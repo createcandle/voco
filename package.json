@@ -1,0 +1,85 @@
+{
+  "name": "voco",
+  "display_name": "Voco",
+  "version": "0.0.1",
+  "description": "Experimental Snips voice control add-on",
+  "author": "CreateCandle",
+  "main": "bootstrap.py",
+  "keywords": [
+    "mozilla",
+    "iot",
+    "adapter",
+    "voice",
+    "speech"
+  ],
+  "homepage": "https://github.com/createcandle/voco",
+  "license": "MPL-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/createcandle/voco.git"
+  },
+  "bugs": {
+    "url": "https://github.com/createcandle/voco/issues"
+  },
+  "files": [
+    "LICENSE",
+    "SHA256SUMS",
+    "bootstrap.py",
+    "main.py",
+    "pkg/__init__.py",
+    "pkg/voco_adapter.py",
+    "pkg/util.py",
+    "requirements.txt",
+    "setup.cfg"
+  ],
+  "moziot": {
+    "api": {
+      "min": 2,
+      "max": 2
+    },
+    "plugin": true,
+    "exec": "python3 {path}/bootstrap.py",
+    "config": {
+      "Microphone": "Playstation Eye",
+      "Metric": true,
+      "USB device name": "",
+      "IP address": "",
+      "Debugging": false
+    },
+    "schema": {
+      "type": "object",
+      "required": [
+        "Microphone",
+        "Metric",
+        "Debugging"
+      ],
+      "properties": {
+        "Microphone": {
+          "type": "string",
+          "enum": [
+            "Playstation Eye",
+            "Respeaker",
+            "Other"
+          ],
+          "description": "How are you talking to the MySensors network? Via a USB device is most common."
+        },
+        "Metric": {
+          "type": "boolean",
+          "description": "Check the box to request metric units from the devices. Uncheck it to request they send data in imperial units instead."
+        },
+        "USB device name": {
+          "type": "string",
+          "description": "If you leave this empty, the add-on will automatically search for a connceted MySensors gateway device. If you want you can manually override this proces by providing a serial port name here. On a Linux device this would be something like '/dev/ttyUSB0'."
+        },
+        "IP address": {
+          "type": "string",
+          "description": "If you are using an ethernet gateway or MQTT server, what is its IP address? You can try 127.0.0.1 if it's installed on the same computer as the Mozilla WebThings gateway."
+        },
+        "Debugging": {
+          "type": "boolean",
+          "description": "Debugging allows you to diagnose any issues with the add-on. If enabled it will result in a lot more debug data in the internal log (which can be found under settings -> developer -> view internal logs)."
+        }
+      }
+    }
+  }
+}
