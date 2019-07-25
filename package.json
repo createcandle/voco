@@ -28,6 +28,7 @@
     "main.py",
     "pkg/__init__.py",
     "pkg/voco_adapter.py",
+    "pkg/voco_snips.py",
     "pkg/util.py",
     "requirements.txt",
     "setup.cfg"

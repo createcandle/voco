@@ -9,9 +9,6 @@ or if the dependencies are already present, main.py will be started.
 import os
 import subprocess
 import sys
-from snipskit.hermes.apps import HermesSnipsApp
-from snipskit.hermes.decorators import intent
-
 
 _BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -45,7 +42,10 @@ def install_packages():
 try:
     sys.path.append(os.path.join(_BASE_DIR, 'lib'))
 
-    import snipskit  # noqa: F401
+    #from hermes_python.hermes import Hermes # noqa: F401
+    #from hermes_python.ontology import * # noqa: F401
+    import hermes_python  # noqa: F401
+    #import fuzzywuzzy
 except ImportError:
     # If installation failed, exit with 100 to tell the gateway not to restart
     # this process.

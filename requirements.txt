@@ -1,1 +1,2 @@
-snipskit[hermes,mqtt]
+fuzzywuzzy
+hermes-python
