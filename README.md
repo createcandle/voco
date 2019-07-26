@@ -79,3 +79,14 @@ say "Hey Snips, what is the humidity level of the weather station?"
 say "Hey Snips, what are the temperature values?"
 say "Hey Snips, turn on the fireplace"
 
+
+# Trouble shooting
+
+Useful commands are
+
+Peek into the internal logs: `tail -f /var/log/syslog`
+See all running services: `sudo service --status-all`
+Restart snips: `sudo systemctl restart snips-*`
+Restart the WebThigns gateway: `sudo systemctl restart mozilla-iot-gateway.service`
+
+
