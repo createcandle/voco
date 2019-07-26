@@ -2,7 +2,7 @@
   "name": "voco",
   "display_name": "Voco",
   "version": "0.0.1",
-  "description": "Experimental Snips voice control add-on",
+  "description": "Privacy friendly voice control",
   "author": "CreateCandle",
   "main": "bootstrap.py",
   "keywords": [
@@ -28,7 +28,6 @@
     "main.py",
     "pkg/__init__.py",
     "pkg/voco_adapter.py",
-    "pkg/voco_snips.py",
     "pkg/util.py",
     "requirements.txt",
     "setup.cfg"
