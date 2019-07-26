@@ -43,6 +43,7 @@
     "config": {
       "Microphone": "Playstation Eye",
       "Speaker": "Headphone jack",
+      "Speaker volume":100,
       "Metric": true,
       "Token": "",
       "Debugging": false
@@ -52,6 +53,7 @@
       "required": [
         "Microphone",
         "Speaker",
+        "Speaker volume",
         "Token",
         "Metric",
         "Debugging"
@@ -70,11 +72,15 @@
           "type": "string",
           "enum": [
             "Headphone jack",
-            "HDMI"
+            "HDMI",
             "USB speaker",
             "Other"
           ],
           "description": "What type of microphone have you connected? The Playstation Eye is a cheap and good option."
+        },
+        "Speaker volume": {
+          "type": "number",
+          "description": "How loud should the audio playback be? Default is 100. This is a system wide settings, and will be set when the add-on is loaded."
         },
         "Token": {
           "type": "string",
