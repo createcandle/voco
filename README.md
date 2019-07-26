@@ -61,17 +61,22 @@ hw 1,0 is your usb device
 
 ### I don't hear anything
 
-Try this:
+Turn up the volume using `alsamixer`
+
+If that doesn't work, try this:
 `sudo nano /etc/snips.toml`
 and there add this under `[snips audio server]` 
 ```
 alsa_playback = "default"
 alsa_capture = "default"
 ```
-While you're there, you can decide if you want audio feedback (beeps) when "hey snips" has been recognised. Under `[snips dialogue]` set `sound_feedback_disabled_default` to `false`
 
 And as always: reboot.
 `sudo reboot`
+
+
+
+
 
 
 # Try it
@@ -95,7 +100,10 @@ See all running services: `sudo service --status-all`
 
 Restart snips: `sudo systemctl restart snips-*`
 
-Restart the WebThigns gateway: `sudo systemctl restart mozilla-iot-gateway.service`
+Restart the WebThings gateway: `sudo systemctl restart mozilla-iot-gateway.service`
 
+### I don't hear confirmation beeps
+
+If you want audio feedback (beeps) when "hey snips" has been recognised, you will ahve to enable it. Open `sudo nano /etc/snips.toml` again. Under `[snips dialogue]` set `sound_feedback_disabled_default` to `false`
 
 
