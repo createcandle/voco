@@ -42,15 +42,17 @@
     "exec": "python3 {path}/bootstrap.py",
     "config": {
       "Microphone": "Playstation Eye",
+      "Speaker": "Headphone jack",
       "Metric": true,
-      "USB device name": "",
-      "IP address": "",
+      "Token": "",
       "Debugging": false
     },
     "schema": {
       "type": "object",
       "required": [
         "Microphone",
+        "Speaker",
+        "Token",
         "Metric",
         "Debugging"
       ],
@@ -62,19 +64,24 @@
             "Respeaker",
             "Other"
           ],
-          "description": "How are you talking to the MySensors network? Via a USB device is most common."
+          "description": "What type of microphone have you connected? The Playstation Eye is a cheap and good option."
+        },
+        "Speaker": {
+          "type": "string",
+          "enum": [
+            "Headphone jack",
+            "USB speaker",
+            "Other"
+          ],
+          "description": "What type of microphone have you connected? The Playstation Eye is a cheap and good option."
+        },
+        "Token": {
+          "type": "string",
+          "description": "To be allowed to get information on all your devices, you have to create an 'authorization' code. It's basically a very long password. You can generate it yourself under settings."
         },
         "Metric": {
           "type": "boolean",
-          "description": "Check the box to request metric units from the devices. Uncheck it to request they send data in imperial units instead."
-        },
-        "USB device name": {
-          "type": "string",
-          "description": "If you leave this empty, the add-on will automatically search for a connceted MySensors gateway device. If you want you can manually override this proces by providing a serial port name here. On a Linux device this would be something like '/dev/ttyUSB0'."
-        },
-        "IP address": {
-          "type": "string",
-          "description": "If you are using an ethernet gateway or MQTT server, what is its IP address? You can try 127.0.0.1 if it's installed on the same computer as the Mozilla WebThings gateway."
+          "description": "Check the box to use metric values instead of imperial units. For example: temperature in Celcius or Fahrenheit."
         },
         "Debugging": {
           "type": "boolean",
