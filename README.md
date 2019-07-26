@@ -84,6 +84,8 @@ say "Hey Snips, turn on the fireplace"
 
 Useful commands are
 
+Test your soundcard when inside the add-on directory: `aplay assets/end_spot.wav`
+
 Peek into the internal logs: `tail -f /var/log/syslog`
 
 See all running services: `sudo service --status-all`
