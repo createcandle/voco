@@ -10,7 +10,7 @@ https://github.com/andrenatal/voice-addon/
 
 ## Installation
 
-For now, you can install it this way:
+For now, during the testing phase, you can install it this way:
 
 From the add-on directory:
 ```
