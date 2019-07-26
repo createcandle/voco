@@ -59,7 +59,7 @@ pcm.!default {
 hw 0,0 is your internal sound card,
 hw 1,0 is your usb device
 
-### I don't hear beeps
+### I don't hear anything
 
 Try this:
 `sudo nano /etc/snips.toml`
@@ -68,6 +68,8 @@ and there add this under `[snips audio server]`
 alsa_playback = "default"
 alsa_capture = "default"
 ```
+While you're there, you can decide if you want audio feedback (beeps) when "hey snips" has been recognised. Under `[snips dialogue]` set `sound_feedback_disabled_default` to `false`
+
 And as always: reboot.
 `sudo reboot`
 
