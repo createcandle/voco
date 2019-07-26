@@ -14,6 +14,7 @@ For now, during the testing phase, you can install it this way:
 
 From the add-on directory:
 ```
+sudo apt-get install pulseaudio
 pip3 install fuzzywuzzy
 pip3 install hermes-python
 ./deps/install_deps.sh install
