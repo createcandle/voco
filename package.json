@@ -28,7 +28,8 @@
     "main.py",
     "pkg/__init__.py",
     "pkg/voco_adapter.py",
-    "pkg/util.py",
+    "deps/install_deps.sh",
+    "deps/assistant.zip",
     "requirements.txt",
     "setup.cfg"
   ],
