@@ -58,6 +58,7 @@ class VocoAdapter(Adapter):
         """
         print("initialising adapter from class")
         self.pairing = False
+        self.DEBUG = True
         self.name = self.__class__.__name__
         Adapter.__init__(self, 'voco', 'voco', verbose=verbose)
         #print("Adapter ID = " + self.get_id())
@@ -73,8 +74,9 @@ class VocoAdapter(Adapter):
         self.metric = True
         self.DEBUG = True
         self.microphone = None
+        self.speaker = None
         self.things = []
-        self.api_token = "eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6ImU2NGU5NWYwLTQ2ZGItNGZhMS1iYmM5LWFmOTQxZWE5YjRhMCJ9.eyJjbGllbnRfaWQiOiJsb2NhbC10b2tlbiIsInJvbGUiOiJhY2Nlc3NfdG9rZW4iLCJzY29wZSI6Ii90aGluZ3M6cmVhZHdyaXRlIiwiaWF0IjoxNTYzODA0MDY4LCJpc3MiOiJOb3Qgc2V0LiJ9.eNJXU4XOUFXJkeEbUUbteGOAq99umYNnpMa6HNZAki8XJ650hm-2QZfn22XNF6bqjSRDk4ogZQYh8s_9l0daRg"
+        self.token = "eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6ImU2YTYxYTJjLWJjODYtNGQzMS05MTg0LTljYmJhMGM5ZTA3ZSJ9.eyJjbGllbnRfaWQiOiJsb2NhbC10b2tlbiIsInJvbGUiOiJhY2Nlc3NfdG9rZW4iLCJzY29wZSI6Ii90aGluZ3M6cmVhZHdyaXRlIiwiaWF0IjoxNTY0MDk4NDQ3LCJpc3MiOiJOb3Qgc2V0LiJ9.d3_H_MqBm9JNvzXz1gnkwc3beRUNvYNTT5giMpEe4QTZLtONZwTaGP61D6nI1Ao2ZTL_6wDWVakXhSKwer71Wg"
 
         self.MQTT_IP_address = "localhost"
         self.MQTT_port = 1883
@@ -187,18 +189,22 @@ class VocoAdapter(Adapter):
             database.close()
         except:
             print("Error! Failed to open settings database.")
-
-        print(str(config))
         
         if not config:
             print("Error loading config from database")
             return
+        
+        print(str(config))
         
         # Connection status preference
         try:
             if 'Microphone' in config:
                 print("-Microphone is present in the config data.")
                 self.microphone = str(config['Microphone'])
+
+            if 'Speaker' in config:
+                print("-Speaker is present in the config data.")
+                self.speaker = str(config['Speaker'])
                 
             if 'Debugging' in config:
                 print("Debugging was in config")
@@ -228,7 +234,7 @@ class VocoAdapter(Adapter):
         try:
             if 'Token' in config:
                 print("-Token is present in the config data.")
-                self.api_token = str(config['Token'])
+                self.token = str(config['Token'])
                 
         except:
             print("Error loading api token from settings")
@@ -268,8 +274,9 @@ class VocoAdapter(Adapter):
     def api_get(self, path):
         try:
             r = requests.get('http://gateway.local:8080' + path, headers={
+                  'Content-Type': 'application/json',
                   'Accept': 'application/json',
-                  'Authorization': 'Bearer ' + str(self.api_token)
+                  'Authorization': 'Bearer ' + str(self.token)
                 }, verify=False)
             #print("AJAX JSON = " + str(r.text))
             return json.loads(r.text)
@@ -283,8 +290,9 @@ class VocoAdapter(Adapter):
         #print("api put called")
         
         full_path = 'http://gateway.local:8080' + str(path)
+        print("PUT path = " + str(full_path))
         #full_path = 'http://localhost:8080/things/MySensors-33/properties/33-1-2'
-        bearer_string = 'Bearer ' + str(self.api_token)
+        bearer_string = 'Bearer ' + str(self.token)
         
         #                data=json.dumps('{"33-1-2":true}'),
         #                data=json.dumps({'33-1-2': True}),
@@ -294,8 +302,9 @@ class VocoAdapter(Adapter):
             print("trying api put now")
             r = requests.put(
                 full_path,
-                data=json.dumps({'33-1-2': True}),
+                data=json.dumps(json_dict), #{'33-1-2': True}
                 headers={
+                    'Content-Type': 'application/json',
                     'Accept': 'application/json',
                     'Authorization': bearer_string,
                 })
@@ -411,6 +420,8 @@ class VocoAdapter(Adapter):
         
         voice_message = ""
         
+        timer_count = len(self.action_times)
+        
         if slots['timer_type'] == "countdown":
             print("cancelling countdown")
             self.countdown = 0
@@ -419,7 +430,6 @@ class VocoAdapter(Adapter):
         # Remove all timers
         elif slots['timer_last'] == "all":
             print("cancelling all timers")
-            timer_count = len(self.action_times)
             self.action_times = []
             self.countdown = 0
             if timer_count > 0:
@@ -431,15 +441,22 @@ class VocoAdapter(Adapter):
         # Remove the last timer, or even a certain number of the last timers, like "remove the last three timers"
         elif slots['timer_last'] == "last":
             print("removing last timer")
-            if slots['number'] == None:
-                self.action_times.pop()
-                voice_message = "the last created timer has been removed"
+            
+            if timer_count == 0:
+                voice_message = "There are no timers set"
             else:
-                timers_to_remove = int(slots['number'])
-                for i in range(timers_to_remove):
-                    self.action_times.pop()
-                voice_message = str(timers_to_remove) + " timers have been removed"
-
+                try:
+                    if slots['number'] == None:
+                        self.action_times.pop()
+                        voice_message = "the last created timer has been removed"
+                    else:
+                        timers_to_remove = int(slots['number'])
+                        for i in range(timers_to_remove):
+                            self.action_times.pop()
+                        voice_message = str(timers_to_remove) + " timers have been removed"
+                except:
+                    print("Maybe there were no timers to remove?")
+                
         else:
             print("stop timer: I should not be possibe.")
         # if need to speak the execution result by tts
@@ -640,10 +657,13 @@ class VocoAdapter(Adapter):
             
             
             for found_property in found_properties:
-                if found_property['property_url'] != None and found_property['type'] == "boolean" and found_property['readOnly'] == False:
+                print("Checking found property. url:" + str(found_property['property_url']))
+                print("-type: " + str(found_property['type']))
+                print("- read only? " + str(found_property['readOnly']))
+                if found_property['property_url'] != None and str(found_property['type']) == "boolean" and found_property['readOnly'] == False:
                 #if hasattr(search_thing_result, 'property_url'):
 
-                    api_result = self.api_get(found_property['property_url'])
+                    api_result = self.api_get(str(found_property['property_url']))
                     #api_result = self.api_get("things/" + check_result['thing'] + "/properties/" + check_result['property'])
                     print("called api for switch data, it gave: " + str(api_result))
 
@@ -674,8 +694,8 @@ class VocoAdapter(Adapter):
                         system_property_name = found_property['property_url'].rsplit('/', 1)[-1]
                         print("system_property_name = " + str(system_property_name))
                         #json_string = '{\n"' + str(system_property_name) + '":' + str(new_switch_value) + '\n}'
-                        json_string = '{\n"' + str(system_property_name) + '":true\n}'
-                        json_dict = {str(system_property_name):str(new_switch_value)}
+                        #json_string = '{\n"' + str(system_property_name) + '":true\n}'
+                        json_dict = {str(system_property_name).rstrip():str(new_switch_value)}
                         #json_dict = {"value":new_switch_value}
                         #json_dict = {"value":"true"}
                         #json_dict = {"35-2-47":new_switch_value}
@@ -1050,6 +1070,15 @@ class VocoAdapter(Adapter):
         return result
 
 
+    def authorization_check(self):
+        if self.token == "":
+            return false
+        else:
+            return true
+        
+        #Todo: do a quick check to see if a call to get things actually returns data. If not, say:
+        
+        # "Please supply a valid authorization token on the settings page."
 
 
 
