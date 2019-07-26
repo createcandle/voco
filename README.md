@@ -67,7 +67,15 @@ and there add this under `[snips audio server]`
 alsa_playback = "default"
 alsa_capture = "default"
 ```
+And as always: reboot.
+`sudo reboot`
 
-## Try it
 
-say "Hey snips... set a timer for 5 minutes"
+# Try it
+
+say "Hey Snips... set a timer for 5 minutes"
+
+say "Hey Snips, what is the humidity level of the weather station?"
+say "Hey Snips, what are the temperature values?"
+say "Hey Snips, turn on the fireplace"
+
