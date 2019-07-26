@@ -35,7 +35,7 @@ Run `alsamixer` and crank up the volume to maximum.
 reboot your device
 
 
-# Using the playstation eye
+### Using the playstation eye
 You may have to do this:
 `sudo nano /etc/asound.conf`
 and in that file change the settings to:
