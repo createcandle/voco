@@ -58,6 +58,16 @@ pcm.!default {
 hw 0,0 is your internal sound card,
 hw 1,0 is your usb device
 
+### I don't hear beeps
+
+Try this:
+`sudo nano /etc/snips.toml`
+and there add this under `[snips audio server]` 
+```
+alsa_playback = "default"
+alsa_capture = "default"
+```
+
 ## Try it
 
 say "Hey snips... set a timer for 5 minutes"
