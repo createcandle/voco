@@ -1,4 +1,8 @@
 # voco
 Privacy friendly voice control for the WebThings Gateway
 
-Uses Snips, based on the work by Andre Natal.
+Uses Snips
+https://www.snips.ai
+
+Based on the work by Andre Natal:
+https://github.com/andrenatal/voice-addon/
