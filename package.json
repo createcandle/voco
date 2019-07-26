@@ -70,6 +70,7 @@
           "type": "string",
           "enum": [
             "Headphone jack",
+            "HDMI"
             "USB speaker",
             "Other"
           ],
