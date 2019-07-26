@@ -85,8 +85,12 @@ say "Hey Snips, turn on the fireplace"
 Useful commands are
 
 Peek into the internal logs: `tail -f /var/log/syslog`
+
 See all running services: `sudo service --status-all`
+
 Restart snips: `sudo systemctl restart snips-*`
+
 Restart the WebThigns gateway: `sudo systemctl restart mozilla-iot-gateway.service`
+
 
 
