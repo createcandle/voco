@@ -2,6 +2,7 @@
 
 
 import os
+import sys
 
 import json
 import asyncio
@@ -14,13 +15,34 @@ from time import sleep
 from datetime import datetime,timezone
 
 
+print('Python:', sys.version)
+print('requests:', requests.__version__)
+
+_SERVER = 'https://stegemandev.mozilla-iot.org'
+_TOKEN = '<token>'  # fill in your token
+_THING_ID = 'virtual-things-custom-36c5513a-ee09-463a-9a4e-7e280afb06a3'
+_PROPERTY_ID = '33-1-2'
+
+
+
 #from .voco_snips import SimpleSnipsApp
+try:
+    from hermes_python.hermes import Hermes
+    from hermes_python.ontology import *
+except:
+    print("ERROR, hermes not available. try 'pip3 install hermes-python'")
 
-from hermes_python.hermes import Hermes
-from hermes_python.ontology import *
+    
+try:
+    from fuzzywuzzy import fuzz
+    from fuzzywuzzy import process
+except:
+    print("ERROR, fuzzywuzzy not available. try 'pip3 install fuzzywuzzy'")
 
-from fuzzywuzzy import fuzz
-from fuzzywuzzy import process
+try:
+    import alsaaudio
+except:
+    print("ERROR, alsaaudio not available. try 'pip3 install alsaaudio'")
 
 from gateway_addon import Adapter, Device, Database
 #from .util import pretty, is_a_number, get_int_or_float
@@ -77,32 +99,35 @@ class VocoAdapter(Adapter):
         self.speaker = None
         self.things = []
         self.token = "eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6ImU2YTYxYTJjLWJjODYtNGQzMS05MTg0LTljYmJhMGM5ZTA3ZSJ9.eyJjbGllbnRfaWQiOiJsb2NhbC10b2tlbiIsInJvbGUiOiJhY2Nlc3NfdG9rZW4iLCJzY29wZSI6Ii90aGluZ3M6cmVhZHdyaXRlIiwiaWF0IjoxNTY0MDk4NDQ3LCJpc3MiOiJOb3Qgc2V0LiJ9.d3_H_MqBm9JNvzXz1gnkwc3beRUNvYNTT5giMpEe4QTZLtONZwTaGP61D6nI1Ao2ZTL_6wDWVakXhSKwer71Wg"
-
+        self.speaker_volume = 99
+        
         self.MQTT_IP_address = "localhost"
         self.MQTT_port = 1883
 
         self.action_times = []
         self.countdown = 0
         
+        self.server = 'http://127.0.0.1:8080'
+
         t = threading.Thread(target=self.clock)
         t.daemon = True
         t.start()
-
-        #print("will try loading")
-        try:
-            self.things = self.api_get("/things")
-            print("loaded things: " + str(self.things))
-            #self.check_things("anemone", None)
-            #print("checked a thing")
-        except:
-            print("Couldn't load things")
-
 
 
         try:
             self.add_from_config()
         except Exception as ex:
             print("Error loading config: " + str(ex))
+
+        #print("will try loading")
+        try:
+            self.things = self.api_get("/things")
+            #print("loaded things: " + str(self.things))
+            #self.check_things("anemone", None)
+            #print("checked a thing")
+        except Exception as ex:
+            print("Error, couldn't load things: " + str(ex))
+
 
         try:
             #self.snips = SimpleSnipsApp() #starting the Snips app
@@ -239,6 +264,25 @@ class VocoAdapter(Adapter):
         except:
             print("Error loading api token from settings")
 
+        try:
+            if 'Speaker volume' in config:
+                self.speaker_volume = int(config['Speaker volume'])
+                print("-Speaker volume is present in the config data: " + str(self.speaker_volume))
+                #device = alsaaudio.PCM(device=device)
+                try:
+                    import alsaaudio
+                    #alsa_pcm = alsaaudio.PCM(alsaaudio.PCM_PLAYBACK)
+                    #print("ALSA: " + str(alsa_pcm.pcms()))
+                    #alsa_pcm.setvolume(self.speaker_volume)
+                    m = alsaaudio.Mixer()
+                    #vol = m.getvolume()
+                    m.setvolume(self.speaker_volume)
+                except Exception as ex:
+                    print("Could not load pyalsaaudio: " + str(ex))
+                
+        except Exception as ex:
+            print("Error, couldn't set volume level: " + str(ex))
+            
 
  
 
@@ -272,52 +316,107 @@ class VocoAdapter(Adapter):
 
 
     def api_get(self, path):
+        print("GET PATH = " + str(path))
+        print("GET TOKEN = " + str(self.token))
         try:
-            r = requests.get('http://gateway.local:8080' + path, headers={
+            r = requests.get('http://127.0.0.1:8080' + path, headers={
                   'Content-Type': 'application/json',
                   'Accept': 'application/json',
-                  'Authorization': 'Bearer ' + str(self.token)
+                  'Authorization': 'Bearer ' + str(self.token),
                 }, verify=False)
-            #print("AJAX JSON = " + str(r.text))
-            return json.loads(r.text)
+            print(r.status_code, r.reason)
+            print("AJAX JSON = " + str(r.text))
+            if r.status_code == 500:
+                print("internal server error. Can mean that the target device is disconnected.")
+                return json.loads('{"error":"disconnected"}')
+            else:
+                return json.loads(r.text)
         except Exception as ex:
             print("Error doing http request/loading returned json: " + str(ex))
             return [] # or should this be {} ? Depends on the call perhaps.
 
 
-
     def api_put(self, path, json_dict):
-        #print("api put called")
+        print("")
+        print("+++++++++++ PUT +++++++++++++")
+
+        #full_path = '{}/things/{}/properties/{}'.format(
+        #    self.server,
+        #    self.thing_id,
+        #    self.property_id,
+        #)
+        full_path = "http://127.0.0.1:8080/things/MySensors-33/properties/33-1-2"
         
-        full_path = 'http://gateway.local:8080' + str(path)
-        print("PUT path = " + str(full_path))
-        #full_path = 'http://localhost:8080/things/MySensors-33/properties/33-1-2'
+        property_id = '33-1-2'
+        data = {
+            property_id: True,
+        }
+
+        headers = {
+            'Accept': 'application/json',
+            'Authorization': 'Bearer {}'.format(self.token),
+        }
+
+        try:
+            print("trying api put now")
+
+            r = requests.put(
+                full_path,
+                json=data,
+                headers=headers,
+            )
+            j = r.json()
+
+            print(r.status_code, r.reason, j)
+
+            if r.status_code == 200:
+                return j
+            else:
+                return {"error": "PUT failed"}
+
+        except Exception as ex:
+            print("Error doing http request/loading returned json: " + str(ex))
+            return {"error": "PUT failed"}
+        
+        
+    def api_put_old(self, path, json_dict):
+        print("")
+        print("+++++++++++ PUT +++++++++++++")
+        
+        #full_path = 'http://127.0.0.1:8080' + str(path)
+        full_path = "http://192.168.2.31:8080/things/MySensors-33/properties/33-1-2"
+        
+        data = '{"33-1-2":true}'
+        #data = {"33-1-2":True}
+        data = {"33-1-2": True}
+        
         bearer_string = 'Bearer ' + str(self.token)
         
-        #                data=json.dumps('{"33-1-2":true}'),
-        #                data=json.dumps({'33-1-2': True}),
-        #                }, verify=False)
-        #                    'Content-Type': 'application/json',
+        headers = { 
+                    'Accept': 'application/json',
+                    'Authorization': bearer_string
+                }
+
         try:
             print("trying api put now")
             r = requests.put(
                 full_path,
-                data=json.dumps(json_dict), #{'33-1-2': True}
-                headers={
-                    'Content-Type': 'application/json',
-                    'Accept': 'application/json',
-                    'Authorization': bearer_string,
-                })
-            print("rquested")
+                json=data,
+                headers=headers
+            )
             print(r.status_code, r.reason)
-            #print(r.status_code, r.reason, r.json())
-            print("PUT AJAX JSON = " + str(r.text))
-            dict_from_json = json.loads(r.text)
-            print("dict_from_json = " + str(dict_from_json))
-            return dict_from_json
+            print("received text = " + str(r.text))
+            if r.status_code == 200:
+                return r.json()
+            else:
+                return {"error":"PUT failed"}
+        
+            #dict_from_json = json.loads(r.text)
+            #print("dict_from_json = " + str(dict_from_json))
+            #return dict_from_json
         except Exception as ex:
             print("Error doing http request/loading returned json: " + str(ex))
-            return {}
+            return {"error":"PUT failed"}
 
         
     def api_put_new(self, path, json_dict):
@@ -660,62 +759,64 @@ class VocoAdapter(Adapter):
                 print("Checking found property. url:" + str(found_property['property_url']))
                 print("-type: " + str(found_property['type']))
                 print("- read only? " + str(found_property['readOnly']))
-                if found_property['property_url'] != None and str(found_property['type']) == "boolean" and found_property['readOnly'] == False:
-                #if hasattr(search_thing_result, 'property_url'):
+                try:
+                    if found_property['property_url'] != None and str(found_property['type']) == "boolean" and found_property['readOnly'] == False:
+                    #if hasattr(search_thing_result, 'property_url'):
 
-                    api_result = self.api_get(str(found_property['property_url']))
-                    #api_result = self.api_get("things/" + check_result['thing'] + "/properties/" + check_result['property'])
-                    print("called api for switch data, it gave: " + str(api_result))
+                        api_result = self.api_get(str(found_property['property_url']))
+                        #api_result = self.api_get("things/" + check_result['thing'] + "/properties/" + check_result['property'])
+                        print("called api for switch data, it gave: " + str(api_result))
 
-                    key = list(api_result.keys())[0]
+                        key = list(api_result.keys())[0]
 
-                    print("api_result[key] = " + str(api_result[key]) + " =?= " + str(slots['boolean']))
-                    if api_result[key] == slots['boolean']:
-                        
-                        # TODO: create a list with words tht indicate the boolean values. 
-                        # Otherwise we are comparing "1" and "on".
-                        
-                        print("SWITCH WAS ALREADY IN DESIRED STATE")
-                        # It's already in the desired state
-                        hermes.publish_start_session_notification(intent_message.site_id, "it's already " + str(slots['boolean']), "")
+                        print("api_result[key] = " + str(api_result[key]) + " =?= " + str(slots['boolean']))
+                        if api_result[key] == slots['boolean']:
 
-                    else:
-                        # here we toggle it.
-                        print("SWITCH WAS NOT ALREADY IN DESIRED STATE, SWITCHING NOW")
+                            # TODO: create a list with words tht indicate the boolean values. 
+                            # Otherwise we are comparing "1" and "on".
 
-                        
-                        # TODO dit stukje moet dus hoger komen:
-                        new_switch_value = ""
-                        if slots['boolean'] == "on" or slots['boolean'] == "locked":
-                            new_switch_value = True
+                            print("SWITCH WAS ALREADY IN DESIRED STATE")
+                            # It's already in the desired state
+                            hermes.publish_start_session_notification(intent_message.site_id, "it's already " + str(slots['boolean']), "")
+
                         else:
-                            new_switch_value = False
+                            # here we toggle it.
+                            print("SWITCH WAS NOT ALREADY IN DESIRED STATE, SWITCHING NOW")
 
-                        system_property_name = found_property['property_url'].rsplit('/', 1)[-1]
-                        print("system_property_name = " + str(system_property_name))
-                        #json_string = '{\n"' + str(system_property_name) + '":' + str(new_switch_value) + '\n}'
-                        #json_string = '{\n"' + str(system_property_name) + '":true\n}'
-                        json_dict = {str(system_property_name).rstrip():str(new_switch_value)}
-                        #json_dict = {"value":new_switch_value}
-                        #json_dict = {"value":"true"}
-                        #json_dict = {"35-2-47":new_switch_value}
-                        
-                        print("str(json_dict) = " + str(json_dict))
-                        
-                        #print("json to PUT: " + str(json_dict))
-                        print("path to PUT: " + str(found_property['property_url']))
-                        #api_result = self.api_put(str(found_property['property_url']), json_dict)
-                        
-                        api_result = self.api_put(str(found_property['property_url']), json_dict)
-                        
 
-                        print("PUT result = " + str(api_result))
-                        #url.rsplit('/', 1)[-1]
+                            # TODO dit stukje moet dus hoger komen:
+                            new_switch_value = ""
+                            if slots['boolean'] == "on" or slots['boolean'] == "locked":
+                                new_switch_value = True
+                            else:
+                                new_switch_value = False
 
-                        # TODO check if the new value was indeed set, and if so, tell the user.
-                        
-                        hermes.publish_start_session_notification(intent_message.site_id, "Setting to " + str(slots['boolean']), "")
+                            system_property_name = found_property['property_url'].rsplit('/', 1)[-1]
+                            print("system_property_name = " + str(system_property_name))
+                            #json_string = '{\n"' + str(system_property_name) + '":' + str(new_switch_value) + '\n}'
+                            #json_string = '{\n"' + str(system_property_name) + '":true\n}'
+                            json_dict = {str(system_property_name).rstrip():str(new_switch_value)}
+                            #json_dict = {"value":new_switch_value}
+                            #json_dict = {"value":"true"}
+                            #json_dict = {"35-2-47":new_switch_value}
 
+                            print("str(json_dict) = " + str(json_dict))
+
+                            #print("json to PUT: " + str(json_dict))
+                            print("path to PUT: " + str(found_property['property_url']))
+                            #api_result = self.api_put(str(found_property['property_url']), json_dict)
+
+                            api_result = self.api_put(str(found_property['property_url']), json_dict)
+
+
+                            print("PUT result = " + str(api_result))
+                            #url.rsplit('/', 1)[-1]
+
+                            # TODO check if the new value was indeed set, and if so, tell the user.
+
+                            hermes.publish_start_session_notification(intent_message.site_id, "Setting " + str(found_property['property']) + " to " + str(slots['boolean']), "")
+                except Exception as ex:
+                    print("Error while dealing with found property: " + str(ex))
         else:
             print("Unable to find a thing and property :-(")
             hermes.publish_start_session_notification(intent_message.site_id, "I can't find that device", "")
@@ -807,7 +908,7 @@ class VocoAdapter(Adapter):
         
         if target_thing_title == None and target_property_title == None:
             print("No thing title AND no property title provided. Cancelling...")
-            return
+            return []
         
         
         result = [] # This will hold all matches
@@ -979,9 +1080,14 @@ class VocoAdapter(Adapter):
                         #if hasattr(thing['properties'][thing_property_key]['readOnly']):
                             #print("READ ONLY")
                         try:
-                            match_dict['readOnly'] = thing['properties'][thing_property_key]['readOnly']
+                            print("READ ONLY VALUE FOUND IS " + str(thing['properties'][thing_property_key]['readOnly']))
+                            if thing['properties'][thing_property_key]['readOnly'] == True:
+                                print("VAUE WAS REALLY TRUE")
+                                match_dict['readOnly'] = thing['properties'][thing_property_key]['readOnly']
                         except:
-                            pass
+                            print("Error looking up readOnly value")
+                            match_dict['readOnly'] = False
+
                         try:
                             if thing['properties'][thing_property_key]['@type'] == "OnOffProperty":
                                 match_dict['@type'] = "OnOffProperty"
@@ -1045,15 +1151,15 @@ class VocoAdapter(Adapter):
         # PART 2 - No thing name found.
         try:
             # Here there could be some more advanced determination of the thing, in case it's not clear cut.
-
+            print("No thing name found while looping.")
             pass
             
             # We did find a title that's pretty close.
-            if match_dict['thing'] == None and match_dict['property'] == None:
-                if fuzzed_title != None:
-                    print("Well, there is a fuzzy title..")
-                    #match_dict['thing'] = fuzzed_title
-                    pass
+            #if match_dict['thing'] == None and match_dict['property'] == None:
+            #    if fuzzed_title != None:
+            #        print("Well, there is a fuzzy title..")
+            #        #match_dict['thing'] = fuzzed_title
+            #        pass
                     # Here we could ask for confirmation if the user meant this similar thing we found
 
             # We could just read out all the values?
@@ -1164,10 +1270,13 @@ def extract_slots(intent_message):
             if hasattr(time_data, 'from_date') and hasattr(time_data, 'to_date'):
             #if time_data['start_date'] != None and time_data['to_date'] != None:
                 print("both a start and end date in the time")
-                if time_data['from_date']:
-                    slots['start_time'] = date_to_timestamp(time_data.from_date)
-                if time_data['from_date']:
-                    slots['end_time'] = date_to_timestamp(time_data.to_date)
+                #if time_data['from_date']:
+                print("from date: " + str(time_data.from_date))
+                slots['start_time'] = date_to_timestamp(time_data.from_date)
+                print("from data handled")
+                #if time_data['to_date']:
+                print("to date")
+                slots['end_time'] = date_to_timestamp(time_data.to_date)
             
             # If there is just one time value:
             elif hasattr(time_data, 'value'):
@@ -1186,8 +1295,10 @@ def extract_slots(intent_message):
                 
                 slots['duration'].append(date_to_timestamp(time_data.value))
                 #slots['end_time'] = date_to_timestamp(time_data.value)
+    except Exception as ex:
+        print("Error getting datetime intention data: " + str(ex)) 
             
-            
+    try:
         # DURATION
         if len(intent_message.slots.duration) > 0:
             print("incoming slots duration = " + str(vars(intent_message.slots.duration.first())))
@@ -1198,7 +1309,7 @@ def extract_slots(intent_message):
             slots['duration'].append(target_time)
             
     except Exception as ex:
-        print("Error getting temporal intention data: " + str(ex))   
+        print("Error getting duration intention data: " + str(ex))   
             
     return slots
             
