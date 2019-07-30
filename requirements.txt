@@ -1,3 +1,5 @@
 hermes-python
 fuzzywuzzy
 pyalsaaudio
+python-dateutil
+pytz
