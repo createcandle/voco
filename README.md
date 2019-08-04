@@ -38,7 +38,7 @@ These are all examples. You don't have to say things exactly like this.
 - "How warm is it?" -> Will get you all temperature values in the home
 
 
-### timers
+### Timers
 
 #### Set timers
 - "Set a timer for 5 minutes"
@@ -55,7 +55,7 @@ These are all examples. You don't have to say things exactly like this.
 - "Cancel all timers"
 
 
-### Other things
+### Other
 - "What time is it?"
 
 
