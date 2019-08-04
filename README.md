@@ -66,8 +66,9 @@ These are all examples. You don't have to say things exactly like this.
 # Features
 
 ### Strong focus on privacy
-- Once installed, there is no internet connection required/used.
-- Snips telemetry is removed
+- Once installed, there is no internet connection required or used.
+- Once installed, there is no internet connection required or used.
+- Once installed, there is no internet connection required or used.
 
 ### Extendable
 - Choose to install a larger vocabulary for even better word recognition (advised if you like to use reminders)
