@@ -44,7 +44,7 @@ These are all examples. You don't have to say things exactly like this.
 - "Set a timer for 5 minutes"
 - "Set an alarm for a quarter past 9"
 - "Wake me up at 7 am"
-- "Set a countdown for 3 minutes"
+- "Set a countdown to midnight"
 
 #### Query timers
 - "How many alarms are set?"
