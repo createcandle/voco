@@ -2,7 +2,7 @@
 Privacy friendly voice control for the Mozilla WebThings Gateway
 
 
-# Features
+# Abilities
 These are all examples. You don't have to say things exactly like this.
 
 ### Turn things on and off
@@ -46,12 +46,16 @@ These are all examples. You don't have to say things exactly like this.
 - "Wake me up at 7 am"
 - "Set a countdown to midnight"
 
+#### Set reminders
+- "At 5 o'clock remind me to wash the car"
+
 #### Query timers
-- "How many alarms are set?"
+- "How many alarms have been set?"
 - "How many timers are there?"
 
 #### Remove timers
 - "Remove the last timer"
+- "Disable the countdown"
 - "Cancel all timers"
 
 
@@ -59,15 +63,27 @@ These are all examples. You don't have to say things exactly like this.
 - "What time is it?"
 
 
+# Features
+
+### Strong focus on privacy
+- Once installed, there is no internet connection required/used.
+- Snips telemetry is removed
+
+### Extendable
+- Choose to install a larger vocabulary for even better word recognition (advised if you like to use reminders)
+- Override the built-in assistant with one you created yourself at snips.ai. To keep the above mentioned abilities, make sure you add the 'Candle' app to your assistant.
 
 
+# Technology
 
-### Technology
 Voco is built on Snips
 https://snips.ai/
 
 
-### Thanks to
+# Thanks to
 
 Voco is based on the work by Andre Natal.
 https://github.com/andrenatal/voice-addon/
+
+Work on Voco was supported by the Creative Industries Fund NL and the European Union, via their support for the Candle privacy friendly smart home project.
+https://www.createcandle.com
