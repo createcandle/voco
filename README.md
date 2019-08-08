@@ -60,5 +60,6 @@ https://snips.ai/
 # Thanks to
 Voco is based on the work by Andre Natal.
 https://github.com/andrenatal/voice-addon/
+
 Work on Voco was supported by the Creative Industries Fund NL and the European Union, via their support for the Candle privacy friendly smart home project.
 https://www.createcandle.com
