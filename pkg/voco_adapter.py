@@ -1,8 +1,18 @@
 """Voco adapter for Mozilla WebThings Gateway."""
 
+# A future release will no longer show privacy sensitive information via the debug option. 
+# For now, during early development, it will be available. Please be considerate of others if you use this in a home situation.
+
 
 import os
+from os import path
 import sys
+
+
+import subprocess
+from subprocess import call
+
+sys.path.append(path.join(path.dirname(path.abspath(__file__)), 'lib'))
 
 import json
 import asyncio
@@ -10,49 +20,52 @@ import logging
 import threading
 import requests
 
+
 import time
 from time import sleep
-from datetime import datetime,timezone
+from datetime import datetime,timedelta
+from dateutil import tz
+from dateutil.parser import *
 
+from subprocess import call
+import queue
 
-print('Python:', sys.version)
-print('requests:', requests.__version__)
+from .intentions import *
 
-_SERVER = 'https://stegemandev.mozilla-iot.org'
-_TOKEN = '<token>'  # fill in your token
-_THING_ID = 'virtual-things-custom-36c5513a-ee09-463a-9a4e-7e280afb06a3'
-_PROPERTY_ID = '33-1-2'
-
-
-
-#from .voco_snips import SimpleSnipsApp
 try:
     from hermes_python.hermes import Hermes
-    from hermes_python.ontology import *
+    from hermes_python.ontology.injection import InjectionRequestMessage, AddInjectionRequest, AddFromVanillaInjectionRequest
+    from hermes_python.ontology.feedback import SiteMessage
 except:
-    print("ERROR, hermes not available. try 'pip3 install hermes-python'")
+    print("ERROR, hermes is not installed. try 'pip3 install hermes-python'")
 
-    
 try:
     from fuzzywuzzy import fuzz
     from fuzzywuzzy import process
 except:
-    print("ERROR, fuzzywuzzy not available. try 'pip3 install fuzzywuzzy'")
+    print("ERROR, fuzzywuzzy is not installed. try 'pip3 install fuzzywuzzy'")
 
 try:
     import alsaaudio
 except:
-    print("ERROR, alsaaudio not available. try 'pip3 install alsaaudio'")
+    print("ERROR, alsaaudio is not installed. try 'pip3 install alsaaudio'")
 
-from gateway_addon import Adapter, Device, Database
+try:
+    from pytz import timezone
+    import pytz
+except:
+    print("ERROR, pytz is not installed. try 'pip3 install pytz'")
+
+    
+from gateway_addon import Database, Adapter
+from .util import *
+from .voco_device import *
 #from .util import pretty, is_a_number, get_int_or_float
 
-abstract_list = ["level","value"]
-counters_list = ["first","second","third","fourth","fifth","sixth","seventh"]
 
-# If this skill is supposed to run on the satellite,
-# please get this mqtt connection info from <config.ini>
-# Hint: MQTT server is always running on the master device
+#print('Python:', sys.version)
+#print('requests:', requests.__version__)
+
 
 
 _TIMEOUT = 3
@@ -69,10 +82,11 @@ if 'MOZIOT_HOME' in os.environ:
 
 
 
+
 class VocoAdapter(Adapter):
     """Adapter for Snips"""
 
-    def __init__(self, verbose=True):
+    def __init__(self, voice_messages_queue, verbose=True):
         """
         Initialize the object.
         
@@ -82,126 +96,270 @@ class VocoAdapter(Adapter):
         self.pairing = False
         self.DEBUG = True
         self.name = self.__class__.__name__
-        Adapter.__init__(self, 'voco', 'voco', verbose=verbose)
+        Adapter.__init__(self, 'voco-adapter', 'voco', verbose=verbose)
         #print("Adapter ID = " + self.get_id())
         
+        try:
+            #self.voice_messages_queue = voice_messages_queue
+            print("adapter: self.voice_messages_queue = " + str(self.voice_messages_queue))
+        except:
+            print("adapter: no message queue?")
+
         for path in _CONFIG_PATHS:
             if os.path.isdir(path):
                 self.persistence_file_path = os.path.join(
                     path,
-                    'voco-adapter-persistence.json'
+                    'voco-persistence.json'
                 )
                 print("self.persistence_file_path is now: " + str(self.persistence_file_path))
+
+        if self.DEBUG:
+            print("Current working directory: " + str(os.getcwd()))
         
+        try:
+            with open(self.persistence_file_path) as f:
+                self.persistent_data = json.load(f)
+                if self.DEBUG:
+                    print("Persistence data was loaded succesfully.")
+        except:
+            print("Could not load persistent data (if you just installed the add-on then this is normal)")
+            self.persistent_data = {}
+
+        self.opposites = {
+                "on":"off",
+                "off":"on",
+                "open":"closed",
+                "closed":"open",
+                "locked":"unlocked",
+                "unlocked":"locked"
+        }
+
+        # self.persistent_data              # self.persistent_data is handled just above
         self.metric = True
         self.DEBUG = True
+        self.DEV = True
+        self.playback_devices = []
+        self.capture_devices = []
         self.microphone = None
         self.speaker = None
         self.things = []
-        self.token = "eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6ImU2YTYxYTJjLWJjODYtNGQzMS05MTg0LTljYmJhMGM5ZTA3ZSJ9.eyJjbGllbnRfaWQiOiJsb2NhbC10b2tlbiIsInJvbGUiOiJhY2Nlc3NfdG9rZW4iLCJzY29wZSI6Ii90aGluZ3M6cmVhZHdyaXRlIiwiaWF0IjoxNTY0MDk4NDQ3LCJpc3MiOiJOb3Qgc2V0LiJ9.d3_H_MqBm9JNvzXz1gnkwc3beRUNvYNTT5giMpEe4QTZLtONZwTaGP61D6nI1Ao2ZTL_6wDWVakXhSKwer71Wg"
-        self.speaker_volume = 99
-        
-        self.MQTT_IP_address = "localhost"
-        self.MQTT_port = 1883
+        self.token = None
+        #self.speaker_volume = 99
+        self.timer_counts = {'timer':0,'alarm':0,'reminder':0}
+        self.temperature_unit = 'degrees celsius'
 
-        self.action_times = []
-        self.countdown = 0
+        self.action_times = [] # will hold all the timers
+        self.countdown = 0 # There can only be one timer at a time. It's set the target unix time.
         
         self.server = 'http://127.0.0.1:8080'
 
-        t = threading.Thread(target=self.clock)
-        t.daemon = True
-        t.start()
+        # Snips settings
+        self.MQTT_IP_address = "localhost"
+        self.MQTT_port = 1883
+        self.snips_parts = ['snips-hotword','snips-asr','snips-tts','snips-audio-server','snips-nlu','snips-injection','snips-dialogue']
+        self.feedback_sounds = True
+        self.snips_main_site_id = None
+        self.custom_assistant_url = None
+        self.increase_vocabulary = None
+        self.larger_vocabulary_url = "https://raspbian.snips.ai/stretch/pool/s/sn/snips-asr-model-en-500MB_0.6.0-alpha.4_armhf.deb"
+        self.h = None # will hold the Hermes object, which is used to communicate with Snips
+        self.pleasantry_count = 0 # How often Snips has heard "please". Will be used to thank the use for being cordial once in a while.
+
+        # These will be injected ino Snips for better recognition.
+        self.extra_properties = ["state","set point"]
+        self.generic_properties = ["level","value","values","state","states","all values","all levels"]
+        self.capabilities = ["temperature"]
+        self.numeric_property_names = ["first","second","third","fourth","fifth","sixth","seventh"]
+         
+        # Time
+        self.time_zone = "Europe/Amsterdam"
+        self.seconds_offset_from_utc = 7200 # Used for quick calculations when dealing with timezones.
+        self.last_injection_time = 0 # The last time the things/property names list was sent to Snips.
+        self.minimum_injection_interval = 600  # Minimum amount of seconds between new thing/property name injections.
+        
+        self.addon_path =  os.path.join(os.path.expanduser('~'), '.mozilla-iot', 'addons', 'voco')
+        
+
+        try:
+            voco_device = VocoDevice(self)
+            self.handle_device_added(voco_device)
+            try:
+                self.set_status_on_thing("Checking...")
+                self.update_timer_counts()
+                self.devices['voco'].properties[ 'listening' ].set_cached_value_and_notify( True ) # TODO: store the last state of the listening switch in the persistence file. That way it can be restored on reboot.
+                self.devices['voco'].properties[ 'feedback-sounds' ].set_cached_value_and_notify( True )
+            except:
+                pass
+        except:
+            print("Could not create voco device")
 
 
+
+
+
+
+
+        # Stop Snips until the init is complete (if it is installed).
+        try:
+            self.set_snips_state(0)
+        except Exception as ex:
+            print("Could not stop Snips: " + str(ex))
+
+
+        
+        # Pre-scan ALSA
+        try:
+            self.playback_devices = self.scan_alsa('playback')
+            self.capture_devices = self.scan_alsa('capture')
+            print("Available audio playback devices: " + str(self.playback_devices))
+            print("Available audio capture devices: " + str(self.capture_devices))
+            
+        except Exception as ex:
+            print("Error scanning ALSA (audio devices): " + str(ex))
+        
+        
+        
+        # LOAD CONFIG
+        
         try:
             self.add_from_config()
         except Exception as ex:
             print("Error loading config: " + str(ex))
 
-        #print("will try loading")
+
+        # Setup the sound configuration. We do this only once.
+        if self.configure_alsa():
+            print("Audio was set up succesfully.")
+
+
+
+
+
+        # Install Snips if it hasn't been installed already
         try:
-            self.things = self.api_get("/things")
-            #print("loaded things: " + str(self.things))
-            #self.check_things("anemone", None)
-            #print("checked a thing")
+            self.snips_installed = self.install_snips()
         except Exception as ex:
-            print("Error, couldn't load things: " + str(ex))
+            print("Error while trying to install Snips/check if Snips should be installed: " + str(ex))
+
+        
+        # Try to remove Snips telemetry. // Update: apparently snips no longer has any tracking enabled by default, and this is not required.
+        #if self.disable_snips_telemetry():
+        #    print("removed Snips telemetry")
 
 
+        # TIME
+        
+        # Calculate timezone difference between the user set timezone and UTC.
         try:
-            #self.snips = SimpleSnipsApp() #starting the Snips app
-            self.start_blocking()
-            #self.snips.say("hello world")
-            print("Initiated connection to Snips")
-            #self.snips.setParent(self)
-            #print("IT WAS DONE, ADAPTER IS NOW:"  + str(self.snips.adapter))
-
-        except Exception as ex:
-            print("Error starting Snips connection: " + str(ex))
+            print("self.time_zone = " + str(self.time_zone))
+            self.user_timezone = timezone(self.time_zone)
+            utcnow = datetime.now(tz=pytz.utc)
+            now = datetime.now() # This is not used
+            usernow = self.user_timezone.localize(datetime.utcnow()) # utcnow() is naive
             
+            print("The universal time is " + str(utcnow))
+            #print("datetime.utcnow() = " + str(datetime.utcnow()))
+            print("In " + str(self.time_zone) + " the current time is " + str(usernow))
+            print("With your current localization settings, your computer will tell you it is now " + str(now))
+            
+            tdelta = utcnow - usernow
+            self.seconds_offset_from_utc = round(tdelta.total_seconds())
+            print("The difference between UTC and user selected timezone, in seconds, is " + str(self.seconds_offset_from_utc))
+            
+        except Exception as ex:
+            print("Error handling time zone calculation: " + str(ex))
+
+
+        # Set the correct speaker volume
+        try:
+            self.set_speaker_volume(self.persistent_data['speaker_volume'])
+            self.devices['voco'].properties['volume'].set_value(self.persistent_data['speaker_volume'])
+        except:
+            print("Could not set initial audio volume")
         
-
-
-    def clock(self):
-        print("Starting the clock")
-        while True:
-            time.sleep(.9)
+        
+        # If Snips is installed, check if any other parts should be downloaded or updated.
+        if self.snips_installed:
             try:
-                current_time = int(time.time())
-                if len(self.action_times) > 0:
-                    print("current time: " + str(current_time))
-                
-                for index, item in enumerate(self.action_times):
-                    print("item time = " + str(item['time']))
-                    if current_time >= item['time']:
-                        if item['type'] == 'timer':
-                            print("OOO ALARM SHOULD GO OFF")
-                            print("item = " + str(item))
-                            os.system("aplay assets/end_spot.wav")
-                            #hermes.publish_start_session_notification(item['intent_message']['site_id'], "Your timer is finished", "")
-                        elif item['type'] == 'wake':
-                            print("OOO WAKE UP")
-                            print("item = " + str(item))
-                            os.system("aplay assets/end_spot.wav")
-                            os.system("aplay assets/end_spot.wav")
-                            os.system("aplay assets/end_spot.wav")
-                            os.system("aplay assets/end_spot.wav")
-                        elif item['type'] == 'actuator':
-                            print("OOO TIMED ACTUATOR SWITCHING")
-                            print("item = " + str(item))
-                            print("stored slots: " + str(item['slots']))
-                            delayed_action = True
-                            self.intent_set_state(item['hermes'],item['intent_message'], delayed_action)
-                            os.system("aplay assets/end_spot.wav")
-                        else:
-                            print("unhandled timer type")
-                        
-                        #os.system("aplay assets/end_spot.wav")
-                        #action = item[current_time]
-                        #print("action: " + str(action))
-                        del self.action_times[index] # Will this work if it's inside it? Apparently so.
-                        #toDelete.append(index)
-                        
+                if os.path.isdir("/usr/share/snips") and not os.path.isdir("/usr/share/snips/assistant"):
+                    if self.install_assistant():
+                        print("Succesfully installed the assistant")
             except Exception as ex:
-                print("Error dealing with stored alarm item: " + str(ex))
-                continue
+                print("Error while trying to install missing assistant: " + str(ex))
+
+            # Check if a new custom assistant should be downloaded
+            try:
+                if self.custom_assistant_url != None:
+                    if self.custom_assistant_url.startswith("http"):
+                        if self.DEBUG:
+                            print("A new assistant should be downloaded and installed from: " + str(self.custom_assistant_url))
+                        if self.download_assistant():
+                            print("Succesfully downloaded the new assistant zip file")
+                            if self.install_assistant():
+                                print("Succesfully installed the new assistant")
+                                try:
+                                    database = Database('voco')
+                                    if not database.open():
+                                        print("Could not open settings database")
+                                    else:
+                                        config = database.load_config()
+                                        config['Custom assistant'] = "Your new assistant has succesfully been installed"
+                                        database.save_config(config)
+                                        database.close()
+                                except:
+                                    print("Error while trying to open the database")
+                                #self.disable_snips_telemetry() # Apparently this is no longer required. Kudos to Snips!
+                                
+                    else:
+                        print("Assistant download url was not a url")
+                    
+            except:
+                print("Error downloading custom assistant")
+
+            # Check if the user wants to increase the vocabulary
+            try:
+                if self.increase_vocabulary:
+                    if self.download_extra_vocabulary():
+                        self.install_extra_vocabulary()
+            except Exception as ex:
+                print("Error while installing bigger vocabulary: " + str(ex))
 
 
-    #def test(self, value):
-    #    print("TEST WORKED, VALUE IS " + str(value))
+            # Start Snips
+            try:
+                self.set_snips_state(1) # Turning Snips on
+            except Exception as ex:
+                print("Error while installing bigger vocabulary: " + str(ex))
+
+            # Start the internal clock which is used to handle timers. It also receives messages from the notifier.
+            t = threading.Thread(target=self.clock, args=(voice_messages_queue,))
+            t.daemon = True
+            t.start()
+            
+            # Let Snips say hello
+            #voice_messages_queue.put("Hello, I am Snips")
+
+            # Get al the things via the API.
+            try:
+                self.things = self.api_get("/things")
+            except Exception as ex:
+                print("Error, couldn't load things at init: " + str(ex))
+
+            # Teach Snips the names of all the things and properties
+            self.inject_updated_things_into_snips()
+                
+            # TODO: Inject the color names into snips.
 
 
-    def unload(self):
-        print("Shutting down Voco adapter")
-        
-
-    def remove_thing(self, device_id):
-        if self.DEBUG:
-            print("-----REMOVING:" + str(device_id))
+            # Finally, start the (blocking) MQTT connection that connects Snips to this add-on.
+            try:
+                self.start_blocking() # This starts Hermes, which is the bridge between Python and Snips.
+            except Exception as ex:
+                print("Error starting Snips connection: " + str(ex))
 
 
 
+    # Read the settings from the add-on settings page
     def add_from_config(self):
         """Attempt to add all configured devices."""
         try:
@@ -209,9 +367,10 @@ class VocoAdapter(Adapter):
             if not database.open():
                 print("Could not open settings database")
                 return
-
+            
             config = database.load_config()
             database.close()
+            
         except:
             print("Error! Failed to open settings database.")
         
@@ -219,70 +378,787 @@ class VocoAdapter(Adapter):
             print("Error loading config from database")
             return
         
-        print(str(config))
-        
-        # Connection status preference
-        try:
-            if 'Microphone' in config:
-                print("-Microphone is present in the config data.")
-                self.microphone = str(config['Microphone'])
+        if self.DEV:
+            print(str(config))
 
-            if 'Speaker' in config:
-                print("-Speaker is present in the config data.")
-                self.speaker = str(config['Speaker'])
-                
-            if 'Debugging' in config:
-                print("Debugging was in config")
-                self.DEBUG = bool(config['Debugging'])
+        if 'Debugging' in config:
+            print("-Debugging was in config")
+            self.DEBUG = bool(config['Debugging'])
+            if self.DEBUG:
                 print("Debugging enabled")
-            else:
-                self.DEBUG = False
+
+        try:
+            store_updated_settings = False
+            if 'Microphone' in config:
+                print("-Microphone is present in the config data: " + str(config['Microphone']))
+                
+                if len(self.capture_devices) == 0 or str(config['Microphone']) in self.capture_devices:
+                    print("--Using microphone from config")
+                    self.microphone = str(config['Microphone'])         # If the prefered device in config also exists in hardware, then select it.
+                else:
+                    print("--Overriding the selected microphone because that device did not actually exist/was not plugged in.")
+                    config['Microphone'] = self.capture_devices[0]      # If the prefered device in config does not actually exist, but the scan did sho connected hardware, then select the first item from the scan results instead.
+                    self.microphone = self.capture_devices[0]
+                    store_updated_settings = True
+                
+            if 'Speaker' in config:
+                print("-Speaker is present in the config data: " + str(config['Speaker']))
+                
+                if len(self.playback_devices) == 0 or str(config['Speaker']) in self.playback_devices:
+                    print("--Using speaker from config")
+                    self.speaker = str(config['Speaker'])               # If the prefered device in config also exists in hardware, then select it.
+                else:
+                    print("--Overriding the selected speaker because that device did not actually exist/was not plugged in.")
+                    config['Speaker'] = self.playback_devices[0]      # If the prefered device in config does not actually exist, but the scan did sho connected hardware, then select the first item from the scan results instead.
+                    self.speaker = self.playback_devices[0]
+                    store_updated_settings = True
+            
+            if 'Custom assistant' in config:
+                print("-Custom assistant was in config")
+                possible_url = str(config['Custom assistant'])
+                #print(str(possible_url))
+                if possible_url.startswith("http") and possible_url.endswith(".zip") and os.path.isdir("/usr/share/snips"):
+                    print("-Custom assistant data was a good URL.")
+                    self.custom_assistant_url = possible_url
+
+                elif possible_url == "Your new assistant has succesfully been installed":
+                    print("The 'assistant succesfully installed' message was present in the config")
+                else:
+                    print("Cannot use what is in the Custom assistant input field")
+                        
+            # Store the settings that were changed by the add-on.
+            if store_updated_settings:
+
+                print("Storing overridden settings")
+                try:
+                    database = Database('voco')
+                    if not database.open():
+                        print("Error, could not open settings database")
+                        #return
+                    else:
+                        database.save_config(config)
+                        database.close()
+                        if self.DEBUG:
+                            print("Stored overridden preferences into the database")
+                        
+                except:
+                    print("Error! Failed to store overridden settings in database.")
+                
+            if 'Feedback sounds' in config:
+                print("-Feedback sounds preference was in config")
+                self.feedback_sounds = bool(config['Debugging'])
+
+            if 'Increase vocabulary' in config:
+                print("-Vocabulary size preference was in config")
+                self.increase_vocabulary = bool(config['Increase vocabulary'])
+
+
                 
         except:
             print("Error loading part 1 of settings")
             
-        
-        
-        # Metric or Imperial
+            
+            
+        # Time zone
         try:
+            if 'Time zone' in config:
+                print("-Time zone is present in the config data.")
+                self.time_zone = str(config['Time zone'])
+                
+        # Metric or Imperial
             if 'Metric' in config:
+                print("-Metric preference is present in the config data.")
                 self.metric = bool(config['Metric'])
                 if self.metric == False:
-                    self.temperature_unit = 'degree fahrenheit'
+                    self.temperature_unit = 'degrees fahrenheit'
             else:
                 self.metric = True
+                
         except Exception as ex:
-            print("Metric/Fahrenheit preference not found." + str(ex))
+            print("Error loading locale information from config: " + str(ex))
             
             
         # Api token
         try:
             if 'Token' in config:
-                print("-Token is present in the config data.")
                 self.token = str(config['Token'])
-                
+                print("-Authorization token is present in the config data.")
         except:
             print("Error loading api token from settings")
 
+        # Speaker volume
         try:
             if 'Speaker volume' in config:
-                self.speaker_volume = int(config['Speaker volume'])
-                print("-Speaker volume is present in the config data: " + str(self.speaker_volume))
-                #device = alsaaudio.PCM(device=device)
+                print("-Speaker volume is present in the config data")
+                if 'speaker-volume' not in self.persistent_data:
+                    self.persistent_data['speaker_volume'] = int(config['Speaker volume'])
+        except Exception as ex:
+            print("Error, couldn't get volume level: " + str(ex))
+
+        # Feedback sounds
+        try:
+            if 'Feedback sounds' in config:
+                self.feedback_sounds = bool(config['Feedback sounds'])   
+                print("-Feedback sounds preference is present in the config data")
+        except Exception as ex:
+            print("Error, couldn't get feedback sounds preference: " + str(ex))
+            
+
+            
+    def set_status_on_thing(self,status_string):
+        if self.DEBUG:
+            print(str(status_string))
+        try:
+            if self.devices['voco'] != None:
+                self.devices['voco'].properties['status'].set_cached_value_and_notify( str(status_string) )
+        except:
+            print("Error setting status of voco device")
+
+
+
+    def install_snips(self):
+        """Install Snips using a shell command"""
+        try:
+            #busy = os.path.isfile("snips/busy_installing")
+            #done = os.path.isfile("snips/snips_installed")
+            if not os.path.isdir("/usr/share/snips"):
+                print("It seems Snips hasn't been (fully) installed yet - /usr/share/snips directory could not be found. Cancelling installation of assistant.")
                 try:
-                    import alsaaudio
-                    #alsa_pcm = alsaaudio.PCM(alsaaudio.PCM_PLAYBACK)
-                    #print("ALSA: " + str(alsa_pcm.pcms()))
-                    #alsa_pcm.setvolume(self.speaker_volume)
-                    m = alsaaudio.Mixer()
-                    #vol = m.getvolume()
-                    m.setvolume(self.speaker_volume)
+                    os.remove(done_path)
+                except:
+                    pass
+
+            busy_path = str(os.path.join(self.addon_path,"busy_installing"))
+            done_path = str(os.path.join(self.addon_path,"snips_installed"))
+            busy = os.path.isfile(busy_path)
+            done = os.path.isfile(done_path)
+
+            if done:
+                print("Snips is installed")
+                return True
+            
+            if busy:
+                print("Snips is already busy being installed")
+                self.set_status_on_thing("Installing?")
+                installation_starting_time = os.path.getmtime(busy_path)
+                current_time = int(time.time())
+                if current_time - installation_starting_time > 900: # Installation shouldn't really take longer than 15 minutes
+                    print("It's been more than 15 minutes since the Snips installation started and it still hasn't finished. Something may have gone wrong.")
+                    try:
+                        os.remove(busy_path)
+                    except:
+                        pass
+                    print("If you pause and restart this add-on it will try to install Snips again. Or you can wait a few more minutes")
+                    
+            # Start installing Snips
+            else:
+                command = str(os.path.join(self.addon_path,"install_snips.sh")) + " install"
+                self.set_status_on_thing("Installing Snips")
+                print("Snips install command: " + str(command))
+                for line in run_command(command):
+                    print(str(line))
+                    if line.startswith('Command success'):
+                        self.set_status_on_thing("Succesfully installed Snips")
+                        return True
+                    elif line.startswith('Command failed'):
+                        self.set_status_on_thing("Error installing Snips")
+                        
+        except Exception as ex:
+            self.set_status_on_thing("Error during Snips installation")
+            
+        return False
+
+
+    def download_assistant(self):
+        target_file_path = os.path.join(self.addon_path,"snips","assistant.zip")
+        try:
+            if self.custom_assistant_url.startswith('http') == False:
+                print("Url to download did not start with http")
+                return False
+            self.set_status_on_thing("Downloading assistant")
+            try:
+                os.remove(target_file_path)
+                if self.DEBUG:
+                    print("removed old assistant.zip")
+            except:
+                pass
+
+            if download_file(self.custom_assistant_url,target_file_path):
+                self.set_status_on_thing("Succesfully downloaded assistant")
+                return True
+            else:
+                self.set_status_on_thing("Error downloading assistant")
+                return False
+            
+        except Exception as ex:
+            print("Download assistant: error:" + str(ex))
+            self.set_status_on_thing("Error downloading assistant")
+        return False
+
+
+    def install_assistant(self):
+        print("Installing assistant")
+        try:
+            if not os.path.isdir("/usr/share/snips"):
+                print("It seems Snips hasn't been (fully) installed yet - /usr/share/snips directory could not be found. Cancelling installation of assistant.")
+                self.snips_installed = False
+                return
+            if not os.path.isfile( os.path.join(self.addon_path,"snips","assistant.zip") ):
+                print("Error: cannot install assistant: there doesn't seem to be an assistant.zip file in the snips folder of the addon.")
+                return
+            try:
+                os.remove(os.path.join(self.addon_path,"assistant_installed"))
+            except:
+                pass
+            command = os.path.join(self.addon_path,"install_snips.sh") + " install_assistant"
+            for line in run_command(command):
+                print(str(line))
+                if line.startswith('Command success'):
+                    self.set_status_on_thing("Succesfully installed assistant")
+                    return True
+                elif line.startswith('Command failed'):
+                    self.set_status_on_thing("Error installing assistant")
+                    return False
+        except Exception as ex:
+            print("installing assistant: error: " + str(ex))
+        return False
+
+
+    def disable_snips_telemetry(self):
+        filename = "/usr/share/snips/assistant/assistant.json"
+        should_copy_to_assistant = False
+        current_assistant = ""
+
+        try:
+            #current_assistant = ""
+            with open(filename, 'r') as f:
+                for index,line in enumerate(f):
+                    if 'analyticsEnabled\" : true' in line:
+                        print("analytics enabled in line")
+                        line = line.replace("true", "false")
+                        should_copy_to_assistant = True
+                    elif 'heartbeatEnabled\" : true' in line:
+                        print("heartbeat enabled in line: ")
+                        line = line.replace("true", "false")
+                        should_copy_to_assistant = True
+                    current_assistant += line
+
+        except Exception as ex:
+            print("Error while analyzing current assistant.json file: " + str(ex))
+            return
+            
+        try:
+            if should_copy_to_assistant:
+                print("Creating a new assistant.json configuration file:")
+                print(str(current_assistant))
+
+                local_filename = str(os.path.join(self.addon_path,"assistant.json"))
+                try:
+                    with open(local_filename, 'w+') as f:
+                        f.seek(0)
+                        f.write(current_assistant)
+                        f.truncate()
+                        #print("Succesfully overwritten the local assistant.json file")
+                            
                 except Exception as ex:
-                    print("Could not load pyalsaaudio: " + str(ex))
+                    print("Error storing the new assistant.json in the local add-on directory: " + str(ex))
+                    should_copy_to_assistant = False
+                    
+            elif self.DEBUG:
+                    print("Telemetry is already disabled in the /usr/share/snips/assistant.jon file")
+
+            if should_copy_to_assistant:
+                print("Copying assistant.json to /usr/share/snips/assistant")
+                command = "sudo cp " + str(os.path.join(self.addon_path,"assistant.json")) + " " + str(filename)
+                for line in run_command(command):
+                    print(str(line))
+                    if "Command success" in line:
+                        return True
+        except Exception as ex:
+            print("Error while trying to replace the assistant.json file with the telemetry-free version: " + str(ex))
+        return False
+
+
+
+    def download_extra_vocabulary(self):
+        target_file = os.path.join(self.addon_path,"snips","snips-asr-model-en-500MB_0.6.0-alpha.4_armhf.deb")
+        try:
+            if os.path.isfile(target_file):
+                if self.DEBUG:
+                    print("It looks like a vocabulary file was already (partially) downloaded.")
+                    return True # temporary debug option
+                try:
+                    os.remove(target_file)
+                    if self.DEBUG:
+                        print("Old vocabulary file has been removed")
+                except:
+                    print("Error removing old vocabulary file. Will try to download anyway.")
+
+            self.set_status_on_thing("Downloading 143Mb vocabulary")
+            if download_file(self.larger_vocabulary_url,target_file):
+                self.set_status_on_thing("Succesfully downloaded vocabulary")
+                return True
+            
+        except Exception as ex:
+            print("Error: download vocabulary: " + str(ex))
+        self.set_status_on_thing("Error downloading vocabulary")
+        return False
+
+
+    def install_extra_vocabulary(self):
+        try:
+            busy_path = str(os.path.join(self.addon_path,"busy_installing_vocabulary"))
+            done_path = str(os.path.join(self.addon_path,"vocabulary_installed"))
+            busy = os.path.isfile(busy_path)
+            done = os.path.isfile(done_path)
+            if done:
+                if self.DEBUG:
+                    print("Extra dictionary has already been installed")
+                return False
+            elif busy:
+                if self.DEBUG:
+                    print("Already busy installing the larger vocabulary?")
+                return False
+            elif not os.path.isdir(os.path.normpath("/usr/share/snips")):
+                print("It seems Snips hasn't been (fully) installed yet - /usr/share/snips directory could not be found.")
+                return
+            
+            self.set_status_on_thing("Installing bigger vocabulary")
+            command = os.path.join(self.addon_path,"install_snips.sh") + " install_extra_vocabulary"
+            for line in run_command(command):
+                print(str(line))
+                if line.startswith('Command success'):
+                    self.set_status_on_thing("Succesfully increased vocabulary")
+                    return True
+                elif line.startswith('Command failed'):
+                    self.set_status_on_thing("Error increasing vocabulary")
+                    return False
+            if self.DEBUG:
+                print("Run command ended without an ending sentence?")
+        except Exception as ex:
+            print("Error increasing vocabulary: " + str(ex))
+        return False
+
+
+
+    def scan_alsa(self,device_type):
+        """ Checks what audio hardware is available """
+        result = []
+        try:
+            if device_type == "playback":
+                command = "aplay -l"
+            if device_type == "capture":
+                command = "arecord -l"
+                
+            for line in run_command(command):
+                #print(str(line))
+                
+                if line.startswith('card 0'):
+                    if 'device 0' in line:
+                        if device_type == 'playback':
+                            result.append('Built-in headphone jack (0,0)')
+                        if device_type == 'capture':
+                            result.append('Built-in microphone (0,0)')
+                    elif 'device 1' in line:
+                        if device_type == 'playback':
+                            result.append('Built-in HDMI (0,1)')
+                        if device_type == 'capture':
+                            result.append('Built-in microphone, channel 2 (0,1)')
+                            
+                if line.startswith('card 1'):
+                    if 'device 0' in line:
+                        if device_type == 'playback':
+                            result.append('Plugged-in (USB) device  (1,0)')
+                        if device_type == 'capture':
+                            result.append('Plugged-in (USB) microphone (1,0)')
+                    elif 'device 1' in line:
+                        if device_type == 'playback':
+                            result.append('Plugged-in (USB) device, channel 2 (1,1)')
+                        if device_type == 'capture':
+                            result.append('Plugged-in (USB) microphone, channel 2 (1,1)')
+                            
+                if line.startswith('card 2'):
+                    if 'device 0' in line:
+                        if device_type == 'playback':
+                            result.append('Second plugged-in (USB) device (2,0)')
+                        if device_type == 'capture':
+                            result.append('Second plugged-in (USB) microphone (2,0)')
+                    elif 'device 1' in line:
+                        if device_type == 'playback':
+                            result.append('Second plugged-in (USB) device, channel 2 (2,1)')
+                        if device_type == 'capture':
+                            result.append('Second plugged-in (USB) microphone, channel 2 (2,1)')
+                            
+        except Exception as e:
+            print("Error during ALSA scan: " + str(e))
+        return result
+
+
+
+    def configure_alsa(self):
+        """ Store new ALSA settings into a new /etc/asound.conf file """
+        filename = str(os.path.normpath(os.path.join(self.addon_path,"asound.conf")))
+        etc_asound_path = os.path.normpath("/etc/asound.conf")
+        if self.DEBUG:
+            print("configure_alsa: path to asound.conf is: " + str(filename))
+        
+        should_copy_to_etc = False
+        
+        try:
+            # We generate potentially new asound.conf file contents.
+            new_asound = 'pcm.!default {\n type asym\n  playback.pcm {\n   type plug\n   slave.pcm "hw:'
+            
+            # Mix in the audio output
+            
+            if   self.speaker == "Built-in headphone jack (0,0)":
+                new_asound += "0,0"
+            elif self.speaker == "Built-in HDMI (0,1)":
+                new_asound += "0,1"
+            elif self.speaker == "Plugged-in (USB) device (1,0)":
+                new_asound += "1,0"
+            elif self.speaker == "Plugged-in (USB) device, channel 2 (1,1)":
+                new_asound += "1,1"
+            elif self.speaker == "Second plugged-in (USB) device (2,0)":
+                new_asound += "2,0"
+            elif self.speaker == "Second plugged-in (USB) device, channel 2 (2,1)":
+                new_asound += "2,1"
+            else:
+                print("Speaker was not set in settings.")
+                return
+            
+            new_asound +='"\n }\n  capture.pcm {\n   type plug\n   slave.pcm "hw:'
+            
+            # Mix in the audio input
+            
+            if   self.microphone == "Built-in microphone (0,0)":
+                new_asound += "0,0"
+            elif self.microphone == "Built-in microphone, channel 2 (0,1)":
+                new_asound += "0,1"
+            elif self.microphone == "Plugged-in (USB) microphone (1,0)":
+                new_asound += "1,0"
+            elif self.microphone == "Plugged-in (USB) microphone, channel 2 (1,1)":
+                new_asound += "1,1"
+            elif self.microphone == "Second plugged-in (USB) microphone (2,0)":
+                new_asound += "2,0"
+            elif self.microphone == "Second plugged-in (USB) microphone, channel 2 (2,1)":
+                new_asound += "2,1"
+            else:
+                print("Microphone was not set in settings.")
+                return
+                
+            new_asound += '"\n  }\n}'
+            
+            old_asound = ""
+            with open(filename, 'r+') as f:
+                old_asound = f.read()
+            
+            # Compare the new settings string to the existing settings file.
+            maxlen=len(new_asound) if len(old_asound)<len(new_asound) else len(old_asound)
+            for i in range(maxlen):
+                letter1=old_asound[i:i+1]
+                letter2=new_asound[i:i+1]
+                if letter1 != letter2:
+                    should_copy_to_etc  = True
+        except Exception as ex:
+            print("Error while configuring ALSA 1: " + str(ex))
+            
+        try:
+            if should_copy_to_etc:
+                print("Creating a new ALSA configuration file:")
+                print(str(new_asound))
+                try:
+                    with open(filename, 'w+') as f:
+                        f.seek(0)
+                        f.write(new_asound)
+                        f.truncate()
+                        if self.DEBUG:
+                            print("Succesfully overwritten the local asound.conf file")
+                            
+                except Exception as ex:
+                    print("Error storing new ALSA configuraton in local asound.conf file: " + str(ex))
+                    should_copy_to_etc = False
+                    
+            else:
+                #print("Audio configuration has not changed.") # But perhaps we should copy the file to /etc anyway, if it's missing there.
+                if not os.path.isfile(etc_asound_path):
+                    print("Copying ALSA configuration file to /etc.")
+                    should_copy_to_etc = True
+            
+            if should_copy_to_etc:
+                if self.DEBUG:
+                    print("Copying local asound.conf to /etc")
+                command = "sudo cp " + filename + " " + etc_asound_path
+                for line in run_command(command):
+                    print(str(line))
+                    if line.startswith('Command success'):
+                        self.set_status_on_thing("Succesfully changed audio settings")
+                        return True
+                    elif line.startswith('Command failed'):
+                        self.set_status_on_thing("Error changing audio settings")
+                        return False
+
+        except Exception as ex:
+            print("Error while configuring ALSA 2: " + str(ex))
+
+
+
+    def set_speaker_volume(self,volume): # TODO: store sound card ID number, and use that to set the volume of the correct soundcard instead of the master volume.
+        print("User changed volume")
+
+
+        if int(volume) >= 0 and int(volume) <= 100:
+            self.persistent_data['speaker_volume'] = int(volume)
+
+        try:
+            m = alsaaudio.Mixer()
+            #vol = m.getvolume()
+            try:
+                current_volume = m.getvolume()
+                print("Audio volume was: " + str(current_volume))
+            except Exception as ex:
+                print("Error getting ALSA volume: " + str(ex))
+            m.setvolume(int(volume))
+        except Exception as ex:
+            print("Could not set the volume via pyalsaaudio: " + str(ex))
+            try:
+                # backup method of setting the volume
+                call(["/usr/bin/amixer", "-q", "sset", "'Master'", str(volume) + "%"])
+                if self.DEBUG:
+                    print("set the volume with a system call (backup method)")
+            except Exception as ex:
+                print("The backup method of setting the volume also failed: " + str(ex))
+
+
+
+    def clock(self, voice_messages_queue):
+        """ Runs every second and handles the various timers """
+        while True:
+            time.sleep(1)
+            voice_message = ""
+            try:
+                utcnow = datetime.now(tz=pytz.utc)
+                current_time = int(utcnow.timestamp())
+                self.current_utc_time = current_time
+                #print(str(self.current_utc_time))
+
+                for index, item in enumerate(self.action_times):
+                    #print("timer item = " + str(item))
+
+                    try:
+                        # Wake up alarm
+                        if item['type'] == 'wake' and current_time >= int(item['moment']):
+                            if self.DEBUG:
+                                print("(...) WAKE UP")
+                            self.quick_speak("It's time to wake up")
+                            os.system("aplay " + str(os.path.join(self.addon_path,"assets","end_spot.wav")))
+                            os.system("aplay " + str(os.path.join(self.addon_path,"assets","end_spot.wav")))
+                            os.system("aplay " + str(os.path.join(self.addon_path,"assets","end_spot.wav")))
+                            os.system("aplay " + str(os.path.join(self.addon_path,"assets","end_spot.wav")))
+                        
+                        # Normal alarm
+                        elif item['type'] == 'alarm' and current_time >= int(item['moment']):
+                            if self.DEBUG:
+                                print("(...) ALARM")
+                            self.quick_speak("This is your alarm notification")
+                            os.system("aplay " + str(os.path.join(self.addon_path,"assets","end_spot.wav")))
+                            os.system("aplay " + str(os.path.join(self.addon_path,"assets","end_spot.wav")))
+                            os.system("aplay " + str(os.path.join(self.addon_path,"assets","end_spot.wav")))
+                            os.system("aplay " + str(os.path.join(self.addon_path,"assets","end_spot.wav")))
+
+                        # Reminder
+                        elif item['type'] == 'reminder' and current_time >= int(item['moment']):
+                            if self.DEBUG:
+                                print("(...) REMINDER")
+                            os.system("aplay " + str(os.path.join(self.addon_path,"assets","end_spot.wav")))
+                            voice_message = "This is a reminder to " + str(item['reminder_text'])
+                            self.quick_speak(voice_message)
+                            
+                        
+
+                        # Delayed setting of a boolean state
+                        elif item['type'] == 'actuator' and current_time >= int(item['moment']):
+                            if self.DEBUG:
+                                print("(...) TIMED ACTUATOR SWITCHING")
+                            delayed_action = True
+                            intent_set_state(self, item['hermes'],item['intent_message'], delayed_action)
+                            
+                        # Delayed setting of a value
+                        elif item['type'] == 'value' and current_time >= int(item['moment']):
+                            if self.DEBUG:
+                                print("(...) TIMED SETTING OF A VALUE")
+                            if item['original_value'] != None:
+                                delayed_value = item['original_value']
+                            else:
+                                delayed_value = None
+                            intent_set_value(self, item['hermes'],item['intent_message'], delayed_value)
+                            
+                        # Countdown
+                        elif item['type'] == 'countdown':
+                            #if self.countdown >= current_time: # This one is reversed - it's only trigger as long as it hasn't reached the target time.
+                            if item['moment'] >= current_time: # This one is reversed - it's only trigger as long as it hasn't reached the target time.
+
+                                countdown_delta = self.countdown - current_time
+                                
+                                if countdown_delta > 86400:
+                                    if countdown_delta % 86400 == 0:
+                                        
+                                        days_to_go = countdown_delta//86400
+                                        if days_to_go > 1:
+                                            voice_message = "countdown has " + str(days_to_go) + " days to go"
+                                        else:
+                                            voice_message = "countdown has " + str(days_to_go) + " days to go"
+                                            
+                                            
+                                elif countdown_delta > 3599:
+                                    if countdown_delta % 3600 == 0:
+                                        
+                                        hours_to_go = countdown_delta//3600
+                                        if hours_to_go > 1:
+                                            voice_message = "countdown has " + str(hours_to_go) + " hours to go"
+                                        else:
+                                            voice_message = "countdown has " + str(hours_to_go) + " hour to go"
+                                            
+                                            
+                                elif countdown_delta > 59:
+                                    if countdown_delta % 60 == 0:
+                                        
+                                        minutes_to_go = countdown_delta//60
+                                        if minutes_to_go > 1:
+                                            voice_message = "countdown has " + str(minutes_to_go) + " minutes to go"
+                                        else:
+                                            voice_message = "countdown has " + str(minutes_to_go) + " minute to go"
+                                            
+                                elif countdown_delta == 30:
+                                    voice_message = "Counting down 30 seconds"
+                                    
+                                elif countdown_delta < 11:
+                                    voice_message = str(int(countdown_delta))
+                                    
+                                if voice_message != "":
+                                    print("(...) " + str(voice_message))
+                                    self.quick_speak(voice_message)
+                        
+                        # Anything without a type will be treated as a normal timer.
+                        elif current_time >= int(item['moment']):
+                            os.system("aplay " + os.path.join(self.addon_path,"assets","end_spot.wav"))
+                            if self.DEBUG:
+                                print("(...) Your timer is finished")
+                            self.quick_speak("Your timer is finished")
+                            
+                    except Exception as ex:
+                        print("Clock: error recreating event from timer: " + str(ex))
+
+                # Removed timers whose time has come 
+                timer_removed = False
+                for index, item in enumerate(self.action_times):
+                    if int(item['moment']) <= current_time:
+                        timer_removed = True
+                        if self.DEBUG:
+                            print("removing timer from list")
+                        del self.action_times[index]
+                if timer_removed:
+                    print("at least one timer was removed")
+                    #self)
+                
+
+            except Exception as ex:
+                print("Clock error: " + str(ex))
+                continue
+
+            try:
+                if self.h != None:
+                    notifier_message = voice_messages_queue.get(False)
+                    if notifier_message != None:
+                        if self.DEBUG:
+                            print("Incoming message from notifier: " + str(notifier_message))
+                        self.quick_speak(str(notifier_message))
+            except:
+                pass
+
+    # Count how many timers, alarms and reminders have now been set, and update the voco device
+    def update_timer_counts(self):
+        
+        updated_timer_counts = {'timer':0,'alarm':0,'reminder':0}
+        for index, item in enumerate(self.action_times):
+            current_type = item['type']
+            if current_type == "wake":
+                current_type = "alarm"
+            updated_timer_counts[current_type] += 1
+        if self.DEBUG:
+            if self.DEBUG:print("updated timer counts = " + str(updated_timer_counts))
+        self.timer_counts = updated_timer_counts
+        
+        try:
+            for timer_type, count in self.timer_counts.items():
+            #for item in self.timer_counts: #enumerate(self.timer_counts):
+                #print("enumerating: " + str(timer_type) + ": " + str(count))
+                self.devices['voco'].properties[ str(timer_type) ].set_cached_value_and_notify( int(count) )
+        except Exception as ex:
+            print("Could not update timer counts on the voco device: " + str(ex))
+
+    
+    def unload(self):
+        print("Shutting down Voco. Bye!")
+        self.set_status_on_thing("Bye")
+        self.set_snips_state(0)
+
+
+    def remove_thing(self, device_id):
+        try:
+            obj = self.get_device(device_id)        
+            self.handle_device_removed(obj)                     # Remove from device dictionary
+            if self.DEBUG:
+                print("User removed Voco device")
+        except:
+            print("Could not remove things from devices")
+            
+    
+    # Turn Snips services on or off
+    def set_snips_state(self, active=False):
+        
+        if active == True:
+            action = "start"
+        else:
+            action = "stop"
+        if self.DEBUG:
+            print(action + " Snips")
+
+        try:
+            if active:
+                sleep(1)
+                self.devices['voco'].connected = True
+                self.devices['voco'].connected_notify(True)
+                self.set_status_on_thing("Running")
+            else:
+                self.devices['voco'].connected = False
+                self.devices['voco'].connected_notify(False)
+                self.set_status_on_thing("Stopped")
+        except Exception as ex:
+            print("Error settings voco_device state: " + str(ex))
+
+        try:    
+            for snips_part in self.snips_parts:
+                call(["sudo","systemctl", str(action), str(snips_part)]) # TODO: maybe change this to the run_command function that is used everywhere
                 
         except Exception as ex:
-            print("Error, couldn't set volume level: " + str(ex))
-            
+            print("Error settings Snips state: " + str(ex))
+
+
+    def set_feedback_sounds(self,state):
+        print("user wants to switch feedback sounds to: " + str(state))
+        if self.h == None:
+            print("Error: no Hermes object")
+            return
+        else:
+            try:
+                site_message = SiteMessage('default')
+                if state == True:
+                    self.h.enable_sound_feedback(site_message)
+                else:
+                    self.h.disable_sound_feedback(site_message)
+            except:
+                print("Error. Was unable to change the feedback sounds preference")
+
 
  
 
@@ -292,18 +1168,14 @@ class VocoAdapter(Adapter):
         
         timeout -- Timeout in seconds at which to quit pairing
         """
-        #print()
-        if self.DEBUG:
-            print("PAIRING INITIATED")
+        #if self.DEBUG:
+        #    print("Pairing initiated")
         
         if self.pairing:
-            print("-Already pairing")
+            #print("-Already pairing")
             return
           
         self.pairing = True
-        
-        for item in self.action_times:
-            print("action time: " + str(item))
         
         return
     
@@ -315,1005 +1187,737 @@ class VocoAdapter(Adapter):
 
 
 
-    def api_get(self, path):
+    def api_get(self, api_path):
+        """Returns data from the WebThings Gateway API."""
         print("GET PATH = " + str(path))
-        print("GET TOKEN = " + str(self.token))
+        #print("GET TOKEN = " + str(self.token))
+        if self.token == None:
+            print("PLEASE ENTER YOUR AUTHORIZATION CODE IN THE SETTINGS PAGE")
+            self.set_status_on_thing("Authorization code missing, check settings")
+            self.quick_speak("The authorization code is missing. Check my settings page for details.")
+            return []
+        
         try:
-            r = requests.get('http://127.0.0.1:8080' + path, headers={
+            r = requests.get(self.server + api_path, headers={
                   'Content-Type': 'application/json',
                   'Accept': 'application/json',
                   'Authorization': 'Bearer ' + str(self.token),
                 }, verify=False)
-            print(r.status_code, r.reason)
-            print("AJAX JSON = " + str(r.text))
-            if r.status_code == 500:
-                print("internal server error. Can mean that the target device is disconnected.")
-                return json.loads('{"error":"disconnected"}')
+            if self.DEBUG:
+                print("API GET: " + str(r.status_code) + ", " + str(r.reason))
+
+            if r.status_code != 200:
+                return {"error": r.status_code}
+                
             else:
                 return json.loads(r.text)
+            
         except Exception as ex:
             print("Error doing http request/loading returned json: " + str(ex))
             return [] # or should this be {} ? Depends on the call perhaps.
 
 
-    def api_put(self, path, json_dict):
-        print("")
-        print("+++++++++++ PUT +++++++++++++")
-
-        #full_path = '{}/things/{}/properties/{}'.format(
-        #    self.server,
-        #    self.thing_id,
-        #    self.property_id,
-        #)
-        full_path = "http://127.0.0.1:8080/things/MySensors-33/properties/33-1-2"
-        
-        property_id = '33-1-2'
-        data = {
-            property_id: True,
-        }
+    def api_put(self, api_path, json_dict):
+        """Sends data to the WebThings Gateway API."""
 
         headers = {
             'Accept': 'application/json',
             'Authorization': 'Bearer {}'.format(self.token),
         }
-
         try:
-            print("trying api put now")
-
             r = requests.put(
-                full_path,
-                json=data,
+                self.server + api_path,
+                json=json_dict,
                 headers=headers,
+                verify=False
             )
-            j = r.json()
+            if self.DEBUG:
+                print("API PUT: " + str(r.status_code) + ", " + str(r.reason))
 
-            print(r.status_code, r.reason, j)
-
-            if r.status_code == 200:
-                return j
+            if r.status_code != 200:
+                return {"error": r.status_code}
             else:
-                return {"error": "PUT failed"}
+                return json.loads(r.text)
 
         except Exception as ex:
             print("Error doing http request/loading returned json: " + str(ex))
-            return {"error": "PUT failed"}
+            return {"error": "I could not connect to the web things gateway"}
         
-        
-    def api_put_old(self, path, json_dict):
-        print("")
-        print("+++++++++++ PUT +++++++++++++")
-        
-        #full_path = 'http://127.0.0.1:8080' + str(path)
-        full_path = "http://192.168.2.31:8080/things/MySensors-33/properties/33-1-2"
-        
-        data = '{"33-1-2":true}'
-        #data = {"33-1-2":True}
-        data = {"33-1-2": True}
-        
-        bearer_string = 'Bearer ' + str(self.token)
-        
-        headers = { 
-                    'Accept': 'application/json',
-                    'Authorization': bearer_string
-                }
+
+
+    def save_persistent_data(self):
+        if self.DEBUG:
+            print("Saving to persistence data store")
 
         try:
-            print("trying api put now")
-            r = requests.put(
-                full_path,
-                json=data,
-                headers=headers
-            )
-            print(r.status_code, r.reason)
-            print("received text = " + str(r.text))
-            if r.status_code == 200:
-                return r.json()
+            if not os.path.isfile(self.persistence_file_path):
+                open(self.persistence_file_path, 'a').close()
+                if self.DEBUG:
+                    print("Created an empty persistence file")
             else:
-                return {"error":"PUT failed"}
-        
-            #dict_from_json = json.loads(r.text)
-            #print("dict_from_json = " + str(dict_from_json))
-            #return dict_from_json
-        except Exception as ex:
-            print("Error doing http request/loading returned json: " + str(ex))
-            return {"error":"PUT failed"}
+                if self.DEBUG:
+                    print("Persistence file existed. Will try to save to it.")
 
-        
-    def api_put_new(self, path, json_dict):
-        print("NEW api put called")
+            with open(self.persistence_file_path) as f:
+                if self.DEBUG:
+                    print("saving: " + str(self.persistent_data))
+                json.dump( self.persistent_data, open( self.persistence_file_path, 'w+' ) )
+                return True
+
+        except Exception as ex:
+            print("Error: could not store data in persistent store: " + str(ex) )
+            return False
+
+
+    def quick_speak(self, voice_message="",site_id="default"):
         try:
-            r = requests.put(
-                'http://gateway.local:8080/things/MySensors-33/properties/33-1-2',
-                data=json.dumps({'33-1-2': True}),
-                headers={
-                    'Content-Type': 'application/json',
-                    'Accept': 'application/json',
-                    'Authorization': bearer_string,
-                },
-            )
-            
-            #print(r.status_code, r.reason)
-            print(r.status_code, r.reason, r.json())
-            print("PUT AJAX JSON = " + str(r.text))
-            return json.loads(r.text)
+            self.h.publish_start_session_notification(site_id, voice_message, None)
+        except:
+            print("Cannot speak, connection to Snips hasn't been made yet")
+
+
+
+    def master_intent_callback(self,hermes, intent_message):    # Triggered everytime Snips succesfully recognises a voice intent
+        incoming_intent = str(intent_message.intent.intent_name)
+        sentence = str(intent_message.input).lower()
+
+        if self.DEBUG:
+            print("")
+            print("")
+            print(">>")
+            print(">> incoming intent: " + incoming_intent)
+            print(">> intent_message: " + sentence)
+            print(">>")
+        
+        slots = self.extract_slots(intent_message)
+        if self.DEBUG:
+            print("INCOMING SLOTS = " + str(slots))
+
+        # Get all the things data via the API
+        try:
+            self.things = self.api_get("/things")
         except Exception as ex:
-            print("Error doing http request/loading returned json: " + str(ex))
-            return {}
+            print("Error, couldn't load things: " + str(ex))
+
+        # Teach Snips the names of all the things
+        try:
+            self.inject_updated_things_into_snips() # will check if there are new things/properties that Snips should learn about
+        except Exception as ex:
+            print("Error, couldn't teach Snips the names of your things: " + str(ex))  
+
+        try:
+            # Alternative routing. Some heuristics, since Snips sometimes chooses the wrong intent.
+            if str(slots['property']) == "state":          
+                #print("using alternative route to get_boolean")
+                intent_get_boolean(self,hermes, intent_message) # TODO Maybe it would be better to merge getting sensor value and getting actuator states into one intent.
+
+            # Not sure this route is even actually necessary:
+            elif incoming_intent == 'createcandle:set_state' and str(slots['boolean']) == 'state':
+                #print("using alternative route to get_value")
+                intent_get_value(self,hermes, intent_message)
+
+            elif slots['duration'] == None and slots['end_time'] == None and slots['timer_type'] != None:
+                if sentence.startswith("how many alarm") or sentence.startswith("how many timer"):
+                    print("using alternative route to get_timer_count")
+                    intent_get_timer_count(self,hermes, intent_message)
 
 
-        
-        
-#json.dumps(json_dict)
-#data='{\n"35-2-47":"test"\n}',
-#35-1-2
-#35-2-47
-
-
-
-
-    #
-    # INTENT HANDLING
-    #
-
-
-    def intent_set_timer(self, hermes, intent_message):
-        # terminate the session first if not continue
-        hermes.publish_end_session(intent_message.session_id, "")
-        
-        # action code goes here...
-        print('[Received] intent: {}'.format(intent_message.intent.intent_name))
-        
-        slots = extract_slots(intent_message)
-        print(str(slots))
-        
-        # IDEA/TODO check if the word 'countdown' is in the sentence, and then create a separate countdown item? Only one countdown should be possible at a time. If it's set in minutes, it counts down in minutes.
-        
-        voice_message = ""
-        
-        # getting the target time.
-        #target_times = []
-        #if len(slots['duration']) > 0:
-        target_times = slots['duration']  # a list of moments in time
-        #elif slots['time'] != None:
-        #    target_times = slots['time']            # time is a list of one or more time moments.
-        
-        print("amount of target times: " + str(len(target_times)))
-        if len(target_times) == 0:
-            voice_message = "Not enough time information"
-        
-        #if 'countdown' in str(intent_message.input):
-        if slots['timer_type'] != None:
-            if slots['timer_type'] == "countdown":
-                print("STARTING COUNTDOWN")
-                self.countdown = target_times[0]    # only one countdown can exist. It's a special case.
-                voice_message = "Starting countdown"
-                
-            elif slots['timer_type'] == "wake":
-                for time in target_times:
-                    self.action_times.append({"time":int(time),"type":"wake","slots":slots}) # saving the slots may not be required in this instance.
-                voice_message = "OK, I will wake you up"
-            
-            # just make a thread?
-            #hermes.publish_start_session_notification(intent_message.site_id, "Counting down", "")
-        else:
-            print("just a basic timer")
-            #alarm_times.add(slots['duration'])
-            for time in target_times:
-                self.action_times.append({"time":time,"type":"timer","slots":slots})
-            voice_message = "A timer has been set"
-            
-        hermes.publish_start_session_notification(intent_message.site_id, voice_message, "")
-                
-
-
-
-    def intent_stop_timer(self, hermes, intent_message):
-        # terminate the session first if not continue
-        hermes.publish_end_session(intent_message.session_id, "")
-
-        # action code goes here...
-        print('[Received] intent: {}'.format(intent_message.intent.intent_name))
-        
-        slots = extract_slots(intent_message)
-        print(str(slots))
-        
-        voice_message = ""
-        
-        timer_count = len(self.action_times)
-        
-        if slots['timer_type'] == "countdown":
-            print("cancelling countdown")
-            self.countdown = 0
-            voice_message = "the countdown has been disabled"
-        
-        # Remove all timers
-        elif slots['timer_last'] == "all":
-            print("cancelling all timers")
-            self.action_times = []
-            self.countdown = 0
-            if timer_count > 0:
-                voice_message = str(timer_count) + " timers have all been removed"
-            else:
-                voice_message = "There were no timers"
-            # if need to speak the execution result by tts
-
-        # Remove the last timer, or even a certain number of the last timers, like "remove the last three timers"
-        elif slots['timer_last'] == "last":
-            print("removing last timer")
-            
-            if timer_count == 0:
-                voice_message = "There are no timers set"
-            else:
-                try:
-                    if slots['number'] == None:
-                        self.action_times.pop()
-                        voice_message = "the last created timer has been removed"
-                    else:
-                        timers_to_remove = int(slots['number'])
-                        for i in range(timers_to_remove):
-                            self.action_times.pop()
-                        voice_message = str(timers_to_remove) + " timers have been removed"
-                except:
-                    print("Maybe there were no timers to remove?")
-                
-        else:
-            print("stop timer: I should not be possibe.")
-        # if need to speak the execution result by tts
-        hermes.publish_start_session_notification(intent_message.site_id, voice_message, "")
-
-
-
-    # NEW - the boolean intent. Which should really be called get_state...
-    def intent_get_boolean(self, hermes, intent_message):
-        
-        # terminate the session first if not continue
-        hermes.publish_end_session(intent_message.session_id, "") # What is this all about?
-        
-        # action code goes here...
-        print('[Received] intent: {}'.format(intent_message.intent.intent_name))
-        
-        slots = extract_slots(intent_message)
-        print(str(slots))
-        
-        actuator = True
-        found_properties = self.check_things(actuator,slots['thing'],slots['property'])
-        
-        if found_properties != None:
-            print("found some properties")
-            voice_message = ""
-            for found_property in found_properties:
-                if found_property['property_url'] == None or found_property['property'] == None or found_property['type'] != "boolean":
-                    print("Error: this result item was missing a property name or property API url, or was not a boolean")
-                    continue
-                    
-                print("good get boolean: " + str(found_property))
-                
-                api_path = str(found_property['property_url'])
-                print("api path = " + str(api_path))
-                api_result = self.api_get(api_path)
-                #api_result = self.api_get("things/" + check_result['thing'] + "/properties/" + check_result['property'])
-                print("called api for data, it gave:" + str(api_result))
-                #print("value of " + str(search_thing_result['property']) + " is " + str(api_result[search_thing_result['property']]))
-                #return api_result
-                
-                try:
-                    key = str(list(api_result.keys())[0]) # the key is used to extract the returned value from the json.
-                    print("key = " + str(key))
-                except:
-                    print("error parsing the returned json")
-                    continue
-                
-                # Constructing the voice message that will be spoken
-                voice_message = str(found_property['property'])
-                if found_property['thing'] != None:
-                    voice_message += " of " + str(found_property['thing'])
-                voice_message += " is " + str(api_result[key])
-                
-                print("voice message: " + str(voice_message))
-                # if need to speak the execution result by tts
-                hermes.publish_start_session_notification(intent_message.site_id, voice_message, "")
-
-            #hermes.publish_start_session_notification(intent_message.site_id, voice_message, "")
-
-
-    # This could be called get VALUE.. but it's name cannot be changed in the snips interface...
-    def intent_get_state(self, hermes, intent_message):
-        
-        # terminate the session first if not continue
-        hermes.publish_end_session(intent_message.session_id, "") # What is this all about?
-        
-        # action code goes here...
-        print('[Received] intent: {}'.format(intent_message.intent.intent_name))
-        
-        slots = extract_slots(intent_message)
-        print(str(slots))
-        
-        #slots['thing'] = "temperature sensor"
-        #slots['property'] = "humidity"
-        
-        #search_thing_result = self.search_thing(slots)
-        
-        actuator = False
-        found_properties = self.check_things(actuator,slots['thing'],slots['property'])
-        print("found_properties: " + str(found_properties))
-        
-        
-        if found_properties != None:
-            for found_property in found_properties:
-                #api_path = "things/" + str(search_thing_result['thing']) + "/properties/" + str(search_thing_result['property'])
-                
-                #api_path = "things/MySensors-51/properties/humidity"
-                
-                if found_property['property_url'] == None or found_property['property'] == None:
-                    print("Error: this result item was missing a property name or property API url")
-                    continue
-                    
-                api_path = str(found_property['property_url'])
-                print("api path = " + str(api_path))
-                api_result = self.api_get(api_path)
-                #api_result = self.api_get("things/" + check_result['thing'] + "/properties/" + check_result['property'])
-                print("called api for data, it gave:" + str(api_result))
-                #print("value of " + str(search_thing_result['property']) + " is " + str(api_result[search_thing_result['property']]))
-                #return api_result
-                
-                try:
-                    key = str(list(api_result.keys())[0]) # the key is used to extract the returned value from the json.
-                    print("key = " + str(key))
-                except:
-                    print("error parsing the returned json")
-                    continue
-                
-                # Constructing the voice message that will be spoken
-                voice_message = str(found_property['property'])
-                if found_property['thing'] != None:
-                    voice_message += " of " + str(found_property['thing'])
-                voice_message += " is " + str(api_result[key])
-                
-                print("voice message: " + str(voice_message))
-                # if need to speak the execution result by tts
-                hermes.publish_start_session_notification(intent_message.site_id, voice_message, "")
-        
-        # FROM THE OLD WAY
-        #hermes.publish_end_session(intent_message.session_id, "I set it to" + str(percentage))
-
-
-
-
-
-    def intent_set_state(self, hermes, intent_message, delayed_action=False):   # If it is called from a timer, the delayed_action will be set to true.
-        # terminate the session first if not continue
-        hermes.publish_end_session(intent_message.session_id, "")
-
-        # action code goes here...
-        print('[Received] intent: {}'.format(intent_message.intent.intent_name))
-        
-        slots = extract_slots(intent_message)
-        print(str(slots))
-        
-        if slots['boolean'] is None:
-            print("Error, no boolean set")
-            return
-
-
-        
-        #slots['thing'] = "temperature sensor"
-        #slots['property'] = "humidity"
-        
-        #search_thing_result = self.search_thing(slots)
-        
-        actuator = True
-        found_properties = self.check_things(actuator,slots['thing'],slots['property'])
-        print("found_properties: " + str(found_properties))
-        
-    
-        if len(found_properties) > 0:
-            print("properties seem to have been found")
-            #print("search_thing_result['property_url'] = " + str(search_thing_result['property_url']))
-            
-            if delayed_action == False: # to avoid getting into loops, where after the duration this would create another duration. 
-                # Duration toggle
-                # E.g. "turn the heater on for 10 minutes".
-                if len(slots['duration']) == 1:
-                    print("DURATION TOGGLE")
-                    for time in slots['duration']:
-                        self.action_times.append({"time":time,"type":"actuator","slots":slots,"hermes":hermes,"intent_message":intent_message})
-
-                    # if need to speak the execution result by tts
-                    hermes.publish_start_session_notification(intent_message.site_id, "OK, I will let you know when it switches " + str(slots['boolean']), "")
-                    return
-
-                elif len(slots['duration']) > 1:
-                    print("ERROR: a duration for a device toggle should not have multiple time moments?")
-                    return
-
-                # Future moment or period toggle
-                # If the end time has been set, use that. There is a change that a start time has also been set, so deal with that too.
-                # E.g. turn the heater on from 4 till 5 pm
-                elif slots['end_time'] is not None:
-
-                    if slots['start_time'] is not None:
-                        print("has a start time")
-                        # Dual whammy: check if from and to times are set.
-                        self.action_times.append({"time":slots['start_time'],"type":"actuator","slots":slots,"hermes":hermes,"intent_message":intent_message})
-
-                        # Now reverse it for the end time
-                        slots['boolean'] = "on" if slots['boolean'] == "off" else "on"
-                        slots['boolean'] = "lock" if slots['boolean'] == "unlock" else "lock"
-
-                    self.action_times.append({"time":slots['end_time'],"type":"actuator","slots":slots,"hermes":hermes,"intent_message":intent_message})
-
-                    hermes.publish_start_session_notification(intent_message.site_id, "OK, I will signal you when it switches", "")
-                    return
-
-                else:
-                    # A normal immediate switch.
-                    print("No time set, so switching immediately")
+            # Normal routing
+            elif incoming_intent == 'createcandle:get_time':
+                intent_get_time(self, hermes, intent_message)
+            elif incoming_intent == 'createcandle:set_timer':
+                intent_set_timer(self, hermes, intent_message)
+            elif incoming_intent == 'createcandle:get_timer_count':
+                intent_get_timer_count(self, hermes, intent_message)
+            elif incoming_intent == 'createcandle:stop_timer':
+                intent_stop_timer(self, hermes, intent_message)
+            elif incoming_intent == 'createcandle:get_value':
+                intent_get_value(self, hermes, intent_message)
+            elif incoming_intent == 'createcandle:set_state':
+                intent_set_state(self, hermes, intent_message)
+            elif incoming_intent == 'createcandle:set_value':
+                intent_set_value(self, hermes, intent_message, None)
+            elif incoming_intent == 'createcandle:get_boolean':
+                intent_get_boolean(self, hermes, intent_message)
 
             else:
-                print("This is a time delayed replay")
-            
-            
-            
-            
-            for found_property in found_properties:
-                print("Checking found property. url:" + str(found_property['property_url']))
-                print("-type: " + str(found_property['type']))
-                print("- read only? " + str(found_property['readOnly']))
-                try:
-                    if found_property['property_url'] != None and str(found_property['type']) == "boolean" and found_property['readOnly'] == False:
-                    #if hasattr(search_thing_result, 'property_url'):
+                print("Error: the code could not handle that intent. Under construction?")
 
-                        api_result = self.api_get(str(found_property['property_url']))
-                        #api_result = self.api_get("things/" + check_result['thing'] + "/properties/" + check_result['property'])
-                        print("called api for switch data, it gave: " + str(api_result))
+        except Exception as ex:
+            print("Error routing: " + str(ex))
 
-                        key = list(api_result.keys())[0]
-
-                        print("api_result[key] = " + str(api_result[key]) + " =?= " + str(slots['boolean']))
-                        if api_result[key] == slots['boolean']:
-
-                            # TODO: create a list with words tht indicate the boolean values. 
-                            # Otherwise we are comparing "1" and "on".
-
-                            print("SWITCH WAS ALREADY IN DESIRED STATE")
-                            # It's already in the desired state
-                            hermes.publish_start_session_notification(intent_message.site_id, "it's already " + str(slots['boolean']), "")
-
-                        else:
-                            # here we toggle it.
-                            print("SWITCH WAS NOT ALREADY IN DESIRED STATE, SWITCHING NOW")
-
-
-                            # TODO dit stukje moet dus hoger komen:
-                            new_switch_value = ""
-                            if slots['boolean'] == "on" or slots['boolean'] == "locked":
-                                new_switch_value = True
-                            else:
-                                new_switch_value = False
-
-                            system_property_name = found_property['property_url'].rsplit('/', 1)[-1]
-                            print("system_property_name = " + str(system_property_name))
-                            #json_string = '{\n"' + str(system_property_name) + '":' + str(new_switch_value) + '\n}'
-                            #json_string = '{\n"' + str(system_property_name) + '":true\n}'
-                            json_dict = {str(system_property_name).rstrip():str(new_switch_value)}
-                            #json_dict = {"value":new_switch_value}
-                            #json_dict = {"value":"true"}
-                            #json_dict = {"35-2-47":new_switch_value}
-
-                            print("str(json_dict) = " + str(json_dict))
-
-                            #print("json to PUT: " + str(json_dict))
-                            print("path to PUT: " + str(found_property['property_url']))
-                            #api_result = self.api_put(str(found_property['property_url']), json_dict)
-
-                            api_result = self.api_put(str(found_property['property_url']), json_dict)
-
-
-                            print("PUT result = " + str(api_result))
-                            #url.rsplit('/', 1)[-1]
-
-                            # TODO check if the new value was indeed set, and if so, tell the user.
-
-                            hermes.publish_start_session_notification(intent_message.site_id, "Setting " + str(found_property['property']) + " to " + str(slots['boolean']), "")
-                except Exception as ex:
-                    print("Error while dealing with found property: " + str(ex))
-        else:
-            print("Unable to find a thing and property :-(")
-            hermes.publish_start_session_notification(intent_message.site_id, "I can't find that device", "")
-
-
-
-
-
-
-
-
-
-
-
-
-    def intent_set_value(self, hermes, intent_message):
-        # terminate the session first if not continue
-        hermes.publish_end_session(intent_message.session_id, "")
-        
-        # action code goes here...
-        print('[Received] intent: {}'.format(intent_message.intent.intent_name))
-
-        slots = extract_slots(intent_message)
-        print(str(slots))
-
-        # if need to speak the execution result by tts
-        hermes.publish_start_session_notification(intent_message.site_id, "Action2 has been done", "")
-
-
-
-    def master_intent_callback(self,hermes, intent_message):    #triggered everytime a voice intent is recognized
-        print("")
-        print("")
-        print(">>")
-        incoming_intent = intent_message.intent.intent_name
-        print(">> incoming intent: " + str(incoming_intent))
-        print(">> intent_message: " + str(intent_message.input))
-        
-        slots = extract_slots(intent_message)
-        
-        # hacky routing
-        if str(slots['property']) == "state":
-            print("HACKY ROUTING IN ACTION")                # TODO Maybe it would be better to merge getting sensor value and getting actuator states into one intent.
-            self.intent_get_boolean(hermes, intent_message)
-
-        
-        # official routing
-        elif incoming_intent == 'createcandle:set_timer':
-            self.intent_set_timer(hermes, intent_message)
-        elif incoming_intent == 'createcandle:stop_timer':
-            self.intent_stop_timer(hermes, intent_message)
-        elif incoming_intent == 'createcandle:get_state':
-            self.intent_get_state(hermes, intent_message)
-        elif incoming_intent == 'createcandle:set_state':
-            self.intent_set_state(hermes, intent_message)
-        elif incoming_intent == 'createcandle:set_value':
-            self.intent_set_value(hermes, intent_message)
-        elif incoming_intent == 'createcandle:get_boolean':
-            self.intent_get_boolean(hermes, intent_message)
 
 
     def start_blocking(self): 
         MQTT_address = "{}:{}".format(self.MQTT_IP_address, str(self.MQTT_port))
-        with Hermes(MQTT_address) as h:
-            h.subscribe_intents(self.master_intent_callback).start()
 
+        try:
+            with Hermes(MQTT_address) as h:
+                try:
+                    self.h = h
+                    site_message = SiteMessage('default')
+                    if self.feedback_sounds:
+                        self.h.enable_sound_feedback(site_message)
+                    else:
+                        self.h.disable_sound_feedback(site_message)
+                except:
+                    print("Error. Was unable to set the feedback sounds preference")
+                self.h.subscribe_intents(self.master_intent_callback).loop_forever()
 
-    # This is for high level matching logic. Here we decide what to do with the found things.
-    #def search_thing(self,slots):
-    #    
-    #    check_result = self.check_things(False,slots['thing'],slots['property'])
-    #    print("check result: " + str(check_result))
-
-    #    if check_result['double_match'] == True:
-    #        print("GOOD MATCH")
-    #    else:
-    #        print("DIDN'T MATCH BOTH PERFECTLY")
-
-    #    # The check_results function should either provide both values, or it should provide none.
-    #    if check_result['thing'] != None and check_result['property'] != None:
-    #        return check_result
-    #    else:
-    #        return None
-    #            
-
-    # This is where all the complex matching takes place.
-    def check_things(self, boolean, target_thing_title, target_property_title ):
-        print("Checking in things..")
+        except Exception as ex:
+            print("ERROR. starting Hermes (the connection to Snips) failed: " + str(ex))
         
-        if target_thing_title == None and target_property_title == None:
-            print("No thing title AND no property title provided. Cancelling...")
+    
+
+    # Update Snips with the latest names of things and properties. This helps to improve recognition.
+    def inject_updated_things_into_snips(self):
+        """ Teaches Snips what the user's devices and properties are called """
+        try:
+            # Check if any new things have been created by the user.
+            if datetime.utcnow().timestamp() - self.last_injection_time > self.minimum_injection_interval: # TODO datestamp is not strictly UTC, although it doesn't really matter for this use case.
+                fresh_thing_titles = set()
+                fresh_property_titles = set()
+                for thing in self.things:
+                    if 'title' in thing:
+                        fresh_thing_titles.add(clean_up_string_for_speaking(str(thing['title']).lower()))
+                        for thing_property_key in thing['properties']:
+                            if 'title' in thing['properties'][thing_property_key]:
+                                fresh_property_titles.add(clean_up_string_for_speaking(str(thing['properties'][thing_property_key]['title']).lower()))
+
+                operations = []
+                
+                #print("fresh_thing_titles = " + str(fresh_thing_titles))
+                #print("fresh_prop_titles = " + str(fresh_property_titles))
+                
+                try:
+                    thing_titles = set(self.persistent_data['thing_titles'])
+                    property_titles = set(self.persistent_data['property_titles'])
+                except:
+                    print("couldn't load previous title list from persistence.")
+                    thing_titles = set()
+                    property_titles = set()
+
+                if len(thing_titles^fresh_thing_titles) > 0:                           # comparing sets to detect changes in thing titles
+                    print("Thing titles have changed. Will teach Snips the new ones.")
+                    print(str(thing_titles^fresh_thing_titles))
+                    operations.append(
+                        AddInjectionRequest({"Thing" : list(fresh_thing_titles) })
+                    )
+                if len(property_titles^fresh_property_titles) > 0:
+                    print("Thing property titles have changed. Will teach Snips the new ones.")
+                    operations.append(
+                        AddInjectionRequest({"Property" : list(fresh_property_titles) + self.extra_properties + self.capabilities + self.generic_properties + self.numeric_property_names})
+                    )
+
+                # Remember the current list for the next comparison.
+                if operations != []:
+                    try:
+                        self.persistent_data['thing_titles'] = list(fresh_thing_titles)
+                        self.persistent_data['property_titles'] = list(fresh_property_titles)
+                        self.save_persistent_data()
+                        
+                        update_request = InjectionRequestMessage(operations)
+                        with Hermes("localhost:1883") as herm:
+                            herm.request_injection(update_request)
+                        self.last_injection_time = datetime.utcnow().timestamp()
+                    except Exception as ex:
+                         print("Error during injection: " + str(ex))
+            else:
+                print("Not enough time has passed")
+
+        except Exception as ex:
+            print("Error during analysis and injection of your things into Snips: " + str(ex))
+
+
+
+    # This function looks up things that might be a match to the things names or property names that the user mentioned in their request.
+    def check_things(self, actuator, target_thing_title, target_property_title, target_space ):
+        if self.DEBUG:
+            print("SCANNING THINGS")
+        
+        if target_thing_title == None and target_property_title == None and target_space == None:
+            print("No useful input available for a search through the things. Cancelling...")
             return []
         
         
-        result = [] # This will hold all matches
-        
-        
-        fuzzed_title = None         # if we spot a title that's very similar, but not a perfect match.
-        total_property_found_count = 0    # If there is no thing title, but we only find the target property once in all devices, then this could perhaps be the property the user cared about.
-        all_matched_properties = []
-        
+        result = [] # This will hold all found matches
 
-        
         if target_thing_title is None:
-            print("Error, no target title supplied. Will try to get all matching properties")
-            target_thing_title = "all"
-            #return
+            if self.DEBUG:
+                print("No thing title supplied. Will try to matching properties in all devices.")
         else:
             target_thing_title = str(target_thing_title).lower()
-            print("-> target title is: " + str(target_thing_title))
+            if self.DEBUG:
+                print("-> target thing title is: " + str(target_thing_title))
         
         
         if target_property_title is None:
-            print("-> ! No property provided")
+            if self.DEBUG:
+                print("-> No property title provided Will try to get relevant properties.")
         else:
             target_property_title = str(target_property_title).lower()
-            print("-> target thing property title is: " + str(target_property_title))
+            if self.DEBUG:
+                print("-> target property title is: " + str(target_property_title))
         
         try:
+            if self.things == None:
+                print("Error, the things dictionary was empty. Please provice an API key in the add-on setting (or add some things).")
+                return
+            
             for thing in self.things:
-                
-                # the dictionary that represents a single match. There can be multiple matches, for example if the user wants to hear temperature level of all things.
-                match_dict = {
-                        "thing": None,
-                        "property": None,
-                        "double_match": False,
-                        "type": None,
-                        "readOnly": False,
-                        "@type": None,
-                        "property_url": None
-                        }
-                
-                
                 
                 # TITLE
                 
-                possible_fuzzed_title = None    # Used later, by the back-up way of finding the correct thing.
-                
-                current_thing_title = str(thing['title']).lower()
-                if target_thing_title == current_thing_title and target_thing_title != "all":
-                    match_dict['thing'] = current_thing_title
-                    print("FOUND THE CORRECT THING")
-                elif fuzz.ratio(str(target_thing_title), current_thing_title) > 90 and target_thing_title != "all":
-                    print("These thing names are not the same, but very similar. Could be what we're looking for: " + str(thing['title']))
-                    possible_fuzzed_title = current_thing_title
+                try:
+                    current_thing_title = str(thing['title']).lower()
+                    probable_thing_title = None    # Used later, by the back-up way of finding the correct thing.
+                except:
+                    if self.DEBUG:
+                        print("Notice: thing had no title")
+                    try:
+                        current_thing_title = str(thing['name']).lower()
+                    except:
+                        if self.DEBUG:
+                            print("Warning: thing had no name either. Skipping it.")
+                        continue
 
+                try:
+                    
+                    #if self.DEBUG:
+                        #print("")
+                        #print("___" + current_thing_title)
+                    probable_thing_title_confidence = 100
+                    
+                    if target_thing_title == None:  # If no thing title provided, we go over every thing and let the property be leading in finding a match.
+                        pass
+                    
+                    elif target_thing_title == current_thing_title:   # If the thing title is a perfect match
+                        probable_thing_title = current_thing_title
+                        if self.DEBUG:
+                            print("FOUND THE CORRECT THING: " + str(current_thing_title))
+                    elif fuzz.ratio(str(target_thing_title), current_thing_title) > 85:  # If the title is a fuzzy match
+                        if self.DEBUG:
+                            print("This thing title is pretty similar, so it could be what we're looking for: " + str(current_thing_title))
+                        probable_thing_title = current_thing_title
+                        probable_thing_title_confidence = 85
+                    elif target_space != None:
+                        space_title = str(target_space) + " " + str(target_thing_title)
+                        #if self.DEBUG:
+                        #   print("space title = " + str(target_space) + " + " + str(target_thing_title))
+                        if fuzz.ratio(space_title, current_thing_title) > 85:
+                            probable_thing_title = space_title
+                        
+                    elif current_thing_title.startswith(target_thing_title):
+                        if self.DEBUG:
+                            print("partial match:" + str(len(current_thing_title) / len(target_thing_title)))
+                        if len(current_thing_title) / len(target_thing_title) < 2:
+                            # The strings mostly start the same, so this might be a match.
+                            probable_thing_title = current_thing_title
+                            probable_thing_title_confidence = 25
+                    else:
+                        # A title was provided, but we were not able to match it to the current things. Perhaps we can get a property-based match.
+                        continue
+                        
+                except Exception as ex:
+                    print("Error while trying to match title: " + str(ex))
 
 
 
                 # PROPERTIES
                 
-                #numeric_property_counter = 0
-                #property_counter = 0 # Used 
-                
-                
-                # First, if a target property title has been provided we just try and match the actual name.
-                
-                for thing_property_key in thing['properties']:
-                    current_property_title = str(thing['properties'][thing_property_key]['title']).lower()
-                    if current_property_title == target_property_title:
-                        print("FOUND A PROPERTY WITH THE MATCHING NAME")
-                        total_property_found_count += 1 # used later, if we only have a property and not a thing title.
-                        
-                        match_dict['type'] = thing['properties'][thing_property_key]['type']
-                        match_dict['property'] = current_property_title
-                        match_dict['property_url'] = get_api_url(thing['properties'][thing_property_key]['links'])
-                        
-                        
-                        # if the target thing title is 'all', we should save any matching property.
-                        if target_thing_title == "all": # if no thing title has been set
-                            #all_matched_properties.append(thing['properties'][thing_property_key]) # Creating a list of dictionaries with all properties that match.
-                            #match_dict['property'] = current_property_title
-                            #match_dict['property_url'] = get_api_url(thing['properties'][thing_property_key]['links'])
-                            match_dict['thing'] = str(thing['title'])
-                            result.append(match_dict.copy())
-                            
-                        # The optimal situation: they both match perfectly
-                        elif current_thing_title == target_thing_title:
-                            print("DOUBLE PERFECT MATCH")
-                            #match_dict['property'] = current_property_title
-                            #match_dict['property_url'] = get_api_url(thing['properties'][thing_property_key]['links'])
-                            match_dict['double_match'] = True
-                            result.append(match_dict.copy())
-                            return result
-                        
-                        #Properties matches, and the title of this thing was a pretty close match too, so this is probably it.
-                        elif possible_fuzzed_title != None:
-                            match_dict['thing'] = possible_fuzzed_title
-
-                            match_dict['double_match'] = True
-                            result.append(match_dict)
-                            return result
-                        elif target_thing_title == None:
-                            print("Listing all properties")
-                            result.append(match_dict.copy())
-                            
-                
-                if match_dict['property_url'] != None:
-                    print("-> continue")
-                    continue
-                
-                # If the property name we're looking for is something like "first" or "third".
-                if target_property_title in counters_list:
-                    numerical_index = counters_list.index(target_property_title)  # turns "first" into "1".
-                    probability_of_correct_property = 0
+                try:
                     for thing_property_key in thing['properties']:
-                        current_property_title = str(thing['properties'][thing_property_key]['title']).lower()
-                        if str(numerical_index) in current_property_title:
+                        #print("Property details: " + str(thing['properties'][thing_property_key]))
+
+                        try:
+                            current_property_title = str(thing['properties'][thing_property_key]['title']).lower()
+                        except:
+                            if self.DEBUG:
+                                print("could not extract title from WebThings property data. try Name instead.")
+                            try:
+                                current_property_title = str(thing['properties'][thing_property_key]['name']).lower()
+                            except:
+                                current_property_title = str(thing_property_key)
+                                if self.DEBUG:
+                                    print("Couldn't find a property name either. Title has now been set to key: " + str(current_property_title))
+
+                        
+                        # Thi dictionary holds properties of the potential match. There can be multiple matches, for example if the user wants to hear the temperature level of all things.
+                        match_dict = {
+                                "thing": probable_thing_title,
+                                "property": current_property_title,
+                                "confidence": probable_thing_title_confidence,
+                                "type": None,
+                                "readOnly": None,
+                                "@type": None,
+                                "property_url": get_api_url(thing['properties'][thing_property_key]['links'])
+                                }
+                        
+                        try:
+                            if 'type' in thing['properties'][thing_property_key]:
+                                match_dict['type'] = thing['properties'][thing_property_key]['type']
+                            else:
+                                match_dict['type'] = None # This is a little too precautious, since the type should theoretically always be defined?
+                        except Exception as ex:
+                            if self.DEBUG:
+                                print("Error while checking property type: "  + str(ex))
+                            match_dict['type'] = None
+
+                            
+                        try:
+                            # Check if it's a read-only property
+                            if 'readOnly' in thing['properties'][thing_property_key]:
+                                match_dict['readOnly'] = bool(thing['properties'][thing_property_key]['readOnly'])
+                            #else: 
+                            #    match_dict['readOnly'] = None
+                        except Exception as ex:
+                            if self.DEBUG:
+                                print("Error looking up readOnly value: "  + str(ex))
+                            #match_dict['readOnly'] = None # TODO in theory this should not be necessary. In practise, weirdly, it is.
+
+                        try:
+                            if '@type' in thing['properties'][thing_property_key]:
+                                match_dict['@type'] = thing['properties'][thing_property_key]['@type'] # Looking for things like "OnOffProperty"
+                            #else:
+                            #    match_dict['@type'] = None
+                        except Exception as ex:
+                            print("Error looking up capability @type: "  + str(ex))
+                            pass
+                        
+                        # TODO: add proper ordinal support via the built-in Snips slot
+                        numerical_index = None
+                        try:
+                            numerical_index = self.numeric_property_names.index(target_property_title)
+                        except:
+                            #print("name was not in numerical index list (so not 'third' or 'second')")
+                            pass
+                        
+                        
+                        
+                        # No target property title set
+                        if match_dict['thing'] != None and (target_property_title in self.generic_properties or target_property_title == None):
+                            
+                            if self.DEBUG:
+                                print("Property was abstractly defined/unavailable, so adding it")
+                            result.append(match_dict.copy())
+                            continue
+                        
+                        # If we found the thing and it only has one property, then use that.
+                        elif match_dict['thing'] != None and target_property_title != None and len(thing['properties']) == 1:
+                            result.append(match_dict.copy())
+                            continue
+                        
+                        # Looking for a state inside a matched thing.
+                        elif target_property_title == 'state' and match_dict['thing'] != None:
+                            if self.DEBUG:
+                                print("looking for a 'state' (a.k.a. boolean type)")
+                            #print("type:" + str(thing['properties'][thing_property_key]['type']))
+                            if thing['properties'][thing_property_key]['type'] == 'boolean':
+                                # While looking for state, found a boolean
+                                result.append(match_dict.copy())
+                                continue
+                        
+                        # Looking for a level inside a matched thing.
+                        elif target_property_title == 'level' and match_dict['thing'] != None:
+                            if self.DEBUG:
+                                print("looking for a 'level'")
+                            #print("type:" + str(thing['properties'][thing_property_key]['type']))
+                            if thing['properties'][thing_property_key]['type'] != 'boolean':
+                                # While looking for level, found a non-boolean
+                                result.append(match_dict.copy())
+                                continue
+
+                        # Looking for a value
+                        elif target_property_title == 'value' and match_dict['thing'] != None:
+                            result.append(match_dict.copy())
+                            continue
+                            
+                        # Looking for 'all' properties
+                        elif target_property_title == 'all' and match_dict['thing'] != None:
+                            #If all properties are desired, add all properties
+                            result.append(match_dict.copy())
+                            continue
+                        
+                        # We found a good matching property title and already found a good matching thing title. # TODO: shouldn't this be higher up?
+                        elif fuzz.ratio(current_property_title, target_property_title) > 85:
+                            if self.DEBUG:
+                                print("FOUND A PROPERTY WITH THE MATCHING FUZZY NAME")
+                            if match_dict['thing'] == None:
+                                match_dict['thing'] = current_thing_title
+                                result.append(match_dict.copy())
+                            else:
+                                result = [] # Since this is a really good match, we remove any older properties we may have found.
+                                result.append(match_dict.copy())
+                                return result
+
+                            
+                        # We're looking for a numbered property (e.g. moisture 5), and this property has that number in it. Here we favour sensors. # TODO: add ordinal support?
+                        elif str(numerical_index) in current_property_title and target_thing_title != None:
+                            result.append(match_dict.copy())
+                            
                             if thing['properties'][thing_property_key]['type'] == 'boolean' and probability_of_correct_property == 0:
                                 probability_of_correct_property = 1
                                 match_dict['property'] = current_property_title
+                                #match_dict['type'] = thing['properties'][thing_property_key]['type']
                                 match_dict['property_url'] = get_api_url(thing['properties'][thing_property_key]['links'])
+
                             if thing['properties'][thing_property_key]['type'] != 'boolean' and probability_of_correct_property < 2:
                                 probability_of_correct_property = 1
                                 match_dict['property'] = current_property_title
+                                #match_dict['type'] = thing['properties'][thing_property_key]['type']
                                 match_dict['property_url'] = get_api_url(thing['properties'][thing_property_key]['links'])
-                    if match_dict['property_url'] != None: # If we found anything, then append it.
-                        result.append(match_dict)
-                        
+                                #if match_dict['property_url'] != None: # If we found anything, then append it.
+                                #    result.append(match_dict.copy())
+
                 
-                if match_dict['property_url'] != None:
-                    print("-> continue")
-                    continue
-                    
-                for thing_property_key in thing['properties']:
-                    current_property_title = str(thing['properties'][thing_property_key]['title']).lower()
-                    #print("target property title is " + str(current_property_title))
-                    
-                    
-                    
-                    # Here we pre-emptively check if there is only on property on this thing. If this is the case, 
-                    # and we found a title, and the property name is non existent or abstract, then they probably just 
-                    # want the value of this thing.
-                    if len(thing['properties']) == 1 and current_thing_title == target_thing_title and (current_property_title in abstract_list or target_property_title == None):
-                        print("Property was abstractly defined/unavailable, and this thing only has one property, so it must be it")
-                        match_dict['property'] = current_property_title
-                        match_dict['double_match'] = True   # Technically speaking this is not really the case.
-                        result.append(match_dict)
-                        return result
-                    
-                        #TODO len(thing['properties']) == 1 moet ik vervangen met iets dat eerst the property types checkt.
+                
+                except Exception as ex:
+                    if self.DEBUG:
+                        print("Error while looping over property: " + str(ex))
 
-
-                        # If there is a property name that's very similar to the thing name, the user might imply that.
-                    elif target_thing_title != "all" and target_property_title != None and fuzz.ratio(current_property_title, target_property_title) > 80:
-                        print("Found a property name that's similar to the thing name. User may be implying that.")
-                        match_dict['property'] = current_property_title
-                        if current_thing_title == target_thing_title:
-                            match_dict['double_match'] = True   # We found a good title and a likely property in one thing
-                        result.append(match_dict.copy())
-
-                    # What if there is no 'real' property name, and there are multiple properties? We can try to choose one. 
-                    elif match_dict['thing'] != None and (current_property_title in abstract_list or target_property_title == None): 
-                        print("property title was abstract or nonexistent")
-                        
-                        #print(" ALL PROPERTIES DETAILS TO LOOK INTO: " + str(thing['properties'][thing_property_key]))
-                        
-                        #if str(thing['properties'][thing_property_key]['type']) != "boolean":
-                            #print("property was not a boolean, so it's ok")
-                        match_dict['type'] = thing['properties'][thing_property_key]['type']
-                        #if hasattr(thing['properties'][thing_property_key]['readOnly']):
-                            #print("READ ONLY")
-                        try:
-                            print("READ ONLY VALUE FOUND IS " + str(thing['properties'][thing_property_key]['readOnly']))
-                            if thing['properties'][thing_property_key]['readOnly'] == True:
-                                print("VAUE WAS REALLY TRUE")
-                                match_dict['readOnly'] = thing['properties'][thing_property_key]['readOnly']
-                        except:
-                            print("Error looking up readOnly value")
-                            match_dict['readOnly'] = False
-
-                        try:
-                            if thing['properties'][thing_property_key]['@type'] == "OnOffProperty":
-                                match_dict['@type'] = "OnOffProperty"
-                        except:
-                            pass
-                            # todo - read only checking is not working yet
-                        
-                        #if hasattr(thing['properties'][thing_property_key],'readOnly'):
-                        
-                        
-                        match_dict['type'] = thing['properties'][thing_property_key]['type']
-                        match_dict['property'] = current_property_title
-                        match_dict['property_url'] = get_api_url(thing['properties'][thing_property_key]['links'])
-                        #print("match_dict is now: " + str(match_dict))
-                        result.append(match_dict.copy())
-                        continue
-                        # Option 1 is looking for the 'dominant' property.
-                        # - It must be a sensor type value, so we can check for that.
-                        # - The property title might be similar to the thing title.
-                        
-                        #else:
-                        #    print("it was a boolean")
-                        
-                        
-                        
-                        # Option 2 is to look futher for another thing. But that only if the thing name wasn't a 100% match.
-                        
-                        # OPTION ALT: READ OUT ALL VALUES OF THE THING
-                        
-                        
-                        # TODO: magically find a property
-                #        - if actuator -> select that is only one exists. It more than one:
-                #            - if has capacity -> select that one?
-                #                - Otherwise, guess by the name?
-                        
-                        
-                        
-                        
-                        
-                        
-                        
-                        #continue
-                        
-                    # Here we deal with abstract properties such as 'first' and 'second'
-                    #elif current_property_title in counters_list:
-                    #    if property_counter == counters_list.index(current_property_title):
-                    #        print("We are at the index for the abstract property " + str(current_property_title))
-                    
-                    # Here we deal with a non-abstract property title
-                    
-                    
-                    #property_counter += 1        
-                    
-                if possible_fuzzed_title != None:  
-                    fuzzed_title = possible_fuzzed_title
-            
-        except Exception as ex:
-            print("Error while looking for match in things: " + str(ex))
-        
-        
-        # PART 2 - No thing name found.
-        try:
-            # Here there could be some more advanced determination of the thing, in case it's not clear cut.
-            print("No thing name found while looping.")
-            pass
-            
-            # We did find a title that's pretty close.
-            #if match_dict['thing'] == None and match_dict['property'] == None:
-            #    if fuzzed_title != None:
-            #        print("Well, there is a fuzzy title..")
-            #        #match_dict['thing'] = fuzzed_title
-            #        pass
-                    # Here we could ask for confirmation if the user meant this similar thing we found
-
-            # We could just read out all the values?
-
-            # look for most likely property if the property is not defined.
-                # Then for similarity in names. Eg the 'temperature' property of the 'temperature sensor' would be a logical 'main' property.
-
-            # Look for the most likely thing if only a property is defined? 
-                #Perhaps look for slightly different names.
-
+                # If the thing title matches and we found at least one property, then we're done.
+                if probable_thing_title != None and len(result) == 1:
+                    return result
+                
+                # If there are multiple results, we finally take the initial preference of the intent into account and prune properties accordingly.
+                elif len(result) > 1:
+                    for found_property in result:
+                        if found_property['type'] == 'boolean' and actuator == False: # Remote property if it's not the type we're looking for
+                            #print("pruning boolean property")
+                            del found_property
+                        elif found_property['type'] != 'boolean' and actuator == True: # Temove property if it's not the type we're looking for
+                            #print("pruning non-boolean property")
+                            del found_property
+                
         except Exception as ex:
             print("Error while looking for match in things: " + str(ex))
             
         return result
 
 
-    def authorization_check(self):
-        if self.token == "":
-            return false
-        else:
-            return true
-        
-        #Todo: do a quick check to see if a call to get things actually returns data. If not, say:
-        
-        # "Please supply a valid authorization token on the settings page."
 
 
+    # This function parses the data coming from Snips and turned it into an easy to use dictionary.
+    def extract_slots(self,intent_message):
+        slots = {"thing":None,
+                "property":None,
+                "space":None,
+                "boolean":None,
+                "number":None,
+                "percentage":None,
+                "start_time":None,
+                "end_time":None,
+                "special_time":None,
+                "duration":None,
+                "period":None,
+                "timer_type":None,
+                "timer_last":None,
+                "color":None
+                }
 
+        #print("incoming slots: " + str(vars(intent_message.slots)))
 
+        try:
+            if len(intent_message.slots.thing) > 0:
+                print("incoming slots thing = " + str(vars(intent_message.slots.thing.first())))
+                if str(intent_message.slots.thing.first().value) == 'unknownword':
+                    slots['thing'] = None
+                else:
+                    slots['thing'] = str(intent_message.slots.thing.first().value)
+                print("slots['thing'] = " + str(slots['thing']))
+            else:
+                print("Slots: Thing was not set")
 
+            if len(intent_message.slots.property) > 0:
+                print("incoming slots property = " + str(vars(intent_message.slots.property.first())))
+                slots['property'] = intent_message.slots.property.first().value
+            else:
+                print("Slots: Property was not set")
 
-#
-#  SUPPORT FUNCTIONS
-#
+        except Exception as ex:
+            print("Error getting thing related intention data: " + str(ex))
 
+        try:
+            if len(intent_message.slots.boolean) > 0:
+                if self.DEV:
+                    print("incoming slots boolean = " + str(vars(intent_message.slots.boolean.first())))
+                slots['boolean'] = str(intent_message.slots.boolean.first().value)
 
-def get_api_url(link_list):
-    for link in link_list:
-        print("link item = " + str(link))
-        if link['rel'] == 'property':
-            return link['href']
-    return None
+            if len(intent_message.slots.number) > 0:
+                if self.DEV:
+                    print("incoming slots number = " + str(vars(intent_message.slots.number.first())))
+                slots['number'] = intent_message.slots.number.first().value
 
+            if len(intent_message.slots.percentage) > 0:
+                if self.DEV:
+                    print("incoming slots percentage = " + str(vars(intent_message.slots.percentage.first())))
+                slots['percentage'] = intent_message.slots.percentage.first().value
 
-def extract_slots(intent_message):
-    slots = {"thing":None,"property":None,"boolean":None,"number":None,"percentage":None,"start_time":None,"end_time":None,"duration":[],"timer_type":None,"timer_last":None}
-    
-    
-    #print("incoming slots: " + str(vars(intent_message.slots)))
-    
-    try:
-        if len(intent_message.slots.thing) > 0:
-            print("incoming slots thing = " + str(vars(intent_message.slots.thing.first())))
-            slots['thing'] = str(intent_message.slots.thing.first().value)
-            print("slots['thing'] = " + str(slots['thing']))
-        else:
-            print("Slots: Thing was not set")
+            if len(intent_message.slots.timer_type) > 0:
+                if self.DEV:
+                    print("incoming slots timer_type = " + str(vars(intent_message.slots.timer_type.first())))
+                slots['timer_type'] = str(intent_message.slots.timer_type.first().value)
 
-        if len(intent_message.slots.property) > 0:
-            print("incoming slots property = " + str(vars(intent_message.slots.property.first())))
-            slots['property'] = intent_message.slots.property.first().value
-        else:
-            print("Slots: Property was not set")
+            if len(intent_message.slots.timer_last) > 0:
+                if self.DEV:
+                    print("incoming slots timer_last = " + str(vars(intent_message.slots.timer_last.first())))
+                slots['timer_last'] = str(intent_message.slots.timer_last.first().value)
 
-    except Exception as ex:
-        print("Error getting thing related intention data: " + str(ex))
+            if len(intent_message.slots.color) > 0:
+                if self.DEV:
+                    print("incoming slots color = " + str(vars(intent_message.slots.color.first())))
+                slots['color'] = str(intent_message.slots.color.first().value)
 
-    try:
-        if len(intent_message.slots.boolean) > 0:
-            print("incoming slots boolean = " + str(vars(intent_message.slots.boolean.first())))
-            slots['boolean'] = intent_message.slots.boolean.first().value
-
-        if len(intent_message.slots.number) > 0:
-            print("incoming slots number = " + str(vars(intent_message.slots.number.first())))
-            slots['number'] = intent_message.slots.number.first().value
-
-        if len(intent_message.slots.percentage) > 0:
-            print("incoming slots percentage = " + str(vars(intent_message.slots.percentage.first())))
-            slots['percentage'] = intent_message.slots.percentage.first().value
-
-        if len(intent_message.slots.timer_type) > 0:
-            print("incoming slots timer_type = " + str(vars(intent_message.slots.timer_type.first())))
-            slots['timer_type'] = str(intent_message.slots.timer_type.first().value)
-
-        if len(intent_message.slots.timer_last) > 0:
-            print("incoming slots timer_last = " + str(vars(intent_message.slots.timer_last.first())))
-            slots['timer_last'] = str(intent_message.slots.timer_last.first().value)
-
-            
-        # SHOULD REMOVE THIS AFTER AN ASSISTANT UPDATE
-        if len(intent_message.slots.amount) > 0:
-            print("incoming slots amount = " + str(vars(intent_message.slots.amount.first())))
-            slots['timer_last'] = str(intent_message.slots.amount.first().value)
-
-
-    except Exception as ex:
-        print("Error getting value intention data: " + str(ex))
-    
-    try:
-        # TIME
-        if len(intent_message.slots.time) > 0:
-            print("incoming slots time = " + str(vars(intent_message.slots.time.first())))
-            
-            time_data = intent_message.slots.time.first()
-            print("time data = " + str(vars(time_data)))
-            
-            # it's a version of time where there is a start and end date.
-            if hasattr(time_data, 'from_date') and hasattr(time_data, 'to_date'):
-            #if time_data['start_date'] != None and time_data['to_date'] != None:
-                print("both a start and end date in the time")
-                #if time_data['from_date']:
-                print("from date: " + str(time_data.from_date))
-                slots['start_time'] = date_to_timestamp(time_data.from_date)
-                print("from data handled")
-                #if time_data['to_date']:
-                print("to date")
-                slots['end_time'] = date_to_timestamp(time_data.to_date)
-            
-            # If there is just one time value:
-            elif hasattr(time_data, 'value'):
-                print("Just a single time value in the time")
-                #slots['from_time'] = intent_message.slots.time.first().value.from_date
-                #official_time = intent_message.slots.time.first().value
-                # E.g. 2019-07-23 17:00:00 +01:00
-            
-                #print("time_data['value'] = " + str(time_data.value))
-                #timestamp = date_to_timestamp(time_data.value)
-                #print("timestamp = " + str(timestamp))
-                #date_object = datetime.strptime(intent_message.slots.time.first().value, "%Y-%m-%d %H:%M:%S %z")
-                #timestamp = int(date_object.replace(tzinfo=timezone.utc).timestamp())
-                #timestamp = datetime.timestamp(intent_message.slots.time.first().value)
-                #print("timestamp = " + str(timestamp))
+            if len(intent_message.slots.space) > 0:
+                if self.DEV:
+                    print("incoming slots space = " + str(vars(intent_message.slots.space.first())))
+                slots['space'] = str(intent_message.slots.space.first().value)
                 
-                slots['duration'].append(date_to_timestamp(time_data.value))
-                #slots['end_time'] = date_to_timestamp(time_data.value)
-    except Exception as ex:
-        print("Error getting datetime intention data: " + str(ex)) 
+            if len(intent_message.slots.pleasantries) > 0:
+                if self.DEV:
+                    print("incoming slots pleasantries = " + str(vars(intent_message.slots.pleasantries.first())))
+                if str(vars(intent_message.slots.pleasantries.first())).lower() == "please":
+                    self.pleasantry_count += 1 # TODO: We count how often the user has said 'please', so that once in a while Snips can be thankful for the good manners.
+                else:
+                    slots['pleasantries'] = str(intent_message.slots.pleasantries.first().value) # For example, it the sentence started with "Can you" it could be nice to respond with "I can" or "I cannot".
+
+            if len(intent_message.slots.period) > 0:
+                if self.DEV:
+                    print("incoming slots period = " + str(vars(intent_message.slots.period.first())))
+                slots['period'] = str(intent_message.slots.period.first().value)
+
+        except Exception as ex:
+            print("Error getting value intention data: " + str(ex))
+
+        try:
+            # TIME
+            if len(intent_message.slots.time) > 0:
+                #print("incoming slots time = " + str(vars(intent_message.slots.time.first())))
+
+                utcnow = datetime.now(tz=pytz.utc)
+                utcnow_timestamp = int(utcnow.timestamp())
+                
+                time_data = intent_message.slots.time.first()
+                if self.DEBUG:
+                    print("time data = " + str(vars(time_data)))
+
+                # It's a version of time where there is a start and end date.
+                if hasattr(time_data, 'from_date') and hasattr(time_data, 'to_date'): # TODO remove hasattr? replace it 'in'?
+                    #print("both a start and end date in the time:")
+                    #print(str(time_data.from_date))
+                    #print(str(time_data.to_date))
+                    slots['start_time'] = self.string_to_utc_timestamp(time_data.from_date)
+                    slots['end_time'] = self.string_to_utc_timestamp(time_data.to_date)
+                    
+                elif hasattr(time_data, 'value'):
+                    #print("Just a single value in the time slot (so not to_ and from_, but just 'value')")
+                    slots['end_time'] = self.string_to_utc_timestamp(time_data.value)
+
+        except Exception as ex:
+            print("Error getting datetime intention data: " + str(ex)) 
+
+        try:
+            if len(intent_message.slots.special_time) > 0:
+                if self.DEV:
+                    print("incoming slot special_time = " + str(vars(intent_message.slots.special_time.first())))
+                slots['special_time'] = str(intent_message.slots.special_time.first().value)
+        except:
+            print("Error getting special time from incoming intent")
+                
+
+        try:
+            # DURATION
+            if len(intent_message.slots.duration) > 0:
+                if self.DEV:
+                    print("incoming slots duration = " + str(vars(intent_message.slots.duration.first())))
+                target_time_delta = intent_message.slots.duration.first().seconds + intent_message.slots.duration.first().minutes * 60 + intent_message.slots.duration.first().hours * 3600 + intent_message.slots.duration.first().days * 86400 + intent_message.slots.duration.first().weeks * 604800 
+                
+                # Turns the duration into the absolute time when the duration ends
+                if target_time_delta != 0:
+                    utcnow = datetime.now(tz=pytz.utc)
+                    utcnow_timestamp = int(utcnow.timestamp())
+                    target_timestamp = int(utcnow_timestamp) + int(target_time_delta)
+                    slots['duration'] = target_timestamp
+
+        except Exception as ex:
+            print("Error getting duration intention data: " + str(ex))   
+
+        return slots
             
-    try:
-        # DURATION
-        if len(intent_message.slots.duration) > 0:
-            print("incoming slots duration = " + str(vars(intent_message.slots.duration.first())))
-            target_time_delta = intent_message.slots.duration.first().seconds + intent_message.slots.duration.first().minutes * 60 + intent_message.slots.duration.first().hours * 3600
-            print("time delta = " + str(target_time_delta))
-            target_time = int(time.time() + target_time_delta)
-            print("target time = " + str(target_time))
-            slots['duration'].append(target_time)
+
+    def string_to_utc_timestamp(self,date_string):
+        """ date as a date object """
+        
+        try:
+            simpler_times  = date_string.split('+', 1)[0]
+            print("@split string: " + str(simpler_times))
+            naive_datetime = parse(simpler_times)
+            print("@naive datetime: " + str(naive_datetime))
+            localized_datetime = self.user_timezone.localize(naive_datetime)
+            print("@localized_datetime: " + str(localized_datetime))
+            localized_timestamp = int(localized_datetime.timestamp()) #- self.seconds_offset_from_utc
+            print("@" + str(localized_timestamp))
+            return int(localized_timestamp)
+        except Exception as ex:
+            print("Error in string to UTC timestamp: " + str(ex))
+            return 0
+
+
+    def human_readable_time(self,utc_timestamp):
+        """ moment is as UTC timestamp, timezone_offset is in seconds """
+        try:
+            #print("seconds offset: " + str(self.seconds_offset_from_utc))
+            localized_timestamp = int(utc_timestamp) + self.seconds_offset_from_utc
+            #print("HUMAN READABLE localized_timestamp + offset = " + str(localized_timestamp))
+            #naive_localized_datetime = datetime.fromtimestamp(localized_timestamp)
+            hacky_datetime = datetime.utcfromtimestamp(localized_timestamp)
+
+            if self.DEBUG:
+                print("human readable hour = " + str(hacky_datetime.hour))
+                print("human readable minute = " + str(hacky_datetime.minute))
             
-    except Exception as ex:
-        print("Error getting duration intention data: " + str(ex))   
+            hours = hacky_datetime.hour
+            minutes = hacky_datetime.minute
+            combo_word = " past "
+            end_word = ""
             
-    return slots
+            if hours == 0:
+                hours = "midnight"
+            elif hours != 12:
+                hours = hours % 12
+                
+            if minutes == 45:
+                hours += 1
+                combo_word = " to "
+                minutes = "a quarter"
+            elif minutes > 45:
+                hours += 1
+                combo_word = " to "
+                minutes = 60 - minutes # switches minutes to between 1 and 14, and increases the hour count
+            elif minutes == 0:
+                combo_word = ""
+                minutes = ""
+                end_word = " o' clock"
+            elif minutes == 30:
+                minutes = "half"
+
+            if type(minutes) == int:
+                if minutes == 1:
+                    minutes = "1 minute"
+                else:
+                    minutes = str(minutes) + " minutes"
             
-            
-def date_to_timestamp(date):
-    date_object = datetime.strptime(date, "%Y-%m-%d %H:%M:%S %z")
-    return int(date_object.replace(tzinfo=timezone.utc).timestamp())
+            nice_time = str(minutes) + str(combo_word) + str(hours) + str(end_word)
+
+            print(str(nice_time))
+            return nice_time
+        except Exception as ex:
+            print("Error making human readable time: " + str(ex))
+            return ""
+
+
+
+
+
+
+
