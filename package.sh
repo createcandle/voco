@@ -20,6 +20,11 @@ then
     rm snips_installed
 fi
 
+if [ -e respeaker_installed ]
+then
+    rm respeaker_installed
+fi
+
 if [ -e asound.conf ]
 then
     rm asound.conf

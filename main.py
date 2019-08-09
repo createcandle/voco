@@ -14,7 +14,7 @@ sys.path.append(path.join(path.dirname(path.abspath(__file__)), 'lib'))
 
 from pkg.voco_adapter import VocoAdapter  # noqa
 from pkg.voco_notifier import VocoNotifier  # noqa
-from pkg.voco_parent import VocoParent  # noqa
+#from pkg.voco_parent import VocoParent  # noqa
 
 _API_VERSION = {
     'min': 2,
@@ -55,7 +55,7 @@ if __name__ == '__main__':
 
     voice_messages_queue = queue.Queue()
 
-    shared_object = VocoParent('grandpa')
+    #shared_object = VocoParent('grandpa')
 
     # Start the internal clock which is used to handle timers.
     print("-")

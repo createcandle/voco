@@ -61,12 +61,9 @@
     "config": {
       "Microphone": "Plugged-in (USB) microphone (1,0)",
       "Speaker": "Built-in headphone jack (0,0)",
-      "Speaker volume": 75,
       "Token": "",
       "Time zone": "Europe/Amsterdam",
       "Metric": true,
-      "Feedback sounds": true,
-      "Increase vocabulary": false,
       "Custom assistant":"",
       "Debugging": false
     },
@@ -75,7 +72,6 @@
       "required": [
         "Microphone",
         "Speaker",
-        "Speaker volume",
         "Token",
         "Time zone"
       ],
@@ -85,6 +81,7 @@
           "enum": [
             "Built-in microphone (0,0)",
             "Built-in microphone, channel 2 (0,0)",
+            "Respeaker Pi Hat (1,0)",
             "Plugged-in (USB) microphone (1,0)",
             "Plugged-in (USB) microphone, channel 2 (1,1)",
             "Second plugged-in (USB) microphone (2,0)",
@@ -97,16 +94,13 @@
           "enum": [
             "Built-in headphone jack (0,0)",
             "Built-in HDMI (0,1)",
+            "Respeaker Pi Hat (1,0)",
             "Plugged-in (USB) device (1,0)",
             "Plugged-in (USB) device, channel 2 (1,1)",
             "Second plugged-in (USB) device (2,0)",
             "Second plugged-in (USB) device, channel 2 (2,0)"
           ],
           "description": "What type of microphone have you connected? The Playstation Eye is a cheap and good option."
-        },
-        "Speaker volume": {
-          "type": "number",
-          "description": "How loud should the audio playback be? Default is 100. This is a system wide settings, and will be set when the add-on is starting up."
         },
         "Token": {
           "type": "string",
@@ -130,14 +124,6 @@
         "Metric": {
           "type": "boolean",
           "description": "METRIC. Check the box to use metric values instead of imperial units. For example: temperature in Celcius or Fahrenheit."
-        },
-        "Feedback sounds": {
-          "type": "boolean",
-          "description": "FEEDBACK SOUNDS. Would you like Snips to make feedback beeps after you say 'Hey Snips' and after it has completed listening to your request? This set the defaut value for when Snips starts."
-        },
-        "Increase vocabulary": {
-          "type": "boolean",
-          "description": "INCREASE VOCABULARY. If you enable this, a 150Mb dictionary file will be downloaded, which will take up 500Mb of space once extracted. It will greatly increase the English vocabulary, and allow for more words to be recognised. Be warned: installing it takes a very long time, please be patient."
         },
         "Custom assistant": {
           "type": "string",

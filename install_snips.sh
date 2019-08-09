@@ -1,25 +1,10 @@
 #!/bin/bash
 
-#SCRIPTPATH=$(dirname "$SCRIPT")
-#echo this dir: "$(dirname "$BASH_SOURCE")"
-#$SCRIPTPATH="$(dirname "$BASH_SOURCE")"
-#echo $SCRIPTPATH
-
-#echo this file: "$BASH_SOURCE"
-#echo $(dirname "$BASH_SOURCE")
-
-# Absolute path to this script, e.g. /home/user/bin/foo.sh
-#SCRIPT=$(readlink -f "$0")
-# Absolute path this script is in, thus /home/user/bin
-#SCRIPTPATH=$(dirname "$SCRIPT")
-#echo $SCRIPTPATH
-#DONEPATH="$SCRIPTPATH/snips_installed"
-#echo $DONEPATH
-
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 echo $DIR
 BUSYPATH="$DIR/busy_installing"
 DONEPATH="$DIR/snips_installed"
+RESPEAKERDONEPATH="$DIR/respeaker_installed"
 echo $DONEPATH
 
 #set -e
@@ -49,8 +34,6 @@ check_pkg() {
 
 
 install_using_apt() {
-    #$FILENAME="snips_installed"
-    #$check_path="$SCRIPTPATH$FILENAME"
     echo "path to check: $DONEPATH"
 	if [ -f $DONEPATH ]; then
     		echo "Already installed. Remove the 'snips_installed' file to unblock this."
@@ -103,6 +86,20 @@ add_vocabulary() {
     
 }
 
+install_respeaker_driver() {
+    git clone https://github.com/respeaker/seeed-voicecard
+    cd seeed-voicecard
+    sudo ./install.sh n 
+    if [ -f "/etc/voicecard" ]; then
+        touch $RESPEAKERDONEPATH
+        echo "succesfully installed respeaker driver (shell)"
+        echo "Command success (shell)"
+    fi
+    touch $RESPEAKERDONEPATH
+    #echo "Command success (from sh)"
+    #sudo reboot
+}
+
 
 uninstall() {
     for pkg in ${required_packages[@]}; do
@@ -114,6 +111,7 @@ uninstall() {
         echo "Uninstall complete"
 }
 
+
 if [[ $1 == "install" ]]; then
     #result=${PWD##*/}          # to assign to a variable
     printf '%s\n' "${PWD##*/}" # to print to stdout
@@ -124,7 +122,7 @@ if [[ $1 == "install" ]]; then
     #    cd snips
     #fi   
     #printf '%s\n' "${PWD##*/}" # to print to stdout
-    
+
     #install_sudo
     touch $BUSYPATH
 	install_using_apt
@@ -133,10 +131,12 @@ if [[ $1 == "install" ]]; then
     if [ -d "/usr/share/snips/assistant" ]; then
         touch $DONEPATH
         echo "succesfully installed snips (shell)"
-        echo "Command success (from sh)"
+        echo "Command success (shell)"
     fi
 elif [[ $1 == "install_assistant" ]]; then
     install_assistant
+elif [[ $1 == "install_respeaker_driver" ]]; then
+    install_respeaker_driver
 elif [[ $1 == "install_extra_vocabulary" ]]; then
     add_vocabulary
 else
