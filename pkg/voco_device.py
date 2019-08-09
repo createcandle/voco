@@ -96,6 +96,15 @@ class VocoDevice(Device):
                                 'readOnly': True
                             },
                             0)
+            self.properties["countdown"] = VocoProperty(
+                                self,
+                                "countdown",
+                                {
+                                    'label': "Countdown",
+                                    'type': 'integer',
+                                    'readOnly': True
+                                },
+                                0)
         except Exception as ex:
             print("error adding properties: " + str(ex))
         print("Voco thing has been created.")
@@ -122,7 +131,7 @@ class VocoProperty(Property):
         self.set_cached_value(value)
 
     def set_value(self, value):
-        print(str(value))
+        #print(str(value))
         try:
             print("set_value called for " + str(self.title))
             if self.title == 'volume':

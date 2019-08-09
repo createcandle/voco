@@ -169,36 +169,6 @@ color_dictionary = {
   'yellow green': '#9acd32',
   'rebecca purple': '#663399',
 }
-"""
-old_color_dictionary = {
-                        'fffff0':"ivory",
-                        '000000':"black",
-                        '00ffff':"aqua",
-                        '0000ff':"blue",
-                        'ff00ff':"fuchsia",
-                        '808080':"grey",
-                        '008000':"green",
-                        '00ff00':"lime",
-                        '800000':"maroon",
-                        '000080':"navy",
-                        '808000':"olive",
-                        'ffa500':"orange",
-                        '800080':"purple",
-                        'ff0000':"red",
-                        'c0c0c0':"silver",
-                        '008080':"teal",
-                        'ffffff':"white",
-                        'ffff00':"yellow",
-                        '4b0082':"indigo",
-                        'ffc0cb':"pink",
-                        'ff6347':"tomato",
-                        'f5f5f5':"white smoke",
-                        '6495ed':"corn flower blue",
-                        'ffd700':"gold",
-                        'ff69b4':"hot pink",
-                        'ffffe0':"light yellow"
-                    }
-"""
 
 
 
@@ -279,10 +249,17 @@ def split_sentences(st):
     else:
         return sentences[:-1]
 
+        
+
+def is_color(color_name):
+    if color_name in color_dictionary:
+        return True
+    return False
 
 
 
 def color_name_to_hex(target_color):
+    print("target color: " + str(target_color))
     try:
         #hx = next(hex_color for hex_color, value in color_dictionary if value == color_name)
         for current_name,current_hx in color_dictionary:
@@ -297,28 +274,32 @@ def color_name_to_hex(target_color):
 
 def hex_to_color_name(target_hx):
     #hx = next(hex_color for hex_color, value in color_dictionary if value == color_name)
+    print("__hex_to_color_name: hex to work with: " + str(target_hx))
     if len(target_hx) == 7 and target_hx.startswith('#'):
         print("very likely a hex color")
+
         try:
-            target_hx = target_hx.replace("#", "")
-            print("__hex_to_color_name: hex to work with: " + str(target_hx))
-            
             # if color is found in dict
             try:
-                quick_color_name = next(current_color for current_color, current_hx in color_dictionary if current_hx == target_hx)
-                if quick_color_name != "sorry":
-                    print("quick color match: " + str(quick_color_name))
-                    return str(quick_color_name)
+                #quick_color_name = next(current_color for current_color, current_hx in color_dictionary if current_hx == target_hx)
+                quick_color_name = next(key for key, value in color_dictionary.items() if value == str(target_hx))
+                
+                #if str(quick_color_name) != "sorry":
+                print("quick color match: " + str(quick_color_name))
+                return str(quick_color_name)
+
             except:
                 print("Was not able to get a quick hex-to-color match, will try to find a neighbouring color.")
-            #if target_hx in color_dictionary:
-            #    return color_dictionary[hx]
 
-            # else return its closest available color
+            target_hx = target_hx.replace("#", "")
+
+            # return the closest available color
             m = 16777215
             k = '000000'
-            for current_color_name, current_hx in color_dictionary.iteritems():
+            for current_color_name, current_hx in color_dictionary.items():
             #for key in color_dictionary.keys():
+                current_hx = current_hx.replace("#", "")
+
                 a = int(target_hx[:2],16)-int(current_hx[:2],16)
                 b = int(target_hx[2:4],16)-int(current_hx[2:4],16)
                 c = int(target_hx[4:],16)-int(current_hx[4:],16)
@@ -333,12 +314,14 @@ def hex_to_color_name(target_hx):
                     k = current_color_name
 
             #print("__hex_to_color_name: matched color: " + str(color_dictionary[k]))
-            print("__hex_to_color_name: matched color: " + str(k))
+            print("__hex_to_color_name: closest matching hex color: " + str(k))
+            #slow_color_name = next(key for key, value in color_dictionary.items() if value == str(target_hx))
             return str(k)
-        except:
-            print("Error while translating hex color to human readable name")
+        except Exception as ex:
+            print("Error while translating hex color to human readable name: " + str(ex))
             return "red"
     else:
+        print("String was not a hex color?")
         return target_hx
 
 

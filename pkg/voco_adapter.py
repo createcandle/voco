@@ -123,7 +123,7 @@ class VocoAdapter(Adapter):
                     print("Persistence data was loaded succesfully.")
         except:
             print("Could not load persistent data (if you just installed the add-on then this is normal)")
-            self.persistent_data = {}
+            self.persistent_data = {'listening':True,'feedback_sounds':True,'speaker_volume':100}
 
         self.opposites = {
                 "on":"off",
@@ -137,14 +137,13 @@ class VocoAdapter(Adapter):
         # self.persistent_data              # self.persistent_data is handled just above
         self.metric = True
         self.DEBUG = True
-        self.DEV = True
+        self.DEV = False
         self.playback_devices = []
         self.capture_devices = []
         self.microphone = None
         self.speaker = None
         self.things = []
         self.token = None
-        #self.speaker_volume = 99
         self.timer_counts = {'timer':0,'alarm':0,'reminder':0}
         self.temperature_unit = 'degrees celsius'
 
@@ -157,10 +156,9 @@ class VocoAdapter(Adapter):
         self.MQTT_IP_address = "localhost"
         self.MQTT_port = 1883
         self.snips_parts = ['snips-hotword','snips-asr','snips-tts','snips-audio-server','snips-nlu','snips-injection','snips-dialogue']
-        self.feedback_sounds = True
         self.snips_main_site_id = None
         self.custom_assistant_url = None
-        self.increase_vocabulary = None
+        self.increase_vocabulary = False
         self.larger_vocabulary_url = "https://raspbian.snips.ai/stretch/pool/s/sn/snips-asr-model-en-500MB_0.6.0-alpha.4_armhf.deb"
         self.h = None # will hold the Hermes object, which is used to communicate with Snips
         self.pleasantry_count = 0 # How often Snips has heard "please". Will be used to thank the use for being cordial once in a while.
@@ -175,21 +173,25 @@ class VocoAdapter(Adapter):
         self.time_zone = "Europe/Amsterdam"
         self.seconds_offset_from_utc = 7200 # Used for quick calculations when dealing with timezones.
         self.last_injection_time = 0 # The last time the things/property names list was sent to Snips.
-        self.minimum_injection_interval = 600  # Minimum amount of seconds between new thing/property name injections.
+        self.minimum_injection_interval = 30  # Minimum amount of seconds between new thing/property name injections.
         
         self.addon_path =  os.path.join(os.path.expanduser('~'), '.mozilla-iot', 'addons', 'voco')
         
 
+        # Create Voco device
         try:
             voco_device = VocoDevice(self)
             self.handle_device_added(voco_device)
             try:
                 self.set_status_on_thing("Checking...")
                 self.update_timer_counts()
-                self.devices['voco'].properties[ 'listening' ].set_cached_value_and_notify( True ) # TODO: store the last state of the listening switch in the persistence file. That way it can be restored on reboot.
-                self.devices['voco'].properties[ 'feedback-sounds' ].set_cached_value_and_notify( True )
-            except:
-                pass
+                #self.devices['voco'].properties[ 'listening' ].set_cached_value_and_notify( bool(self.persistent_data['listening']) ) # TODO: store the last state of the listening switch in the persistence file. That way it can be restored on reboot.
+                #self.devices['voco'].properties[ 'feedback-sounds' ].set_cached_value_and_notify( bool(self.persistent_data['feedback_sounds']) )
+                #self.devices['voco'].properties['listening'].set_value( bool(self.persistent_data['listening']) )
+                self.devices['voco'].properties['feedback-sounds'].set_value( bool(self.persistent_data['feedback_sounds']) )
+                print("Updated voco thing")
+            except Exception as ex:
+                print("Could not update voco thing: " + str(ex))
         except:
             print("Could not create voco device")
 
@@ -206,13 +208,15 @@ class VocoAdapter(Adapter):
             print("Could not stop Snips: " + str(ex))
 
 
-        
+        if self.DEBUG:
+            print("available audio cards: " + str(alsaaudio.cards()))
+
         # Pre-scan ALSA
         try:
             self.playback_devices = self.scan_alsa('playback')
             self.capture_devices = self.scan_alsa('capture')
-            print("Available audio playback devices: " + str(self.playback_devices))
-            print("Available audio capture devices: " + str(self.capture_devices))
+            print("Possible audio playback devices: " + str(self.playback_devices))
+            print("Possible audio capture devices: " + str(self.capture_devices))
             
         except Exception as ex:
             print("Error scanning ALSA (audio devices): " + str(ex))
@@ -230,10 +234,6 @@ class VocoAdapter(Adapter):
         # Setup the sound configuration. We do this only once.
         if self.configure_alsa():
             print("Audio was set up succesfully.")
-
-
-
-
 
         # Install Snips if it hasn't been installed already
         try:
@@ -327,7 +327,9 @@ class VocoAdapter(Adapter):
 
             # Start Snips
             try:
-                self.set_snips_state(1) # Turning Snips on
+                #self.set_snips_state(1) # Turning Snips on
+                self.persistent_data['listening'] = True # After a restart of the add-on Snips is always turned on
+                self.devices['voco'].properties['listening'].set_value( bool(self.persistent_data['listening']) ) # This will in turn turn on Snips.
             except Exception as ex:
                 print("Error while installing bigger vocabulary: " + str(ex))
 
@@ -346,10 +348,10 @@ class VocoAdapter(Adapter):
                 print("Error, couldn't load things at init: " + str(ex))
 
             # Teach Snips the names of all the things and properties
-            self.inject_updated_things_into_snips()
-                
-            # TODO: Inject the color names into snips.
+            self.inject_updated_things_into_snips(True) # During init we force Snips to learn all the thing names.
 
+            # Let's try again.
+            self.update_timer_counts()
 
             # Finally, start the (blocking) MQTT connection that connects Snips to this add-on.
             try:
@@ -422,9 +424,9 @@ class VocoAdapter(Adapter):
                     self.custom_assistant_url = possible_url
 
                 elif possible_url == "Your new assistant has succesfully been installed":
-                    print("The 'assistant succesfully installed' message was present in the config")
+                    print("--The 'assistant succesfully installed' message was present in the config")
                 else:
-                    print("Cannot use what is in the Custom assistant input field")
+                    print("--Cannot use what is in the Custom assistant input field")
                         
             # Store the settings that were changed by the add-on.
             if store_updated_settings:
@@ -444,15 +446,10 @@ class VocoAdapter(Adapter):
                 except:
                     print("Error! Failed to store overridden settings in database.")
                 
-            if 'Feedback sounds' in config:
-                print("-Feedback sounds preference was in config")
-                self.feedback_sounds = bool(config['Debugging'])
 
             if 'Increase vocabulary' in config:
                 print("-Vocabulary size preference was in config")
                 self.increase_vocabulary = bool(config['Increase vocabulary'])
-
-
                 
         except:
             print("Error loading part 1 of settings")
@@ -490,24 +487,31 @@ class VocoAdapter(Adapter):
         try:
             if 'Speaker volume' in config:
                 print("-Speaker volume is present in the config data")
-                if 'speaker-volume' not in self.persistent_data:
+                if 'speaker_volume' not in self.persistent_data:
+                    print("There was no volume level set in persistent data")
                     self.persistent_data['speaker_volume'] = int(config['Speaker volume'])
+                else:
+                    print("--Using audio volume from persistent data")
+
         except Exception as ex:
             print("Error, couldn't get volume level: " + str(ex))
 
-        # Feedback sounds
-        try:
-            if 'Feedback sounds' in config:
-                self.feedback_sounds = bool(config['Feedback sounds'])   
-                print("-Feedback sounds preference is present in the config data")
-        except Exception as ex:
-            print("Error, couldn't get feedback sounds preference: " + str(ex))
+        # Feedback sounds. Currently removed as a addon setting, but might return later.
+        #try:
+        #    if 'Feedback sounds' in config:
+        #        print("-Feedback sounds is present in the config data")
+        #        if 'feedback_sounds' not in self.persistent_data:
+        #            self.persistent_data['feedback_sounds'] = bool(config['Feedback sounds'])   
+        #
+        #except Exception as ex:
+        #    print("Error, couldn't get feedback sounds preference: " + str(ex))
             
 
             
     def set_status_on_thing(self,status_string):
+        """Set a string to the status property of the snips thing """
         if self.DEBUG:
-            print(str(status_string))
+            print("Setting status on thing to: " +str(status_string))
         try:
             if self.devices['voco'] != None:
                 self.devices['voco'].properties['status'].set_cached_value_and_notify( str(status_string) )
@@ -570,6 +574,7 @@ class VocoAdapter(Adapter):
 
 
     def download_assistant(self):
+        """Download a Snips assistant from a url to the snips directory"""
         target_file_path = os.path.join(self.addon_path,"snips","assistant.zip")
         try:
             if self.custom_assistant_url.startswith('http') == False:
@@ -596,7 +601,9 @@ class VocoAdapter(Adapter):
         return False
 
 
+
     def install_assistant(self):
+        """Install snips/assistant.zip into /usr/share/snips/assistant"""
         print("Installing assistant")
         try:
             if not os.path.isdir("/usr/share/snips"):
@@ -624,7 +631,8 @@ class VocoAdapter(Adapter):
         return False
 
 
-    def disable_snips_telemetry(self):
+
+    def disable_snips_telemetry(self): # This function could be removed.
         filename = "/usr/share/snips/assistant/assistant.json"
         should_copy_to_assistant = False
         current_assistant = ""
@@ -680,7 +688,7 @@ class VocoAdapter(Adapter):
 
 
 
-    def download_extra_vocabulary(self):
+    def download_extra_vocabulary(self): # The makers of Snips tell me that this option will be phased out. More importantly, it seems it may adversely affect the recognition ability.
         target_file = os.path.join(self.addon_path,"snips","snips-asr-model-en-500MB_0.6.0-alpha.4_armhf.deb")
         try:
             if os.path.isfile(target_file):
@@ -703,6 +711,7 @@ class VocoAdapter(Adapter):
             print("Error: download vocabulary: " + str(ex))
         self.set_status_on_thing("Error downloading vocabulary")
         return False
+
 
 
     def install_extra_vocabulary(self):
@@ -769,8 +778,10 @@ class VocoAdapter(Adapter):
                     if 'device 0' in line:
                         if device_type == 'playback':
                             result.append('Plugged-in (USB) device  (1,0)')
+                            result.append('Respeaker Pi Hat (1,0)')
                         if device_type == 'capture':
                             result.append('Plugged-in (USB) microphone (1,0)')
+                            result.append('Respeaker Pi Hat (1,0)')
                     elif 'device 1' in line:
                         if device_type == 'playback':
                             result.append('Plugged-in (USB) device, channel 2 (1,1)')
@@ -803,7 +814,8 @@ class VocoAdapter(Adapter):
             print("configure_alsa: path to asound.conf is: " + str(filename))
         
         should_copy_to_etc = False
-        
+        respeaker_spotted = False
+
         try:
             # We generate potentially new asound.conf file contents.
             new_asound = 'pcm.!default {\n type asym\n  playback.pcm {\n   type plug\n   slave.pcm "hw:'
@@ -814,6 +826,9 @@ class VocoAdapter(Adapter):
                 new_asound += "0,0"
             elif self.speaker == "Built-in HDMI (0,1)":
                 new_asound += "0,1"
+            elif self.speaker == "Respeaker Pi Hat (1,0)":
+                new_asound += "1,0"
+                respeaker_spotted = True
             elif self.speaker == "Plugged-in (USB) device (1,0)":
                 new_asound += "1,0"
             elif self.speaker == "Plugged-in (USB) device, channel 2 (1,1)":
@@ -834,6 +849,9 @@ class VocoAdapter(Adapter):
                 new_asound += "0,0"
             elif self.microphone == "Built-in microphone, channel 2 (0,1)":
                 new_asound += "0,1"
+            elif self.microphone == "Respeaker Pi Hat (1,0)":
+                new_asound += "1,0"
+                respeaker_spotted = True
             elif self.microphone == "Plugged-in (USB) microphone (1,0)":
                 new_asound += "1,0"
             elif self.microphone == "Plugged-in (USB) microphone, channel 2 (1,1)":
@@ -848,6 +866,12 @@ class VocoAdapter(Adapter):
                 
             new_asound += '"\n  }\n}'
             
+            try:
+                if respeaker_spotted:
+                    self.install_respeaker_driver()
+            except:
+                print("Error installing ReSpeaker driver")
+
             old_asound = ""
             with open(filename, 'r+') as f:
                 old_asound = f.read()
@@ -902,22 +926,55 @@ class VocoAdapter(Adapter):
 
 
 
-    def set_speaker_volume(self,volume): # TODO: store sound card ID number, and use that to set the volume of the correct soundcard instead of the master volume.
-        print("User changed volume")
+    def install_respeaker_driver():
+        """ Install respeaker driver. Returns true if (already) intalled """
+        try:
+            filename = str(os.path.normpath(os.path.join(self.addon_path,"respeaker_installed")))
+            respeaker_exists = os.path.isfile(filename)
+
+            if respeaker_exists == False:
+                print("installing respeaker driver")
+                for line in run_command(command):
+                    print(str(line))
+                    if line.startswith('Command success'):
+                        self.set_status_on_thing("Succesfully installed Snips")
+                        return True
+                    elif line.startswith('Command failed'):
+                        self.set_status_on_thing("Error installing Snips")
+                        return False
+            else:
+                print("Respeaker driver was already installed. If this is incorrect, remove the respeaker_installed file from the addon directory, or reinstall the addon.")
+                return True
+        except Exception as ex:
+            print("Error installing respeaker driver: " + str(ex))
 
 
-        if int(volume) >= 0 and int(volume) <= 100:
-            self.persistent_data['speaker_volume'] = int(volume)
+
+
+    def set_speaker_volume(self,volume): # TODO: store sound card ID number, and use that to set the volume of the correct soundcard instead of the master volume?
+        if self.DEBUG:
+            print("User changed audio volume")
 
         try:
-            m = alsaaudio.Mixer()
-            #vol = m.getvolume()
+
+            if int(volume) >= 0 and int(volume) <= 100:
+                self.persistent_data['speaker_volume'] = int(volume)
+                self.save_persistent_data()
+
+            #for i in range(len(alsaaudio.cards())):
+            #    print("ALSA mixer " + str(i) + " =  " + str(alsaaudio.cards()[i]))
+
             try:
-                current_volume = m.getvolume()
-                print("Audio volume was: " + str(current_volume))
+                for mixername in alsaaudio.mixers():
+                    #print("mixer name in .mixers: " + str(mixername))
+                    if str(mixername) == "Master" or str(mixername) == "PCM":
+                        mixer = alsaaudio.Mixer(mixername)
+                        print(str(mixername) + " mixer volume was " + str(mixer.getvolume()))
+                        mixer.setvolume(int(volume))
+                        print(str(mixername) + " volume set to " + str(volume))
             except Exception as ex:
-                print("Error getting ALSA volume: " + str(ex))
-            m.setvolume(int(volume))
+                print("Error setting master volume: " + str(ex))
+
         except Exception as ex:
             print("Could not set the volume via pyalsaaudio: " + str(ex))
             try:
@@ -999,6 +1056,11 @@ class VocoAdapter(Adapter):
 
                                 countdown_delta = self.countdown - current_time
                                 
+                                # Update the countdown on the voco thing
+                                self.devices['voco'].properties[ 'countdown' ].set_cached_value_and_notify( int(countdown_delta) )
+                                
+
+                                # Create speakable countdown message
                                 if countdown_delta > 86400:
                                     if countdown_delta % 86400 == 0:
                                         
@@ -1006,7 +1068,7 @@ class VocoAdapter(Adapter):
                                         if days_to_go > 1:
                                             voice_message = "countdown has " + str(days_to_go) + " days to go"
                                         else:
-                                            voice_message = "countdown has " + str(days_to_go) + " days to go"
+                                            voice_message = "countdown has " + str(days_to_go) + " day to go"
                                             
                                             
                                 elif countdown_delta > 3599:
@@ -1035,9 +1097,10 @@ class VocoAdapter(Adapter):
                                     voice_message = str(int(countdown_delta))
                                     
                                 if voice_message != "":
-                                    print("(...) " + str(voice_message))
+                                    if self.DEBUG:
+                                        print("(...) " + str(voice_message))
                                     self.quick_speak(voice_message)
-                        
+
                         # Anything without a type will be treated as a normal timer.
                         elif current_time >= int(item['moment']):
                             os.system("aplay " + os.path.join(self.addon_path,"assets","end_spot.wav"))
@@ -1057,8 +1120,8 @@ class VocoAdapter(Adapter):
                             print("removing timer from list")
                         del self.action_times[index]
                 if timer_removed:
-                    print("at least one timer was removed")
-                    #self)
+                    if self.DEBUG:
+                        print("at least one timer was removed")
                 
 
             except Exception as ex:
@@ -1075,32 +1138,51 @@ class VocoAdapter(Adapter):
             except:
                 pass
 
+
+
     # Count how many timers, alarms and reminders have now been set, and update the voco device
     def update_timer_counts(self):
-        
-        updated_timer_counts = {'timer':0,'alarm':0,'reminder':0}
-        for index, item in enumerate(self.action_times):
-            current_type = item['type']
-            if current_type == "wake":
-                current_type = "alarm"
-            updated_timer_counts[current_type] += 1
-        if self.DEBUG:
-            if self.DEBUG:print("updated timer counts = " + str(updated_timer_counts))
-        self.timer_counts = updated_timer_counts
-        
         try:
+            print("in update_timer_counts")
+            print("self.timer_counts was: " + str(self.timer_counts))
+            self.timer_counts = {'timer':0,'alarm':0,'reminder':0}
+            #updated_timer_counts = {'timer':0,'alarm':0,'reminder':0}
+            countdown_active = False
+            for index, item in enumerate(self.action_times):
+                current_type = item['type']
+                if current_type == "countdown":
+                    print("Spotted a countdown object")
+                    countdown_active = True
+                if current_type == "wake":
+                    current_type = "alarm"
+                if current_type in self.timer_counts:
+                    self.timer_counts[current_type] += 1
+                    #updated_timer_counts[current_type] += 1
+            
+            if self.DEBUG:
+                if self.DEBUG:print("updated timer counts = " + str(self.timer_counts))
+            #self.timer_counts = updated_timer_counts
+
+            if countdown_active == False:
+                self.devices['voco'].properties[ 'countdown' ].set_cached_value_and_notify( 0 )
+
             for timer_type, count in self.timer_counts.items():
             #for item in self.timer_counts: #enumerate(self.timer_counts):
-                #print("enumerating: " + str(timer_type) + ": " + str(count))
+                print("Changing on voco thing: " + str(timer_type) + ": " + str(count))
+                #print("Changing timer count value on voco thing")
+                #print("timer property object? : " + str(self.devices['voco'].properties[ str(timer_type) ]))
+                #self.devices['voco'].properties[ str(timer_type) ].set_value( int(count) )
                 self.devices['voco'].properties[ str(timer_type) ].set_cached_value_and_notify( int(count) )
         except Exception as ex:
-            print("Could not update timer counts on the voco device: " + str(ex))
+            print("Error, could not update timer counts on the voco device: " + str(ex))
 
     
+
     def unload(self):
         print("Shutting down Voco. Bye!")
         self.set_status_on_thing("Bye")
         self.set_snips_state(0)
+
 
 
     def remove_thing(self, device_id):
@@ -1113,9 +1195,12 @@ class VocoAdapter(Adapter):
             print("Could not remove things from devices")
             
     
+
     # Turn Snips services on or off
     def set_snips_state(self, active=False):
-        
+        self.persistent_data['listening'] = active
+        self.save_persistent_data()
+
         if active == True:
             action = "start"
         else:
@@ -1144,20 +1229,28 @@ class VocoAdapter(Adapter):
             print("Error settings Snips state: " + str(ex))
 
 
+
     def set_feedback_sounds(self,state):
-        print("user wants to switch feedback sounds to: " + str(state))
-        if self.h == None:
-            print("Error: no Hermes object")
-            return
-        else:
-            try:
-                site_message = SiteMessage('default')
-                if state == True:
-                    self.h.enable_sound_feedback(site_message)
-                else:
-                    self.h.disable_sound_feedback(site_message)
-            except:
-                print("Error. Was unable to change the feedback sounds preference")
+        if self.DEBUG:
+            print("User wants to switch feedback sounds to: " + str(state))
+        try:
+            self.persistent_data['feedback_sounds'] = bool(state)
+            self.save_persistent_data()
+
+            if self.h == None:
+                return
+            else:
+                try:
+                    site_message = SiteMessage('default')
+                    if state == True:
+                        self.h.enable_sound_feedback(site_message)
+                    else:
+                        self.h.disable_sound_feedback(site_message)
+                except:
+                    print("Error. Was unable to change the feedback sounds preference")
+        
+        except Exception as ex:
+            print("Error settings Snips feedback sounds preference: " + str(ex))
 
 
  
@@ -1189,7 +1282,8 @@ class VocoAdapter(Adapter):
 
     def api_get(self, api_path):
         """Returns data from the WebThings Gateway API."""
-        print("GET PATH = " + str(path))
+        if self.DEBUG:
+            print("GET PATH = " + str(api_path))
         #print("GET TOKEN = " + str(self.token))
         if self.token == None:
             print("PLEASE ENTER YOUR AUTHORIZATION CODE IN THE SETTINGS PAGE")
@@ -1259,8 +1353,8 @@ class VocoAdapter(Adapter):
                     print("Persistence file existed. Will try to save to it.")
 
             with open(self.persistence_file_path) as f:
-                if self.DEBUG:
-                    print("saving: " + str(self.persistent_data))
+                #if self.DEBUG:
+                #    print("saving: " + str(self.persistent_data))
                 json.dump( self.persistent_data, open( self.persistence_file_path, 'w+' ) )
                 return True
 
@@ -1277,7 +1371,11 @@ class VocoAdapter(Adapter):
 
 
 
-    def master_intent_callback(self,hermes, intent_message):    # Triggered everytime Snips succesfully recognises a voice intent
+    #
+    # ROUTING
+    #
+
+    def master_intent_callback(self,hermes, intent_message):    # Tri ggered everytime Snips succesfully recognises a voice intent
         incoming_intent = str(intent_message.intent.intent_name)
         sentence = str(intent_message.input).lower()
 
@@ -1307,28 +1405,38 @@ class VocoAdapter(Adapter):
 
         try:
             # Alternative routing. Some heuristics, since Snips sometimes chooses the wrong intent.
-            if str(slots['property']) == "state":          
-                #print("using alternative route to get_boolean")
-                intent_get_boolean(self,hermes, intent_message) # TODO Maybe it would be better to merge getting sensor value and getting actuator states into one intent.
+            
+            # Alternative route to get_boolean.
+            if incoming_intent == 'createcandle:get_value' and str(slots['property']) == "state":          
+                print("using alternative route to get_boolean")
+                incoming_intent = 'createcandle:get_boolean'
+                #intent_get_boolean(self,hermes, intent_message) # TODO Maybe it would be better to merge getting sensor value and getting actuator states into one intent.
+            
+            # Alternative route to get_timer_count
+            #elif slots['duration'] == None and slots['end_time'] == None and slots['timer_type'] != None:
+            #    if sentence.startswith("how many alarm") or sentence.startswith("how many timer"):
+            #        print("using alternative route to get_timer_count")
+            #        incoming_intent = 'createcandle:get_timer_count' #intent_get_timer_count(self,hermes, intent_message)
 
-            # Not sure this route is even actually necessary:
-            elif incoming_intent == 'createcandle:set_state' and str(slots['boolean']) == 'state':
-                #print("using alternative route to get_value")
-                intent_get_value(self,hermes, intent_message)
-
-            elif slots['duration'] == None and slots['end_time'] == None and slots['timer_type'] != None:
-                if sentence.startswith("how many alarm") or sentence.startswith("how many timer"):
-                    print("using alternative route to get_timer_count")
-                    intent_get_timer_count(self,hermes, intent_message)
-
+            # Avoid setting a value if no value is present
+            elif incoming_intent == 'createcandle:set_value' and slots['color'] is None and slots['number'] is None and slots['percentage'] is None:
+                if slots['boolean'] != None:
+                    print("Routing set_value to set_state instead")
+                    incoming_intent == 'createcandle:set_state' # Switch to another intent type which has a better shot.
+                else:
+                    hermes.publish_end_session_notification(intent_message.site_id, "Your request did not contain a valid value.", "")
+                    return
 
             # Normal routing
-            elif incoming_intent == 'createcandle:get_time':
+            if incoming_intent == 'createcandle:get_time':
                 intent_get_time(self, hermes, intent_message)
             elif incoming_intent == 'createcandle:set_timer':
                 intent_set_timer(self, hermes, intent_message)
             elif incoming_intent == 'createcandle:get_timer_count':
+                print("normal route to get_timer_count")
                 intent_get_timer_count(self, hermes, intent_message)
+            elif incoming_intent == 'createcandle:list_timers':
+                intent_list_timers(self, hermes, intent_message)
             elif incoming_intent == 'createcandle:stop_timer':
                 intent_stop_timer(self, hermes, intent_message)
             elif incoming_intent == 'createcandle:get_value':
@@ -1340,12 +1448,13 @@ class VocoAdapter(Adapter):
             elif incoming_intent == 'createcandle:get_boolean':
                 intent_get_boolean(self, hermes, intent_message)
 
+
             else:
                 print("Error: the code could not handle that intent. Under construction?")
+                self.quick_speak("Sorry, I did not understand your intention.")
 
         except Exception as ex:
-            print("Error routing: " + str(ex))
-
+            print("Error during routing: " + str(ex))
 
 
     def start_blocking(self): 
@@ -1356,21 +1465,22 @@ class VocoAdapter(Adapter):
                 try:
                     self.h = h
                     site_message = SiteMessage('default')
-                    if self.feedback_sounds:
+                    if bool(self.persistent_data['feedback_sounds']) == True:
                         self.h.enable_sound_feedback(site_message)
+                        print("Starting with feedback sounds enabled")
                     else:
                         self.h.disable_sound_feedback(site_message)
+                        print("Startinh with feedback sounds disabled")
                 except:
                     print("Error. Was unable to set the feedback sounds preference")
                 self.h.subscribe_intents(self.master_intent_callback).loop_forever()
 
         except Exception as ex:
             print("ERROR. starting Hermes (the connection to Snips) failed: " + str(ex))
-        
-    
+
 
     # Update Snips with the latest names of things and properties. This helps to improve recognition.
-    def inject_updated_things_into_snips(self):
+    def inject_updated_things_into_snips(self, force_injection=False):
         """ Teaches Snips what the user's devices and properties are called """
         try:
             # Check if any new things have been created by the user.
@@ -1397,16 +1507,16 @@ class VocoAdapter(Adapter):
                     thing_titles = set()
                     property_titles = set()
 
-                if len(thing_titles^fresh_thing_titles) > 0:                           # comparing sets to detect changes in thing titles
-                    print("Thing titles have changed. Will teach Snips the new ones.")
+                if len(thing_titles^fresh_thing_titles) > 0 or force_injection == True:                           # comparing sets to detect changes in thing titles
+                    print("Teaching Snips the thing titles.")
                     print(str(thing_titles^fresh_thing_titles))
                     operations.append(
-                        AddInjectionRequest({"Thing" : list(fresh_thing_titles) })
+                        AddFromVanillaInjectionRequest({"Thing" : list(fresh_thing_titles) })
                     )
-                if len(property_titles^fresh_property_titles) > 0:
-                    print("Thing property titles have changed. Will teach Snips the new ones.")
+                if len(property_titles^fresh_property_titles) > 0 or force_injection == True:
+                    print("Teaching Snips the property titles.")
                     operations.append(
-                        AddInjectionRequest({"Property" : list(fresh_property_titles) + self.extra_properties + self.capabilities + self.generic_properties + self.numeric_property_names})
+                        AddFromVanillaInjectionRequest({"Property" : list(fresh_property_titles) + self.extra_properties + self.capabilities + self.generic_properties + self.numeric_property_names})
                     )
 
                 # Remember the current list for the next comparison.
@@ -1423,11 +1533,14 @@ class VocoAdapter(Adapter):
                     except Exception as ex:
                          print("Error during injection: " + str(ex))
             else:
-                print("Not enough time has passed")
+                if self.DEV:
+                    print("Not enough time has passed - not injecting.")
+                return 
+                #pass
+                
 
         except Exception as ex:
             print("Error during analysis and injection of your things into Snips: " + str(ex))
-
 
 
     # This function looks up things that might be a match to the things names or property names that the user mentioned in their request.
@@ -1542,7 +1655,9 @@ class VocoAdapter(Adapter):
                                     print("Couldn't find a property name either. Title has now been set to key: " + str(current_property_title))
 
                         
-                        # Thi dictionary holds properties of the potential match. There can be multiple matches, for example if the user wants to hear the temperature level of all things.
+                        # Get basic info
+
+                        # This dictionary holds properties of the potential match. There can be multiple matches, for example if the user wants to hear the temperature level of all things.
                         match_dict = {
                                 "thing": probable_thing_title,
                                 "property": current_property_title,
@@ -1552,7 +1667,7 @@ class VocoAdapter(Adapter):
                                 "@type": None,
                                 "property_url": get_api_url(thing['properties'][thing_property_key]['links'])
                                 }
-                        
+
                         try:
                             if 'type' in thing['properties'][thing_property_key]:
                                 match_dict['type'] = thing['properties'][thing_property_key]['type']
@@ -1591,8 +1706,14 @@ class VocoAdapter(Adapter):
                         except:
                             #print("name was not in numerical index list (so not 'third' or 'second')")
                             pass
+
                         
-                        
+                        # Avoid properties that the add-on can't deal with.
+                        if match_dict['@type'] == "VideoProperty" or match_dict['@type'] == "ImageProperty":
+                            continue
+
+
+                        # Start looking for a matching property
                         
                         # No target property title set
                         if match_dict['thing'] != None and (target_property_title in self.generic_properties or target_property_title == None):
@@ -1719,20 +1840,17 @@ class VocoAdapter(Adapter):
 
         try:
             if len(intent_message.slots.thing) > 0:
-                print("incoming slots thing = " + str(vars(intent_message.slots.thing.first())))
+                #print("incoming slots thing = " + str(vars(intent_message.slots.thing.first())))
                 if str(intent_message.slots.thing.first().value) == 'unknownword':
                     slots['thing'] = None
                 else:
                     slots['thing'] = str(intent_message.slots.thing.first().value)
-                print("slots['thing'] = " + str(slots['thing']))
-            else:
-                print("Slots: Thing was not set")
+                if self.DEBUG:
+                    print("User asked about " + str(slots['thing']))
 
             if len(intent_message.slots.property) > 0:
-                print("incoming slots property = " + str(vars(intent_message.slots.property.first())))
+                #print("incoming slots property = " + str(vars(intent_message.slots.property.first())))
                 slots['property'] = intent_message.slots.property.first().value
-            else:
-                print("Slots: Property was not set")
 
         except Exception as ex:
             print("Error getting thing related intention data: " + str(ex))
@@ -1881,11 +1999,7 @@ class VocoAdapter(Adapter):
             combo_word = " past "
             end_word = ""
             
-            if hours == 0:
-                hours = "midnight"
-            elif hours != 12:
-                hours = hours % 12
-                
+            # Minutes
             if minutes == 45:
                 hours += 1
                 combo_word = " to "
@@ -1907,9 +2021,16 @@ class VocoAdapter(Adapter):
                 else:
                     minutes = str(minutes) + " minutes"
             
+            # Hours
+            if hours == 0:
+                hours = "midnight"
+            elif hours != 12:
+                hours = hours % 12
+                        
             nice_time = str(minutes) + str(combo_word) + str(hours) + str(end_word)
 
-            print(str(nice_time))
+            if self.DEBUG:
+                print(str(nice_time))
             return nice_time
         except Exception as ex:
             print("Error making human readable time: " + str(ex))

@@ -96,16 +96,18 @@ def intent_set_timer(self, hermes, intent_message): # TODO: maybe more different
     time_slot_snippet = "" # A snipper from the original sentence that described the time slot.
     
     current_time = int(time.time())
-    
+    moment = None
+
     try:
         # Get the target moment
-        if slots['duration'] == None and slots['end_time'] == None:
-            voice_message = "Not enough time information"
-
-        elif slots['duration'] != None:
+        if slots['duration'] != None:
             moment = slots['duration']
-        else:
+        elif slots['end_time'] != None:
             moment = slots['end_time'] 
+        else:
+            hermes.publish_end_session_notification(intent_message.site_id, "You didn't provide a time.", "")
+            # TODO: we could ask for the time via a dialogue
+            return
 
         #print("moment = " + str(moment))
                 
@@ -167,14 +169,15 @@ def intent_set_timer(self, hermes, intent_message): # TODO: maybe more different
             # first removing old countdown, if it existed.
             for index, item in enumerate(self.action_times):
                 if str(item['type']) == 'countdown':
-                    print("countdown already existed. Removing the old one.")
+                    if self.DEBUG:
+                        print("countdown already existed. Removing the old one.")
                     item['moment'] = moment
                     #countdown_existed = True
                     del self.action_times[index]
             
             if self.DEBUG:
                 print("Creating new countdown")
-            self.countdown = moment    
+            self.countdown = moment
             self.action_times.append({"moment":moment,"type":"countdown","slots":slots,"hermes":hermes,"intent_message":intent_message})
             voice_message = "Starting countdown for " + time_delta_voice_message
 
@@ -215,11 +218,35 @@ def intent_set_timer(self, hermes, intent_message): # TODO: maybe more different
                 elif slots['end_time'] != None:
                     if self.DEBUG:
                         print("Reminder with a normal time object")
+                    
+                    try:
+                        sentence = sentence.replace( str( intent_message.slots.end_time[0].raw_value), "").rstrip()
+                        if sentence.endswith("at"):
+                            sentence = sentence[:-2]
+                        elif sentence.endswith("at"):
+                            sentence = sentence[:-2]
+                        #print("Cleaned up sentence without the duration at the end: " + str(sentence))
+                    except:
+                        print("could not cut time from the end of the sentence")
+                    
+                    try:
+                        print("RAW: " + str( intent_message.slots.end_time[0].to_date.raw_value))
+                        #time_data.to_date
+                    except:
+                        print("wowsa")
+
             except:
                 print("Error removing raw snippet from sentence string")
 
             if self.DEV:
                 print("Extracting reminder message from: " + str(sentence))
+
+
+                # TODO:
+                # >> intent_message: set a reminder for ten minutes to go to bed
+                # leads to:  
+                # (...) Ok, I have set a reminder to for  to go to bed
+
 
             if 'remind' in sentence:
                 print("spotted 'remind me to'")
@@ -242,7 +269,7 @@ def intent_set_timer(self, hermes, intent_message): # TODO: maybe more different
             print("timer was appended to the list")
             voice_message = "A timer has been set for " + str(time_delta_voice_message)
 
-        self.update_timer_counts()
+        self.update_timer_counts() # Update the voco device
 
         # Speak voice message
         voice_message = clean_up_string_for_speaking(voice_message)
@@ -259,12 +286,13 @@ def intent_get_timer_count(self, hermes, intent_message):
     """ Tells the user how many timers have been set"""
     hermes.publish_end_session(intent_message.session_id, "") # terminate the session first if not continue
     
+    print("in intent get_timer_count")
     try:
         slots = self.extract_slots(intent_message)
         #print(str(slots))
 
         if self.DEBUG:
-            print("Getting timer count for timer type: " + str(slots['timer_type']))
+            print("Getting the count for: " + str(slots['timer_type']))
         
         if slots['timer_type'] == None:
             if self.DEBUG:
@@ -288,21 +316,13 @@ def intent_get_timer_count(self, hermes, intent_message):
                 #print(str(timer_count))
 
         if timer_count == 0:
-            voice_message = "There are none"
+            voice_message = "There are zero " + str(slots['timer_type']) + "s."
         elif timer_count == 1:
             voice_message = "There is one " + str(slots['timer_type'])
             if self.current_utc_time - last_found_moment < 43000: # If the timer is for a nearby time, they we can say it.
                 voice_message += " for " + str(self.human_readable_time(last_found_moment))
         else:
             voice_message = "There are " + str(timer_count) + " " + str(slots['timer_type']) + "s" 
-
-        # Update the timer count variable while we're at it.
-        if str(slots['timer_type']) == 'timer':
-            self.timer_count = int(timer_count)
-        if str(slots['timer_type']) == 'alarm':
-            self.alarm_count = int(timer_count)
-        if str(slots['timer_type']) == 'reminder':
-            self.reminder_count = int(timer_count)
 
         voice_message = clean_up_string_for_speaking(voice_message)
         if self.DEBUG:
@@ -316,19 +336,81 @@ def intent_get_timer_count(self, hermes, intent_message):
 
 
 
+
+def intent_list_timers(self, hermes, intent_message): # TODO: try creating a timers object.
+    """ Tells the user details about their timers/reminders"""
+    hermes.publish_end_session(intent_message.session_id, "") # terminate the session first if not continue
+    
+    try:
+        slots = self.extract_slots(intent_message)
+        print(str(slots))
+
+        if self.DEBUG:
+            print("Listing all timers for timer type: " + str(slots['timer_type']))
+        
+        if slots['timer_type'] == None:
+            if self.DEBUG:
+                print("No timer type set, cancelling")
+            return
+
+        voice_message = ""
+        
+        if str(slots['timer_type']) != "countdown":
+            if int(self.timer_counts[ str(slots['timer_type'])]) > 1:
+                voice_message = "There are " + str(self.timer_counts[str(slots['timer_type'])]) + " " + str(slots['timer_type']) + "s. "
+            #self.timer_counts = {'timer':0,'alarm':0,'reminder':0}
+
+        timer_count = 0
+        for index, item in enumerate(self.action_times):
+            #print("timer item = " + str(item))
+            try:
+                current_type = str(item['type'])
+                if current_type == "wake":
+                    current_type = 'alarm' # wake up alarms count as normal alarms.
+                    
+                if current_type == slots['timer_type']:
+                    
+                    #if timer_count > 0:
+                    #    voice_message += " and "
+
+                    timer_count += 1
+
+                    if str(slots['timer_type']) == 'countdown':
+                        voice_message += "The countdown"
+                    elif str(slots['timer_type']) == 'reminder':
+                        voice_message += "A reminder to " + str(item['reminder_text'])
+                    else:
+                        voice_message += str(item['type']) + " number " + str(timer_count)
+                    voice_message += " is set for " + str(self.human_readable_time( int(item['moment']) )) + ". "
+            except Exception as ex:
+                print("Error while building timer list voice_message: " + str(ex))
+
+
+        voice_message = clean_up_string_for_speaking(voice_message)
+        if self.DEBUG:
+            print("(...) " + str(voice_message))
+        hermes.publish_start_session_notification(intent_message.site_id, voice_message, "") # TODO replace all this with a function, or just with quick_speak
+        hermes.publish_end_session(intent_message.session_id, "")
+
+    except Exception as ex:
+        print("Error while dealing with list_timers intent: " + str(ex))
+
+
+
+
 def intent_stop_timer(self, hermes, intent_message):
     # terminate the session first if not continue
     try:
         hermes.publish_end_session(intent_message.session_id, "")
-        
-        if slots['timer_type'] == None:
-            print("No timer type set")
-            return
 
 
         slots = self.extract_slots(intent_message)
         print(str(slots))
-        
+
+        if slots['timer_type'] == None:
+            print("No timer type set")
+            return
+
         voice_message = ""
         
         if slots['number'] == 0: # is the user mentions zero in the command, it's most likely to set the count back to zero.
@@ -336,24 +418,24 @@ def intent_stop_timer(self, hermes, intent_message):
 
         timer_count = 0
         
-        # TODO: create a new list of timers for the specified type, if it has been specified.
+        # TODO: perhaps create a new list of timers for the specified type, if it has been specified.
         
         # The countdown is a separate case
-        if slots['timer_type'] == "countdown":
+        if str(slots['timer_type']) == "countdown":
             if self.DEBUG:
                 print("Cancelling countdown")
             #self.countdown = 0
             for index, item in enumerate(self.action_times):
                 if str(item['type']) == 'countdown':
                     #print("removing countdown from list")
-                    timer_count += 1
+                    #timer_count += 1
                     del self.action_times[index]
             voice_message = "the countdown has been disabled."
         
         # Remove all timers of selected timer type
         elif slots['timer_last'] == "all":
             if self.DEBUG:
-                print("Removing all " + str(item['type']))
+                print("Removing all " + str(slots['timer_type']))
 
             # Removing all timers of selected timer type
             for index,item in enumerate(self.action_times):
@@ -380,31 +462,40 @@ def intent_stop_timer(self, hermes, intent_message):
             if self.DEBUG:
                 print("Removing last ") #+ str(slots['timer_type'])) # TODO: currently this just removes the last created, and not the last created of a specific type. It may be wise to move different timer types into separate lists, and let the clock loop over those separate lists.
             
-            if timer_count == 0:
-                voice_message = "There are no timers set."
+            if self.timer_counts[str(slots['timer_type'])] == 0:
+            #if timer_count == 0:
+                voice_message = "There are no " + str(slots['timer_type']) + "s set."
             else:
                 try:
                     if slots['number'] == None:
-                        self.action_times.pop()
-                        voice_message = "The last created timer has been removed"
+                        print("no number")
+                        for i, e in reversed(list(enumerate(self.action_times))):
+                            #print("++" + str(i) + "-" + str(e))
+                            if str(e['type']) == str(slots['timer_type']):
+                                del self.action_times[i]
+                        #self.action_times.pop()
+                        voice_message = "The last created " + str(slots['timer_type']) + " has been removed"
                     else:
                         # The number of timers to remove has been specified
                         timers_to_remove = int(slots['number'])
-                        actually_removed_timers_count = 0
+                        
                         removed_count_message = str(timers_to_remove)
-                        for i in range(timers_to_remove):
-                            try:
-                                self.action_times.pop()
-                                actually_removed_timers_count += 1
-                                if self.DEBUG:
-                                    print("removed a timer")
-                            except:
-                                print("There aren't that many timers to remove")
-                                removed_count_message = "all"
-                                #break
-                        voice_message = removed_count_message + " timers have been removed"
-                except:
-                    print("Error removing timer(s).")
+                        
+                        actually_removed_timers_count = 0
+                        timers_count = 0
+                        for i, e in reversed(list(enumerate(self.action_times))):
+                            if e['type'] == str(slots['timer_type']):
+                                timers_count += 1 # count how many of this type we encounter
+                                if actually_removed_timers_count < int(slots['number']):
+                                    del self.action_times[i]
+                                    actually_removed_timers_count += 1
+
+                        if actually_removed_timers_count == timers_count:
+                            removed_count_message = "all" # Explain that we removed all timers of the type
+
+                        voice_message = removed_count_message + " " + str(slots['timer_type']) + "s have been removed."
+                except Exception as ex:
+                    print("Error removing timer(s)." + str(ex))
         
         self.update_timer_counts()
 
@@ -412,8 +503,8 @@ def intent_stop_timer(self, hermes, intent_message):
         if self.DEBUG:
             print("(...) " + str(voice_message))
         hermes.publish_start_session_notification(intent_message.site_id, voice_message, "")
-    except:
-        print("Error in stop_timer")
+    except Exception as ex:
+        print("Error in stop_timer: " + str(ex))
 
 
 # The boolean intent. Which should really be called get_state...
@@ -723,7 +814,8 @@ def intent_set_state(self, hermes, intent_message, delayed_action=False):   # If
                 
             # IN SET_STATE
             for found_property in found_properties:
-                print("Checking found property. url:" + str(found_property['property_url']))
+                if self.DEBUG:
+                    print("Checking found property. url:" + str(found_property['property_url']))
                 try:
                     # We're only interested in actuators that we can switch.
                     if str(found_property['type']) == "boolean" and found_property['readOnly'] != True: # can be None or False
@@ -782,18 +874,18 @@ def intent_set_state(self, hermes, intent_message, delayed_action=False):   # If
                                         pass
                                     else:
                                         if len(found_properties) > 1:
-                                            voice_message = "Setting " + str(found_property['property']) + back + " to " + str(human_readable_desired_state)
+                                            voice_message = "Setting " + str(found_property['property']) + " of " + str(found_property['thing']) + back + " to " + str(human_readable_desired_state)
                                         else:
-                                            voice_message = "Setting " + str(found_property['thing']) + back + " to " + str(human_readable_desired_state)
+                                            voice_message = "Setting " + str(found_property['property']) + back + " to " + str(human_readable_desired_state)
 
                 except Exception as ex:
                     print("Error while dealing with found boolean property: " + str(ex))    
                     
         else:
             if slots['thing'] != None and slots['thing'] != 'all':
-                voice_message += "I couldn't find a thing called " + str(slots['thing'])
+                voice_message += "Sorry, I couldn't do that." #find a thing called " + str(slots['thing'])
             else:
-                voice_message = "I couldn't find a matching device."
+                voice_message = "I couldn't find a match."
 
         if voice_message == "":
             voice_message = "Sorry, I could not toggle anything"
@@ -828,37 +920,49 @@ def intent_set_value(self, hermes, intent_message, original_value):
     if self.DEBUG:
         print("in intent_set_value")
     
-    if slots['color'] is None and slots['number'] is None and slots['percentage'] is None:
-        if self.DEBUG:
-            print("Error, no value present to set to")
-        if slots['boolean'] != None:
-            if self.DEBUG:
-                print("Trying to switch to set_state intent handler")
-            self.intent_set_state(hermes,intent_message) # Could try to switch to the other intent.
-        else:
-            voice_message = "I didn't understand what you wanted to change"
 
+    # Select the desired value from the intent data
+
+    if slots['color'] != None:
+        desired_value  = str(slots['color'])
+    elif slots['percentage'] != None:
+        desired_value  = int(slots['percentage'])
+        addendum = " percent"
+    elif slots['number'] != None:
+        desired_value  = get_int_or_float(slots['number'])
     else:
-        if slots['color'] != None:
-            desired_value  = str(slots['color'])
-        elif slots['percentage'] != None:
-            desired_value  = int(slots['percentage'])
-            addendum = " percent"
-        elif slots['number'] != None:
-            desired_value  = get_int_or_float(slots['number'])
+        self.quick_speak("Your request did not contain a valid value.")
+        return
     if self.DEBUG:
         print("desired_value = " + str(desired_value))
 
+
     try:
 
-        # Search for a matching thing+property
+        # Search for matching thing and properties
         actuator = False # TODO: the check_things function could make better use of this actuator variable
         found_properties = self.check_things(actuator,slots['thing'],slots['property'],slots['space'])
         if self.DEBUG:
             print("")
             print("found " + str(len(found_properties)) + " properties: " + str(found_properties))
 
-            
+
+        # Filter out properties that the desired value is not compatible with
+        for index, found_property in enumerate(found_properties):
+
+            if str(found_property['type']) == "boolean" or found_property['readOnly'] == True:
+                if self.DEBUG:
+                    print("removing boolean/readonly property from list at position: " + str(index))
+                del found_properties[index]
+                continue
+            if found_property['@type'] == 'ColorProperty' and not is_color(desired_value):
+                if self.DEBUG:
+                    print("removing non-color property from list at position: " + str(index))
+                del found_properties[index]
+                continue
+
+
+        # Original_value is only set if this is called by a timer.
         if original_value == None:
             if slots['duration'] != None or slots['end_time'] != None: # to avoid getting into loops, where after the duration this would create another duration. 
                 
@@ -894,7 +998,9 @@ def intent_set_value(self, hermes, intent_message, original_value):
                         else:
                             original_value = api_result[key]
                             if slots['color'] != None:
+                                print("original color from API was: " + str(original_value))
                                 original_value = hex_to_color_name(original_value)
+                                print("if hex, then new original color from API was: " + str(original_value))
                             
                             if self.DEV:
                                 print("Original value that a time delay should get to: " + str(original_value))
@@ -1006,8 +1112,13 @@ def intent_set_value(self, hermes, intent_message, original_value):
 
                         else:
                             api_value = api_result[key]
-                            if slots['color'] != None:
-                                api_value = hex_to_color_name(api_value) # turn the API call result into a human readable value
+                            try:
+                                if slots['color'] != None:
+                                    print("color before:" + str(api_value))
+                                    api_value = hex_to_color_name(api_value) # turn the API call result into a human readable value
+                                    print("color after:" + str(api_value))
+                            except:
+                                print("Error getting human readable color name")
 
                             if self.DEBUG:
                                 print("Checking if not already the desired value. " + str(api_value) + " =?= " + str(desired_value))
@@ -1053,9 +1164,9 @@ def intent_set_value(self, hermes, intent_message, original_value):
                 
         else:
             if slots['thing'] != None and slots['thing'] != 'all':
-                voice_message += "I couldn't find a thing called " + str(slots['thing'])
+                voice_message += "I couldn't do that." #find a thing called " + str(slots['thing'])
             else:
-                voice_message = "I couldn't find a matching device."
+                voice_message = "I couldn't find a match."
 
         if voice_message == "":
             voice_message = "Sorry, I could not change anything"
