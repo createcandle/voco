@@ -14,6 +14,7 @@ required_packages=(
   snips/libttspico-data_1.0+git20130326-5_all.deb
   snips/libttspico0_1.0+git20130326-5_armhf.deb
   snips/libttspico-utils_1.0+git20130326-5_armhf.deb
+  snips/mosquitto_1.4.10-3+deb9u4_armhf.deb
   snips/snips-platform-common_0.63.2_armhf.deb
   snips/snips-kaldi-atlas_0.24.2_armhf.deb
   snips/snips-asr_0.63.2_armhf.deb
@@ -42,8 +43,8 @@ install_using_apt() {
     echo "The snips_installed file was not present, installing now"
     echo "Installing gdebi"
     sudo apt-get install gdebi -y
-    echo "Installing mosquitto"
-    sudo apt-get install mosquitto -y
+    #echo "Installing mosquitto"
+    #sudo apt-get install mosquitto -y
     echo "Installing pulseaudio"
     sudo apt-get install pulseaudio -y
     echo "Installing Snips packages"
