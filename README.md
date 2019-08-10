@@ -14,6 +14,7 @@ These are all examples. You don't have to say things exactly like this.
 #### Toggle devices for a time period
 - "Turn on the bedroom heater for 20 minutes"
 - "Turn on the bubble blowing machine between 3 and 4 o'clock"
+- "Unlock the front door until 3 pm"
 - "Turn on the air filter tomorrow afternoon"
 - "Lock the front door at lunchtime" (11-13 o'clock)
 ### Ask questions
@@ -33,11 +34,16 @@ These are all examples. You don't have to say things exactly like this.
 - "Set a countdown to midnight"
 #### Set reminders
 - "At 5 o'clock remind me to wash the car"
+- "Remind me to go to the dentist in 40 minutes"
 #### Query timers
 - "How many alarms have been set?"
 - "How many timers are there?"
+#### Query timer details
+- "Tell me about all my reminders"
+- "Can you give me a list of all the timers"
 #### Remove timers
 - "Remove the last timer"
+- "Delete the last 3 alarms"
 - "Disable the countdown"
 - "Cancel all timers"
 ### Other
