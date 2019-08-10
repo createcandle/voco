@@ -985,7 +985,6 @@ class VocoAdapter(Adapter):
 
 
 
-
     def set_speaker_volume(self,volume): # TODO: store sound card ID number, and use that to set the volume of the correct soundcard instead of the master volume?
         if self.DEBUG:
             print("User changed audio volume")
@@ -1258,7 +1257,8 @@ class VocoAdapter(Adapter):
             #for snips_part in self.snips_parts:
                 #call(["sudo","systemctl", str(action), str(snips_part)]) # TODO: maybe change this to the run_command function that is used everywhere
                 
-            command = "sudo systemctl " + str(action) + " snips-*" #+ str(snips_part)
+            command = "sudo systemctl " + str(action) + " snips-*.service" #+ str(snips_part)
+            print("command: " + str(command))
             for line in run_command(command):
                 print(str(line))
 
@@ -1774,7 +1774,6 @@ class VocoAdapter(Adapter):
                         except:
                             #print("name was not in numerical index list (so not 'third' or 'second')")
                             pass
-
                         
                         # Avoid properties that the add-on can't deal with.
                         if match_dict['@type'] == "VideoProperty" or match_dict['@type'] == "ImageProperty":
