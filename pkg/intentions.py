@@ -313,57 +313,59 @@ def intent_list_timers(self, slots, intent_message): # TODO: try creating a time
 
         voice_message = ""
         
-        if str(slots['timer_type']) != "countdown":
-            if int(self.timer_counts[ str(slots['timer_type'])]) > 1:
-                voice_message = "There are " + str(self.timer_counts[str(slots['timer_type'])]) + " " + str(slots['timer_type']) + "s. "
+        if self.timer_counts[str(slots['timer_type'])] == 0:
+            voice_message = "There are zero " + str(slots['timer_type']) + "s. "
+        else:
+            if str(slots['timer_type']) != "countdown":
+                if int(self.timer_counts[ str(slots['timer_type'])]) > 1:
+                    voice_message = "There are " + str(self.timer_counts[str(slots['timer_type'])]) + " " + str(slots['timer_type']) + "s. "
 
-        timer_count = 0
-        for index, item in enumerate(self.action_times):
-            #print("timer item = " + str(item))
-            try:
-                current_type = str(item['type'])
-                if current_type == "wake":
-                    current_type = 'alarm' # wake up alarms count as normal alarms.
-                    
-                if current_type == "actuator" or current_type == "value":
-                    current_type = "timer"
+            timer_count = 0
+            for index, item in enumerate(self.action_times):
+                #print("timer item = " + str(item))
+                try:
+                    current_type = str(item['type'])
+                    if current_type == "wake":
+                        current_type = 'alarm' # wake up alarms count as normal alarms.
+                        
+                    if current_type == "actuator" or current_type == "value":
+                        current_type = "timer"
 
-                if current_type == slots['timer_type']:
-                    
-                    #if timer_count > 0:
-                    #    voice_message += " and "
+                    if current_type == slots['timer_type']:
+                        
+                        #if timer_count > 0:
+                        #    voice_message += " and "
 
-                    timer_count += 1
+                        timer_count += 1
 
-                    if str(slots['timer_type']) == 'countdown':
-                        voice_message += "The countdown"
-                    elif str(slots['timer_type']) == 'reminder':
-                        voice_message += "A reminder to " + str(item['reminder_text'])
-                    elif str(slots['timer_type']) == 'alarm':
-                        voice_message += "Alarm number " + str(timer_count)
-                    elif str(slots['timer_type']) == 'timer':
-                        voice_message += "Timer number " + str(timer_count)
-                        print(">> type = " + str(item['type']))
-                        if str(item['type']) == 'actuator':
-                            print("actuator timer")
-                            voice_message += ", which will toggle "
-                            if item['slots']['property'] != None:
-                                voice_message += str(item['slots']['property']) + " of "
-                            voice_message += str(item['slots']['thing'])
-                                # + " to " + str(item['original_value']) + ", "
-                            voice_message += ", "
-                        elif str(item['type']) == 'value':
-                            print("value timer")
-                            voice_message += ", which will set "
-                            if item['slots']['property'] != None:
-                                voice_message += str(item['slots']['property']) + " of "
-                            voice_message += str(item['slots']['thing'])
-                            voice_message += " to " + str(item['original_value']) + ", "
+                        if str(slots['timer_type']) == 'countdown':
+                            voice_message += "The countdown"
+                        elif str(slots['timer_type']) == 'reminder':
+                            voice_message += "A reminder to " + str(item['reminder_text'])
+                        elif str(slots['timer_type']) == 'alarm':
+                            voice_message += "Alarm number " + str(timer_count)
+                        elif str(slots['timer_type']) == 'timer':
+                            voice_message += "Timer number " + str(timer_count)
+                            print(">> type = " + str(item['type']))
+                            if str(item['type']) == 'actuator':
+                                print("actuator timer")
+                                voice_message += ", which will toggle "
+                                if item['slots']['property'] != None:
+                                    voice_message += str(item['slots']['property']) + " of "
+                                voice_message += str(item['slots']['thing'])
+                                    # + " to " + str(item['original_value']) + ", "
+                                voice_message += ", "
+                            elif str(item['type']) == 'value':
+                                print("value timer")
+                                voice_message += ", which will set "
+                                if item['slots']['property'] != None:
+                                    voice_message += str(item['slots']['property']) + " of "
+                                voice_message += str(item['slots']['thing'])
+                                voice_message += " to " + str(item['original_value']) + ", "
 
-                    voice_message += " is set for " + str(self.human_readable_time( int(item['moment']) )) + ". "
-            except Exception as ex:
-                print("Error while building timer list voice_message: " + str(ex))
-
+                        voice_message += " is set for " + str(self.human_readable_time( int(item['moment']) )) + ". "
+                except Exception as ex:
+                    print("Error while building timer list voice_message: " + str(ex))
 
         voice_message = clean_up_string_for_speaking(voice_message)
         if self.DEBUG:
