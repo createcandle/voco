@@ -182,6 +182,7 @@ class VocoAdapter(Adapter):
         try:
             voco_device = VocoDevice(self)
             self.handle_device_added(voco_device)
+            print("Voco thing created")
             try:
                 self.set_status_on_thing("Checking...")
                 #self.update_timer_counts()
@@ -282,6 +283,7 @@ class VocoAdapter(Adapter):
         if self.snips_installed:
             try:
                 if os.path.isdir("/usr/share/snips") and not os.path.isdir("/usr/share/snips/assistant"):
+                    print("Snips seems to be installed, but not an assistant. Will try to (re-)intall the assistant.")
                     if self.install_assistant():
                         print("Succesfully installed the assistant")
             except Exception as ex:
@@ -317,19 +319,20 @@ class VocoAdapter(Adapter):
                 print("Error downloading custom assistant")
 
             # Check if the user wants to increase the vocabulary. Works, but might actually poorly affect the quality of the recognition.
-            try:
-                if self.increase_vocabulary:
-                    if self.download_extra_vocabulary():
-                        self.install_extra_vocabulary()
-            except Exception as ex:
-                print("Error while installing bigger vocabulary: " + str(ex))
+            #try:
+            #    if self.increase_vocabulary:
+            #        if self.download_extra_vocabulary():
+            #            self.install_extra_vocabulary()
+            #except Exception as ex:
+            #    print("Error while installing bigger vocabulary: " + str(ex))
 
 
             # Start Snips
             try:
-                #self.set_snips_state(1) # Turning Snips on
-                self.persistent_data['listening'] = True # After a restart of the add-on Snips is always turned on
-                self.devices['voco'].properties['listening'].set_value( bool(self.persistent_data['listening']) ) # This will in turn turn on Snips.
+                self.set_snips_state(bool(self.persistent_data['listening'])) # Restore snips to the state from the persistence data. If it's the first run, Snips will be turned on.
+                #self.persistent_data['listening'] = True # After a restart of the add-on Snips is always turned on
+                self.devices['voco'].properties['listening'].update( bool(self.persistent_data['listening']) ) # This will in turn turn on Snips.
+        
             except Exception as ex:
                 print("Error while installing bigger vocabulary: " + str(ex))
 
@@ -525,18 +528,21 @@ class VocoAdapter(Adapter):
         try:
             #busy = os.path.isfile("snips/busy_installing")
             #done = os.path.isfile("snips/snips_installed")
-            if not os.path.isdir("/usr/share/snips"):
-                print("It seems Snips hasn't been (fully) installed yet - /usr/share/snips directory could not be found. Cancelling installation of assistant.")
-                try:
-                    os.remove(done_path)
-                except:
-                    pass
+
 
             busy_path = str(os.path.join(self.addon_path,"busy_installing"))
             done_path = str(os.path.join(self.addon_path,"snips_installed"))
+            
+            if not os.path.isdir("/usr/share/snips"):
+                print("It seems Snips hasn't been (fully) installed yet - /usr/share/snips directory could not be found..")
+                try:
+                    os.remove(done_path) # Remove the 'done' file, just in case it's there but Snips hasn't been installed / has disappeared.
+                except:
+                    pass
+            
             busy = os.path.isfile(busy_path)
             done = os.path.isfile(done_path)
-
+            
             if done:
                 print("Snips is installed")
                 return True
@@ -556,9 +562,22 @@ class VocoAdapter(Adapter):
                     
             # Start installing Snips
             else:
+                
+                # Attempt to make the .sh file executable using chmod
+                command = str(os.path.join(self.addon_path,"chmod")) + " +x install_snips.sh"
+                for line in run_command(command):
+                    print(str(line))
+                    if line.startswith('Command success'): # Succesfully made install script executable
+                        print("Chmod successful")
+                    elif line.startswith('Command failed'):
+                        self.set_status_on_thing("Error making Snips installable")
+                        return False
+                
                 command = str(os.path.join(self.addon_path,"install_snips.sh")) + " install"
-                self.set_status_on_thing("Installing Snips")
                 print("Snips install command: " + str(command))
+                self.set_status_on_thing("Installing Snips")
+                if self.DEBUG:
+                    print("Snips install command: " + str(command))
                 for line in run_command(command):
                     print(str(line))
                     if line.startswith('Command success'):
@@ -571,6 +590,7 @@ class VocoAdapter(Adapter):
             self.set_status_on_thing("Error during Snips installation")
             
         return False
+
 
 
     def download_assistant(self):
@@ -589,8 +609,13 @@ class VocoAdapter(Adapter):
                 pass
 
             if download_file(self.custom_assistant_url,target_file_path):
-                self.set_status_on_thing("Succesfully downloaded assistant")
-                return True
+                if os.path.getsize(target_file_path) > 100000:
+                    self.set_status_on_thing("Succesfully downloaded assistant")
+                    return True
+                else:
+                    # Downloaded file seems too small to be an assistant.
+                    self.set_status_on_thing("Error with download URL")
+                    return False
             else:
                 self.set_status_on_thing("Error downloading assistant")
                 return False
@@ -607,7 +632,7 @@ class VocoAdapter(Adapter):
         print("Installing assistant")
         try:
             if not os.path.isdir("/usr/share/snips"):
-                print("It seems Snips hasn't been (fully) installed yet - /usr/share/snips directory could not be found. Cancelling installation of assistant.")
+                print("Install assistant: it seems Snips hasn't been (fully) installed yet - /usr/share/snips directory could not be found. Cancelling installation of assistant.")
                 self.snips_installed = False
                 return
             if not os.path.isfile( os.path.join(self.addon_path,"snips","assistant.zip") ):
@@ -637,6 +662,10 @@ class VocoAdapter(Adapter):
         should_copy_to_assistant = False
         current_assistant = ""
 
+        if not os.path.isfile(filename):
+            print("assistant.json file did not exist. Snips/assistant not installed?")
+            return
+
         try:
             with open(filename, 'r') as f:
                 for index,line in enumerate(f):
@@ -651,7 +680,7 @@ class VocoAdapter(Adapter):
                     current_assistant += line
 
         except Exception as ex:
-            print("Error while analyzing current assistant.json file: " + str(ex))
+            print("Disable telemetry: error while analyzing current assistant.json file: " + str(ex))
             return
             
         try:
@@ -728,7 +757,7 @@ class VocoAdapter(Adapter):
                     print("Already busy installing the larger vocabulary?")
                 return False
             elif not os.path.isdir(os.path.normpath("/usr/share/snips")):
-                print("It seems Snips hasn't been (fully) installed yet - /usr/share/snips directory could not be found.")
+                print("Install extra vocabualry: it seems Snips hasn't been (fully) installed yet - /usr/share/snips directory could not be found.")
                 return
             
             self.set_status_on_thing("Installing bigger vocabulary")
@@ -1220,8 +1249,21 @@ class VocoAdapter(Adapter):
 
         try:    
             for snips_part in self.snips_parts:
-                call(["sudo","systemctl", str(action), str(snips_part)]) # TODO: maybe change this to the run_command function that is used everywhere
+                #call(["sudo","systemctl", str(action), str(snips_part)]) # TODO: maybe change this to the run_command function that is used everywhere
                 
+                command = "sudo systemctl " + str(action) + " " + str(snips_part)
+                for line in run_command(command):
+                    print(str(line))
+                    
+                    if line.startswith('Command success'):
+                        print(str(snips_part) + "->" + str(action))
+                        #self.set_status_on_thing("Succesfully installed Snips")
+                    elif line.startswith('Command failed'):
+                        pass
+                        #self.set_status_on_thing("Error installing Snips")
+                    elif line.startswith('Failed to stop') and line.endswith('not loaded.'): # Snips doesn't seem to be installed yet.
+                        break
+                        
         except Exception as ex:
             print("Error settings Snips state: " + str(ex))
 
