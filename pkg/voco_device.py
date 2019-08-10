@@ -126,8 +126,7 @@ class VocoProperty(Property):
         self.name = name
         self.title = name
         self.description = description # dictionary
-        #self.value = 0
-        #self.update(0)
+        self.value = value
         self.set_cached_value(value)
 
     def set_value(self, value):
@@ -151,7 +150,7 @@ class VocoProperty(Property):
     def update(self, value):         
         print("property -> update")
         
-        #if value != self.value:
-        self.value = value
-        self.set_cached_value(value)
-        self.device.notify_property_changed(self)
+        if value != self.value:
+            self.value = value
+            self.set_cached_value(value)
+            self.device.notify_property_changed(self)

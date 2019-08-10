@@ -60,7 +60,6 @@ except:
 from gateway_addon import Database, Adapter
 from .util import *
 from .voco_device import *
-#from .util import pretty, is_a_number, get_int_or_float
 
 
 #print('Python:', sys.version)
@@ -95,6 +94,7 @@ class VocoAdapter(Adapter):
         print("initialising adapter from class")
         self.pairing = False
         self.DEBUG = True
+        self.DEV = True
         self.name = self.__class__.__name__
         Adapter.__init__(self, 'voco-adapter', 'voco', verbose=verbose)
         #print("Adapter ID = " + self.get_id())
@@ -134,7 +134,7 @@ class VocoAdapter(Adapter):
                 "unlocked":"locked"
         }
 
-        # self.persistent_data              # self.persistent_data is handled just above
+        # self.persistent_data is handled just above
         self.metric = True
         self.DEBUG = True
         self.DEV = False
@@ -184,7 +184,7 @@ class VocoAdapter(Adapter):
             self.handle_device_added(voco_device)
             try:
                 self.set_status_on_thing("Checking...")
-                self.update_timer_counts()
+                #self.update_timer_counts()
                 #self.devices['voco'].properties[ 'listening' ].set_cached_value_and_notify( bool(self.persistent_data['listening']) ) # TODO: store the last state of the listening switch in the persistence file. That way it can be restored on reboot.
                 #self.devices['voco'].properties[ 'feedback-sounds' ].set_cached_value_and_notify( bool(self.persistent_data['feedback_sounds']) )
                 #self.devices['voco'].properties['listening'].set_value( bool(self.persistent_data['listening']) )
@@ -243,8 +243,8 @@ class VocoAdapter(Adapter):
 
         
         # Try to remove Snips telemetry. // Update: apparently snips no longer has any tracking enabled by default, and this is not required.
-        #if self.disable_snips_telemetry():
-        #    print("removed Snips telemetry")
+        if self.disable_snips_telemetry():
+            print("removed Snips telemetry")
 
 
         # TIME
@@ -308,7 +308,7 @@ class VocoAdapter(Adapter):
                                         database.close()
                                 except:
                                     print("Error while trying to open the database")
-                                #self.disable_snips_telemetry() # Apparently this is no longer required. Kudos to Snips!
+                                self.disable_snips_telemetry() # Apparently this is no longer required. Kudos to Snips!
                                 
                     else:
                         print("Assistant download url was not a url")
@@ -316,7 +316,7 @@ class VocoAdapter(Adapter):
             except:
                 print("Error downloading custom assistant")
 
-            # Check if the user wants to increase the vocabulary
+            # Check if the user wants to increase the vocabulary. Works, but might actually poorly affect the quality of the recognition.
             try:
                 if self.increase_vocabulary:
                     if self.download_extra_vocabulary():
@@ -632,13 +632,12 @@ class VocoAdapter(Adapter):
 
 
 
-    def disable_snips_telemetry(self): # This function could be removed.
+    def disable_snips_telemetry(self): # In the future this function could be removed. In the latest versions op Snips telemetry is disabled by default.
         filename = "/usr/share/snips/assistant/assistant.json"
         should_copy_to_assistant = False
         current_assistant = ""
 
         try:
-            #current_assistant = ""
             with open(filename, 'r') as f:
                 for index,line in enumerate(f):
                     if 'analyticsEnabled\" : true' in line:
@@ -989,13 +988,20 @@ class VocoAdapter(Adapter):
 
     def clock(self, voice_messages_queue):
         """ Runs every second and handles the various timers """
+        previous_action_times_count = 0
         while True:
+            if len(self.action_times) != previous_action_times_count:
+                previous_action_times_count = len(self.action_times)
+                self.update_timer_counts()
+
             time.sleep(1)
             voice_message = ""
+            utcnow = datetime.now(tz=pytz.utc)
+            current_time = int(utcnow.timestamp())
+            self.current_utc_time = current_time
+
             try:
-                utcnow = datetime.now(tz=pytz.utc)
-                current_time = int(utcnow.timestamp())
-                self.current_utc_time = current_time
+
                 #print(str(self.current_utc_time))
 
                 for index, item in enumerate(self.action_times):
@@ -1006,7 +1012,7 @@ class VocoAdapter(Adapter):
                         if item['type'] == 'wake' and current_time >= int(item['moment']):
                             if self.DEBUG:
                                 print("(...) WAKE UP")
-                            self.quick_speak("It's time to wake up")
+                            self.speak("It's time to wake up")
                             os.system("aplay " + str(os.path.join(self.addon_path,"assets","end_spot.wav")))
                             os.system("aplay " + str(os.path.join(self.addon_path,"assets","end_spot.wav")))
                             os.system("aplay " + str(os.path.join(self.addon_path,"assets","end_spot.wav")))
@@ -1016,7 +1022,7 @@ class VocoAdapter(Adapter):
                         elif item['type'] == 'alarm' and current_time >= int(item['moment']):
                             if self.DEBUG:
                                 print("(...) ALARM")
-                            self.quick_speak("This is your alarm notification")
+                            self.speak("This is your alarm notification")
                             os.system("aplay " + str(os.path.join(self.addon_path,"assets","end_spot.wav")))
                             os.system("aplay " + str(os.path.join(self.addon_path,"assets","end_spot.wav")))
                             os.system("aplay " + str(os.path.join(self.addon_path,"assets","end_spot.wav")))
@@ -1028,30 +1034,27 @@ class VocoAdapter(Adapter):
                                 print("(...) REMINDER")
                             os.system("aplay " + str(os.path.join(self.addon_path,"assets","end_spot.wav")))
                             voice_message = "This is a reminder to " + str(item['reminder_text'])
-                            self.quick_speak(voice_message)
+                            self.speak(voice_message)
                             
                         
 
                         # Delayed setting of a boolean state
                         elif item['type'] == 'actuator' and current_time >= int(item['moment']):
+                            print("origval:" + str(item['original_value']))
                             if self.DEBUG:
                                 print("(...) TIMED ACTUATOR SWITCHING")
-                            delayed_action = True
-                            intent_set_state(self, item['hermes'],item['intent_message'], delayed_action)
+                            #delayed_action = True
+                            intent_set_state(self, item['slots'],None, item['original_value'])
                             
                         # Delayed setting of a value
                         elif item['type'] == 'value' and current_time >= int(item['moment']):
+                            print("origval:" + str(item['original_value']))
                             if self.DEBUG:
                                 print("(...) TIMED SETTING OF A VALUE")
-                            if item['original_value'] != None:
-                                delayed_value = item['original_value']
-                            else:
-                                delayed_value = None
-                            intent_set_value(self, item['hermes'],item['intent_message'], delayed_value)
+                            intent_set_value(self, item['slots'],None, item['original_value'])
                             
                         # Countdown
                         elif item['type'] == 'countdown':
-                            #if self.countdown >= current_time: # This one is reversed - it's only trigger as long as it hasn't reached the target time.
                             if item['moment'] >= current_time: # This one is reversed - it's only trigger as long as it hasn't reached the target time.
 
                                 countdown_delta = self.countdown - current_time
@@ -1059,7 +1062,6 @@ class VocoAdapter(Adapter):
                                 # Update the countdown on the voco thing
                                 self.devices['voco'].properties[ 'countdown' ].set_cached_value_and_notify( int(countdown_delta) )
                                 
-
                                 # Create speakable countdown message
                                 if countdown_delta > 86400:
                                     if countdown_delta % 86400 == 0:
@@ -1069,8 +1071,7 @@ class VocoAdapter(Adapter):
                                             voice_message = "countdown has " + str(days_to_go) + " days to go"
                                         else:
                                             voice_message = "countdown has " + str(days_to_go) + " day to go"
-                                            
-                                            
+                                              
                                 elif countdown_delta > 3599:
                                     if countdown_delta % 3600 == 0:
                                         
@@ -1079,7 +1080,6 @@ class VocoAdapter(Adapter):
                                             voice_message = "countdown has " + str(hours_to_go) + " hours to go"
                                         else:
                                             voice_message = "countdown has " + str(hours_to_go) + " hour to go"
-                                            
                                             
                                 elif countdown_delta > 59:
                                     if countdown_delta % 60 == 0:
@@ -1099,30 +1099,33 @@ class VocoAdapter(Adapter):
                                 if voice_message != "":
                                     if self.DEBUG:
                                         print("(...) " + str(voice_message))
-                                    self.quick_speak(voice_message)
+                                    self.speak(voice_message)
 
                         # Anything without a type will be treated as a normal timer.
                         elif current_time >= int(item['moment']):
                             os.system("aplay " + os.path.join(self.addon_path,"assets","end_spot.wav"))
                             if self.DEBUG:
                                 print("(...) Your timer is finished")
-                            self.quick_speak("Your timer is finished")
+                            self.speak("Your timer is finished")
                             
                     except Exception as ex:
                         print("Clock: error recreating event from timer: " + str(ex))
-
-                # Removed timers whose time has come 
-                timer_removed = False
-                for index, item in enumerate(self.action_times):
-                    if int(item['moment']) <= current_time:
-                        timer_removed = True
-                        if self.DEBUG:
-                            print("removing timer from list")
-                        del self.action_times[index]
-                if timer_removed:
-                    if self.DEBUG:
-                        print("at least one timer was removed")
+                        # TODO: currently if this fails is seems the timer item will stay in the list indefinately. If it fails, it should still be removed.
                 
+                # Removed timers whose time has come 
+                try:
+                    timer_removed = False
+                    for index, item in enumerate(self.action_times):
+                        if int(item['moment']) <= current_time:
+                            timer_removed = True
+                            if self.DEBUG:
+                                print("removing timer from list")
+                            del self.action_times[index]
+                    if timer_removed:
+                        if self.DEBUG:
+                            print("at least one timer was removed")
+                except Exception as ex:
+                    print("Error while removing old timers: " + str(ex))
 
             except Exception as ex:
                 print("Clock error: " + str(ex))
@@ -1134,9 +1137,9 @@ class VocoAdapter(Adapter):
                     if notifier_message != None:
                         if self.DEBUG:
                             print("Incoming message from notifier: " + str(notifier_message))
-                        self.quick_speak(str(notifier_message))
+                        self.speak(str(notifier_message))
             except:
-                pass
+                continue
 
 
 
@@ -1144,35 +1147,29 @@ class VocoAdapter(Adapter):
     def update_timer_counts(self):
         try:
             print("in update_timer_counts")
-            print("self.timer_counts was: " + str(self.timer_counts))
             self.timer_counts = {'timer':0,'alarm':0,'reminder':0}
-            #updated_timer_counts = {'timer':0,'alarm':0,'reminder':0}
             countdown_active = False
             for index, item in enumerate(self.action_times):
                 current_type = item['type']
+                print(str(current_type))
                 if current_type == "countdown":
-                    print("Spotted a countdown object")
+                    #print("Spotted a countdown object")
                     countdown_active = True
                 if current_type == "wake":
                     current_type = "alarm"
+                if current_type == "actuator" or current_type == "value":
+                    current_type = "timer"
                 if current_type in self.timer_counts:
                     self.timer_counts[current_type] += 1
-                    #updated_timer_counts[current_type] += 1
             
             if self.DEBUG:
                 if self.DEBUG:print("updated timer counts = " + str(self.timer_counts))
-            #self.timer_counts = updated_timer_counts
 
             if countdown_active == False:
                 self.devices['voco'].properties[ 'countdown' ].set_cached_value_and_notify( 0 )
 
             for timer_type, count in self.timer_counts.items():
-            #for item in self.timer_counts: #enumerate(self.timer_counts):
-                print("Changing on voco thing: " + str(timer_type) + ": " + str(count))
-                #print("Changing timer count value on voco thing")
-                #print("timer property object? : " + str(self.devices['voco'].properties[ str(timer_type) ]))
-                #self.devices['voco'].properties[ str(timer_type) ].set_value( int(count) )
-                self.devices['voco'].properties[ str(timer_type) ].set_cached_value_and_notify( int(count) )
+                self.devices['voco'].properties[ str(timer_type) ].set_cached_value_and_notify( int(count) ) # Update the counts on the thing
         except Exception as ex:
             print("Error, could not update timer counts on the voco device: " + str(ex))
 
@@ -1188,7 +1185,7 @@ class VocoAdapter(Adapter):
     def remove_thing(self, device_id):
         try:
             obj = self.get_device(device_id)        
-            self.handle_device_removed(obj)                     # Remove from device dictionary
+            self.handle_device_removed(obj)                     # Remove voco thing from device dictionary
             if self.DEBUG:
                 print("User removed Voco device")
         except:
@@ -1288,7 +1285,7 @@ class VocoAdapter(Adapter):
         if self.token == None:
             print("PLEASE ENTER YOUR AUTHORIZATION CODE IN THE SETTINGS PAGE")
             self.set_status_on_thing("Authorization code missing, check settings")
-            self.quick_speak("The authorization code is missing. Check my settings page for details.")
+            self.speak("The authorization code is missing. Check my settings page for details.")
             return []
         
         try:
@@ -1363,9 +1360,10 @@ class VocoAdapter(Adapter):
             return False
 
 
-    def quick_speak(self, voice_message="",site_id="default"):
+    def speak(self, voice_message="",site_id="default"):
         try:
             self.h.publish_start_session_notification(site_id, voice_message, None)
+            #self.h.publish_stop_session(site_id,"")
         except:
             print("Cannot speak, connection to Snips hasn't been made yet")
 
@@ -1375,9 +1373,11 @@ class VocoAdapter(Adapter):
     # ROUTING
     #
 
-    def master_intent_callback(self,hermes, intent_message):    # Tri ggered everytime Snips succesfully recognises a voice intent
+    def master_intent_callback(self,hermes, intent_message):    # Triggered everytime Snips succesfully recognizes a voice intent
         incoming_intent = str(intent_message.intent.intent_name)
         sentence = str(intent_message.input).lower()
+
+        hermes.publish_end_session(intent_message.session_id, "")
 
         if self.DEBUG:
             print("")
@@ -1419,39 +1419,39 @@ class VocoAdapter(Adapter):
             #        incoming_intent = 'createcandle:get_timer_count' #intent_get_timer_count(self,hermes, intent_message)
 
             # Avoid setting a value if no value is present
-            elif incoming_intent == 'createcandle:set_value' and slots['color'] is None and slots['number'] is None and slots['percentage'] is None:
+            elif incoming_intent == 'createcandle:set_value' and slots['color'] is None and slots['number'] is None and slots['percentage'] is None and slots['string'] is None:
                 if slots['boolean'] != None:
                     print("Routing set_value to set_state instead")
                     incoming_intent == 'createcandle:set_state' # Switch to another intent type which has a better shot.
                 else:
-                    hermes.publish_end_session_notification(intent_message.site_id, "Your request did not contain a valid value.", "")
+                    print("request did not contain a valid value to set to")
+                    self.speak("Your request did not contain a valid value.")
+                    #hermes.publish_end_session_notification(intent_message.site_id, "Your request did not contain a valid value.", "")
                     return
 
             # Normal routing
             if incoming_intent == 'createcandle:get_time':
-                intent_get_time(self, hermes, intent_message)
+                intent_get_time(self, slots, intent_message)
             elif incoming_intent == 'createcandle:set_timer':
-                intent_set_timer(self, hermes, intent_message)
+                intent_set_timer(self, slots, intent_message)
             elif incoming_intent == 'createcandle:get_timer_count':
-                print("normal route to get_timer_count")
-                intent_get_timer_count(self, hermes, intent_message)
+                intent_get_timer_count(self, slots, intent_message)
             elif incoming_intent == 'createcandle:list_timers':
-                intent_list_timers(self, hermes, intent_message)
+                intent_list_timers(self, slots, intent_message)
             elif incoming_intent == 'createcandle:stop_timer':
-                intent_stop_timer(self, hermes, intent_message)
+                intent_stop_timer(self, slots, intent_message)
             elif incoming_intent == 'createcandle:get_value':
-                intent_get_value(self, hermes, intent_message)
+                intent_get_value(self, slots, intent_message)
             elif incoming_intent == 'createcandle:set_state':
-                intent_set_state(self, hermes, intent_message)
+                intent_set_state(self, slots, intent_message)
             elif incoming_intent == 'createcandle:set_value':
-                intent_set_value(self, hermes, intent_message, None)
+                intent_set_value(self, slots, intent_message, None)
             elif incoming_intent == 'createcandle:get_boolean':
-                intent_get_boolean(self, hermes, intent_message)
-
+                intent_get_boolean(self, slots, intent_message)
 
             else:
                 print("Error: the code could not handle that intent. Under construction?")
-                self.quick_speak("Sorry, I did not understand your intention.")
+                self.speak("Sorry, I did not understand your intention.")
 
         except Exception as ex:
             print("Error during routing: " + str(ex))
@@ -1470,7 +1470,7 @@ class VocoAdapter(Adapter):
                         print("Starting with feedback sounds enabled")
                     else:
                         self.h.disable_sound_feedback(site_message)
-                        print("Startinh with feedback sounds disabled")
+                        print("Starting with feedback sounds disabled")
                 except:
                     print("Error. Was unable to set the feedback sounds preference")
                 self.h.subscribe_intents(self.master_intent_callback).loop_forever()
@@ -1484,46 +1484,61 @@ class VocoAdapter(Adapter):
         """ Teaches Snips what the user's devices and properties are called """
         try:
             # Check if any new things have been created by the user.
-            if datetime.utcnow().timestamp() - self.last_injection_time > self.minimum_injection_interval: # TODO datestamp is not strictly UTC, although it doesn't really matter for this use case.
+            if datetime.utcnow().timestamp() - self.last_injection_time > self.minimum_injection_interval:
                 fresh_thing_titles = set()
                 fresh_property_titles = set()
+                fresh_property_strings = set()
+
                 for thing in self.things:
                     if 'title' in thing:
                         fresh_thing_titles.add(clean_up_string_for_speaking(str(thing['title']).lower()))
                         for thing_property_key in thing['properties']:
+                            if 'type' in thing['properties'][thing_property_key] and 'enum' in thing['properties'][thing_property_key]:
+                                if thing['properties'][thing_property_key]['type'] == 'string':
+                                    for word in thing['properties'][thing_property_key]['enum']:
+                                        fresh_property_strings.add(str(word))
                             if 'title' in thing['properties'][thing_property_key]:
                                 fresh_property_titles.add(clean_up_string_for_speaking(str(thing['properties'][thing_property_key]['title']).lower()))
-
+                
                 operations = []
                 
                 #print("fresh_thing_titles = " + str(fresh_thing_titles))
                 #print("fresh_prop_titles = " + str(fresh_property_titles))
+                #print("fresh_prop_strings = " + str(fresh_property_strings))
                 
                 try:
                     thing_titles = set(self.persistent_data['thing_titles'])
                     property_titles = set(self.persistent_data['property_titles'])
+                    property_strings = set(self.persistent_data['property_strings'])
                 except:
-                    print("couldn't load previous title list from persistence.")
+                    print("Couldn't load previous thing data from persistence.")
                     thing_titles = set()
                     property_titles = set()
+                    property_strings = set()
 
                 if len(thing_titles^fresh_thing_titles) > 0 or force_injection == True:                           # comparing sets to detect changes in thing titles
-                    print("Teaching Snips the thing titles.")
+                    print("Teaching Snips the updated thing titles.")
                     print(str(thing_titles^fresh_thing_titles))
                     operations.append(
                         AddFromVanillaInjectionRequest({"Thing" : list(fresh_thing_titles) })
                     )
                 if len(property_titles^fresh_property_titles) > 0 or force_injection == True:
-                    print("Teaching Snips the property titles.")
+                    print("Teaching Snips the updated property titles.")
                     operations.append(
                         AddFromVanillaInjectionRequest({"Property" : list(fresh_property_titles) + self.extra_properties + self.capabilities + self.generic_properties + self.numeric_property_names})
                     )
-
+                if len(property_strings^fresh_property_strings) > 0 or force_injection == True:
+                    print("Teaching Snips the updated property strings.")
+                    operations.append(
+                        AddFromVanillaInjectionRequest({"string" : list(fresh_property_strings) })
+                    )
+                
                 # Remember the current list for the next comparison.
                 if operations != []:
                     try:
                         self.persistent_data['thing_titles'] = list(fresh_thing_titles)
                         self.persistent_data['property_titles'] = list(fresh_property_titles)
+                        self.persistent_data['property_strings'] = list(fresh_property_strings)
                         self.save_persistent_data()
                         
                         update_request = InjectionRequestMessage(operations)
@@ -1547,7 +1562,7 @@ class VocoAdapter(Adapter):
     def check_things(self, actuator, target_thing_title, target_property_title, target_space ):
         if self.DEBUG:
             print("SCANNING THINGS")
-        
+
         if target_thing_title == None and target_property_title == None and target_space == None:
             print("No useful input available for a search through the things. Cancelling...")
             return []
@@ -1566,7 +1581,7 @@ class VocoAdapter(Adapter):
         
         if target_property_title is None:
             if self.DEBUG:
-                print("-> No property title provided Will try to get relevant properties.")
+                print("-> No property title provided. Will try to get relevant properties.")
         else:
             target_property_title = str(target_property_title).lower()
             if self.DEBUG:
@@ -1719,7 +1734,7 @@ class VocoAdapter(Adapter):
                         if match_dict['thing'] != None and (target_property_title in self.generic_properties or target_property_title == None):
                             
                             if self.DEBUG:
-                                print("Property was abstractly defined/unavailable, so adding it")
+                                print("Property title was not or abstractly supplied, so adding " + str(match_dict['property']) + " to the list")
                             result.append(match_dict.copy())
                             continue
                         
@@ -1809,6 +1824,8 @@ class VocoAdapter(Adapter):
                         elif found_property['type'] != 'boolean' and actuator == True: # Temove property if it's not the type we're looking for
                             #print("pruning non-boolean property")
                             del found_property
+
+                # TODO: better handling of what happens if the thing title was not found. The response could be less vague than 'no match'.
                 
         except Exception as ex:
             print("Error while looking for match in things: " + str(ex))
@@ -1820,25 +1837,37 @@ class VocoAdapter(Adapter):
 
     # This function parses the data coming from Snips and turned it into an easy to use dictionary.
     def extract_slots(self,intent_message):
-        slots = {"thing":None,
-                "property":None,
-                "space":None,
-                "boolean":None,
-                "number":None,
-                "percentage":None,
-                "start_time":None,
-                "end_time":None,
-                "special_time":None,
-                "duration":None,
-                "period":None,
-                "timer_type":None,
-                "timer_last":None,
-                "color":None
+
+        # TODO: better handle 'now' as a start time. E.g. Turn on the lamp from now until 5 o'clock. Although it does already work ok.
+
+        slots = {"sentence":None,       # The full original sentence
+                "thing":None,           # Thing title
+                "property":None,        # Property title
+                "space":None,           # Room name
+                "boolean":None,         # On or Off, Open or Closed, Locked or Unlocked
+                "number":None,          # A number
+                "percentage":None,      # A percentage
+                "string":None,          # E.g. to set the value of a dropdown. For now should only be populated by an injection at runtime, based on the existing dropdown values.
+                "color":None,           # E.g. 'green'. Similar to the string.
+                "start_time":None,      # If this exists, there is also an end-time.
+                "end_time":None,        # An absolute time
+                "special_time":None,    # relative times like "sunrise"
+                "duration":None,        # E.g. 5 minutes
+                "period":None,          # Can only be 'in' or 'for'. Used to distinguish "turn on IN 5 minutes" or "turn on FOR 5 minutes"
+                "timer_type":None,      # Can be timer, alarm, reminder, countdown
+                "timer_last":None       # Used to deterine how many timers a user wants to manipulate. Can only be "all" or "last". E.g. "The last 5 timers"
                 }
 
         #print("incoming slots: " + str(vars(intent_message.slots)))
 
         try:
+            sentence = str(intent_message.input).lower()
+            try:
+                sentence = sentence.replace("unknownword","") # TODO: perhaps notify the user that the sentence wasn't fully understood. Perhaps make it an option: try to continue, or ask to repeat the command.
+            except:
+                pass
+            slots['sentence'] = sentence
+
             if len(intent_message.slots.thing) > 0:
                 #print("incoming slots thing = " + str(vars(intent_message.slots.thing.first())))
                 if str(intent_message.slots.thing.first().value) == 'unknownword':
@@ -1850,47 +1879,58 @@ class VocoAdapter(Adapter):
 
             if len(intent_message.slots.property) > 0:
                 #print("incoming slots property = " + str(vars(intent_message.slots.property.first())))
-                slots['property'] = intent_message.slots.property.first().value
+                if str(intent_message.slots.property.first().value) == 'unknownword':
+                    slots['property'] = None
+                else:
+                    slots['property'] = intent_message.slots.property.first().value
 
         except Exception as ex:
             print("Error getting thing related intention data: " + str(ex))
 
         try:
+            # BOOLEAN
             if len(intent_message.slots.boolean) > 0:
                 if self.DEV:
                     print("incoming slots boolean = " + str(vars(intent_message.slots.boolean.first())))
                 slots['boolean'] = str(intent_message.slots.boolean.first().value)
-
+            
+            # NUMBER
             if len(intent_message.slots.number) > 0:
                 if self.DEV:
                     print("incoming slots number = " + str(vars(intent_message.slots.number.first())))
                 slots['number'] = intent_message.slots.number.first().value
 
+            #PERCENTAGE
             if len(intent_message.slots.percentage) > 0:
                 if self.DEV:
                     print("incoming slots percentage = " + str(vars(intent_message.slots.percentage.first())))
                 slots['percentage'] = intent_message.slots.percentage.first().value
 
+            # TIMER_TYPE
             if len(intent_message.slots.timer_type) > 0:
                 if self.DEV:
                     print("incoming slots timer_type = " + str(vars(intent_message.slots.timer_type.first())))
                 slots['timer_type'] = str(intent_message.slots.timer_type.first().value)
 
+            # TIMER_LAST
             if len(intent_message.slots.timer_last) > 0:
                 if self.DEV:
                     print("incoming slots timer_last = " + str(vars(intent_message.slots.timer_last.first())))
                 slots['timer_last'] = str(intent_message.slots.timer_last.first().value)
 
+            # COLOR
             if len(intent_message.slots.color) > 0:
                 if self.DEV:
                     print("incoming slots color = " + str(vars(intent_message.slots.color.first())))
                 slots['color'] = str(intent_message.slots.color.first().value)
 
+            # SPACE
             if len(intent_message.slots.space) > 0:
                 if self.DEV:
                     print("incoming slots space = " + str(vars(intent_message.slots.space.first())))
                 slots['space'] = str(intent_message.slots.space.first().value)
                 
+            # PLEASANTRIES
             if len(intent_message.slots.pleasantries) > 0:
                 if self.DEV:
                     print("incoming slots pleasantries = " + str(vars(intent_message.slots.pleasantries.first())))
@@ -1899,6 +1939,7 @@ class VocoAdapter(Adapter):
                 else:
                     slots['pleasantries'] = str(intent_message.slots.pleasantries.first().value) # For example, it the sentence started with "Can you" it could be nice to respond with "I can" or "I cannot".
 
+            # PERIOD
             if len(intent_message.slots.period) > 0:
                 if self.DEV:
                     print("incoming slots period = " + str(vars(intent_message.slots.period.first())))
@@ -1906,6 +1947,7 @@ class VocoAdapter(Adapter):
 
         except Exception as ex:
             print("Error getting value intention data: " + str(ex))
+
 
         try:
             # TIME
@@ -1921,15 +1963,25 @@ class VocoAdapter(Adapter):
 
                 # It's a version of time where there is a start and end date.
                 if hasattr(time_data, 'from_date') and hasattr(time_data, 'to_date'): # TODO remove hasattr? replace it 'in'?
-                    #print("both a start and end date in the time:")
+                    print("both a start and end date attribute in the time. Values could still be zero though.")
                     #print(str(time_data.from_date))
                     #print(str(time_data.to_date))
-                    slots['start_time'] = self.string_to_utc_timestamp(time_data.from_date)
-                    slots['end_time'] = self.string_to_utc_timestamp(time_data.to_date)
+                    if time_data.from_date != None:
+                        utc_timestamp = self.string_to_utc_timestamp(time_data.from_date)
+                        if utc_timestamp > self.current_utc_time: # Only allow moments in the future
+                            slots['start_time'] = utc_timestamp
+                    
+                    if time_data.to_date != None:
+                        utc_timestamp = self.string_to_utc_timestamp(time_data.to_date)
+                        if utc_timestamp > self.current_utc_time:
+                            slots['end_time'] = utc_timestamp
                     
                 elif hasattr(time_data, 'value'):
-                    #print("Just a single value in the time slot (so not to_ and from_, but just 'value')")
-                    slots['end_time'] = self.string_to_utc_timestamp(time_data.value)
+                    print("Just a single value in the time slot (so not to_ and from_, but just 'value')")
+                    if time_data.value != None:
+                        utc_timestamp = self.string_to_utc_timestamp(time_data.value)
+                        if utc_timestamp > self.current_utc_time:
+                            slots['end_time'] = utc_timestamp
 
         except Exception as ex:
             print("Error getting datetime intention data: " + str(ex)) 
@@ -1941,7 +1993,6 @@ class VocoAdapter(Adapter):
                 slots['special_time'] = str(intent_message.slots.special_time.first().value)
         except:
             print("Error getting special time from incoming intent")
-                
 
         try:
             # DURATION
@@ -1961,12 +2012,17 @@ class VocoAdapter(Adapter):
             print("Error getting duration intention data: " + str(ex))   
 
         return slots
-            
+
+
 
     def string_to_utc_timestamp(self,date_string):
         """ date as a date object """
         
         try:
+            if date_string == None:
+                print("string_to_utc_timestamp: date string was None.")
+                return 0
+
             simpler_times  = date_string.split('+', 1)[0]
             print("@split string: " + str(simpler_times))
             naive_datetime = parse(simpler_times)
@@ -1981,13 +2037,11 @@ class VocoAdapter(Adapter):
             return 0
 
 
+
     def human_readable_time(self,utc_timestamp):
         """ moment is as UTC timestamp, timezone_offset is in seconds """
         try:
-            #print("seconds offset: " + str(self.seconds_offset_from_utc))
             localized_timestamp = int(utc_timestamp) + self.seconds_offset_from_utc
-            #print("HUMAN READABLE localized_timestamp + offset = " + str(localized_timestamp))
-            #naive_localized_datetime = datetime.fromtimestamp(localized_timestamp)
             hacky_datetime = datetime.utcfromtimestamp(localized_timestamp)
 
             if self.DEBUG:
@@ -2008,7 +2062,7 @@ class VocoAdapter(Adapter):
                 hours += 1
                 combo_word = " to "
                 minutes = 60 - minutes # switches minutes to between 1 and 14, and increases the hour count
-            elif minutes == 0:
+            elif minutes == 0 and hours != 24:
                 combo_word = ""
                 minutes = ""
                 end_word = " o' clock"
@@ -2024,6 +2078,7 @@ class VocoAdapter(Adapter):
             # Hours
             if hours == 0:
                 hours = "midnight"
+                end_word = ""
             elif hours != 12:
                 hours = hours % 12
                         
@@ -2039,6 +2094,33 @@ class VocoAdapter(Adapter):
 
 
 
+def run_command(command):
+    try:
+        p = subprocess.Popen(command,
+                            stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE,
+                            shell=True)
+        # Read stdout from subprocess until the buffer is empty !
+        for bline in iter(p.stdout.readline, b''):
+            line = bline.decode('ASCII') #decodedLine = lines.decode('ISO-8859-1')
+            if line: # Don't print blank lines
+                yield line
+        # This ensures the process has completed, AND sets the 'returncode' attr
+        while p.poll() is None:                                                                                                                                        
+            sleep(.1) #Don't waste CPU-cycles
+        # Empty STDERR buffer
+        err = p.stderr.read()
+        if p.returncode == 0:
+            yield("Command success")
+        else:
+            # The run_command() function is responsible for logging STDERR 
+            if len(err) > 1:
+                yield("Error: " + str(err.decode('utf-8')))
+            yield("Command failed")
+            #return False
+    except Exception as ex:
+        print("Error running shell command: " + str(ex))   
+        
 
 
 
