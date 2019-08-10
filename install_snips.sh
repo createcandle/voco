@@ -40,14 +40,18 @@ install_using_apt() {
     		exit 0
 	fi
     echo "The snips_installed file was not present, installing now"
+    echo "Installing gdebi"
     sudo apt-get install gdebi -y
+    echo "Installing pulseaudio"
     sudo apt-get install pulseaudio -y
+    echo "Installing Snips packages"
 	for pkg in ${required_packages[@]}; do
             echo "installing $pkg"
             sudo gdebi "$pkg" -n
 	done
-
+    echo "Doing api-get -f install"
     sudo apt-get -f install
+    echo "Finished first Snips install part."
 }
 
 
