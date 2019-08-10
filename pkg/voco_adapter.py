@@ -526,6 +526,7 @@ class VocoAdapter(Adapter):
     def install_snips(self):
         """Install Snips using a shell command"""
         try:
+            print("in install_snips")
             #busy = os.path.isfile("snips/busy_installing")
             #done = os.path.isfile("snips/snips_installed")
 
@@ -564,7 +565,8 @@ class VocoAdapter(Adapter):
             else:
                 
                 # Attempt to make the .sh file executable using chmod
-                command = str(os.path.join(self.addon_path,"chmod")) + " +x install_snips.sh"
+                command = "chmod +x " + str(os.path.join(self.addon_path,"install_snips.sh")) 
+                print("chmod command: " + str(command))
                 for line in run_command(command):
                     print(str(line))
                     if line.startswith('Command success'): # Succesfully made install script executable
@@ -588,6 +590,7 @@ class VocoAdapter(Adapter):
                         
         except Exception as ex:
             self.set_status_on_thing("Error during Snips installation")
+            print("Error in Snips installation: " + str(ex))
             
         return False
 
