@@ -1255,22 +1255,23 @@ class VocoAdapter(Adapter):
             print("Error settings voco_device state: " + str(ex))
 
         try:    
-            for snips_part in self.snips_parts:
+            #for snips_part in self.snips_parts:
                 #call(["sudo","systemctl", str(action), str(snips_part)]) # TODO: maybe change this to the run_command function that is used everywhere
                 
-                command = "sudo systemctl " + str(action) + " " + str(snips_part)
-                for line in run_command(command):
-                    print(str(line))
-                    
-                    if line.startswith('Command success'):
-                        print(str(snips_part) + "->" + str(action))
-                        #self.set_status_on_thing("Succesfully installed Snips")
-                    elif line.startswith('Command failed'):
-                        pass
-                        #self.set_status_on_thing("Error installing Snips")
-                    elif line.startswith('Failed to stop') and line.endswith('not loaded.'): # Snips doesn't seem to be installed yet.
-                        break
-                        
+            command = "sudo systemctl " + str(action) + " snips-*" #+ str(snips_part)
+            for line in run_command(command):
+                print(str(line))
+
+                if line.startswith('Command success'):
+                    print("Succesfully set Snips' state to " + str(action))
+                    #self.set_status_on_thing("Succesfully installed Snips")
+                elif line.startswith('Command failed'):
+                    print("failed to set Snips' state to " + str(action))
+                    #pass
+                    #self.set_status_on_thing("Error installing Snips")
+                #elif line.startswith('Failed to stop') and line.endswith('not loaded.'): # Snips doesn't seem to be installed yet.
+                #    break
+
         except Exception as ex:
             print("Error settings Snips state: " + str(ex))
 
