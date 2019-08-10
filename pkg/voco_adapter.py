@@ -281,6 +281,7 @@ class VocoAdapter(Adapter):
         
         # If Snips is installed, check if any other parts should be downloaded or updated.
         if self.snips_installed:
+            print("self.snips_installed == True")
             try:
                 if os.path.isdir("/usr/share/snips") and not os.path.isdir("/usr/share/snips/assistant"):
                     print("Snips seems to be installed, but not an assistant. Will try to (re-)intall the assistant.")
@@ -329,14 +330,16 @@ class VocoAdapter(Adapter):
 
             # Start Snips
             try:
+                self.persistent_data['listening'] = True # After a restart of the add-on Snips is always turned on
+                #print("Setting Snips state to: " + str(bool(self.persistent_data['listening'])))
                 self.set_snips_state(bool(self.persistent_data['listening'])) # Restore snips to the state from the persistence data. If it's the first run, Snips will be turned on.
-                #self.persistent_data['listening'] = True # After a restart of the add-on Snips is always turned on
                 self.devices['voco'].properties['listening'].update( bool(self.persistent_data['listening']) ) # This will in turn turn on Snips.
         
             except Exception as ex:
                 print("Error while installing bigger vocabulary: " + str(ex))
 
             # Start the internal clock which is used to handle timers. It also receives messages from the notifier.
+            print("Starting the internal clock")
             t = threading.Thread(target=self.clock, args=(voice_messages_queue,))
             t.daemon = True
             t.start()
@@ -715,6 +718,7 @@ class VocoAdapter(Adapter):
                         return True
         except Exception as ex:
             print("Error while trying to replace the assistant.json file with the telemetry-free version: " + str(ex))
+
         return False
 
 
@@ -1521,7 +1525,7 @@ class VocoAdapter(Adapter):
                 self.h.subscribe_intents(self.master_intent_callback).loop_forever()
 
         except Exception as ex:
-            print("ERROR. starting Hermes (the connection to Snips) failed: " + str(ex))
+            print("ERROR starting Hermes (the connection to Snips) failed: " + str(ex))
 
 
     # Update Snips with the latest names of things and properties. This helps to improve recognition.
@@ -1556,14 +1560,14 @@ class VocoAdapter(Adapter):
                     property_titles = set(self.persistent_data['property_titles'])
                     property_strings = set(self.persistent_data['property_strings'])
                 except:
-                    print("Couldn't load previous thing data from persistence.")
+                    print("Couldn't load previous thing data from persistence. If Snips was just installed this is normal.")
                     thing_titles = set()
                     property_titles = set()
                     property_strings = set()
 
                 if len(thing_titles^fresh_thing_titles) > 0 or force_injection == True:                           # comparing sets to detect changes in thing titles
                     print("Teaching Snips the updated thing titles.")
-                    print(str(thing_titles^fresh_thing_titles))
+                    #print(str(thing_titles^fresh_thing_titles))
                     operations.append(
                         AddFromVanillaInjectionRequest({"Thing" : list(fresh_thing_titles) })
                     )
@@ -1585,7 +1589,10 @@ class VocoAdapter(Adapter):
                         self.persistent_data['property_titles'] = list(fresh_property_titles)
                         self.persistent_data['property_strings'] = list(fresh_property_strings)
                         self.save_persistent_data()
-                        
+                    except Exception as ex:
+                         print("Error saving thing details to persistence: " + str(ex))
+                    
+                    try:
                         update_request = InjectionRequestMessage(operations)
                         with Hermes("localhost:1883") as herm:
                             herm.request_injection(update_request)
@@ -2152,7 +2159,7 @@ def run_command(command):
                 yield line
         # This ensures the process has completed, AND sets the 'returncode' attr
         while p.poll() is None:                                                                                                                                        
-            sleep(.1) #Don't waste CPU-cycles
+            sleep(.02) #Don't waste CPU-cycles
         # Empty STDERR buffer
         err = p.stderr.read()
         if p.returncode == 0:
