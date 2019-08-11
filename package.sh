@@ -12,34 +12,34 @@ rm -rf lib
 # Make sure files exist and are initially empty
 if [ -e busy_installing ]
 then
-    rm busy_installing
+    rm -f busy_installing
 fi
 
 if [ -e snips_installed ]
 then
-    rm snips_installed
+    rm -f snips_installed
 fi
 
 if [ -e respeaker_installed ]
 then
-    rm respeaker_installed
+    rm -f respeaker_installed
 fi
 
 if [ -e asound.conf ]
 then
-    rm asound.conf
+    rm -f asound.conf
 fi
 touch asound.conf
 
 if [ -e assistant.json ]
 then
-    rm assistant.json
+    rm -f assistant.json
 fi
 touch assistant.json
 
 if [ -e snips/snips-asr-model-en-500MB_0.6.0-alpha.4_armhf.deb ]
 then
-    rm snips/snips-asr-model-en-500MB_0.6.0-alpha.4_armhf.deb
+    rm -f snips/snips-asr-model-en-500MB_0.6.0-alpha.4_armhf.deb
 fi
 
 # Put package together
