@@ -43,7 +43,15 @@ install_using_apt() {
     		exit 0
 	fi
     echo "The snips_installed file was not present, installing now"
+    
     sudo apt update -y
+    sudo apt-get update
+    
+    # Unzip and prepare the assistant first
+    mkdir /usr/share/snips
+    sudo unzip -o snips/assistant.zip -d /usr/share/snips
+    
+    #
     #echo "Installing gdebi"
     #sudo apt-get install gdebi -y
     #echo "Installing mosquitto"
@@ -57,7 +65,12 @@ install_using_apt() {
             sudo dpkg -i --force-depends "$pkg"
 	done
     echo "Doing api-get -f install"
-    sudo apt-get -f install -y
+    #sudo apt-get -f install -y
+    sudo chown -R _snips:_snips /usr/share/snips/assistant/
+	sudo systemctl restart snips-hotword
+	sudo systemctl restart snips-dialogue
+	sudo systemctl restart snips-injection
+    
     echo "Finished first Snips install part."
 }
 
@@ -137,7 +150,7 @@ if [[ $1 == "install" ]]; then
     #install_sudo
     touch $BUSYPATH
 	install_using_apt
-    install_assistant
+    #install_assistant
     rm $BUSYPATH
     if [ -d "/usr/share/snips/assistant" ]; then
         touch $DONEPATH
