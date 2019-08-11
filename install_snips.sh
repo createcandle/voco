@@ -6,7 +6,9 @@ BUSYPATH="$DIR/busy_installing"
 DONEPATH="$DIR/snips_installed"
 RESPEAKERDONEPATH="$DIR/respeaker_installed"
 ASSISTANTPATH="$DIR/snips/assistant.zip"
-echo $DONEPATH
+ASSISTANTDONEPATH="$DIR/respeaker_installed"
+
+#echo $DONEPATH
 
 #set -e
 
@@ -15,23 +17,23 @@ echo $DONEPATH
 #  snips/mosquitto_1.4.10-3+deb9u4_armhf.deb
 
 required_packages=(
-  snips/libportaudio2_19.6.0-1_armhf.deb
-  snips/libblas-common_3.7.0-2_armhf.deb
-  snips/libatlas3-base_3.10.3-1-snips_armhf.deb
-  snips/libgfortran3_6.3.0-18+rpi1+deb9u1_armhf.deb
-  snips/libttspico-data_1.0+git20130326-5_all.deb
-  snips/libttspico0_1.0+git20130326-5_armhf.deb
-  snips/libttspico-utils_1.0+git20130326-5_armhf.deb
-  snips/snips-platform-common_0.63.2_armhf.deb
-  snips/snips-kaldi-atlas_0.24.2_armhf.deb
-  snips/snips-asr_0.63.2_armhf.deb
-  snips/snips-audio-server_0.63.2_armhf.deb
-  snips/snips-dialogue_0.63.2_armhf.deb
-  snips/snips-hotword_0.63.2_armhf.deb
-  snips/snips-injection_0.63.2_armhf.deb
-  snips/snips-nlu_0.63.2_armhf.deb
-  snips/snips-platform-voice_0.63.2_armhf.deb
-  snips/snips-tts_0.63.2_armhf.deb
+    libportaudio2_19.6.0-1_armhf.deb
+    libblas-common_3.7.0-2_armhf.deb
+    libatlas3-base_3.10.3-1-snips_armhf.deb
+    libgfortran3_6.3.0-18+rpi1+deb9u1_armhf.deb
+    libttspico-data_1.0+git20130326-5_all.deb
+    libttspico0_1.0+git20130326-5_armhf.deb
+    libttspico-utils_1.0+git20130326-5_armhf.deb
+    snips-platform-common_0.63.2_armhf.deb
+    snips-kaldi-atlas_0.24.2_armhf.deb
+    snips-asr_0.63.2_armhf.deb
+    snips-audio-server_0.63.2_armhf.deb
+    snips-dialogue_0.63.2_armhf.deb
+    snips-hotword_0.63.2_armhf.deb
+    snips-injection_0.63.2_armhf.deb
+    snips-nlu_0.63.2_armhf.deb
+    snips-platform-voice_0.63.2_armhf.deb
+    snips-tts_0.63.2_armhf.deb
 )
 
 check_pkg() {
@@ -41,7 +43,7 @@ check_pkg() {
 
 
 
-install_using_apt() {
+install_snips() {
     echo "path to check: $DONEPATH"
 	if [ -f $DONEPATH ]; then
     		echo "Already installed. Remove the 'snips_installed' file to unblock this. (shell)"
@@ -77,7 +79,6 @@ install_using_apt() {
     fi
     
     
-    #
     #echo "Installing gdebi"
     #sudo apt-get install gdebi -y
     #echo "Installing mosquitto"
@@ -86,9 +87,9 @@ install_using_apt() {
     sudo apt-get install pulseaudio -y
     echo "Installing Snips packages"
 	for pkg in ${required_packages[@]}; do
-            echo "installing $pkg from $DIR/$pkg"
+            echo "installing $pkg from $DIR/snips/$pkg"
             #sudo gdebi "$pkg" -n
-            sudo dpkg -i --force-depends "$DIR/$pkg"
+            sudo dpkg -i --force-depends "$DIR/snips/$pkg"
 	done
     echo "Doing api-get -f install"
     #sudo apt-get -f install -y
@@ -97,7 +98,6 @@ install_using_apt() {
 	sudo systemctl restart snips-hotword
 	sudo systemctl restart snips-dialogue
 	sudo systemctl restart snips-injection
-    
     echo "Finished giving install commands. (shell)"
 }
 
@@ -120,7 +120,7 @@ add_vocabulary() {
     		exit 1
 	fi
     touch busy_installing_vocabulary
-    #echo "Downloading and installing 150Mb dictionary, please be patient"
+    #echo "Downloading and installing 150Mb dictionary, please be patient" # Handled by Python now.
     #wget https://raspbian.snips.ai/stretch/pool/s/sn/snips-asr-model-en-500MB_0.6.0-alpha.4_armhf.deb 
     echo "Installing 500Mb voice dictionary, please be patient (shell)"
     chmod +x snips/snips-asr-model-en-500MB_0.6.0-alpha.4_armhf.deb
@@ -155,28 +155,20 @@ install_respeaker_driver() {
 uninstall() {
     for pkg in ${required_packages[@]}; do
         pkg_="$(cut -d'_' -f1 <<<"$pkg")"
-    sudo dpkg --purge --force-depends "$pkg_"
+        sudo dpkg --purge --force-depends "$pkg_"
     done
 	sudo rm -rf /usr/share/snips/
-	rm setup_complete
+	if [ -f $DONEPATH ]; then
         echo "Uninstall complete"
+        rm $DONEPATH
+	fi
 }
 
 
 if [[ $1 == "install" ]]; then
-    #result=${PWD##*/}          # to assign to a variable
     printf '%s\n' "${PWD##*/}" # to print to stdout
-    #if [[ result != "snips" ]]; then
-    #    cd snips
-    #fi
-    #if [ -d "snips" ]; then
-    #    cd snips
-    #fi   
-    #printf '%s\n' "${PWD##*/}" # to print to stdout
-
-    #install_sudo
     touch $BUSYPATH
-	install_using_apt
+	install_snips
     #install_assistant
     rm $BUSYPATH
     if [ -d "/usr/share/snips/g2p-models" ]; then
@@ -196,6 +188,8 @@ elif [[ $1 == "install_respeaker_driver" ]]; then
     install_respeaker_driver
 elif [[ $1 == "install_extra_vocabulary" ]]; then
     add_vocabulary
+elif [[ $1 == "uninstall" ]]; then
+    uninstall
 else
 	echo "use 'install' or 'install_assistant' parameter"
 fi
