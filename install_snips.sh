@@ -39,16 +39,18 @@ check_pkg() {
 install_using_apt() {
     echo "path to check: $DONEPATH"
 	if [ -f $DONEPATH ]; then
-    		echo "Already installed. Remove the 'snips_installed' file to unblock this."
+    		echo "Already installed. Remove the 'snips_installed' file to unblock this. (shell)"
     		exit 0
 	fi
-    echo "The snips_installed file was not present, installing now"
+    echo "The snips_installed file was not present, installing now (shell)"
     
+    echo "Updating APT (shell)"
     sudo apt update -y
     sudo apt-get update
     
+    echo "Copying the assistant into /usr/share/snips/assistant (shell)"
     # Unzip and prepare the assistant first
-    mkdir /usr/share/snips
+    sudo mkdir /usr/share/snips
     sudo unzip -o snips/assistant.zip -d /usr/share/snips
     
     #
@@ -71,19 +73,19 @@ install_using_apt() {
 	sudo systemctl restart snips-dialogue
 	sudo systemctl restart snips-injection
     
-    echo "Finished first Snips install part."
+    echo "Finished giving install commands. (shell)"
 }
 
 
 install_assistant() {
-    echo "Installing assistant"
+    echo "Installing assistant (shell)"
     sudo rm -rf /usr/share/snips/assistant
     sudo unzip -o snips/assistant.zip -d /usr/share/snips
     sudo chown -R _snips:_snips /usr/share/snips/assistant/
     sudo systemctl restart snips-hotword
     sudo systemctl restart snips-dialogue
     sudo systemctl restart snips-injection
-    echo "Command success"
+    echo "Command success (shell)"
 }
 
 
@@ -95,7 +97,7 @@ add_vocabulary() {
     touch busy_installing_vocabulary
     #echo "Downloading and installing 150Mb dictionary, please be patient"
     #wget https://raspbian.snips.ai/stretch/pool/s/sn/snips-asr-model-en-500MB_0.6.0-alpha.4_armhf.deb 
-    echo "Installing 500Mb voice dictionary, please be patient"
+    echo "Installing 500Mb voice dictionary, please be patient (shell)"
     chmod +x snips/snips-asr-model-en-500MB_0.6.0-alpha.4_armhf.deb
     #sudo gdebi snips/snips-asr-model-en-500MB_0.6.0-alpha.4_armhf.deb
     ar -xv snips/snips-asr-model-en-500MB_0.6.0-alpha.4_armhf.deb
@@ -104,7 +106,7 @@ add_vocabulary() {
         sudo cp snips/snips_extra.toml /etc/snips.toml
         sudo chown -R _snips:_snips /usr/share/snips/
         touch vocabulary_installed
-        echo "Command success (from sh)"
+        echo "Command success (shell)"
     fi
     rm busy_installing_vocabulary
     
@@ -152,10 +154,16 @@ if [[ $1 == "install" ]]; then
 	install_using_apt
     #install_assistant
     rm $BUSYPATH
-    if [ -d "/usr/share/snips/assistant" ]; then
+    if [ -d "/usr/share/snips/g2p-models" ]; then
+        if [ -d "/usr/share/snips/assistant" ]; then
         touch $DONEPATH
-        echo "succesfully installed snips (shell)"
+        echo "succesfully installed snips and assistant (shell)"
         echo "Command success (shell)"
+        else
+            echo "Error: Snips was installed, but the assistant was not (shell)."
+        fi
+    else
+        echo "ERROR: Snips was NOT installed (shell)"
     fi
 elif [[ $1 == "install_assistant" ]]; then
     install_assistant
