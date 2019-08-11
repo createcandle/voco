@@ -10,6 +10,7 @@ echo $DONEPATH
 #set -e
 
 required_packages=(
+  snips/libblas-common_3.7.0-2_armhf.deb
   snips/libatlas3-base_3.10.3-1-snips_armhf.deb
   snips/libgfortran3_6.3.0-18+rpi1+deb9u1_armhf.deb
   snips/libttspico-data_1.0+git20130326-5_all.deb
