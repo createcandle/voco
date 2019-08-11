@@ -43,8 +43,8 @@ install_using_apt() {
 	fi
     echo "The snips_installed file was not present, installing now"
     sudo apt update -y
-    echo "Installing gdebi"
-    sudo apt-get install gdebi -y
+    #echo "Installing gdebi"
+    #sudo apt-get install gdebi -y
     #echo "Installing mosquitto"
     #sudo apt-get install mosquitto -y
     echo "Installing pulseaudio"
