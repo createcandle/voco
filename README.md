@@ -69,3 +69,5 @@ https://github.com/andrenatal/voice-addon/
 
 Work on Voco was supported by the Creative Industries Fund NL and the European Union, via their support for the Candle privacy friendly smart home project.
 https://www.createcandle.com
+
+This project has received funding from the European Union’s Horizon 2020 research and innovation programme, under grant agreement No 786641.
