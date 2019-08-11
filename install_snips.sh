@@ -10,6 +10,10 @@ echo $DONEPATH
 
 #set -e
 
+
+#  snips/libwebsockets8_2.0.3-2+b1~rpt1_armhf.deb
+#  snips/mosquitto_1.4.10-3+deb9u4_armhf.deb
+
 required_packages=(
   snips/libportaudio2_19.6.0-1_armhf.deb
   snips/libblas-common_3.7.0-2_armhf.deb
@@ -18,8 +22,6 @@ required_packages=(
   snips/libttspico-data_1.0+git20130326-5_all.deb
   snips/libttspico0_1.0+git20130326-5_armhf.deb
   snips/libttspico-utils_1.0+git20130326-5_armhf.deb
-  snips/libwebsockets8_2.0.3-2+b1~rpt1_armhf.deb
-  snips/mosquitto_1.4.10-3+deb9u4_armhf.deb
   snips/snips-platform-common_0.63.2_armhf.deb
   snips/snips-kaldi-atlas_0.24.2_armhf.deb
   snips/snips-asr_0.63.2_armhf.deb
@@ -51,6 +53,8 @@ install_using_apt() {
     sudo apt update -y
     sudo apt-get update
     
+    echo "Installing mosquitto"
+    sudo apt-get install mosquitto -y
     
     # Unzip and prepare the assistant first
     
