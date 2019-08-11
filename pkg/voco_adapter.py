@@ -578,7 +578,7 @@ class VocoAdapter(Adapter):
                         self.set_status_on_thing("Error making Snips installable")
                         return False
                 
-                command = str(os.path.join(self.addon_path,"install_snips.sh")) + " install"
+                command = "sudo " + str(os.path.join(self.addon_path,"install_snips.sh")) + " install"
                 print("Snips install command: " + str(command))
                 self.set_status_on_thing("Installing Snips")
                 if self.DEBUG:
@@ -1426,9 +1426,9 @@ class VocoAdapter(Adapter):
     def master_intent_callback(self,hermes, intent_message):    # Triggered everytime Snips succesfully recognizes a voice intent
         incoming_intent = str(intent_message.intent.intent_name)
         sentence = str(intent_message.input).lower()
-
+        
         hermes.publish_end_session(intent_message.session_id, "")
-
+        
         if self.DEBUG:
             print("")
             print("")
@@ -2154,7 +2154,7 @@ def run_command(command):
                             shell=True)
         # Read stdout from subprocess until the buffer is empty !
         for bline in iter(p.stdout.readline, b''):
-            line = bline.decode('ASCII') #decodedLine = lines.decode('ISO-8859-1')
+            line = bline.decode('utf-8') #decodedLine = lines.decode('ISO-8859-1')
             if line: # Don't print blank lines
                 yield line
         # This ensures the process has completed, AND sets the 'returncode' attr
