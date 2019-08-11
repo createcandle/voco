@@ -51,7 +51,8 @@ class VocoOutlet(Outlet):
         #print("Initialising outlet")
         Outlet.__init__(self, notifier, _id)
         self.id = str(_id)
-        self.name = 'voco_outlet'
+        self.name = 'Speech'
+        self.title = 'Speech'
         self.notifier = notifier
 
         
@@ -60,7 +61,7 @@ class VocoOutlet(Outlet):
 
         # Now let's send it up to the voco adapter to speak it out loud.
         try:
-            self.notifier.voice_messages_queue.put(str(message)) # TODO do something with the alert level
+            self.notifier.voice_messages_queue.put(str(message)) # TODO do something with the title or alert level?
             #print("")
             #print("added message to queue")
         except Exception as ex:

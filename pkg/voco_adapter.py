@@ -205,6 +205,8 @@ class VocoAdapter(Adapter):
         # Stop Snips until the init is complete (if it is installed).
         try:
             self.set_snips_state(0)
+            self.devices['voco'].connected = False
+            self.devices['voco'].connected_notify(False)
         except Exception as ex:
             print("Could not stop Snips: " + str(ex))
 
@@ -537,8 +539,8 @@ class VocoAdapter(Adapter):
             busy_path = str(os.path.join(self.addon_path,"busy_installing"))
             done_path = str(os.path.join(self.addon_path,"snips_installed"))
             
-            if not os.path.isdir("/usr/share/snips"):
-                print("It seems Snips hasn't been (fully) installed yet - /usr/share/snips directory could not be found..")
+            if not os.path.isdir("/usr/share/snips/g2p-models"):
+                print("It seems Snips hasn't been (fully) installed yet - /usr/share/snips/g2p-models directory could not be found..")
                 try:
                     os.remove(done_path) # Remove the 'done' file, just in case it's there but Snips hasn't been installed / has disappeared.
                 except:
@@ -553,7 +555,7 @@ class VocoAdapter(Adapter):
             
             if busy:
                 print("Snips is already busy being installed")
-                self.set_status_on_thing("Installing?")
+                self.set_status_on_thing("Still busy installing?")
                 installation_starting_time = os.path.getmtime(busy_path)
                 current_time = int(time.time())
                 if current_time - installation_starting_time > 900: # Installation shouldn't really take longer than 15 minutes
@@ -1247,30 +1249,28 @@ class VocoAdapter(Adapter):
                 self.devices['voco'].connected_notify(True)
                 self.set_status_on_thing("Running")
             else:
-                self.devices['voco'].connected = False
-                self.devices['voco'].connected_notify(False)
                 self.set_status_on_thing("Stopped")
         except Exception as ex:
             print("Error settings voco_device state: " + str(ex))
 
         try:    
-            #for snips_part in self.snips_parts:
+            for snips_part in self.snips_parts:
                 #call(["sudo","systemctl", str(action), str(snips_part)]) # TODO: maybe change this to the run_command function that is used everywhere
                 
-            command = "sudo systemctl " + str(action) + " snips-*.service" #+ str(snips_part)
-            print("command: " + str(command))
-            for line in run_command(command):
-                print(str(line))
+                command = "sudo systemctl " + str(action) + " " + str(snips_part) #" snips-*.service" #
+                print("command: " + str(command))
+                for line in run_command(command):
+                    print(str(line))
 
-                if line.startswith('Command success'):
-                    print("Succesfully set Snips' state to " + str(action))
-                    #self.set_status_on_thing("Succesfully installed Snips")
-                elif line.startswith('Command failed'):
-                    print("failed to set Snips' state to " + str(action))
-                    #pass
-                    #self.set_status_on_thing("Error installing Snips")
-                #elif line.startswith('Failed to stop') and line.endswith('not loaded.'): # Snips doesn't seem to be installed yet.
-                #    break
+                    if line.startswith('Command success'):
+                        print("Succesfully set " + str(snips_part) +  " state to " + str(action))
+                        #self.set_status_on_thing("Succesfully installed Snips")
+                    elif line.startswith('Command failed'):
+                        print("failed to set Snips' state to " + str(action))
+                        #pass
+                        #self.set_status_on_thing("Error installing Snips")
+                    #elif line.startswith('Failed to stop') and line.endswith('not loaded.'): # Snips doesn't seem to be installed yet.
+                    #    break
 
         except Exception as ex:
             print("Error settings Snips state: " + str(ex))
@@ -2159,7 +2159,7 @@ def run_command(command):
                 yield line
         # This ensures the process has completed, AND sets the 'returncode' attr
         while p.poll() is None:                                                                                                                                        
-            sleep(.02) #Don't waste CPU-cycles
+            sleep(.1) #Don't waste CPU-cycles
         # Empty STDERR buffer
         err = p.stderr.read()
         if p.returncode == 0:
