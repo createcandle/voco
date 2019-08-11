@@ -5,6 +5,7 @@ echo $DIR
 BUSYPATH="$DIR/busy_installing"
 DONEPATH="$DIR/snips_installed"
 RESPEAKERDONEPATH="$DIR/respeaker_installed"
+ASSISTANTPATH="$DIR/snips/assistant.zip"
 echo $DONEPATH
 
 #set -e
@@ -48,10 +49,27 @@ install_using_apt() {
     sudo apt update -y
     sudo apt-get update
     
-    echo "Copying the assistant into /usr/share/snips/assistant (shell)"
+    
     # Unzip and prepare the assistant first
-    sudo mkdir /usr/share/snips
-    sudo unzip -o snips/assistant.zip -d /usr/share/snips
+    
+    if [ ! -d "/usr/share/snips" ]; then
+        echo "/usr/share/snips directory did not exist yet. Creating it now."
+        sudo mkdir /usr/share/snips
+    else
+        echo "/usr/share/snips directory already existed"
+    fi
+    
+    if [ ! -d "/usr/share/snips/assistant" ]; then
+        if [ -f $ASSISTANTPATH ]; then
+            echo "Copying the assistant into /usr/share/snips/assistant (shell)"
+            sudo unzip -o "$ASSISTANTPATH" -d /usr/share/snips
+        else
+            echo "ERROR: could not find assistant.zip file"
+        fi
+    else
+        echo "/usr/share/snips/assistant directory already existed"
+    fi
+    
     
     #
     #echo "Installing gdebi"
