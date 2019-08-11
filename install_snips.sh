@@ -10,6 +10,7 @@ echo $DONEPATH
 #set -e
 
 required_packages=(
+  snips/libatlas3-base_3.10.3-1-snips_armhf.deb
   snips/libgfortran3_6.3.0-18+rpi1+deb9u1_armhf.deb
   snips/libttspico-data_1.0+git20130326-5_all.deb
   snips/libttspico0_1.0+git20130326-5_armhf.deb
@@ -41,6 +42,7 @@ install_using_apt() {
     		exit 0
 	fi
     echo "The snips_installed file was not present, installing now"
+    sudo apt update -y
     echo "Installing gdebi"
     sudo apt-get install gdebi -y
     #echo "Installing mosquitto"
@@ -50,10 +52,11 @@ install_using_apt() {
     echo "Installing Snips packages"
 	for pkg in ${required_packages[@]}; do
             echo "installing $pkg"
-            sudo gdebi "$pkg" -n
+            #sudo gdebi "$pkg" -n
+            sudo dpkg -i --force-depends "$pkg"
 	done
     echo "Doing api-get -f install"
-    sudo apt-get -f install
+    sudo apt-get -f install -y
     echo "Finished first Snips install part."
 }
 
