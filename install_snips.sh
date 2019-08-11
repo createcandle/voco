@@ -93,6 +93,7 @@ install_using_apt() {
     echo "Doing api-get -f install"
     #sudo apt-get -f install -y
     sudo chown -R _snips:_snips /usr/share/snips/assistant/
+    sudo systemctl restart mosquitto
 	sudo systemctl restart snips-hotword
 	sudo systemctl restart snips-dialogue
 	sudo systemctl restart snips-injection
