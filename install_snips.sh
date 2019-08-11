@@ -60,9 +60,9 @@ install_using_apt() {
     sudo apt-get install pulseaudio -y
     echo "Installing Snips packages"
 	for pkg in ${required_packages[@]}; do
-            echo "installing $pkg"
+            echo "installing $pkg from $DIR/$pkg"
             #sudo gdebi "$pkg" -n
-            sudo dpkg -i --force-depends "$pkg"
+            sudo dpkg -i --force-depends "$DIR/$pkg"
 	done
     echo "Doing api-get -f install"
     #sudo apt-get -f install -y
