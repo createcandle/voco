@@ -3,3 +3,4 @@ fuzzywuzzy
 pyalsaaudio
 python-dateutil
 pytz
+paho-mqtt

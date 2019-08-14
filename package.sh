@@ -10,37 +10,17 @@ rm -f SHA256SUMS
 rm -rf lib
 
 # Make sure files exist and are initially empty
-if [ -e busy_installing ]
+if [ -e snips/playme.wav ]
 then
-    rm -f busy_installing
+    rm -f snips/playme.wav
 fi
 
-if [ -e snips_installed ]
+if [ -e snips.tar ]
 then
-    rm -f snips_installed
+    rm -f snips.tar
 fi
+tar -cvzf snips.tar snips/
 
-if [ -e respeaker_installed ]
-then
-    rm -f respeaker_installed
-fi
-
-if [ -e asound.conf ]
-then
-    rm -f asound.conf
-fi
-touch asound.conf
-
-if [ -e assistant.json ]
-then
-    rm -f assistant.json
-fi
-touch assistant.json
-
-if [ -e snips/snips-asr-model-en-500MB_0.6.0-alpha.4_armhf.deb ]
-then
-    rm -f snips/snips-asr-model-en-500MB_0.6.0-alpha.4_armhf.deb
-fi
 
 # Put package together
 mkdir package
@@ -49,13 +29,13 @@ mkdir lib
 # Pull down Python dependencies
 pip3 install -r requirements.txt -t lib --no-binary fuzzywuzzy,python-dateutil,pytz --prefix ""
 
-cp -r pkg lib snips assets LICENSE package.json *.py requirements.txt install_snips.sh asound.conf assistant.json setup.cfg package/
+cp -r pkg lib snips.tar assets LICENSE package.json *.py requirements.txt *.sh setup.cfg package/
 find package -type f -name '*.pyc' -delete
 find package -type d -empty -delete
 
 # Generate checksums
 cd package
-sha256sum *.py pkg/*.py assets/end_spot.wav snips/* LICENSE install_snips.sh asound.conf assistant.json requirements.txt setup.cfg > SHA256SUMS
+sha256sum *.py *.sh snips.tar pkg/*.py assets/end_spot.wav LICENSE requirements.txt setup.cfg > SHA256SUMS
 cd -
 
 # Make the tarball

@@ -33,7 +33,7 @@ def install_packages():
     #    '-r requirements.txt'.format(sys.executable, system_option))
 
     
-    cmd = 'pip3 install -r requirements.txt -t lib --no-binary fuzzywuzzy --prefix ""'
+    cmd = 'pip3 install -r requirements.txt -t lib --no-binary fuzzywuzzy,paho-mqtt --prefix ""'
     #cmd = (
     #    '{} -m pip install --install-option="--prefix=" -t lib '
     #    '-r requirements.txt'.format(sys.executable))
@@ -62,6 +62,8 @@ try:
     import alsaaudio  # noqa: F401
     import dateutil # noqa: F401
     import pytz # noqa: F401
+    import paho # noqa: F401
+    #import pyttsx3 # noqa: F401
 except ImportError as ex:
     print("Import error: " + str(ex))
     # If installation failed, exit with 100 to tell the gateway not to restart
