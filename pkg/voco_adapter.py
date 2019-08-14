@@ -14,6 +14,7 @@ from subprocess import call
 
 sys.path.append(path.join(path.dirname(path.abspath(__file__)), 'lib'))
 
+
 import json
 import asyncio
 import logging
@@ -40,6 +41,13 @@ except:
     print("ERROR, hermes is not installed. try 'pip3 install hermes-python'")
 
 try:
+    import paho.mqtt.publish as publish
+    import paho.mqtt.client as client
+except:
+    print("ERROR, paho is not installed. try 'pip3 install paho'")
+
+    
+try:
     from fuzzywuzzy import fuzz
     from fuzzywuzzy import process
 except:
@@ -65,6 +73,9 @@ from .voco_device import *
 #print('Python:', sys.version)
 #print('requests:', requests.__version__)
 
+
+
+os.environ["LD_LIBRARY_PATH"] = "/home/pi/.mozilla/addons/voco/snips/"
 
 
 _TIMEOUT = 3
@@ -105,6 +116,7 @@ class VocoAdapter(Adapter):
         except:
             print("adapter: no message queue?")
 
+        self.persistence_file_path = "/home/pi/.mozilla/config/voco-persistence.json"
         for path in _CONFIG_PATHS:
             if os.path.isdir(path):
                 self.persistence_file_path = os.path.join(
@@ -162,7 +174,9 @@ class VocoAdapter(Adapter):
         self.larger_vocabulary_url = "https://raspbian.snips.ai/stretch/pool/s/sn/snips-asr-model-en-500MB_0.6.0-alpha.4_armhf.deb"
         self.h = None # will hold the Hermes object, which is used to communicate with Snips
         self.pleasantry_count = 0 # How often Snips has heard "please". Will be used to thank the use for being cordial once in a while.
-
+        
+        
+        
         # These will be injected ino Snips for better recognition.
         self.extra_properties = ["state","set point"]
         self.generic_properties = ["level","value","values","state","states","all values","all levels"]
@@ -177,6 +191,7 @@ class VocoAdapter(Adapter):
         
         self.addon_path =  os.path.join(os.path.expanduser('~'), '.mozilla-iot', 'addons', 'voco')
         
+        self.bleep = os.path.join(self.addon_path,"snips","start_of_input.wav")
 
         # Create Voco device
         try:
@@ -197,11 +212,6 @@ class VocoAdapter(Adapter):
             print("Could not create voco device")
 
 
-
-
-
-
-
         # Stop Snips until the init is complete (if it is installed).
         try:
             self.set_snips_state(0)
@@ -209,11 +219,11 @@ class VocoAdapter(Adapter):
             self.devices['voco'].connected_notify(False)
         except Exception as ex:
             print("Could not stop Snips: " + str(ex))
-
-
+            
+            
         if self.DEBUG:
             print("available audio cards: " + str(alsaaudio.cards()))
-
+            
         # Pre-scan ALSA
         try:
             self.playback_devices = self.scan_alsa('playback')
@@ -225,30 +235,25 @@ class VocoAdapter(Adapter):
             print("Error scanning ALSA (audio devices): " + str(ex))
         
         
-        
+        # Install Snips if it hasn't been installed already
+        try:
+            self.snips_installed = self.install_snips()
+        except Exception as ex:
+            print("Error while trying to install Snips/check if Snips should be installed: " + str(ex))
+            
+            
         # LOAD CONFIG
         
         try:
             self.add_from_config()
         except Exception as ex:
             print("Error loading config: " + str(ex))
-
-
+            
+            
         # Setup the sound configuration. We do this only once.
-        if self.configure_alsa():
-            print("Audio was set up succesfully.")
-
-        # Install Snips if it hasn't been installed already
-        try:
-            self.snips_installed = self.install_snips()
-        except Exception as ex:
-            print("Error while trying to install Snips/check if Snips should be installed: " + str(ex))
-
+        #if self.configure_alsa():
+        #    print("Audio was set up succesfully.")
         
-        # Try to remove Snips telemetry. // Update: apparently snips no longer has any tracking enabled by default, and this is not required.
-        if self.disable_snips_telemetry():
-            print("removed Snips telemetry")
-
 
         # TIME
         
@@ -272,100 +277,119 @@ class VocoAdapter(Adapter):
         except Exception as ex:
             print("Error handling time zone calculation: " + str(ex))
 
+        
+        # Start Snips
+        try:
+            #self.persistent_data['listening'] = True # After a restart of the add-on Snips is always turned on
+            #print("Setting Snips state to: " + str(bool(self.persistent_data['listening'])))
+            self.set_snips_state(1) # Restore snips to the state from the persistence data. If it's the first run, Snips will be turned on.
+            self.devices['voco'].properties['listening'].update( bool(self.persistent_data['listening']) ) # This will in turn turn on Snips.
+            self.set_status_on_thing("OK, Listening")
+        except Exception as ex:
+            print("Error while setting Snips state to 1: " + str(ex))
 
+        # Start the internal clock which is used to handle timers. It also receives messages from the notifier.
+        print("Starting the internal clock")
+        try:
+            t = threading.Thread(target=self.clock, args=(voice_messages_queue,))
+            t.daemon = True
+            t.start()
+        except:
+            print("Error starting the clock")
+
+        print("Starting the hotword bleep response")
+        try:
+            b = threading.Thread(target=self.hotword_bleep)
+            b.daemon = True
+            b.start()
+        except:
+            print("Error starting the clock")
+
+
+        # Let Snips say hello
+        #voice_messages_queue.put("Hello, I am Snips")
+
+        # Say hello
+        #print("say hello")
+        #try:
+        #    self.speak("Hello, I am snips")
+        #except:
+        #    print("Error saying hello")
+        
         # Set the correct speaker volume
         try:
+            print("Speaker volume from persistence was: " + str(self.persistent_data['speaker_volume']))
             self.set_speaker_volume(self.persistent_data['speaker_volume'])
             self.devices['voco'].properties['volume'].set_value(self.persistent_data['speaker_volume'])
         except:
             print("Could not set initial audio volume")
         
         
-        # If Snips is installed, check if any other parts should be downloaded or updated.
-        if self.snips_installed:
-            print("self.snips_installed == True")
-            try:
-                if os.path.isdir("/usr/share/snips") and not os.path.isdir("/usr/share/snips/assistant"):
-                    print("Snips seems to be installed, but not an assistant. Will try to (re-)intall the assistant.")
-                    if self.install_assistant():
-                        print("Succesfully installed the assistant")
-            except Exception as ex:
-                print("Error while trying to install missing assistant: " + str(ex))
+        # Get al the things via the API.
+        try:
+            self.things = self.api_get("/things")
+            print("Did the API call")
+        except Exception as ex:
+            print("Error, couldn't load things at init: " + str(ex))
 
-            # Check if a new custom assistant should be downloaded
-            try:
-                if self.custom_assistant_url != None:
-                    if self.custom_assistant_url.startswith("http"):
-                        if self.DEBUG:
-                            print("A new assistant should be downloaded and installed from: " + str(self.custom_assistant_url))
-                        if self.download_assistant():
-                            print("Succesfully downloaded the new assistant zip file")
-                            if self.install_assistant():
-                                print("Succesfully installed the new assistant")
-                                try:
-                                    database = Database('voco')
-                                    if not database.open():
-                                        print("Could not open settings database")
-                                    else:
-                                        config = database.load_config()
-                                        config['Custom assistant'] = "Your new assistant has succesfully been installed"
-                                        database.save_config(config)
-                                        database.close()
-                                except:
-                                    print("Error while trying to open the database")
-                                self.disable_snips_telemetry() # Apparently this is no longer required. Kudos to Snips!
-                                
-                    else:
-                        print("Assistant download url was not a url")
-                    
-            except:
-                print("Error downloading custom assistant")
+        # Teach Snips the names of all the things and properties
+        self.inject_updated_things_into_snips(True) # During init we force Snips to learn all the thing names.
 
-            # Check if the user wants to increase the vocabulary. Works, but might actually poorly affect the quality of the recognition.
-            #try:
-            #    if self.increase_vocabulary:
-            #        if self.download_extra_vocabulary():
-            #            self.install_extra_vocabulary()
-            #except Exception as ex:
-            #    print("Error while installing bigger vocabulary: " + str(ex))
-
-
-            # Start Snips
-            try:
-                self.persistent_data['listening'] = True # After a restart of the add-on Snips is always turned on
-                #print("Setting Snips state to: " + str(bool(self.persistent_data['listening'])))
-                self.set_snips_state(bool(self.persistent_data['listening'])) # Restore snips to the state from the persistence data. If it's the first run, Snips will be turned on.
-                self.devices['voco'].properties['listening'].update( bool(self.persistent_data['listening']) ) # This will in turn turn on Snips.
-        
-            except Exception as ex:
-                print("Error while installing bigger vocabulary: " + str(ex))
-
-            # Start the internal clock which is used to handle timers. It also receives messages from the notifier.
-            print("Starting the internal clock")
-            t = threading.Thread(target=self.clock, args=(voice_messages_queue,))
-            t.daemon = True
-            t.start()
-            
-            # Let Snips say hello
-            #voice_messages_queue.put("Hello, I am Snips")
-
-            # Get al the things via the API.
-            try:
-                self.things = self.api_get("/things")
-            except Exception as ex:
-                print("Error, couldn't load things at init: " + str(ex))
-
-            # Teach Snips the names of all the things and properties
-            self.inject_updated_things_into_snips(True) # During init we force Snips to learn all the thing names.
-
-            # Let's try again.
+        # Let's try again.
+        try:
             self.update_timer_counts()
+        except:
+            print("Error resetting timer counts")
+        
+        
 
-            # Finally, start the (blocking) MQTT connection that connects Snips to this add-on.
-            try:
-                self.start_blocking() # This starts Hermes, which is the bridge between Python and Snips.
-            except Exception as ex:
-                print("Error starting Snips connection: " + str(ex))
+        
+        print("STARTING HERMES CONNECTION")
+        # Finally, start the (blocking) MQTT connection that connects Snips to this add-on.
+        try:
+            self.start_blocking() # This starts Hermes, which is the bridge between Python and Snips.
+        except Exception as ex:
+            print("Error starting Snips connection: " + str(ex))
+
+
+    def hotword_bleep(self):
+        # Start an extra MQTT Client just to enable a hotword bleep response
+        try:
+            print("CREATING BLEEP CLIENT")
+            self.mqtt_client = client.Client()
+            HOST = "localhost"
+            PORT = 1883
+            HOTWORD_DETECTED = "hermes/hotword/default/detected"
+            
+            self.mqtt_client.on_connect = self.on_connect
+            self.mqtt_client.on_message = self.on_message
+            self.mqtt_client.connect(HOST, PORT)
+            self.mqtt_client.loop_forever()
+        except Exception as ex:
+            print("Error creating extra MQTT connection: " + str(ex))
+
+
+
+
+    # Subscribe to the important messages
+    def on_connect(self, client, userdata, flags, rc):
+        print("ON MQTT CONNECT")
+        self.mqtt_client.subscribe("hermes/hotword/default/detected")
+
+    # Process a message as it arrives
+    def on_message(self, client, userdata, msg):
+        #print("INCOMING MESSAGE")
+        if not msg.topic == "hermes/hotword/default/detected":
+            #print("not bleep, it was " + str(msg.topic))
+            return
+        else:
+            if self.persistent_data['feedback_sounds'] == True:
+                os.system("aplay " + str(self.bleep) )
+            #binaryFile = open(self.bleep, mode='rb')
+            #wav = bytearray(binaryFile.read())
+            #publish.single("hermes/audioServer/{}/playBytes/whateverId".format("default"), payload=wav, hostname="localhost", client_id="") 
+
+
 
 
 
@@ -427,7 +451,7 @@ class VocoAdapter(Adapter):
                 print("-Custom assistant was in config")
                 possible_url = str(config['Custom assistant'])
                 #print(str(possible_url))
-                if possible_url.startswith("http") and possible_url.endswith(".zip") and os.path.isdir("/usr/share/snips"):
+                if possible_url.startswith("http") and possible_url.endswith(".zip") and self.snips_installed:
                     print("-Custom assistant data was a good URL.")
                     self.custom_assistant_url = possible_url
 
@@ -485,8 +509,8 @@ class VocoAdapter(Adapter):
             
         # Api token
         try:
-            if 'Token' in config:
-                self.token = str(config['Token'])
+            if 'Authorization token' in config:
+                self.token = str(config['Authorization token'])
                 print("-Authorization token is present in the config data.")
         except:
             print("Error loading api token from settings")
@@ -530,59 +554,58 @@ class VocoAdapter(Adapter):
 
     def install_snips(self):
         """Install Snips using a shell command"""
+
         try:
             print("in install_snips")
             #busy = os.path.isfile("snips/busy_installing")
             #done = os.path.isfile("snips/snips_installed")
 
-
-            busy_path = str(os.path.join(self.addon_path,"busy_installing"))
-            done_path = str(os.path.join(self.addon_path,"snips_installed"))
-            
-            if not os.path.isdir("/usr/share/snips/g2p-models"):
-                print("It seems Snips hasn't been (fully) installed yet - /usr/share/snips/g2p-models directory could not be found..")
-                try:
-                    os.remove(done_path) # Remove the 'done' file, just in case it's there but Snips hasn't been installed / has disappeared.
-                except:
-                    pass
-            
-            busy = os.path.isfile(busy_path)
-            done = os.path.isfile(done_path)
-            
+            self.snips_path = str(os.path.join(self.addon_path,"snips"))
+            done = os.path.isdir(self.snips_path)
+                        
             if done:
-                print("Snips is installed")
+                print("Snips has already been extracted")
                 return True
             
-            if busy:
-                print("Snips is already busy being installed")
-                self.set_status_on_thing("Still busy installing?")
-                installation_starting_time = os.path.getmtime(busy_path)
-                current_time = int(time.time())
-                if current_time - installation_starting_time > 900: # Installation shouldn't really take longer than 15 minutes
-                    print("It's been more than 15 minutes since the Snips installation started and it still hasn't finished. Something may have gone wrong.")
-                    try:
-                        os.remove(busy_path)
-                    except:
-                        pass
-                    print("If you pause and restart this add-on it will try to install Snips again. Or you can wait a few more minutes")
-                    
-            # Start installing Snips
             else:
+                print("It seems Snips hasn't been extracted yet - snips directory could not be found..")
                 
-                # Attempt to make the .sh file executable using chmod
-                command = "chmod +x " + str(os.path.join(self.addon_path,"install_snips.sh")) 
-                print("chmod command: " + str(command))
-                for line in run_command(command):
-                    print(str(line))
-                    if line.startswith('Command success'): # Succesfully made install script executable
-                        print("Chmod successful")
-                    elif line.startswith('Command failed'):
-                        self.set_status_on_thing("Error making Snips installable")
-                        return False
-                
-                command = "sudo " + str(os.path.join(self.addon_path,"install_snips.sh")) + " install"
+                try:
+                    # Attempt to make the .sh files executable using chmod
+                    command = "chmod +x " + str(os.path.join(self.addon_path,"start.sh")) 
+                    print("chmod command: " + str(command))
+                    for line in run_command(command):
+                        print(str(line))
+                        if line.startswith('Command success'): # Succesfully made install script executable
+                            print("Chmod successful")
+                        elif line.startswith('Command failed'):
+                            self.set_status_on_thing("Error making .sh files executable")
+
+                    # Attempt to make the .sh files executable using chmod
+                    command = "chmod +x " + str(os.path.join(self.addon_path,"stop.sh")) 
+                    print("chmod command: " + str(command))
+                    for line in run_command(command):
+                        print(str(line))
+                        if line.startswith('Command success'): # Succesfully made install script executable
+                            print("Chmod successful")
+                        elif line.startswith('Command failed'):
+                            self.set_status_on_thing("Error making .sh files executable")
+
+                    # Attempt to make the .sh files executable using chmod
+                    command = "chmod +x " + str(os.path.join(self.addon_path,"speak.sh")) 
+                    print("chmod command: " + str(command))
+                    for line in run_command(command):
+                        print(str(line))
+                        if line.startswith('Command success'): # Succesfully made install script executable
+                            print("Chmod successful")
+                        elif line.startswith('Command failed'):
+                            self.set_status_on_thing("Error making .sh files executable")
+                except Exception as ex:
+                    print("Couldn't chmod: " + str(ex))
+                        
+                command = "tar xzf " + str(os.path.join(self.addon_path,"snips.tar"))
                 print("Snips install command: " + str(command))
-                self.set_status_on_thing("Installing Snips")
+                self.set_status_on_thing("Unpacking Snips")
                 if self.DEBUG:
                     print("Snips install command: " + str(command))
                 for line in run_command(command):
@@ -637,20 +660,15 @@ class VocoAdapter(Adapter):
 
     def install_assistant(self):
         """Install snips/assistant.zip into /usr/share/snips/assistant"""
+        
+        return True
+    
         print("Installing assistant")
         try:
-            if not os.path.isdir("/usr/share/snips"):
-                print("Install assistant: it seems Snips hasn't been (fully) installed yet - /usr/share/snips directory could not be found. Cancelling installation of assistant.")
-                self.snips_installed = False
-                return
             if not os.path.isfile( os.path.join(self.addon_path,"snips","assistant.zip") ):
                 print("Error: cannot install assistant: there doesn't seem to be an assistant.zip file in the snips folder of the addon.")
                 return
-            try:
-                os.remove(os.path.join(self.addon_path,"assistant_installed"))
-            except:
-                pass
-            command = os.path.join(self.addon_path,"install_snips.sh") + " install_assistant"
+            command = "unzip " + str(os.path.join(self.addon_path,"snips","assistant.zip")) + " " + str(os.path.join(self.addon_path,"snips"))
             for line in run_command(command):
                 print(str(line))
                 if line.startswith('Command success'):
@@ -661,128 +679,6 @@ class VocoAdapter(Adapter):
                     return False
         except Exception as ex:
             print("installing assistant: error: " + str(ex))
-        return False
-
-
-
-    def disable_snips_telemetry(self): # In the future this function could be removed. In the latest versions op Snips telemetry is disabled by default.
-        filename = "/usr/share/snips/assistant/assistant.json"
-        should_copy_to_assistant = False
-        current_assistant = ""
-
-        if not os.path.isfile(filename):
-            print("assistant.json file did not exist. Snips/assistant not installed?")
-            return
-
-        try:
-            with open(filename, 'r') as f:
-                for index,line in enumerate(f):
-                    if 'analyticsEnabled\" : true' in line:
-                        print("analytics enabled in line")
-                        line = line.replace("true", "false")
-                        should_copy_to_assistant = True
-                    elif 'heartbeatEnabled\" : true' in line:
-                        print("heartbeat enabled in line: ")
-                        line = line.replace("true", "false")
-                        should_copy_to_assistant = True
-                    current_assistant += line
-
-        except Exception as ex:
-            print("Disable telemetry: error while analyzing current assistant.json file: " + str(ex))
-            return
-            
-        try:
-            if should_copy_to_assistant:
-                print("Creating a new assistant.json configuration file:")
-                print(str(current_assistant))
-
-                local_filename = str(os.path.join(self.addon_path,"assistant.json"))
-                try:
-                    with open(local_filename, 'w+') as f:
-                        f.seek(0)
-                        f.write(current_assistant)
-                        f.truncate()
-                        #print("Succesfully overwritten the local assistant.json file")
-                            
-                except Exception as ex:
-                    print("Error storing the new assistant.json in the local add-on directory: " + str(ex))
-                    should_copy_to_assistant = False
-                    
-            elif self.DEBUG:
-                    print("Telemetry is already disabled in the /usr/share/snips/assistant.jon file")
-
-            if should_copy_to_assistant:
-                print("Copying assistant.json to /usr/share/snips/assistant")
-                command = "sudo cp " + str(os.path.join(self.addon_path,"assistant.json")) + " " + str(filename)
-                for line in run_command(command):
-                    print(str(line))
-                    if "Command success" in line:
-                        return True
-        except Exception as ex:
-            print("Error while trying to replace the assistant.json file with the telemetry-free version: " + str(ex))
-
-        return False
-
-
-
-    def download_extra_vocabulary(self): # The makers of Snips tell me that this option will be phased out. More importantly, it seems it may adversely affect the recognition ability.
-        target_file = os.path.join(self.addon_path,"snips","snips-asr-model-en-500MB_0.6.0-alpha.4_armhf.deb")
-        try:
-            if os.path.isfile(target_file):
-                if self.DEBUG:
-                    print("It looks like a vocabulary file was already (partially) downloaded.")
-                    return True # temporary debug option
-                try:
-                    os.remove(target_file)
-                    if self.DEBUG:
-                        print("Old vocabulary file has been removed")
-                except:
-                    print("Error removing old vocabulary file. Will try to download anyway.")
-
-            self.set_status_on_thing("Downloading 143Mb vocabulary")
-            if download_file(self.larger_vocabulary_url,target_file):
-                self.set_status_on_thing("Succesfully downloaded vocabulary")
-                return True
-            
-        except Exception as ex:
-            print("Error: download vocabulary: " + str(ex))
-        self.set_status_on_thing("Error downloading vocabulary")
-        return False
-
-
-
-    def install_extra_vocabulary(self):
-        try:
-            busy_path = str(os.path.join(self.addon_path,"busy_installing_vocabulary"))
-            done_path = str(os.path.join(self.addon_path,"vocabulary_installed"))
-            busy = os.path.isfile(busy_path)
-            done = os.path.isfile(done_path)
-            if done:
-                if self.DEBUG:
-                    print("Extra dictionary has already been installed")
-                return False
-            elif busy:
-                if self.DEBUG:
-                    print("Already busy installing the larger vocabulary?")
-                return False
-            elif not os.path.isdir(os.path.normpath("/usr/share/snips")):
-                print("Install extra vocabualry: it seems Snips hasn't been (fully) installed yet - /usr/share/snips directory could not be found.")
-                return
-            
-            self.set_status_on_thing("Installing bigger vocabulary")
-            command = os.path.join(self.addon_path,"install_snips.sh") + " install_extra_vocabulary"
-            for line in run_command(command):
-                print(str(line))
-                if line.startswith('Command success'):
-                    self.set_status_on_thing("Succesfully increased vocabulary")
-                    return True
-                elif line.startswith('Command failed'):
-                    self.set_status_on_thing("Error increasing vocabulary")
-                    return False
-            if self.DEBUG:
-                print("Run command ended without an ending sentence?")
-        except Exception as ex:
-            print("Error increasing vocabulary: " + str(ex))
         return False
 
 
@@ -843,150 +739,6 @@ class VocoAdapter(Adapter):
 
 
 
-    def configure_alsa(self):
-        """ Store new ALSA settings into a new /etc/asound.conf file """
-        filename = str(os.path.normpath(os.path.join(self.addon_path,"asound.conf")))
-        etc_asound_path = os.path.normpath("/etc/asound.conf")
-        if self.DEBUG:
-            print("configure_alsa: path to asound.conf is: " + str(filename))
-        
-        should_copy_to_etc = False
-        respeaker_spotted = False
-
-        try:
-            # We generate potentially new asound.conf file contents.
-            new_asound = 'pcm.!default {\n type asym\n  playback.pcm {\n   type plug\n   slave.pcm "hw:'
-            
-            # Mix in the audio output
-            
-            if   self.speaker == "Built-in headphone jack (0,0)":
-                new_asound += "0,0"
-            elif self.speaker == "Built-in HDMI (0,1)":
-                new_asound += "0,1"
-            elif self.speaker == "Respeaker Pi Hat (1,0)":
-                new_asound += "1,0"
-                respeaker_spotted = True
-            elif self.speaker == "Plugged-in (USB) device (1,0)":
-                new_asound += "1,0"
-            elif self.speaker == "Plugged-in (USB) device, channel 2 (1,1)":
-                new_asound += "1,1"
-            elif self.speaker == "Second plugged-in (USB) device (2,0)":
-                new_asound += "2,0"
-            elif self.speaker == "Second plugged-in (USB) device, channel 2 (2,1)":
-                new_asound += "2,1"
-            else:
-                print("Speaker was not set in settings.")
-                return
-            
-            new_asound +='"\n }\n  capture.pcm {\n   type plug\n   slave.pcm "hw:'
-            
-            # Mix in the audio input
-            
-            if   self.microphone == "Built-in microphone (0,0)":
-                new_asound += "0,0"
-            elif self.microphone == "Built-in microphone, channel 2 (0,1)":
-                new_asound += "0,1"
-            elif self.microphone == "Respeaker Pi Hat (1,0)":
-                new_asound += "1,0"
-                respeaker_spotted = True
-            elif self.microphone == "Plugged-in (USB) microphone (1,0)":
-                new_asound += "1,0"
-            elif self.microphone == "Plugged-in (USB) microphone, channel 2 (1,1)":
-                new_asound += "1,1"
-            elif self.microphone == "Second plugged-in (USB) microphone (2,0)":
-                new_asound += "2,0"
-            elif self.microphone == "Second plugged-in (USB) microphone, channel 2 (2,1)":
-                new_asound += "2,1"
-            else:
-                print("Microphone was not set in settings.")
-                return
-                
-            new_asound += '"\n  }\n}'
-            
-            try:
-                if respeaker_spotted:
-                    self.install_respeaker_driver()
-            except:
-                print("Error installing ReSpeaker driver")
-
-            old_asound = ""
-            with open(filename, 'r+') as f:
-                old_asound = f.read()
-            
-            # Compare the new settings string to the existing settings file.
-            maxlen=len(new_asound) if len(old_asound)<len(new_asound) else len(old_asound)
-            for i in range(maxlen):
-                letter1=old_asound[i:i+1]
-                letter2=new_asound[i:i+1]
-                if letter1 != letter2:
-                    should_copy_to_etc  = True
-        except Exception as ex:
-            print("Error while configuring ALSA 1: " + str(ex))
-            
-        try:
-            if should_copy_to_etc:
-                print("Creating a new ALSA configuration file:")
-                print(str(new_asound))
-                try:
-                    with open(filename, 'w+') as f:
-                        f.seek(0)
-                        f.write(new_asound)
-                        f.truncate()
-                        if self.DEBUG:
-                            print("Succesfully overwritten the local asound.conf file")
-                            
-                except Exception as ex:
-                    print("Error storing new ALSA configuraton in local asound.conf file: " + str(ex))
-                    should_copy_to_etc = False
-                    
-            else:
-                #print("Audio configuration has not changed.") # But perhaps we should copy the file to /etc anyway, if it's missing there.
-                if not os.path.isfile(etc_asound_path):
-                    print("Copying ALSA configuration file to /etc.")
-                    should_copy_to_etc = True
-            
-            if should_copy_to_etc:
-                if self.DEBUG:
-                    print("Copying local asound.conf to /etc")
-                command = "sudo cp " + filename + " " + etc_asound_path
-                for line in run_command(command):
-                    print(str(line))
-                    if line.startswith('Command success'):
-                        self.set_status_on_thing("Succesfully changed audio settings")
-                        return True
-                    elif line.startswith('Command failed'):
-                        self.set_status_on_thing("Error changing audio settings")
-                        return False
-
-        except Exception as ex:
-            print("Error while configuring ALSA 2: " + str(ex))
-
-
-
-    def install_respeaker_driver():
-        """ Install respeaker driver. Returns true if (already) intalled """
-        try:
-            filename = str(os.path.normpath(os.path.join(self.addon_path,"respeaker_installed")))
-            respeaker_exists = os.path.isfile(filename)
-
-            if respeaker_exists == False:
-                print("installing respeaker driver")
-                for line in run_command(command):
-                    print(str(line))
-                    if line.startswith('Command success'):
-                        self.set_status_on_thing("Succesfully installed Snips")
-                        return True
-                    elif line.startswith('Command failed'):
-                        self.set_status_on_thing("Error installing Snips")
-                        return False
-            else:
-                print("Respeaker driver was already installed. If this is incorrect, remove the respeaker_installed file from the addon directory, or reinstall the addon.")
-                return True
-        except Exception as ex:
-            print("Error installing respeaker driver: " + str(ex))
-
-
-
     def set_speaker_volume(self,volume): # TODO: store sound card ID number, and use that to set the volume of the correct soundcard instead of the master volume?
         if self.DEBUG:
             print("User changed audio volume")
@@ -1023,15 +775,12 @@ class VocoAdapter(Adapter):
 
 
 
+
     def clock(self, voice_messages_queue):
         """ Runs every second and handles the various timers """
         previous_action_times_count = 0
         while True:
-            if len(self.action_times) != previous_action_times_count:
-                previous_action_times_count = len(self.action_times)
-                self.update_timer_counts()
 
-            time.sleep(1)
             voice_message = ""
             utcnow = datetime.now(tz=pytz.utc)
             current_time = int(utcnow.timestamp())
@@ -1166,7 +915,7 @@ class VocoAdapter(Adapter):
 
             except Exception as ex:
                 print("Clock error: " + str(ex))
-                continue
+
 
             try:
                 if self.h != None:
@@ -1176,7 +925,17 @@ class VocoAdapter(Adapter):
                             print("Incoming message from notifier: " + str(notifier_message))
                         self.speak(str(notifier_message))
             except:
-                continue
+                pass
+            
+            try:
+                if len(self.action_times) != previous_action_times_count:
+                    print("UPDATING TIMER COUNT TO " + str(len(self.action_times)))
+                    previous_action_times_count = len(self.action_times)
+                    self.update_timer_counts()
+            except Exception as ex:
+                print("Error updating timer counts from clock: " + str(ex))
+                
+            time.sleep(1)
 
 
 
@@ -1213,9 +972,12 @@ class VocoAdapter(Adapter):
     
 
     def unload(self):
+        try:
+            self.set_status_on_thing("Bye")
+            self.set_snips_state(0)
+        except:
+            print("Could not cleanly shut down")
         print("Shutting down Voco. Bye!")
-        self.set_status_on_thing("Bye")
-        self.set_snips_state(0)
 
 
 
@@ -1230,51 +992,73 @@ class VocoAdapter(Adapter):
             
     
 
+
     # Turn Snips services on or off
     def set_snips_state(self, active=False):
         self.persistent_data['listening'] = active
         self.save_persistent_data()
-
-        if active == True:
-            action = "start"
-        else:
-            action = "stop"
-        if self.DEBUG:
-            print(action + " Snips")
-
         try:
-            if active:
-                sleep(1)
-                self.devices['voco'].connected = True
-                self.devices['voco'].connected_notify(True)
-                self.set_status_on_thing("Running")
+            if active == True:
+                command = str(self.addon_path) + "/start.sh"
+                print("new start command: " + str(command))
+                os.system(command)
+                try:
+                    self.devices['voco'].connected = True
+                    self.devices['voco'].connected_notify(True)
+                except:
+                    print("Could not set thing as connected")
             else:
-                self.set_status_on_thing("Stopped")
+                command = str(self.addon_path) + "/stop.sh"
+                print("new stop command: " + str(command))
+                os.system(command)
         except Exception as ex:
-            print("Error settings voco_device state: " + str(ex))
-
-        try:    
-            for snips_part in self.snips_parts:
-                #call(["sudo","systemctl", str(action), str(snips_part)]) # TODO: maybe change this to the run_command function that is used everywhere
+            print("Error settings Snips state: " + str(ex))
                 
-                command = "sudo systemctl " + str(action) + " " + str(snips_part) #" snips-*.service" #
-                print("command: " + str(command))
+                
+    # Turn Snips services on or off
+    def set_snips_state_OLD(self, active=False):
+        self.persistent_data['listening'] = active
+        self.save_persistent_data()
+        try:
+            if active == True:
+                print("Staring Snips")
+                command = str(self.addon_path) + "/start.sh"
+                print("start command: " + str(command))
                 for line in run_command(command):
                     print(str(line))
 
                     if line.startswith('Command success'):
-                        print("Succesfully set " + str(snips_part) +  " state to " + str(action))
+                        print("Succesfully set Snips state to on")
+                        self.devices['voco'].connected = True
+                        self.devices['voco'].connected_notify(True)
+                        self.set_status_on_thing("Running")
+                        return
                         #self.set_status_on_thing("Succesfully installed Snips")
                     elif line.startswith('Command failed'):
-                        print("failed to set Snips' state to " + str(action))
-                        #pass
-                        #self.set_status_on_thing("Error installing Snips")
-                    #elif line.startswith('Failed to stop') and line.endswith('not loaded.'): # Snips doesn't seem to be installed yet.
-                    #    break
+                        print("failed to set Snips' state to on")
 
+            else:
+                print("Stopping Snips...")
+                command = str(self.addon_path) + "/stop.sh"
+                print("stop command: " + str(command))
+                for line in run_command(command):
+                    print(str(line))
+
+                    if line.startswith('Command success'):
+                        print("Succesfully set Snips state to off")
+                        self.set_status_on_thing("Stopped")
+                        #break
+                        
+                        #self.set_status_on_thing("Succesfully installed Snips")
+                    elif line.startswith('Command failed'):
+                        print("failed to set Snips' state to off")
+                        #break
+                        
         except Exception as ex:
             print("Error settings Snips state: " + str(ex))
-
+        #if self.DEBUG:
+        #    print("At the end of the set_snips_state method")
+        return
 
 
     def set_feedback_sounds(self,state):
@@ -1290,7 +1074,7 @@ class VocoAdapter(Adapter):
                 try:
                     site_message = SiteMessage('default')
                     if state == True:
-                        self.h.enable_sound_feedback(site_message)
+                        self.h.disable_sound_feedback(site_message)
                     else:
                         self.h.disable_sound_feedback(site_message)
                 except:
@@ -1388,8 +1172,8 @@ class VocoAdapter(Adapter):
 
     def save_persistent_data(self):
         if self.DEBUG:
-            print("Saving to persistence data store")
-
+            print("Saving to persistence data store at path: " + str(self.persistence_file_path))
+            
         try:
             if not os.path.isfile(self.persistence_file_path):
                 open(self.persistence_file_path, 'a').close()
@@ -1412,22 +1196,36 @@ class VocoAdapter(Adapter):
 
     def speak(self, voice_message="",site_id="default"):
         try:
-            self.h.publish_start_session_notification(site_id, voice_message, None)
-            #self.h.publish_stop_session(site_id,"")
+            command = "./speak.sh \"" + str(voice_message) + "\"" 
+            print("speak command: " + str(command))
+            for line in run_command(command):
+                print(str(line))
+
+                if line.startswith('Command success'):
+                    print("Succesfully spoke")
+                    #break
+                    #return
+
+                elif line.startswith('Command failed'):
+                    print("Couldn't speak")
+                    #break
+
+            self.h.publish_start_session_notification(site_id, "", None)
+            #self.h.publish_end_session(site_id, voice_message, None)
         except:
             print("Cannot speak, connection to Snips hasn't been made yet")
-
+        #print("At the end of the speak method")
+        #return
 
 
     #
     # ROUTING
     #
 
-    def master_intent_callback(self,hermes, intent_message):    # Triggered everytime Snips succesfully recognizes a voice intent
+    def master_intent_callback(self, hermes, intent_message):    # Triggered everytime Snips succesfully recognizes a voice intent
         incoming_intent = str(intent_message.intent.intent_name)
         sentence = str(intent_message.input).lower()
-        
-        hermes.publish_end_session(intent_message.session_id, "")
+        print("INCOMING INTENT")
         
         if self.DEBUG:
             print("")
@@ -1441,14 +1239,20 @@ class VocoAdapter(Adapter):
         if self.DEBUG:
             print("INCOMING SLOTS = " + str(slots))
 
+
+        hermes.publish_end_session(intent_message.session_id, "")
+
         # Get all the things data via the API
         try:
             self.things = self.api_get("/things")
         except Exception as ex:
             print("Error, couldn't load things: " + str(ex))
 
+
+
         # Teach Snips the names of all the things
         try:
+            pass
             self.inject_updated_things_into_snips() # will check if there are new things/properties that Snips should learn about
         except Exception as ex:
             print("Error, couldn't teach Snips the names of your things: " + str(ex))  
@@ -1502,7 +1306,7 @@ class VocoAdapter(Adapter):
             else:
                 print("Error: the code could not handle that intent. Under construction?")
                 self.speak("Sorry, I did not understand your intention.")
-
+                
         except Exception as ex:
             print("Error during routing: " + str(ex))
 
@@ -1512,18 +1316,21 @@ class VocoAdapter(Adapter):
 
         try:
             with Hermes(MQTT_address) as h:
+                self.h = h
                 try:
-                    self.h = h
+                    #pass
                     site_message = SiteMessage('default')
-                    if bool(self.persistent_data['feedback_sounds']) == True:
-                        self.h.enable_sound_feedback(site_message)
-                        print("Starting with feedback sounds enabled")
-                    else:
-                        self.h.disable_sound_feedback(site_message)
-                        print("Starting with feedback sounds disabled")
+                    self.h.disable_sound_feedback(site_message)
+                    #if bool(self.persistent_data['feedback_sounds']) == True:
+                    #    self.h.enable_sound_feedback(site_message)
+                    #    print("Starting with feedback sounds enabled")
+                    #else:
+                    #    self.h.disable_sound_feedback(site_message)
+                    #    print("Starting with feedback sounds disabled")
                 except:
                     print("Error. Was unable to set the feedback sounds preference")
                 self.h.subscribe_intents(self.master_intent_callback).loop_forever()
+                print("I have become unsubscribed")
 
         except Exception as ex:
             print("ERROR starting Hermes (the connection to Snips) failed: " + str(ex))
@@ -1535,6 +1342,8 @@ class VocoAdapter(Adapter):
         try:
             # Check if any new things have been created by the user.
             if datetime.utcnow().timestamp() - self.last_injection_time > self.minimum_injection_interval:
+    
+                print("Trying injection now")
                 fresh_thing_titles = set()
                 fresh_property_titles = set()
                 fresh_property_strings = set()
@@ -1552,7 +1361,7 @@ class VocoAdapter(Adapter):
                 
                 operations = []
                 
-                #print("fresh_thing_titles = " + str(fresh_thing_titles))
+                print("fresh_thing_titles = " + str(fresh_thing_titles))
                 #print("fresh_prop_titles = " + str(fresh_property_titles))
                 #print("fresh_prop_strings = " + str(fresh_property_strings))
                 
@@ -1595,8 +1404,9 @@ class VocoAdapter(Adapter):
                     
                     try:
                         update_request = InjectionRequestMessage(operations)
-                        with Hermes("localhost:1883") as herm:
-                            herm.request_injection(update_request)
+                        #with Hermes("localhost:1883") as herm:
+                            #herm.request_injection(update_request)
+                        print("WOULD HAVE INJECTED NOW")
                         self.last_injection_time = datetime.utcnow().timestamp()
                     except Exception as ex:
                          print("Error during injection: " + str(ex))
@@ -2155,6 +1965,7 @@ def run_command(command):
         # Read stdout from subprocess until the buffer is empty !
         for bline in iter(p.stdout.readline, b''):
             line = bline.decode('utf-8') #decodedLine = lines.decode('ISO-8859-1')
+            line = line.rstrip()
             if line: # Don't print blank lines
                 yield line
         # This ensures the process has completed, AND sets the 'returncode' attr
