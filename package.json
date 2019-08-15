@@ -1,7 +1,7 @@
 {
   "name": "voco",
   "display_name": "Voco",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "Privacy friendly voice control",
   "author": "CreateCandle",
   "main": "bootstrap.py",
@@ -32,9 +32,6 @@
     "pkg/voco_notifier.py",
     "pkg/intentions.py",
     "pkg/util.py",
-    "start.sh",
-    "stop.sh",
-    "speak.sh",
     "snips.tar",
     "requirements.txt",
     "setup.cfg"
@@ -75,7 +72,7 @@
             "Second plugged-in (USB) microphone (2,0)",
             "Second plugged-in (USB) microphone, channel 2 (2,1)"
           ],
-          "description": "What type of microphone have you connected? The Playstation Eye is a cheap and good option."
+          "description": "What type of microphone have you connected? The Playstation Eye is a cheap and good option. If you want to use the ReSpeaker hat you will have to intall the drivers manually."
         },
         "Speaker": {
           "type": "string",
@@ -88,9 +85,9 @@
             "Second plugged-in (USB) device (2,0)",
             "Second plugged-in (USB) device, channel 2 (2,0)"
           ],
-          "description": "What type of microphone have you connected? The Playstation Eye is a cheap and good option."
+          "description": "By defeault audio is sent out over the built-in headphone jack. If you want to send it out over USB via a ReSpeaker Hat you will have to install the drivers manually."
         },
-        "Token": {
+        "Authorization token": {
           "type": "string",
           "description": "To be allowed to get information on all your devices, you have to create an 'authorization' code. It's basically a very long password. You can generate it yourself under Settings -> Developer -> Create local authorization"
         },
