@@ -339,3 +339,49 @@ def download_file(url, target_file):
         return False
     print("download_file: returning. Filename = " + str(intended_filename))
     return True
+
+
+
+def run_command(command):
+    try:
+        return_code = subprocess.call(command, shell=True) 
+        return return_code
+
+    except Exception as ex:
+        print("Error running shell command: " + str(ex))
+        
+
+
+
+def run_command_with_lines(command):
+    try:
+        p = subprocess.Popen(command,
+                            stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE,
+                            shell=True)
+        # Read stdout from subprocess until the buffer is empty !
+        for bline in iter(p.stdout.readline, b''):
+            line = bline.decode('utf-8') #decodedLine = lines.decode('ISO-8859-1')
+            line = line.rstrip()
+            if line: # Don't print blank lines
+                yield line
+                
+        # This ensures the process has completed, AND sets the 'returncode' attr
+        while p.poll() is None:                                                                                                                                        
+            sleep(.1) #Don't waste CPU-cycles
+        # Empty STDERR buffer
+        err = p.stderr.read()
+        if p.returncode == 0:
+            yield("Command success")
+            return True
+        else:
+            # The run_command() function is responsible for logging STDERR 
+            if len(err) > 1:
+                yield("Command failed with error: " + str(err.decode('utf-8')))
+                return False
+            yield("Command failed")
+            return False
+            #return False
+    except Exception as ex:
+        print("Error running shell command: " + str(ex))
+        

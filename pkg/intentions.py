@@ -75,7 +75,6 @@ def intent_get_time(self, slots, intent_message):
         if self.DEBUG:
             print("(...) " + str(voice_message))
         self.speak(voice_message)
-        #hermes.publish_end_session(intent_message.session_id, voice_message)
     except Exception as ex:
         print("Error dealing with get_time intent: " + str(ex))
     
@@ -87,6 +86,8 @@ def intent_set_timer(self, slots, intent_message):
         print("__intent_set_timer")
     
     sentence = slots['sentence']
+    if slots['time_string'] != None:
+        sentence = sentence.replace(slots['time_string'], " ")
     voice_message = ""
     time_delta_voice_message = ""
     time_slot_snippet = "" # A snippet from the original sentence that described the time slot.
@@ -101,25 +102,12 @@ def intent_set_timer(self, slots, intent_message):
         elif slots['end_time'] != None:
             moment = slots['end_time'] 
         else:
-            print("No time provided")
+            if self.DEBUG:
+                print("The spoken sentence did not contain a time")
             self.speak("You didn't provide a time.")
-            #hermes.publish_end_session(intent_message.site_id, "You didn't provide a time.", "")
             # TODO: we could ask for the time via a dialogue
             return
 
-        #print("moment = " + str(moment))
-                
-        # If the intended time is in the past, it's useless.
-        if moment <= current_time:
-            if current_time - moment > 86400: #if it's more than a day in the past, then this is frivolous.
-                if self.DEBUG:
-                    print("moment was in the past, cannot set a timer for it")
-                return
-            else:
-                moment += 86400 # Trying to hack the moment to be in the future by adding a day. Maybe not a good idea.
-        if moment <= current_time:
-            self.speak("I could not interpret the time you stated.") # If after all that the moment is still in the past
-            return
         
         time_delta_seconds = moment - current_time
         #print("time delta seconds: " + str(time_delta_seconds))
@@ -191,49 +179,9 @@ def intent_set_timer(self, slots, intent_message):
             if self.DEBUG:
                 print("Creating reminder")
 
-            try:
-                if slots['duration'] != None:
-                    if self.DEBUG:
-                        print("Reminder with a duration time")
-
-                    # Remove the duration from the end of the string.
-                    try:
-                        sentence = sentence.replace( str( intent_message.slots.duration[0].raw_value), "").rstrip()
-                        if sentence.endswith("in"):
-                            sentence = sentence[:-2]
-                        #print("Cleaned up sentence without the duration at the end: " + str(sentence))
-                    except:
-                        print("could not cut duration from the end of the sentence")
-
-                elif slots['end_time'] != None:
-                    if self.DEBUG:
-                        print("Reminder with a normal time object")
-                    
-                    try:
-                        sentence = sentence.replace( str( intent_message.slots.end_time[0].raw_value), "").rstrip()
-                        if sentence.endswith("at"):
-                            sentence = sentence[:-2]
-                        elif sentence.endswith("at"):
-                            sentence = sentence[:-2]
-                        #print("Cleaned up sentence without the duration at the end: " + str(sentence))
-                    except:
-                        print("could not cut time from the end of the sentence")
-
-            except:
-                print("Error removing raw snippet from sentence string")
-
-            if self.DEV:
-                print("Extracting reminder message from: " + str(sentence))
-
-
-                # TODO: better handle this order:
-                # >> intent_message: set a reminder for ten minutes to go to bed
-                # currently leads to:  
-                # (...) Ok, I have set a reminder to for  to go to bed
-
-
             if 'remind' in sentence:
-                print("spotted 'remind me to'")
+                if self.DEBUG:
+                    print("spotted 'remind' in sentence")
                 #pattern = r'(?:remind(?:er)?\s?(?:me|us)?\s?(to)?)([\w\s]*)(\bat|in\b)(?!.*\b\3\b)'
                 pattern = r'(?:remind(?:er)?\s?(?:me|us)?\s?(to)?)([\w\s\']*)'
                 matches = re.search(pattern, sentence)
@@ -242,15 +190,14 @@ def intent_set_timer(self, slots, intent_message):
                     self.action_times.append({"moment":moment,"type":"reminder","reminder_text":matches.group(2),"slots":slots})
                     voice_message = "Ok, I have set a reminder to " + str(matches.group(2))
                 else:
-                    voice_message = "Setting a normal timer "
                     # TODO this could be a spot to start a dialogue and ask the user what the reminder is for.
-
                     self.action_times.append({"moment":moment,"type":"timer","slots":slots})
                     voice_message = "A timer has been set for " + time_delta_voice_message
         else:
             # TIMER
             self.action_times.append({"moment":moment,"type":"timer","slots":slots})
-            print("timer was appended to the list")
+            if self.DEBUG:
+                print("timer was appended to the list")
             voice_message = "A timer has been set for " + str(time_delta_voice_message)
 
         # Speak voice message
@@ -261,7 +208,6 @@ def intent_set_timer(self, slots, intent_message):
 
     except Exception as ex:
         print("Error while dealing with timer intent: " + str(ex))
-            
 
 
 def intent_get_timer_count(self, slots, intent_message):
@@ -499,6 +445,7 @@ def intent_stop_timer(self, slots, intent_message):
         print("Error in stop_timer: " + str(ex))
 
 
+
 # The boolean intent. Which should really be called get_state...
 def intent_get_boolean(self, slots, intent_message):
     if self.DEBUG:
@@ -578,7 +525,6 @@ def intent_get_boolean(self, slots, intent_message):
 
 
 
-# This could be called get_VALUE.. but it's name cannot be changed in the snips interface...
 def intent_get_value(self, slots, intent_message):
     
     voice_message = ""
@@ -590,6 +536,9 @@ def intent_get_value(self, slots, intent_message):
         if len(found_properties) > 0:
             for found_property in found_properties:
                     
+                if found_property['type'] == 'boolean' and len(found_properties) > 1:  # Skip booleans if we can.
+                    continue
+            
                 api_path = str(found_property['property_url'])
                 if self.DEV:
                     print("api path = " + str(api_path))
@@ -621,7 +570,7 @@ def intent_get_value(self, slots, intent_message):
                     voice_message += str(found_property['property']) + " of " + str(found_property['thing']) + " is " 
                     
 
-                if found_property['type'] == 'boolean' and len(found_properties) == 1:
+                if found_property['type'] == 'boolean':
                     # Boolean should not really be handled here, but it's the only matching property we found. # TODO create boolean to human readable boolean function which can be reused?
                     if bool(api_result[key]) == True:
                         if found_property['@type'] == 'OpenProperty':
@@ -771,7 +720,6 @@ def intent_set_state(self, slots, intent_message, delayed_action=None):   # If i
                             if slots['period'] != "for": # If this is a 'for' type of duration (e.g. for 5 minutes), then we should also continue and toggle now.
                                 self.speak(voice_message)
                                 print("___Period was not for. Should be returning. ")
-                                #hermes.publish_start_session_notification(intent_message.site_id, voice_message, "")
                                 return
                         
                         # Future moment or period toggle
@@ -922,6 +870,8 @@ def intent_set_value(self, slots, intent_message, original_value):
             addendum = " percent"
         elif slots['number'] != None:
             desired_value  = get_int_or_float(slots['number'])
+        elif slots['string'] != None:
+            desired_value  = str(slots['string'])
         else:
             self.speak("Your request did not contain a valid value.")
             return
@@ -937,6 +887,7 @@ def intent_set_value(self, slots, intent_message, original_value):
             print("")
             print("found " + str(len(found_properties)) + " properties: " + str(found_properties))
 
+            print(str(found_properties))
 
         # Filter out properties that the desired value is not compatible with
         for index, found_property in enumerate(found_properties):
@@ -1018,7 +969,6 @@ def intent_set_value(self, slots, intent_message, original_value):
                             
                             if slots['period'] != "for": # If this is a 'for' type of duration (e.g. for 5 minutes), then we should also continue and change the value now.
                                 self.speak(voice_message)
-                                #hermes.publish_start_session_notification(intent_message.site_id, voice_message, "")
                                 return
                             
                             if self.DEBUG:
@@ -1050,7 +1000,6 @@ def intent_set_value(self, slots, intent_message, original_value):
                             if self.DEBUG:
                                 print("(...) " + str(voice_message))
                             self.speak(voice_message)
-                            #hermes.publish_start_session_notification(intent_message.site_id, voice_message, "")
                             return
                     
         else:

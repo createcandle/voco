@@ -4,6 +4,8 @@
 # For now, during early development, it will be available. Please be considerate of others if you use this in a home situation.
 
 
+from __future__ import print_function
+
 import os
 from os import path
 import sys
@@ -21,6 +23,14 @@ import logging
 import threading
 import requests
 
+#from types import SimpleNamespace
+from collections import namedtuple
+
+try:
+    from types import SimpleNamespace as Namespace
+except ImportError:
+    # Python 2.x fallback
+    from argparse import Namespace
 
 import time
 from time import sleep
@@ -128,15 +138,17 @@ class VocoAdapter(Adapter):
         if self.DEBUG:
             print("Current working directory: " + str(os.getcwd()))
         
+        first_run = False
         try:
             with open(self.persistence_file_path) as f:
                 self.persistent_data = json.load(f)
                 if self.DEBUG:
                     print("Persistence data was loaded succesfully.")
         except:
+            first_run = True
             print("Could not load persistent data (if you just installed the add-on then this is normal)")
             self.persistent_data = {'listening':True,'feedback_sounds':True,'speaker_volume':100}
-
+            
         self.opposites = {
                 "on":"off",
                 "off":"on",
@@ -176,7 +188,8 @@ class VocoAdapter(Adapter):
         self.h = None # will hold the Hermes object, which is used to communicate with Snips
         self.pleasantry_count = 0 # How often Snips has heard "please". Will be used to thank the use for being cordial once in a while.
         self.voice = "en-GB"
-        
+        self.hotword_process = None
+        self.intent_received = True # Used to create a 'no voice input received' sound effect if no intent was heard.
         
         # These will be injected ino Snips for better recognition.
         self.extra_properties = ["state","set point"]
@@ -189,6 +202,7 @@ class VocoAdapter(Adapter):
         self.seconds_offset_from_utc = 7200 # Used for quick calculations when dealing with timezones.
         self.last_injection_time = 0 # The last time the things/property names list was sent to Snips.
         self.minimum_injection_interval = 30  # Minimum amount of seconds between new thing/property name injections.
+        self.current_utc_time = 0
         
         # Some paths
         self.addon_path =  os.path.join(os.path.expanduser('~'), '.mozilla-iot', 'addons', 'voco')
@@ -198,7 +212,12 @@ class VocoAdapter(Adapter):
         self.work_path = os.path.join(self.snips_path,"work")
         self.toml_path = os.path.join(self.snips_path,"snips.toml")
         self.hotword_path = os.path.join(self.snips_path,"snips-hotword")
-        self.bleep = os.path.join(self.addon_path,"snips","start_of_input.wav")
+        self.mosquitto_path = os.path.join(self.snips_path,"mosquitto")
+        self.g2p_models_path = os.path.join(self.snips_path,"g2p-models")
+        self.start_of_input_sound = os.path.join(self.addon_path,"sounds","start_of_input.wav")
+        self.end_of_input_sound = os.path.join(self.addon_path,"sounds","end_of_input.wav")
+        self.alarm_sound = os.path.join(self.addon_path,"sounds","alarm.wav")
+        self.error_sound = os.path.join(self.addon_path,"sounds","error.wav")
 
         # Create Voco device
         try:
@@ -222,6 +241,7 @@ class VocoAdapter(Adapter):
         # Stop Snips until the init is complete (if it is installed).
         try:
             #self.set_snips_state(0)
+            os.system("pkill -f snips") # Avoid snips running paralel
             self.devices['voco'].connected = False
             self.devices['voco'].connected_notify(False)
         except Exception as ex:
@@ -241,6 +261,16 @@ class VocoAdapter(Adapter):
         except Exception as ex:
             print("Error scanning ALSA (audio devices): " + str(ex))
         
+        # Try to get the master audio mixer
+        self.audio_mixer = None
+        try:
+            for mixername in alsaaudio.mixers():
+                if str(mixername) == "Master" or str(mixername) == "PCM":
+                    self.audio_mixer = alsaaudio.Mixer(mixername)
+                    break
+        except Exception as ex:
+            print("Error getting audio mixer: " + str(ex))
+            
         
         # Install Snips if it hasn't been installed already
         try:
@@ -267,7 +297,7 @@ class VocoAdapter(Adapter):
             print("Setting audio output to headphone jack")
             run_command("amixer cset numid=3 1")
         
-
+        
         # TIME
         
         # Calculate timezone difference between the user set timezone and UTC.
@@ -276,6 +306,7 @@ class VocoAdapter(Adapter):
             self.user_timezone = timezone(self.time_zone)
             utcnow = datetime.now(tz=pytz.utc)
             now = datetime.now() # This is not used
+            #usernow = datetime.now(tz=self.user_timezone)
             usernow = self.user_timezone.localize(datetime.utcnow()) # utcnow() is naive
             
             print("The universal time is " + str(utcnow))
@@ -290,38 +321,43 @@ class VocoAdapter(Adapter):
         except Exception as ex:
             print("Error handling time zone calculation: " + str(ex))
 
-        
-        # Start Snips
-        try:
-            self.devices['voco'].properties['listening'].update( bool(self.persistent_data['listening']) )
-            self.set_status_on_thing("OK, Listening")
-        except Exception as ex:
-            print("Error while setting Snips state to 1: " + str(ex))
-
-        # Start the internal clock which is used to handle timers. It also receives messages from the notifier.
-        print("Starting the internal clock")
-        try:
-            t = threading.Thread(target=self.clock, args=(voice_messages_queue,))
-            t.daemon = True
-            t.start()
-        except:
-            print("Error starting the clock")
-
-        print("Starting the hotword bleep response")
-        try:
-            b = threading.Thread(target=self.hotword_bleep)
-            b.daemon = True
-            b.start()
-        except:
-            print("Error starting the clock")
-
+            
         print("Starting Mosquitto and the Snips processes")
         try:
             p = threading.Thread(target=self.run_snips)
             p.daemon = True
             p.start()
         except:
-            print("Error starting the clock")
+            print("Error starting the run_snips thread")
+            
+        sleep(1.17)
+            
+            
+        # Start the internal clock which is used to handle timers. It also receives messages from the notifier.
+        print("Starting the internal clock")
+        try:
+            # Restore the timers, alarms and remindes from persistence.
+            if 'action_times' in self.persistent_data:
+                self.action_times = self.persistent_data['action_times']
+            
+            t = threading.Thread(target=self.clock, args=(voice_messages_queue,))
+            t.daemon = True
+            t.start()
+        except:
+            print("Error starting the clock thread")
+
+            
+        sleep(3.12)
+        
+        print("Starting the MQTT client")
+        try:
+            b = threading.Thread(target=self.start_mqtt_client)
+            b.daemon = True
+            #b.start()
+        except:
+            print("Error starting the MQTT client thread")
+
+
 
         # Let Snips say hello
         #voice_messages_queue.put("Hello, I am Snips")
@@ -362,81 +398,128 @@ class VocoAdapter(Adapter):
         except:
             print("Error resetting timer counts")
         
+        sleep(5.4)
         
-        print("Starting Mosquitto and the Snips processes")
-        try:
-            m = threading.Thread(target=self.start_blocking)
-            m.daemon = True
-            m.start()
-        except:
-            print("Error starting the clock")
+        if self.persistent_data['listening'] == True:
+            self.speak("Hello, I am Snips. ")
         
-        #print("STARTING HERMES CONNECTION")
-        # Finally, start the (blocking) MQTT connection that connects Snips to this add-on.
-        #try:
-        #    pass
-        #    #self.start_blocking() # This starts Hermes, which is the bridge between Python and Snips.
-        #except Exception as ex:
-        #    print("Error starting Snips connection: " + str(ex))
+            if first_run:
+                sleep(.5)
+                self.speak("If you would like to ask me something, say. Hey Snips. ")
+            
+            if self.token == None:
+                sleep(1)
+                print("PLEASE ENTER YOUR AUTHORIZATION CODE IN THE SETTINGS PAGE")
+                self.set_status_on_thing("Authorization code missing, check settings")
+                self.speak("I cannot connect to your devices because the authorization code is missing. Check the voco settings page for details.")
 
-        if self.token == None:
-            print("PLEASE ENTER YOUR AUTHORIZATION CODE IN THE SETTINGS PAGE")
-            self.set_status_on_thing("Authorization code missing, check settings")
-            self.speak("The authorization code is missing. Check the voco settings page for details.")
-        
-        print("End of init")
+        #while True:
+        #    sleep(1.23)
+            
+        try:
+            self.mqtt_client = client.Client(client_id="voco_mqtt_snips_client")
+            HOST = "localhost"
+            PORT = 1883
+            self.mqtt_client.on_connect = self.on_connect
+            self.mqtt_client.on_message = self.on_message
+            self.mqtt_client.connect(HOST, PORT, keepalive=60)
+            self.mqtt_client.loop_forever()
+        except Exception as ex:
+            print("Error creating extra MQTT connection: " + str(ex))
+
+        print("END OF INIT")
 
 
 
     def run_snips(self):
-        print(">>>> IN RUN_SNIPS COMMAND")
+        
+        sleep(1.11)
+        os.system("aplay " + self.end_of_input_sound)
         
         commands = [
-            'snips-audio-server --alsa_capture plughw:1,0 --alsa_playback default',
+            'snips-tts',
+            'snips-audio-server',
             'snips-dialogue',
             'snips-asr',
             'snips-nlu',
-            'snips-injection -g ' + os.path.join(self.snips_path,"g2p-models")
+            'snips-injection'
         ]
-            #'snips-tts' # Disabled the internal tts for now.
+            #'snips-tts' # Disabled the internal tts for now. # TODO re-instate the 'play via shell script' option, so in rare cases Snips can make sounds by itself.
         
-        mosquitto_path = os.path.join(self.snips_path,"mosquitto")
+        my_env = os.environ.copy()
+        my_env["LD_LIBRARY_PATH"] = '{}:{}'.format(self.snips_path,self.arm_libs_path)
         
-        # Start Mosquitto
-        mosquitto_command = 'LD_LIBRARY_PATH={}:{} {}'.format(self.snips_path,self.arm_libs_path,mosquitto_path)
-        print("mosquitto_command = " + str(mosquitto_command))
-        self.mosquitto_process = Popen(mosquitto_command, shell=True)
+        if self.DEBUG:
+            print("--my_env = " + str(my_env))
         
-        sleep(2) # Give mosquitto some time to start
+        print("starting mosquitto")
+        mosquitto_command = [self.mosquitto_path,"-d"] # -d for daemon
+        self.mosquitto_process = Popen(mosquitto_command, env=my_env)
+
+        sleep(3) # Give mosquitto some time to start
+        #print("-- 3 seconds")
+        #os.system("aplay " + self.end_of_input_sound)
         
         # Start the snips parts
         for unique_command in commands:
-            command = self.generate_process_command(str(unique_command))
-            print("generated command = " + str(command))
-            self.external_processes.append(Popen(command, shell=True))
+            #print("")
+            #command = self.generate_normal_process_command(str(unique_command))
+            bin_path = os.path.join(self.snips_path,unique_command)
+            command = [bin_path,"-u",self.work_path,"-a",self.assistant_path,"-c",self.toml_path]
+            if unique_command == 'snips-audio-server':
+                command = command + ["--alsa_capture","plughw:1,0","--alsa_playback","default"]
+            elif unique_command == 'snips-injection':
+                command = command + ["-g",self.g2p_models_path]
+            elif unique_command == 'snips-asr':
+                command = command + ["--thread_number","1"]
+            
+            
+            if self.DEV:
+                print("--generated command = " + str(command))
+            self.external_processes.append( Popen(command, env=my_env) )
+            sleep(1)
+            print("-- 1 seconds in loop")
+            #os.system("aplay " + self.end_of_input_sound)
+            
+        #if self.persistent_data['listening'] == True:
+        if self.hotword_process == None:
+            if self.persistent_data['listening'] == True:
+                hotword_command = '{} -u {} -a {} -c {}'.format(self.hotword_path,self.work_path,self.assistant_path,self.toml_path)
+                if self.DEBUG:
+                    print("hotword_command = " + str(hotword_command))
+                #self.hotword_process = Popen("exec " + hotword_command, stdout=subprocess.PIPE, shell=True)
+                self.hotword_process = subprocess.run([self.hotword_path,"-u",self.work_path,"-a",self.assistant_path,"-c",self.toml_path]) #, check=True)
 
-        # Start the hotword detection
-        #hotword_command = self.generate_process_command("snips-hotword")
-        #hotword_command = "/home/pi/.mozilla-iot/addons/voco/snips/snips-hotword -u /home/pi/.mozilla-iot/addons/voco/snips/work -a /home/pi/.mozilla-iot/addons/voco/snips/assistant -c /home/pi/.mozilla-iot/addons/voco/snips/snips.toml"
-        
-        #self.hotword_process = (Popen(hotword_command, shell=True))
-        #self.hotword_process = Popen("exec " + hotword_command, stdout=subprocess.PIPE, shell=True)
-        
-        if self.persistent_data['listening'] == True:
-            hotword_command = '{} -u {} -a {} -c {}'.format(self.hotword_path,self.work_path,self.assistant_path,self.toml_path)
-            print("hotword_command = " + str(hotword_command))
-            self.hotword_process = Popen("exec " + hotword_command, stdout=subprocess.PIPE, shell=True)
-
-        sleep(1)
+                # Reflect the state of Snips on the thing
+                try:
+                    self.devices['voco'].properties['listening'].update( bool(self.persistent_data['listening']) )
+                    self.set_status_on_thing("OK, Listening")
+                except Exception as ex:
+                    print("Error while setting the state on the thing: " + str(ex))
+            else:
+                # Reflect the state of Snips on the thing
+                try:
+                    self.devices['voco'].properties['listening'].update( bool(self.persistent_data['listening']) )
+                    self.set_status_on_thing("Stopped")
+                except Exception as ex:
+                    print("Error while setting the state on the thing: " + str(ex))
+                
+        #sleep(3)
+        #os.system("aplay " + self.end_of_input_sound)
+        #print("-- 3 seconds")
         
         # Teach Snips the names of all the things and properties
-        self.inject_updated_things_into_snips(True) # During init we force Snips to learn all the thing names.
-
+        #self.inject_updated_things_into_snips(True) # During init we force Snips to learn all the thing names.
+        
+        self.speak("Goodbye")
         
         # Wait for completion
-        for p in self.external_processes: p.wait()
+        #print("P.WAIT")
+        #for p in self.external_processes: p.wait()
         
         # TODO: Add a while loop here that checks if Mosquitto and the other processes are still running, and restarts them if they are not?
+        
+        #TODO: loop over the processes and kill them?
         
         """
         while True:
@@ -453,43 +536,8 @@ class VocoAdapter(Adapter):
         
     def generate_process_command(self,unique_command):
         return 'LD_LIBRARY_PATH={}:{} {}/{} -u {} -a {} -c {}'.format(self.snips_path,self.arm_libs_path,self.snips_path,unique_command,self.work_path,self.assistant_path, self.toml_path)
-
-
-
-    def hotword_bleep(self):
-        # Start an extra MQTT Client just to enable a hotword bleep response
-        try:
-            sleep(10)
-            self.mqtt_client = client.Client(client_id="extra_snips_detector")
-            HOST = "localhost"
-            PORT = 1883
-            HOTWORD_DETECTED = "hermes/hotword/default/detected"
-            self.mqtt_client.on_connect = self.on_connect
-            self.mqtt_client.on_message = self.on_message
-            self.mqtt_client.connect(HOST, PORT)
-            self.mqtt_client.loop_forever()
-        except Exception as ex:
-            print("Error creating extra MQTT connection: " + str(ex))
-
-
-
-
-    # Subscribe to the important messages
-    def on_connect(self, client, userdata, flags, rc):
-        self.mqtt_client.subscribe("hermes/hotword/default/detected")
-
-    # Process a message as it arrives
-    def on_message(self, client, userdata, msg):
-        if self.DEBUG:
-            print("Hotword detected")
-        if msg.topic == "hermes/hotword/default/detected":
-            if self.persistent_data['feedback_sounds'] == True:
-                os.system("aplay " + str(self.bleep) )
-                
-            #binaryFile = open(self.bleep, mode='rb')
-            #wav = bytearray(binaryFile.read())
-            #publish.single("hermes/audioServer/{}/playBytes/whateverId".format("default"), payload=wav, hostname="localhost", client_id="") 
-
+    def generate_normal_process_command(self,unique_command):
+        return '{}/{} -u {} -a {} -c {}'.format(self.snips_path,unique_command,self.work_path,self.assistant_path, self.toml_path)
 
 
 
@@ -670,26 +718,6 @@ class VocoAdapter(Adapter):
             else:
                 print("It seems Snips hasn't been extracted yet - snips directory could not be found..")
                 
-                try:
-                    # Attempt to make the .sh files executable using chmod
-                    #command = "chmod +x " + str(os.path.join(self.addon_path,"start.sh")) 
-                    #print("chmod command: " + str(command))
-                    #run_command(command)
-                    
-                    # Attempt to make the .sh files executable using chmod
-                    #command = "chmod +x " + str(os.path.join(self.addon_path,"stop.sh")) 
-                    #print("chmod command: " + str(command))
-                    #run_command(command)
-
-                    # Attempt to make the .sh files executable using chmod
-                    command = "chmod +x " + str(os.path.join(self.addon_path,"speak.sh")) 
-                    print("chmod command: " + str(command))
-                    if run_command(command) != 0:
-                        self.set_status_on_thing("Error making .sh file executable")
-                        
-                except Exception as ex:
-                    print("Error: couldn't chmod: " + str(ex))
-                        
                 command = "tar xzf " + str(os.path.join(self.addon_path,"snips.tar")) + " --directory " + str(self.addon_path)
                 print("Snips install command: " + str(command))
                 self.set_status_on_thing("Unpacking Snips")
@@ -823,37 +851,34 @@ class VocoAdapter(Adapter):
 
     def set_speaker_volume(self,volume): # TODO: store sound card ID number, and use that to set the volume of the correct soundcard instead of the master volume?
         if self.DEBUG:
-            print("User changed audio volume")
-
+            print("User wants to change audio volume")
         try:
-
-            if int(volume) >= 0 and int(volume) <= 100:
+            if int(volume) != int(self.persistent_data['speaker_volume']) and int(volume) >= 0 and int(volume) <= 100:
                 self.persistent_data['speaker_volume'] = int(volume)
                 self.save_persistent_data()
-
+                
             #for i in range(len(alsaaudio.cards())):
             #    print("ALSA mixer " + str(i) + " =  " + str(alsaaudio.cards()[i]))
 
-            try:
                 for mixername in alsaaudio.mixers():
-                    #print("mixer name in .mixers: " + str(mixername))
                     if str(mixername) == "Master" or str(mixername) == "PCM":
                         mixer = alsaaudio.Mixer(mixername)
-                        print(str(mixername) + " mixer volume was " + str(mixer.getvolume()))
                         mixer.setvolume(int(volume))
-                        print(str(mixername) + " volume set to " + str(volume))
-            except Exception as ex:
-                print("Error setting master volume: " + str(ex))
+                        self.devices['voco'].properties['volume'].update( int(current_volume) )
+                        break
+                        if self.DEBUG:
+                            print("Volume set to " + str(volume))
 
         except Exception as ex:
-            print("Could not set the volume via pyalsaaudio: " + str(ex))
+            if self.DEBUG:
+                print("Could not set the volume via pyalsaaudio: " + str(ex))
             try:
                 # backup method of setting the volume
-                call(["/usr/bin/amixer", "-q", "sset", "'Master'", str(volume) + "%"])
+                call(["amixer", "-q", "sset", "'PCM'", str(volume) + "%"])
                 if self.DEBUG:
                     print("set the volume with a system call (backup method)")
             except Exception as ex:
-                print("The backup method of setting the volume also failed: " + str(ex))
+                print("The volume could not be set: " + str(ex))
 
 
 
@@ -865,162 +890,173 @@ class VocoAdapter(Adapter):
 
             voice_message = ""
             utcnow = datetime.now(tz=pytz.utc)
-            current_time = int(utcnow.timestamp())
-            self.current_utc_time = current_time
-
-            try:
-
-                #print(str(self.current_utc_time))
-
-                for index, item in enumerate(self.action_times):
-                    #print("timer item = " + str(item))
-
-                    try:
-                        # Wake up alarm
-                        if item['type'] == 'wake' and current_time >= int(item['moment']):
-                            if self.DEBUG:
-                                print("(...) WAKE UP")
-                            self.speak("It's time to wake up")
-                            os.system("aplay " + str(os.path.join(self.addon_path,"assets","end_spot.wav")))
-                            os.system("aplay " + str(os.path.join(self.addon_path,"assets","end_spot.wav")))
-                            os.system("aplay " + str(os.path.join(self.addon_path,"assets","end_spot.wav")))
-                            os.system("aplay " + str(os.path.join(self.addon_path,"assets","end_spot.wav")))
-                        
-                        # Normal alarm
-                        elif item['type'] == 'alarm' and current_time >= int(item['moment']):
-                            if self.DEBUG:
-                                print("(...) ALARM")
-                            self.speak("This is your alarm notification")
-                            os.system("aplay " + str(os.path.join(self.addon_path,"assets","end_spot.wav")))
-                            os.system("aplay " + str(os.path.join(self.addon_path,"assets","end_spot.wav")))
-                            os.system("aplay " + str(os.path.join(self.addon_path,"assets","end_spot.wav")))
-                            os.system("aplay " + str(os.path.join(self.addon_path,"assets","end_spot.wav")))
-
-                        # Reminder
-                        elif item['type'] == 'reminder' and current_time >= int(item['moment']):
-                            if self.DEBUG:
-                                print("(...) REMINDER")
-                            os.system("aplay " + str(os.path.join(self.addon_path,"assets","end_spot.wav")))
-                            voice_message = "This is a reminder to " + str(item['reminder_text'])
-                            self.speak(voice_message)
-                            
-                        
-
-                        # Delayed setting of a boolean state
-                        elif item['type'] == 'actuator' and current_time >= int(item['moment']):
-                            print("origval:" + str(item['original_value']))
-                            if self.DEBUG:
-                                print("(...) TIMED ACTUATOR SWITCHING")
-                            #delayed_action = True
-                            intent_set_state(self, item['slots'],None, item['original_value'])
-                            
-                        # Delayed setting of a value
-                        elif item['type'] == 'value' and current_time >= int(item['moment']):
-                            print("origval:" + str(item['original_value']))
-                            if self.DEBUG:
-                                print("(...) TIMED SETTING OF A VALUE")
-                            intent_set_value(self, item['slots'],None, item['original_value'])
-                            
-                        # Countdown
-                        elif item['type'] == 'countdown':
-                            if item['moment'] >= current_time: # This one is reversed - it's only trigger as long as it hasn't reached the target time.
-
-                                countdown_delta = self.countdown - current_time
-                                
-                                # Update the countdown on the voco thing
-                                self.devices['voco'].properties[ 'countdown' ].set_cached_value_and_notify( int(countdown_delta) )
-                                
-                                # Create speakable countdown message
-                                if countdown_delta > 86400:
-                                    if countdown_delta % 86400 == 0:
-                                        
-                                        days_to_go = countdown_delta//86400
-                                        if days_to_go > 1:
-                                            voice_message = "countdown has " + str(days_to_go) + " days to go"
-                                        else:
-                                            voice_message = "countdown has " + str(days_to_go) + " day to go"
-                                              
-                                elif countdown_delta > 3599:
-                                    if countdown_delta % 3600 == 0:
-                                        
-                                        hours_to_go = countdown_delta//3600
-                                        if hours_to_go > 1:
-                                            voice_message = "countdown has " + str(hours_to_go) + " hours to go"
-                                        else:
-                                            voice_message = "countdown has " + str(hours_to_go) + " hour to go"
-                                            
-                                elif countdown_delta > 59:
-                                    if countdown_delta % 60 == 0:
-                                        
-                                        minutes_to_go = countdown_delta//60
-                                        if minutes_to_go > 1:
-                                            voice_message = "countdown has " + str(minutes_to_go) + " minutes to go"
-                                        else:
-                                            voice_message = "countdown has " + str(minutes_to_go) + " minute to go"
-                                            
-                                elif countdown_delta == 30:
-                                    voice_message = "Counting down 30 seconds"
-                                    
-                                elif countdown_delta < 11:
-                                    voice_message = str(int(countdown_delta))
-                                    
-                                if voice_message != "":
-                                    if self.DEBUG:
-                                        print("(...) " + str(voice_message))
-                                    self.speak(voice_message)
-
-                        # Anything without a type will be treated as a normal timer.
-                        elif current_time >= int(item['moment']):
-                            os.system("aplay " + os.path.join(self.addon_path,"assets","end_spot.wav"))
-                            if self.DEBUG:
-                                print("(...) Your timer is finished")
-                            self.speak("Your timer is finished")
-                            
-                    except Exception as ex:
-                        print("Clock: error recreating event from timer: " + str(ex))
-                        # TODO: currently if this fails is seems the timer item will stay in the list indefinately. If it fails, it should still be removed.
-                
-                # Removed timers whose time has come 
+            fresh_time = int(utcnow.timestamp())
+            
+            if fresh_time == self.current_utc_time:
+                sleep(.1)
+            else:
+                self.current_utc_time = fresh_time
                 try:
-                    timer_removed = False
+
+                    #print(str(self.current_utc_time))
+
                     for index, item in enumerate(self.action_times):
-                        if int(item['moment']) <= current_time:
-                            timer_removed = True
+                        #print("timer item = " + str(item))
+
+                        try:
+                            # Wake up alarm
+                            if item['type'] == 'wake' and self.current_utc_time >= int(item['moment']):
+                                if self.DEBUG:
+                                    print("(...) WAKE UP")
+                                os.system("aplay " + self.alarm_sound)
+                                self.speak("Good morning, it's time to wake up.")
+
+                            # Normal alarm
+                            elif item['type'] == 'alarm' and self.current_utc_time >= int(item['moment']):
+                                if self.DEBUG:
+                                    print("(...) ALARM")
+                                os.system("aplay " + self.alarm_sound)
+                                self.speak("This is your alarm notification")
+
+                            # Reminder
+                            elif item['type'] == 'reminder' and self.current_utc_time >= int(item['moment']):
+                                if self.DEBUG:
+                                    print("(...) REMINDER")
+                                os.system("aplay " + self.end_of_input_sound)
+                                voice_message = "This is a reminder to " + str(item['reminder_text'])
+                                self.speak(voice_message)
+
+
+
+                            # Delayed setting of a boolean state
+                            elif item['type'] == 'actuator' and self.current_utc_time >= int(item['moment']):
+                                print("origval:" + str(item['original_value']))
+                                if self.DEBUG:
+                                    print("(...) TIMED ACTUATOR SWITCHING")
+                                #delayed_action = True
+                                intent_set_state(self, item['slots'],None, item['original_value'])
+
+                            # Delayed setting of a value
+                            elif item['type'] == 'value' and self.current_utc_time >= int(item['moment']):
+                                print("origval:" + str(item['original_value']))
+                                if self.DEBUG:
+                                    print("(...) TIMED SETTING OF A VALUE")
+                                intent_set_value(self, item['slots'],None, item['original_value'])
+
+                            # Countdown
+                            elif item['type'] == 'countdown':
+                                if item['moment'] >= self.current_utc_time: # This one is reversed - it's only trigger as long as it hasn't reached the target time.
+
+                                    countdown_delta = self.countdown - self.current_utc_time
+
+                                    # Update the countdown on the voco thing
+                                    self.devices['voco'].properties[ 'countdown' ].set_cached_value_and_notify( int(countdown_delta) )
+
+                                    # Create speakable countdown message
+                                    if countdown_delta > 86400:
+                                        if countdown_delta % 86400 == 0:
+
+                                            days_to_go = countdown_delta//86400
+                                            if days_to_go > 1:
+                                                voice_message = "countdown has " + str(days_to_go) + " days to go"
+                                            else:
+                                                voice_message = "countdown has " + str(days_to_go) + " day to go"
+
+                                    elif countdown_delta > 3599:
+                                        if countdown_delta % 3600 == 0:
+
+                                            hours_to_go = countdown_delta//3600
+                                            if hours_to_go > 1:
+                                                voice_message = "countdown has " + str(hours_to_go) + " hours to go"
+                                            else:
+                                                voice_message = "countdown has " + str(hours_to_go) + " hour to go"
+
+                                    elif countdown_delta > 59:
+                                        if countdown_delta % 60 == 0:
+
+                                            minutes_to_go = countdown_delta//60
+                                            if minutes_to_go > 1:
+                                                voice_message = "countdown has " + str(minutes_to_go) + " minutes to go"
+                                            else:
+                                                voice_message = "countdown has " + str(minutes_to_go) + " minute to go"
+
+                                    elif countdown_delta == 30:
+                                        voice_message = "Counting down 30 seconds"
+
+                                    elif countdown_delta < 11:
+                                        voice_message = str(int(countdown_delta))
+
+                                    if voice_message != "":
+                                        if self.DEBUG:
+                                            print("(...) " + str(voice_message))
+                                        self.speak(voice_message)
+
+                            # Anything without a type will be treated as a normal timer.
+                            elif self.current_utc_time >= int(item['moment']):
+                                os.system("aplay " + self.end_of_input_sound)
+                                if self.DEBUG:
+                                    print("(...) Your timer is finished")
+                                self.speak("Your timer is finished")
+
+                        except Exception as ex:
+                            print("Clock: error recreating event from timer: " + str(ex))
+                            # TODO: currently if this fails is seems the timer item will stay in the list indefinately. If it fails, it should still be removed.
+
+                    # Removed timers whose time has come 
+                    try:
+                        timer_removed = False
+                        for index, item in enumerate(self.action_times):
+                            if int(item['moment']) <= self.current_utc_time:
+                                timer_removed = True
+                                if self.DEBUG:
+                                    print("removing timer from list")
+                                del self.action_times[index]
+                        if timer_removed:
                             if self.DEBUG:
-                                print("removing timer from list")
-                            del self.action_times[index]
-                    if timer_removed:
-                        if self.DEBUG:
-                            print("at least one timer was removed")
+                                print("at least one timer was removed")
+                    except Exception as ex:
+                        print("Error while removing old timers: " + str(ex))
+
                 except Exception as ex:
-                    print("Error while removing old timers: " + str(ex))
-
-            except Exception as ex:
-                print("Clock error: " + str(ex))
+                    print("Clock error: " + str(ex))
 
 
-            try:
-                if self.h != None:
+                # Check if anything from the notifier should be spoken
+                try:
                     notifier_message = voice_messages_queue.get(False)
                     if notifier_message != None:
                         if self.DEBUG:
                             print("Incoming message from notifier: " + str(notifier_message))
                         self.speak(str(notifier_message))
-            except:
-                pass
-            
-            try:
-                if len(self.action_times) != previous_action_times_count:
-                    if self.DEBUG:
-                        print("New total amount of reminders+alarms+timers: " + str(len(self.action_times)))
-                    previous_action_times_count = len(self.action_times)
-                    self.update_timer_counts()
-                    self.persistent_data['action_times'] = self.action_times
-                    self.save_persistent_data()
-            except Exception as ex:
-                print("Error updating timer counts from clock: " + str(ex))
-                
-            time.sleep(1)
+                except:
+                    pass
+
+                # Update the persistence data is the number of timers has changed
+                try:
+                    if len(self.action_times) != previous_action_times_count:
+                        if self.DEBUG:
+                            print("New total amount of reminders+alarms+timers: " + str(len(self.action_times)))
+                        previous_action_times_count = len(self.action_times)
+                        self.update_timer_counts()
+                        self.persistent_data['action_times'] = self.action_times
+                        self.save_persistent_data()
+                except Exception as ex:
+                    print("Error updating timer counts from clock: " + str(ex))
+
+                # Match the volume on the thing to the actual system volume. Sometimes other add-ons can change it.
+                try:
+                    for mixername in alsaaudio.mixers():
+                        if str(mixername) == "Master" or str(mixername) == "PCM":
+                            mixer = alsaaudio.Mixer(mixername)
+                    
+                            current_volume = mixer.getvolume()[0]
+                            if self.persistent_data['speaker_volume'] != current_volume:
+                                self.persistent_data['speaker_volume'] = current_volume
+                                self.save_persistent_data()
+                                self.devices['voco'].properties['volume'].update( int(current_volume) )
+
+                except Exception as ex:
+                    print("Error getting current audio volume: " + str(ex))
 
 
 
@@ -1174,9 +1210,6 @@ class VocoAdapter(Adapter):
 
 
 
-
-
-
     def api_get(self, api_path):
         """Returns data from the WebThings Gateway API."""
         if self.DEBUG:
@@ -1232,7 +1265,7 @@ class VocoAdapter(Adapter):
         except Exception as ex:
             print("Error doing http request/loading returned json: " + str(ex))
             return {"error": "I could not connect to the web things gateway"}
-        
+
 
 
     def save_persistent_data(self):
@@ -1259,53 +1292,143 @@ class VocoAdapter(Adapter):
             return False
 
 
+
     def speak(self, voice_message="",site_id="default"):
         try:
-            #command = "./speak.sh \"" + str(voice_message) + "\"" 
-            #command = os.path.join(self.addon_path,"speak.sh") + " \"" + str(voice_message) + "\"" 
-            #print("speak command: " + str(command))
-            #run_command(command)
-
-            #command = 'echo "' + str(voice_message) + '" | ' + str(os.path.join(self.snips_path,'nanotts')) + ' -l ' + str(os.path.join(self.snips_path,'lang')) + ' -v ' + str(self.voice) + ' --speed 0.9 --pitch 1.2 --volume 1 -p'
-            command = str(os.path.join(self.snips_path,'nanotts')) + ' -i "' + str(voice_message) +  '" -l ' + str(os.path.join(self.snips_path,'lang')) + ' -v ' + str(self.voice) + ' --speed 0.9 --pitch 1.2 --volume 1 -p'
-            #print("speak command: " + str(command))
-            run_command(command)
+            #command = ['echo', str(voice_message), '|', str(os.path.join(self.snips_path,'nanotts')), '-l',str(os.path.join(self.snips_path,'lang')),'-v',str(self.voice),'--speed','0.9','--pitch','1.2','--volume','1','-p']
+            #subprocess.run(command)
             
-            try:
-                pass
-                #self.h.publish_start_session_notification(site_id, "", None)
-            except:
-                print("Speak: self.h doesn't exist yet?")
-            #self.h.publish_end_session(site_id, voice_message, None)
+            #command = 'echo "' + str(voice_message) + '" | '+  str(os.path.join(self.snips_path,'nanotts')) +  ' -l ' + str(os.path.join(self.snips_path,'lang')) + ' -v ' + str(self.voice) + ' --speed 0.9 --pitch 1.2 --volume 1 -p'
+            #command = str(os.path.join(self.snips_path,'nanotts')) +  ' -l ' + str(os.path.join(self.snips_path,'lang')) + ' -v ' + str(self.voice) + ' --speed 0.9 --pitch 1.2 --volume 1 -p'
+            
+            ps = subprocess.Popen(('echo', str(voice_message)), stdout=subprocess.PIPE)
+            output = subprocess.check_output((str(os.path.join(self.snips_path,'nanotts')), '-l',str(os.path.join(self.snips_path,'lang')),'-v',str(self.voice),'--speed','0.9','--pitch','1.2','-p'), stdin=ps.stdout)
+            ps.wait()
+            
+            #run_command(command)
+            #os.system("aplay " + self.error_sound)
         except Exception as ex:
             print("Error speaking: " + str(ex))
-        #print("At the end of the speak method")
-        #return
 
 
-    #
-    # ROUTING
-    #
 
-    def master_intent_callback(self, hermes, intent_message):    # Triggered everytime Snips succesfully recognizes a voice intent
-        incoming_intent = str(intent_message.intent.intent_name)
-        sentence = str(intent_message.input).lower()
+
+
+
+#
+# MQTT
+#
+
+
+    # In the end Hermes proved unreliable and not flexible enough.
+    def start_mqtt_client(self):
+        try:
+            self.mqtt_client = client.Client(client_id="extra_snips_detector")
+            HOST = "localhost"
+            PORT = 1883
+            self.mqtt_client.on_connect = self.on_connect
+            self.mqtt_client.on_message = self.on_message
+            self.mqtt_client.connect(HOST, PORT, keepalive=60)
+            self.mqtt_client.loop_forever()
+        except Exception as ex:
+            print("Error creating extra MQTT connection: " + str(ex))
+
+
+
+    # Subscribe to the important messages
+    def on_connect(self, client, userdata, flags, rc):
+        #self.mqtt_client.subscribe("hermes/hotword/default/detected")
+        self.mqtt_client.subscribe("hermes/hotword/#")
+        #self.mqtt_client.subscribe('hermes/hotword/toggleOff')
+        #self.mqtt_client.subscribe('hermes/hotword/toggleOn')
+        self.mqtt_client.subscribe("hermes/intent/#");
+
+
+
+    # Process a message as it arrives
+    def on_message(self, client, userdata, msg):
+        try:
+            if self.DEBUG:
+                print("MQTT msg.topic = " + str(msg.topic))
+                #print("message qos=",msg.qos)
+                #print("message retain flag=",msg.retain)
+
+            if msg.topic.startswith('hermes/hotword'):
+                if msg.topic.endswith('/detected'):
+                    self.intent_received = False
+                    if self.DEBUG:
+                        print(">> Hotword detected")
+                    if self.persistent_data['feedback_sounds'] == True:
+                        os.system("aplay " + str(self.start_of_input_sound) )
+
+                #elif msg.topic.endswith('/toggleOff'):
+                #    os.system("aplay " + str(self.alarm_sound) )
+                
+                elif msg.topic.endswith('/toggleOn'):
+                    if self.persistent_data['feedback_sounds'] == True and self.intent_received == False:
+                        os.system("aplay " + str(self.end_of_input_sound) )
+                
+                # TODO: To support satelites it will be necessary to 'throw the voice' via the Snips audio server:
+                #binaryFile = open(self.listening_sound, mode='rb')
+                #wav = bytearray(binaryFile.read())
+                #publish.single("hermes/audioServer/{}/playBytes/whateverId".format("default"), payload=wav, hostname="localhost", client_id="") 
+                
+            else:
+                self.intent_received = True
+                if self.DEBUG:
+                    print("-----------------------------------")
+                    print(">> other message.")
+                    print("message received "  + str(msg.payload.decode("utf-8")))
+                    print("message topic = " + str(msg.topic))
+                intent_name = os.path.basename(os.path.normpath(msg.topic))
+                
+                intent_message = json.loads(msg.payload.decode("utf-8"), object_hook=lambda d: Namespace(**d)) # Allows for the use of dot notation.3
+                print("intent_message.sessionId = " + intent_message.sessionId)
+                
+                # End the existing session
+                self.mqtt_client.publish('hermes/dialogueManager/endSession', json.dumps({"text": "", "sessionId": intent_message.sessionId}))
+                
+                # Deal with the user's command
+                self.master_intent_callback(intent_message)
+                
+        except Exception as ex:
+            print("Error in Paho receive: " + str(ex))
+
+
+
+
+
+
+
+    
+#
+# ROUTING
+#
+
+    def master_intent_callback(self, intent_message):    # Triggered everytime Snips succesfully recognizes a voice intent
+        try:
+            incoming_intent = str(intent_message.intent.intentName)
+            sentence = str(intent_message.input).lower()
+
+            if self.DEBUG:
+                print("")
+                print("")
+                print(">>")
+                print(">> incoming intent   : " + incoming_intent)
+                print(">> intent_message    : " + sentence)
+                print(">> session ID        : " + str(intent_message.sessionId))
+                print(">>")
+        except Exception as ex:
+            print("Error at beginning of master intent callback: " + str(ex))
         
-        if self.DEBUG:
-            print("")
-            print("")
-            print(">>")
-            print(">> incoming intent   : " + incoming_intent)
-            print(">> intent_message    : " + sentence)
-            print(">> session ID        : " + str(intent_message.session_id))
-            print(">>")
+        try:
+            slots = self.extract_slots(intent_message)
+            if self.DEBUG:
+                print("INCOMING SLOTS = " + str(slots))
+        except Exception as ex:
+            print("Error extracting slots at beginning of intent callback: " + str(ex))
         
-        slots = self.extract_slots(intent_message)
-        if self.DEBUG:
-            print("INCOMING SLOTS = " + str(slots))
-
-        
-        hermes.publish_end_session(intent_message.session_id, "")
+        #hermes.publish_end_session(intent_message.session_id, "")
 
         # Get all the things data via the API
         try:
@@ -1320,13 +1443,6 @@ class VocoAdapter(Adapter):
             if incoming_intent == 'createcandle:get_value' and str(slots['property']) == "state":          
                 #print("using alternative route to get_boolean")
                 incoming_intent = 'createcandle:get_boolean'
-                #intent_get_boolean(self,hermes, intent_message) # TODO Maybe it would be better to merge getting sensor value and getting actuator states into one intent.
-            
-            # Alternative route to get_timer_count
-            #elif slots['duration'] == None and slots['end_time'] == None and slots['timer_type'] != None:
-            #    if sentence.startswith("how many alarm") or sentence.startswith("how many timer"):
-            #        print("using alternative route to get_timer_count")
-            #        incoming_intent = 'createcandle:get_timer_count' #intent_get_timer_count(self,hermes, intent_message)
 
             # Avoid setting a value if no value is present
             elif incoming_intent == 'createcandle:set_value' and slots['color'] is None and slots['number'] is None and slots['percentage'] is None and slots['string'] is None:
@@ -1372,25 +1488,29 @@ class VocoAdapter(Adapter):
     def start_blocking(self): 
         MQTT_address = "{}:{}".format(self.MQTT_IP_address, str(self.MQTT_port))
         
-        while True:
-            try:
-                print("Starting Hermes")
-                with Hermes(MQTT_address) as h:
-                    self.h = h
-                    try:
-                        site_message = SiteMessage('default')
-                        self.h.disable_sound_feedback(site_message)
-                    except:
-                        if self.DEBUG:
-                            print("Error. Was unable to turn off the feedback sounds.")
-                    self.h.subscribe_intents(self.master_intent_callback).loop_forever()
+        #while True:
+        try:
+            print(">> Starting Hermes")
+            #self.h = Hermes(MQTT_address)
+            with Hermes(MQTT_address) as h:
+                self.h = h
+                try:
+                    site_message = SiteMessage('default')
+                    self.h.disable_sound_feedback(site_message)
+                except:
+                    if self.DEBUG:
+                        print("Error. Was unable to turn off the feedback sounds.")
+                print("")
+                print("SUBSCRIBING NOW")
+                self.h.subscribe_intents(self.master_intent_callback).loop_forever()
+            #self.h.subscribe_intents(self.master_intent_callback).loop_forever()
 
-            except Exception as ex:
-                print("ERROR starting Hermes (the connection to Snips) failed: " + str(ex))
+        except Exception as ex:
+            print("ERROR starting Hermes (the connection to Snips) failed: " + str(ex))
 
 
     # Update Snips with the latest names of things and properties. This helps to improve recognition.
-    def inject_updated_things_into_snips(self, force_injection=False):
+    def inject_updated_things_into_snips(self, force_injection=True):
         """ Teaches Snips what the user's devices and properties are called """
         try:
             # Check if any new things have been created by the user.
@@ -1434,17 +1554,45 @@ class VocoAdapter(Adapter):
                     operations.append(
                         AddFromVanillaInjectionRequest({"Thing" : list(fresh_thing_titles) })
                     )
+                    #operations.append(('addFromVanilla',{"Thing" : list(fresh_thing_titles) }))
+                    
                 if len(property_titles^fresh_property_titles) > 0 or force_injection == True:
                     print("Teaching Snips the updated property titles.")
                     operations.append(
                         AddFromVanillaInjectionRequest({"Property" : list(fresh_property_titles) + self.extra_properties + self.capabilities + self.generic_properties + self.numeric_property_names})
                     )
+                    
+                    #kind = "addFromVanilla"
+                    #values = {"Thing" : list(fresh_thing_titles)}
+                    
+                    #operations.append({"kind":"addFromVanilla","values":{"Thing" : list(fresh_thing_titles)}})
+                    #operations.append({"kind":"addFromVanilla","values":{"Thing" : list(fresh_thing_titles)}})
+                    #operation_string = '{"operations":[("addFromVanilla",{"Thing":["snips","virtual door sensor"]})]}'
+                    
                 if len(property_strings^fresh_property_strings) > 0 or force_injection == True:
                     print("Teaching Snips the updated property strings.")
                     operations.append(
                         AddFromVanillaInjectionRequest({"string" : list(fresh_property_strings) })
                     )
+                    #operations.append(('addFromVanilla',{"Thing" : list(fresh_thing_titles) }))
+                    
+                    
+                #print("OPERATIONS: " + str(json.dumps(operations)))
+                #operations.append(['addFromVanilla',{"Thing" : list(fresh_thing_titles) }])
                 
+                print("operations: " + str(operations))
+                
+                #for item in operations:
+                #    try:
+                #        print(str(type(item)))
+                #        print(str(vars(item)))
+                #    except:
+                #        print("not vars")
+                    #try:
+                    #    print(str(dir(item)))
+                    #except:
+                    #    print("not dir")
+                        
                 # Remember the current list for the next comparison.
                 if operations != []:
                     try:
@@ -1457,13 +1605,17 @@ class VocoAdapter(Adapter):
                     
                     try:
                         update_request = InjectionRequestMessage(operations)
-                        if self.h != None:
-                            print("Injection: self.h exists, will try to inject")
-                            self.h.request_injection(update_request)
+                        print("injection update_request = " + str(vars(update_request)))
+                        
+                        if self.mqtt_client != None:
+                            print("Injection: self.mqtt_client exists, will try to inject")
+                            #self.mqtt_client.publish('hermes/injection/perform', operation_string) #json.dumps(operations))
+                            
+                            #self.h.request_injection(update_request)
                         else:
                             print("Warning, could not inject new values into Snips - self.h did not exist")
-                        #with Hermes("localhost:1883") as herm:
-                        #    herm.request_injection(update_request)
+                        with Hermes("localhost:1883") as herm:
+                            herm.request_injection(update_request)
                         self.last_injection_time = datetime.utcnow().timestamp()
                     except Exception as ex:
                          print("Error during injection: " + str(ex))
@@ -1477,6 +1629,11 @@ class VocoAdapter(Adapter):
         except Exception as ex:
             print("Error during analysis and injection of your things into Snips: " + str(ex))
 
+
+
+#
+# THING SCANNER
+#
 
     # This function looks up things that might be a match to the things names or property names that the user mentioned in their request.
     def check_things(self, actuator, target_thing_title, target_property_title, target_space ):
@@ -1507,13 +1664,19 @@ class VocoAdapter(Adapter):
             if self.DEBUG:
                 print("-> target property title is: " + str(target_property_title))
         
+        if target_space != None:
+            if self.DEBUG:
+                print("-> target space is: " + str(target_property_title))
+        
+        
         try:
-            if self.things == None:
+            if self.things == None or self.things == []:
                 print("Error, the things dictionary was empty. Please provice an API key in the add-on setting (or add some things).")
                 return
             
             for thing in self.things:
                 
+
                 # TITLE
                 
                 try:
@@ -1756,6 +1919,7 @@ class VocoAdapter(Adapter):
 
     # This function parses the data coming from Snips and turned it into an easy to use dictionary.
     def extract_slots(self,intent_message):
+        """Parses incoming data from Snips into an easy to use dictionary"""
 
         # TODO: better handle 'now' as a start time. E.g. Turn on the lamp from now until 5 o'clock. Although it does already work ok.
 
@@ -1767,6 +1931,7 @@ class VocoAdapter(Adapter):
                 "number":None,          # A number
                 "percentage":None,      # A percentage
                 "string":None,          # E.g. to set the value of a dropdown. For now should only be populated by an injection at runtime, based on the existing dropdown values.
+                "time_string":None,     # the snippet of the sentence describing the time the user spoke.
                 "color":None,           # E.g. 'green'. Similar to the string.
                 "start_time":None,      # If this exists, there is also an end-time.
                 "end_time":None,        # An absolute time
@@ -1786,149 +1951,61 @@ class VocoAdapter(Adapter):
             except:
                 pass
             slots['sentence'] = sentence
-
-            if len(intent_message.slots.thing) > 0:
-                #print("incoming slots thing = " + str(vars(intent_message.slots.thing.first())))
-                if str(intent_message.slots.thing.first().value) == 'unknownword':
-                    slots['thing'] = None
-                else:
-                    slots['thing'] = str(intent_message.slots.thing.first().value)
-                if self.DEBUG:
-                    print("User asked about " + str(slots['thing']))
-
-            if len(intent_message.slots.property) > 0:
-                #print("incoming slots property = " + str(vars(intent_message.slots.property.first())))
-                if str(intent_message.slots.property.first().value) == 'unknownword':
-                    slots['property'] = None
-                else:
-                    slots['property'] = intent_message.slots.property.first().value
-
         except Exception as ex:
-            print("Error getting thing related intention data: " + str(ex))
+            print("Could not extract full sentence into a slot: " + str(ex))
 
-        try:
-            # BOOLEAN
-            if len(intent_message.slots.boolean) > 0:
-                if self.DEV:
-                    print("incoming slots boolean = " + str(vars(intent_message.slots.boolean.first())))
-                slots['boolean'] = str(intent_message.slots.boolean.first().value)
+        print("intent_message.slots = " + str(intent_message.slots))
             
-            # NUMBER
-            if len(intent_message.slots.number) > 0:
-                if self.DEV:
-                    print("incoming slots number = " + str(vars(intent_message.slots.number.first())))
-                slots['number'] = intent_message.slots.number.first().value
 
-            #PERCENTAGE
-            if len(intent_message.slots.percentage) > 0:
-                if self.DEV:
-                    print("incoming slots percentage = " + str(vars(intent_message.slots.percentage.first())))
-                slots['percentage'] = intent_message.slots.percentage.first().value
+        for item in intent_message.slots:
+            try:                
+                if item.value.kind == 'InstantTime':
+                    slots['time_string'] = item.rawValue # The time as it was spoken
+                    utc_timestamp = self.string_to_utc_timestamp(item.value.value)
+                    if utc_timestamp > self.current_utc_time: # Only allow moments in the future
+                        slots['end_time'] = utc_timestamp
+                    else:
+                        self.speak("The time you stated seems to be in the past.") # If after all that the moment is still in the past
+                        return
+                    
+                elif item.value.kind == 'TimeInterval':
+                    slots['time_string'] = item.rawValue # The time as it was spoken
+                    print("bla")
+                    utc_timestamp = self.string_to_utc_timestamp(item.value.to)
+                    if utc_timestamp > self.current_utc_time: # Only allow moments in the future
+                        slots['end_time'] = utc_timestamp
+                    utc_timestamp = self.string_to_utc_timestamp(item.value['from'])
+                    if utc_timestamp > self.current_utc_time: # Only allow moments in the future
+                        slots['start_time'] = utc_timestamp        
+                    else:
+                        self.speak("The time you stated seems to be in the past.") # If after all that the moment is still in the past
+                        return
 
-            # TIMER_TYPE
-            if len(intent_message.slots.timer_type) > 0:
-                if self.DEV:
-                    print("incoming slots timer_type = " + str(vars(intent_message.slots.timer_type.first())))
-                slots['timer_type'] = str(intent_message.slots.timer_type.first().value)
+                elif item.value.kind == 'Duration':
+                    slots['time_string'] = item.rawValue # The time as it was spoken
+                    target_time_delta = item.value.seconds + item.value.minutes * 60 + item.value.hours * 3600 + item.value.days * 86400 + item.value.weeks * 604800 # TODO: Could also support years, in theory..
+                    # Turns the duration into the absolute time when the duration ends
+                    if target_time_delta != 0:
+                        slots['duration'] = self.current_utc_time + int(target_time_delta)
 
-            # TIMER_LAST
-            if len(intent_message.slots.timer_last) > 0:
-                if self.DEV:
-                    print("incoming slots timer_last = " + str(vars(intent_message.slots.timer_last.first())))
-                slots['timer_last'] = str(intent_message.slots.timer_last.first().value)
-
-            # COLOR
-            if len(intent_message.slots.color) > 0:
-                if self.DEV:
-                    print("incoming slots color = " + str(vars(intent_message.slots.color.first())))
-                slots['color'] = str(intent_message.slots.color.first().value)
-
-            # SPACE
-            if len(intent_message.slots.space) > 0:
-                if self.DEV:
-                    print("incoming slots space = " + str(vars(intent_message.slots.space.first())))
-                slots['space'] = str(intent_message.slots.space.first().value)
+                elif item.slotName == 'special_time':
+                    pass
+                    # TODO here we could handle things like 'at dawn', 'at sundown' and 'at sunrise', as long as those could be calculated without looking it up online somehow.
                 
-            # PLEASANTRIES
-            if len(intent_message.slots.pleasantries) > 0:
-                if self.DEV:
-                    print("incoming slots pleasantries = " + str(vars(intent_message.slots.pleasantries.first())))
-                if str(vars(intent_message.slots.pleasantries.first())).lower() == "please":
-                    self.pleasantry_count += 1 # TODO: We count how often the user has said 'please', so that once in a while Snips can be thankful for the good manners.
+                elif item.slotName == 'pleasantries':
+                    if item.value.value.lower() == "please":
+                        self.pleasantry_count += 1 # TODO: We count how often the user has said 'please', so that once in a while Snips can be thankful for the good manners.
+                    else:
+                        slots['pleasantries'] = item.value.value # For example, it the sentence started with "Can you" it could be nice to respond with "I can" or "I cannot".
+
                 else:
-                    slots['pleasantries'] = str(intent_message.slots.pleasantries.first().value) # For example, it the sentence started with "Can you" it could be nice to respond with "I can" or "I cannot".
+                    if slots[item.slotName] == None:
+                        slots[item.slotName] = item.value.value
+                    else:
+                        slots[item.slotName] = slots[item.slotName] + " " + item.value.value # TODO: in the future multiple thing titles should be handled separately. All slots should probably be lists.
 
-            # PERIOD
-            if len(intent_message.slots.period) > 0:
-                if self.DEV:
-                    print("incoming slots period = " + str(vars(intent_message.slots.period.first())))
-                slots['period'] = str(intent_message.slots.period.first().value)
-
-        except Exception as ex:
-            print("Error getting value intention data: " + str(ex))
-
-
-        try:
-            # TIME
-            if len(intent_message.slots.time) > 0:
-                #print("incoming slots time = " + str(vars(intent_message.slots.time.first())))
-
-                utcnow = datetime.now(tz=pytz.utc)
-                utcnow_timestamp = int(utcnow.timestamp())
-                
-                time_data = intent_message.slots.time.first()
-                if self.DEBUG:
-                    print("time data = " + str(vars(time_data)))
-
-                # It's a version of time where there is a start and end date.
-                if hasattr(time_data, 'from_date') and hasattr(time_data, 'to_date'): # TODO remove hasattr? replace it 'in'?
-                    print("both a start and end date attribute in the time. Values could still be zero though.")
-                    #print(str(time_data.from_date))
-                    #print(str(time_data.to_date))
-                    if time_data.from_date != None:
-                        utc_timestamp = self.string_to_utc_timestamp(time_data.from_date)
-                        if utc_timestamp > self.current_utc_time: # Only allow moments in the future
-                            slots['start_time'] = utc_timestamp
-                    
-                    if time_data.to_date != None:
-                        utc_timestamp = self.string_to_utc_timestamp(time_data.to_date)
-                        if utc_timestamp > self.current_utc_time:
-                            slots['end_time'] = utc_timestamp
-                    
-                elif hasattr(time_data, 'value'):
-                    print("Just a single value in the time slot (so not to_ and from_, but just 'value')")
-                    if time_data.value != None:
-                        utc_timestamp = self.string_to_utc_timestamp(time_data.value)
-                        if utc_timestamp > self.current_utc_time:
-                            slots['end_time'] = utc_timestamp
-
-        except Exception as ex:
-            print("Error getting datetime intention data: " + str(ex)) 
-
-        try:
-            if len(intent_message.slots.special_time) > 0:
-                if self.DEV:
-                    print("incoming slot special_time = " + str(vars(intent_message.slots.special_time.first())))
-                slots['special_time'] = str(intent_message.slots.special_time.first().value)
-        except:
-            print("Error getting special time from incoming intent")
-
-        try:
-            # DURATION
-            if len(intent_message.slots.duration) > 0:
-                if self.DEV:
-                    print("incoming slots duration = " + str(vars(intent_message.slots.duration.first())))
-                target_time_delta = intent_message.slots.duration.first().seconds + intent_message.slots.duration.first().minutes * 60 + intent_message.slots.duration.first().hours * 3600 + intent_message.slots.duration.first().days * 86400 + intent_message.slots.duration.first().weeks * 604800 
-                
-                # Turns the duration into the absolute time when the duration ends
-                if target_time_delta != 0:
-                    utcnow = datetime.now(tz=pytz.utc)
-                    utcnow_timestamp = int(utcnow.timestamp())
-                    target_timestamp = int(utcnow_timestamp) + int(target_time_delta)
-                    slots['duration'] = target_timestamp
-
-        except Exception as ex:
-            print("Error getting duration intention data: " + str(ex))   
+            except Exception as ex:
+                print("Error getting while looping over incoming slots data: " + str(ex))   
 
         return slots
 
@@ -2013,49 +2090,5 @@ class VocoAdapter(Adapter):
 
 
 
-def run_command(command):
-    try:
-        return_code = subprocess.call(command, shell=True) 
-        return return_code
-
-    except Exception as ex:
-        print("Error running shell command: " + str(ex))
-        
-    print("END OF RUN COMMAND")
-
-
-
-def run_command_with_lines(command):
-    try:
-        p = subprocess.Popen(command,
-                            stdout=subprocess.PIPE,
-                            stderr=subprocess.PIPE,
-                            shell=True)
-        # Read stdout from subprocess until the buffer is empty !
-        for bline in iter(p.stdout.readline, b''):
-            line = bline.decode('utf-8') #decodedLine = lines.decode('ISO-8859-1')
-            line = line.rstrip()
-            if line: # Don't print blank lines
-                yield line
-        # This ensures the process has completed, AND sets the 'returncode' attr
-        while p.poll() is None:                                                                                                                                        
-            sleep(.1) #Don't waste CPU-cycles
-        # Empty STDERR buffer
-        err = p.stderr.read()
-        if p.returncode == 0:
-            yield("Command success")
-            return True
-        else:
-            # The run_command() function is responsible for logging STDERR 
-            if len(err) > 1:
-                yield("Command failed with error: " + str(err.decode('utf-8')))
-                return False
-            yield("Command failed")
-            return False
-            #return False
-    except Exception as ex:
-        print("Error running shell command: " + str(ex))
-        
-    print("END OF RUN COMMAND WITH LINES")
 
 

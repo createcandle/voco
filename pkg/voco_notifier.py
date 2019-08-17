@@ -24,7 +24,7 @@ class VocoNotifier(Notifier):
         try:
             self.voice_messages_queue = voice_messages_queue
             print("notifier: self.voice_messages_queue = " + str(self.voice_messages_queue))
-            voice_messages_queue.put("Hello, I am Snips.")
+            #voice_messages_queue.put("Hello, I am Snips.")
         except Exception as ex:
             print("Notifier: parent failed: " + str(ex))
 
