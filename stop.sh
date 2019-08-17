@@ -1,6 +1,6 @@
 #!/bin/bash
 
-echo "Stopping any existing snips processes"
+echo "Stopping any existing snips processes (shell)"
 pkill -f snips
-echo "Command succesful"
+#echo "Command succesful"
 exit 0

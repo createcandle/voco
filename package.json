@@ -1,8 +1,8 @@
 {
   "name": "voco",
   "display_name": "Voco",
-  "version": "0.0.3",
-  "description": "Privacy friendly voice control",
+  "version": "0.0.4",
+  "description": "Privacy friendly voice control. Say 'Hey Snips' to start a voice command.",
   "author": "CreateCandle",
   "main": "bootstrap.py",
   "keywords": [
@@ -32,6 +32,11 @@
     "pkg/voco_notifier.py",
     "pkg/intentions.py",
     "pkg/util.py",
+    "sounds/alarm.wav",
+    "sounds/start_of_input.wav",
+    "sounds/end_of_input.wav",
+    "sounds/end_spot.wav",
+    "sounds/error.wav",
     "snips.tar",
     "requirements.txt",
     "setup.cfg"

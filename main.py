@@ -60,9 +60,9 @@ if __name__ == '__main__':
     # Start the internal clock which is used to handle timers.
     print("-")
     print("starting thread")
-    th = threading.Thread(target=notifier_thread, args=(voice_messages_queue,))
-    th.daemon = True
-    th.start()
+    #th = threading.Thread(target=notifier_thread, args=(voice_messages_queue,))
+    #th.daemon = True
+    #th.start()
 
     print("-")
     print("starting adapter")
