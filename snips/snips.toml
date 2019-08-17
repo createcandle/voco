@@ -71,14 +71,8 @@ sound_feedback_disabled_default = true
 provider = "customtts"
 ## customtts specific configuration (here configured to use picotts using the en-US language)
 ## available placeholder variables : %%OUTPUT_FILE%%, %%LANG%%, %%TEXT%%
-#customtts = { command = ["pico2wave", "-w", "%%OUTPUT_FILE%%", "-l", "en-US", "%%TEXT%%"] }
-#customtts = { command = [".tts_speak.sh", "-w", "%%OUTPUT_FILE%%", "-l", "%%LANG%%", "%%TEXT%%"] }
-#customtts = { command = ["~/.mozilla/addons/voco/speak.sh", "-w", "%%OUTPUT_FILE%%", "-l", "en-US", "%%TEXT%%"] }
-#customtts = { command = ["/home/pi/.mozilla-iot/addons/voco/snips/speak.sh", "-w", "%%OUTPUT_FILE%%", "-l", "%%LANG%%", "%%TEXT%%"] }
-#customtts = { command = ["echo","%%TEXT%%","|","/home/pi/.mozilla-iot/addons/voco/snips/nanotts","-m","-o", "%%OUTPUT_FILE%%","-l","/home/pi/.mozilla-iot/addons/voco/snips/nanotts/lang"] }
-#customtts = { command = ["echo","%%TEXT%%","|","/home/pi/.mozilla-iot/addons/voco/snips/nanotts","-m","-o", "%%OUTPUT_FILE%%","-l","/home/pi/.mozilla-iot/addons/voco/snips/nanotts/lang"] }
-
-customtts = { command = ["/home/pi/.mozilla-iot/addons/voco/snips/speak.sh", "-o", "%%OUTPUT_FILE%%", "%%TEXT%%", "-l", "%%LANG%%" ] }
+# customtts = { command = ["pico2wave", "-w", "%%OUTPUT_FILE%%", "-l", "en-US", "%%TEXT%%"] }
+customtts = { command = ["/home/pi/.mozilla/addons/vodo/snips/speak.sh", "%%TEXT%%" ] }
 
 
 [snips-pegasus]
