@@ -1,7 +1,9 @@
 # Voco
 Privacy friendly voice control for the Mozilla WebThings Gateway
 # Abilities
-These are all examples. You don't have to say things exactly like this.
+These are all examples. You don't have to say things exactly like this. Any command should always be preceded by saying "Hey Snips".
+
+
 ### Turn things on and off
 #### Toggle devices
 - "Turn on the table lamp"
