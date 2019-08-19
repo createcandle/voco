@@ -8,7 +8,7 @@ from gateway_addon import Notifier, Outlet
 class VocoNotifier(Notifier):
     """Candle device type."""
 
-    def __init__(self, voice_messages_queue, verbose=True):
+    def __init__(self, adapter, voice_messages_queue, verbose=True):
         """
         Initialize the object.
         adapter -- the Adapter managing this device
@@ -19,12 +19,13 @@ class VocoNotifier(Notifier):
         Notifier.__init__(self, 'voco-notifier', 'voco', verbose=True)
         #Notifier.__init__(self, adapter, 'voco')
 
+        self.adapter = adapter
         
 
         try:
             self.voice_messages_queue = voice_messages_queue
             print("notifier: self.voice_messages_queue = " + str(self.voice_messages_queue))
-            #voice_messages_queue.put("Hello, I am Snips.")
+            #voice_messages_queue.put(" Your rules can now also notify you through speech. ")
         except Exception as ex:
             print("Notifier: parent failed: " + str(ex))
 

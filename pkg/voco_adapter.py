@@ -78,7 +78,7 @@ except:
 from gateway_addon import Database, Adapter
 from .util import *
 from .voco_device import *
-
+from .voco_notifier import *
 
 #print('Python:', sys.version)
 #print('requests:', requests.__version__)
@@ -106,7 +106,7 @@ if 'MOZIOT_HOME' in os.environ:
 class VocoAdapter(Adapter):
     """Adapter for Snips"""
 
-    def __init__(self, voice_messages_queue, verbose=True):
+    def __init__(self, verbose=True):
         """
         Initialize the object.
         
@@ -119,12 +119,6 @@ class VocoAdapter(Adapter):
         self.name = self.__class__.__name__
         Adapter.__init__(self, 'voco-adapter', 'voco', verbose=verbose)
         #print("Adapter ID = " + self.get_id())
-        
-        try:
-            #self.voice_messages_queue = voice_messages_queue
-            print("adapter: voice_messages_queue = " + str(voice_messages_queue))
-        except:
-            print("adapter: no message queue?")
 
         self.persistence_file_path = "/home/pi/.mozilla/config/voco-persistence.json"
         for path in _CONFIG_PATHS:
@@ -162,10 +156,6 @@ class VocoAdapter(Adapter):
         self.metric = True
         self.DEBUG = True
         self.DEV = False
-        self.playback_devices = []
-        self.capture_devices = []
-        self.microphone = None
-        self.speaker = None
         self.things = []
         self.token = None
         self.timer_counts = {'timer':0,'alarm':0,'reminder':0}
@@ -175,6 +165,18 @@ class VocoAdapter(Adapter):
         self.countdown = 0 # There can only be one timer at a time. It's set the target unix time.
         
         self.server = 'http://127.0.0.1:8080'
+
+        # Microphone
+        self.microphone = None
+        self.capture_card_id = 1 # 0 is internal, 1 is usb.
+        self.capture_device_id = 0 # Which channel
+        self.capture_devices = []
+        
+        # Speaker
+        self.speaker = None
+        self.playback_card_id = 0 # 0 is internal, 1 is usb.
+        self.playback_device_id = 0
+        self.playback_devices = []
 
         # Snips settings
         self.external_processes = [] # Will hold all the spawned processes
@@ -240,7 +242,7 @@ class VocoAdapter(Adapter):
 
         # Stop Snips until the init is complete (if it is installed).
         try:
-            #self.set_snips_state(0)
+            #self.set_snips_state(False)
             os.system("pkill -f snips") # Avoid snips running paralel
             self.devices['voco'].connected = False
             self.devices['voco'].connected_notify(False)
@@ -262,14 +264,14 @@ class VocoAdapter(Adapter):
             print("Error scanning ALSA (audio devices): " + str(ex))
         
         # Try to get the master audio mixer
-        self.audio_mixer = None
-        try:
-            for mixername in alsaaudio.mixers():
-                if str(mixername) == "Master" or str(mixername) == "PCM":
-                    self.audio_mixer = alsaaudio.Mixer(mixername)
-                    break
-        except Exception as ex:
-            print("Error getting audio mixer: " + str(ex))
+        #self.audio_mixer = None
+        #try:
+        #    for mixername in alsaaudio.mixers():
+        #        if str(mixername) == "Master" or str(mixername) == "PCM":
+        #            self.audio_mixer = alsaaudio.Mixer(mixername)
+        #            break
+        #except Exception as ex:
+        #    print("Error getting audio mixer: " + str(ex))
             
         
         # Install Snips if it hasn't been installed already
@@ -291,12 +293,34 @@ class VocoAdapter(Adapter):
         #if self.configure_alsa():
         #    print("Audio was set up succesfully.")
         
-        
+
+        # Fix the audio input.
+        if self.microphone == "Built-in microphone (0,0)":
+            print("Setting audio input to built-in")
+            self.capture_card_id = 0
+            self.capture_device_id = 0
+        if self.microphone == "Attached device (1,0)":
+            print("Setting audio input to USB/Hat")
+            self.capture_card_id = 1
+            self.capture_device_id = 0
+
         # Fix the audio output. The default on the WebThings image is HDMI.
         if self.speaker == "Built-in headphone jack (0,0)":
             print("Setting audio output to headphone jack")
             run_command("amixer cset numid=3 1")
-        
+            self.playback_card_id = 0
+            self.playback_device_id = 0
+        if self.speaker == "Built-in HDMI (0,1)":
+            print("Setting audio output to HDMI")
+            run_command("amixer cset numid=3 2")
+            self.playback_card_id = 0
+            self.playback_device_id = 1
+        if self.speaker == "Attached device (1,0)":
+            print("Setting audio output to USB/Hat")
+            #run_command("amixer cset numid=3 0")
+            self.playback_card_id = 1
+            self.playback_device_id = 0
+            
         
         # TIME
         
@@ -320,7 +344,6 @@ class VocoAdapter(Adapter):
             
         except Exception as ex:
             print("Error handling time zone calculation: " + str(ex))
-
             
         print("Starting Mosquitto and the Snips processes")
         try:
@@ -333,6 +356,16 @@ class VocoAdapter(Adapter):
         sleep(1.17)
             
             
+        # Create notifier
+        
+        self.voice_messages_queue = queue.Queue()
+        self.notifier = VocoNotifier(self,self.voice_messages_queue,verbose=True) # TODO: the queue is no longer necessary. Then again, it could be nice to move speech completely to a queue system so that voice doesn't overlap.
+        
+        #th = threading.Thread(target=notifier_thread, args=(voice_messages_queue,))
+        #th.daemon = True
+        #th.start()
+        
+
         # Start the internal clock which is used to handle timers. It also receives messages from the notifier.
         print("Starting the internal clock")
         try:
@@ -340,7 +373,7 @@ class VocoAdapter(Adapter):
             if 'action_times' in self.persistent_data:
                 self.action_times = self.persistent_data['action_times']
             
-            t = threading.Thread(target=self.clock, args=(voice_messages_queue,))
+            t = threading.Thread(target=self.clock, args=(self.voice_messages_queue,))
             t.daemon = True
             t.start()
         except:
@@ -412,9 +445,6 @@ class VocoAdapter(Adapter):
                 print("PLEASE ENTER YOUR AUTHORIZATION CODE IN THE SETTINGS PAGE")
                 self.set_status_on_thing("Authorization code missing, check settings")
                 self.speak("I cannot connect to your devices because the authorization code is missing. Check the voco settings page for details.")
-
-        #while True:
-        #    sleep(1.23)
             
         try:
             self.mqtt_client = client.Client(client_id="voco_mqtt_snips_client")
@@ -427,14 +457,25 @@ class VocoAdapter(Adapter):
         except Exception as ex:
             print("Error creating extra MQTT connection: " + str(ex))
 
-        print("END OF INIT")
 
+
+
+    #def notifier_thread(self,message_queue):
+    #    self.notifier = VocoNotifier(message_queue,verbose=True)
+    
+
+
+
+
+    def play_sound(self,sound_file):
+        os.system("aplay " + str(sound_file) + " -D plughw:" + str(self.playback_card_id) + "," + str(self.playback_device_id))
 
 
     def run_snips(self):
         
         sleep(1.11)
-        os.system("aplay " + self.end_of_input_sound)
+        self.play_sound(self.end_of_input_sound)
+        
         
         commands = [
             'snips-tts',
@@ -449,7 +490,7 @@ class VocoAdapter(Adapter):
         my_env = os.environ.copy()
         my_env["LD_LIBRARY_PATH"] = '{}:{}'.format(self.snips_path,self.arm_libs_path)
         
-        if self.DEBUG:
+        if self.DEV:
             print("--my_env = " + str(my_env))
         
         print("starting mosquitto")
@@ -458,7 +499,7 @@ class VocoAdapter(Adapter):
 
         sleep(3) # Give mosquitto some time to start
         #print("-- 3 seconds")
-        #os.system("aplay " + self.end_of_input_sound)
+        #self.play_sound(self.end_of_input_sound)
         
         # Start the snips parts
         for unique_command in commands:
@@ -467,19 +508,20 @@ class VocoAdapter(Adapter):
             bin_path = os.path.join(self.snips_path,unique_command)
             command = [bin_path,"-u",self.work_path,"-a",self.assistant_path,"-c",self.toml_path]
             if unique_command == 'snips-audio-server':
-                command = command + ["--alsa_capture","plughw:1,0","--alsa_playback","default"]
+                command = command + ["--alsa_capture","plughw:" + str(self.capture_card_id) + "," + str(self.capture_device_id),"--alsa_playback","default:" + str(self.playback_card_id) + "," + str(self.playback_device_id)]
             elif unique_command == 'snips-injection':
                 command = command + ["-g",self.g2p_models_path]
             elif unique_command == 'snips-asr':
-                command = command + ["--thread_number","1"]
+                command = command + ["--thread_number","1"] # TODO Check if this actually helps.
             
             
             if self.DEV:
                 print("--generated command = " + str(command))
             self.external_processes.append( Popen(command, env=my_env) )
             sleep(1)
-            print("-- 1 seconds in loop")
-            #os.system("aplay " + self.end_of_input_sound)
+            if self.DEBUG:
+                print("-- waiting 1 seconds in Snips startup loop")
+            #self.play_sound(self.end_of_input_sound)
             
         #if self.persistent_data['listening'] == True:
         if self.hotword_process == None:
@@ -505,7 +547,7 @@ class VocoAdapter(Adapter):
                     print("Error while setting the state on the thing: " + str(ex))
                 
         #sleep(3)
-        #os.system("aplay " + self.end_of_input_sound)
+        #self.play_sound(self.end_of_input_sound)
         #print("-- 3 seconds")
         
         # Teach Snips the names of all the things and properties
@@ -814,34 +856,29 @@ class VocoAdapter(Adapter):
                     elif 'device 1' in line:
                         if device_type == 'playback':
                             result.append('Built-in HDMI (0,1)')
-                        if device_type == 'capture':
-                            result.append('Built-in microphone, channel 2 (0,1)')
+                        #if device_type == 'capture':
+                        #    result.append('Built-in microphone, channel 2 (0,1)')
                             
                 if line.startswith('card 1'):
                     if 'device 0' in line:
-                        if device_type == 'playback':
-                            result.append('Plugged-in (USB) device  (1,0)')
-                            result.append('Respeaker Pi Hat (1,0)')
-                        if device_type == 'capture':
-                            result.append('Plugged-in (USB) microphone (1,0)')
-                            result.append('Respeaker Pi Hat (1,0)')
-                    elif 'device 1' in line:
-                        if device_type == 'playback':
-                            result.append('Plugged-in (USB) device, channel 2 (1,1)')
-                        if device_type == 'capture':
-                            result.append('Plugged-in (USB) microphone, channel 2 (1,1)')
+                        result.append('Attached device (1,0)')
+                    #elif 'device 1' in line:
+                    #    if device_type == 'playback':
+                    #        result.append('Plugged-in (USB) device, channel 2 (1,1)')
+                    #    if device_type == 'capture':
+                    #        result.append('Plugged-in (USB) microphone, channel 2 (1,1)')
                             
-                if line.startswith('card 2'):
-                    if 'device 0' in line:
-                        if device_type == 'playback':
-                            result.append('Second plugged-in (USB) device (2,0)')
-                        if device_type == 'capture':
-                            result.append('Second plugged-in (USB) microphone (2,0)')
-                    elif 'device 1' in line:
-                        if device_type == 'playback':
-                            result.append('Second plugged-in (USB) device, channel 2 (2,1)')
-                        if device_type == 'capture':
-                            result.append('Second plugged-in (USB) microphone, channel 2 (2,1)')
+                #if line.startswith('card 2'):
+                #    if 'device 0' in line:
+                #        if device_type == 'playback':
+                #            result.append('Second plugged-in (USB) device (2,0)')
+                #        if device_type == 'capture':
+                #            result.append('Second plugged-in (USB) microphone (2,0)')
+                #    elif 'device 1' in line:
+                #        if device_type == 'playback':
+                #            result.append('Second plugged-in (USB) device, channel 2 (2,1)')
+                #        if device_type == 'capture':
+                #            result.append('Second plugged-in (USB) microphone, channel 2 (2,1)')
                             
         except Exception as e:
             print("Error during ALSA scan: " + str(e))
@@ -908,21 +945,21 @@ class VocoAdapter(Adapter):
                             if item['type'] == 'wake' and self.current_utc_time >= int(item['moment']):
                                 if self.DEBUG:
                                     print("(...) WAKE UP")
-                                os.system("aplay " + self.alarm_sound)
+                                self.play_sound(self.alarm_sound)
                                 self.speak("Good morning, it's time to wake up.")
 
                             # Normal alarm
                             elif item['type'] == 'alarm' and self.current_utc_time >= int(item['moment']):
                                 if self.DEBUG:
                                     print("(...) ALARM")
-                                os.system("aplay " + self.alarm_sound)
+                                self.play_sound(self.alarm_sound)
                                 self.speak("This is your alarm notification")
 
                             # Reminder
                             elif item['type'] == 'reminder' and self.current_utc_time >= int(item['moment']):
                                 if self.DEBUG:
                                     print("(...) REMINDER")
-                                os.system("aplay " + self.end_of_input_sound)
+                                self.play_sound(self.end_of_input_sound)
                                 voice_message = "This is a reminder to " + str(item['reminder_text'])
                                 self.speak(voice_message)
 
@@ -993,7 +1030,7 @@ class VocoAdapter(Adapter):
 
                             # Anything without a type will be treated as a normal timer.
                             elif self.current_utc_time >= int(item['moment']):
-                                os.system("aplay " + self.end_of_input_sound)
+                                self.play_sound(self.end_of_input_sound)
                                 if self.DEBUG:
                                     print("(...) Your timer is finished")
                                 self.speak("Your timer is finished")
@@ -1063,12 +1100,11 @@ class VocoAdapter(Adapter):
     # Count how many timers, alarms and reminders have now been set, and update the voco device
     def update_timer_counts(self):
         try:
-            print("in update_timer_counts")
             self.timer_counts = {'timer':0,'alarm':0,'reminder':0}
             countdown_active = False
             for index, item in enumerate(self.action_times):
                 current_type = item['type']
-                print(str(current_type))
+                #print(str(current_type))
                 if current_type == "countdown":
                     #print("Spotted a countdown object")
                     countdown_active = True
@@ -1092,6 +1128,7 @@ class VocoAdapter(Adapter):
 
     def unload(self):
         print("Shutting down Voco. Talk to you soon!")
+        self.set_snips_state(False)
 
 
 
@@ -1301,12 +1338,13 @@ class VocoAdapter(Adapter):
             #command = 'echo "' + str(voice_message) + '" | '+  str(os.path.join(self.snips_path,'nanotts')) +  ' -l ' + str(os.path.join(self.snips_path,'lang')) + ' -v ' + str(self.voice) + ' --speed 0.9 --pitch 1.2 --volume 1 -p'
             #command = str(os.path.join(self.snips_path,'nanotts')) +  ' -l ' + str(os.path.join(self.snips_path,'lang')) + ' -v ' + str(self.voice) + ' --speed 0.9 --pitch 1.2 --volume 1 -p'
             
+            # TODO add an environment variable here to set alsa to the USB output device?
             ps = subprocess.Popen(('echo', str(voice_message)), stdout=subprocess.PIPE)
             output = subprocess.check_output((str(os.path.join(self.snips_path,'nanotts')), '-l',str(os.path.join(self.snips_path,'lang')),'-v',str(self.voice),'--speed','0.9','--pitch','1.2','-p'), stdin=ps.stdout)
             ps.wait()
             
             #run_command(command)
-            #os.system("aplay " + self.error_sound)
+            #self.play_sound(self.error_sound)
         except Exception as ex:
             print("Error speaking: " + str(ex))
 
@@ -1359,14 +1397,14 @@ class VocoAdapter(Adapter):
                     if self.DEBUG:
                         print(">> Hotword detected")
                     if self.persistent_data['feedback_sounds'] == True:
-                        os.system("aplay " + str(self.start_of_input_sound) )
+                        self.play_sound(str(self.start_of_input_sound) )
 
                 #elif msg.topic.endswith('/toggleOff'):
-                #    os.system("aplay " + str(self.alarm_sound) )
+                #    self.play_sound(str(self.alarm_sound) )
                 
                 elif msg.topic.endswith('/toggleOn'):
                     if self.persistent_data['feedback_sounds'] == True and self.intent_received == False:
-                        os.system("aplay " + str(self.end_of_input_sound) )
+                        self.play_sound(str(self.end_of_input_sound) )
                 
                 # TODO: To support satelites it will be necessary to 'throw the voice' via the Snips audio server:
                 #binaryFile = open(self.listening_sound, mode='rb')
@@ -1580,7 +1618,8 @@ class VocoAdapter(Adapter):
                 #print("OPERATIONS: " + str(json.dumps(operations)))
                 #operations.append(['addFromVanilla',{"Thing" : list(fresh_thing_titles) }])
                 
-                print("operations: " + str(operations))
+                if self.DEBUG:
+                    print("operations: " + str(operations))
                 
                 #for item in operations:
                 #    try:
@@ -1954,7 +1993,7 @@ class VocoAdapter(Adapter):
         except Exception as ex:
             print("Could not extract full sentence into a slot: " + str(ex))
 
-        print("intent_message.slots = " + str(intent_message.slots))
+        #print("intent_message.slots = " + str(intent_message.slots))
             
 
         for item in intent_message.slots:
