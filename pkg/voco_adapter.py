@@ -165,6 +165,7 @@ class VocoAdapter(Adapter):
         self.countdown = 0 # There can only be one timer at a time. It's set the target unix time.
         
         self.server = 'http://127.0.0.1:8080'
+        self.mqtt_client = None
 
         # Microphone
         self.microphone = None
@@ -379,16 +380,32 @@ class VocoAdapter(Adapter):
         except:
             print("Error starting the clock thread")
 
+
+
+
+
             
         sleep(3.12)
         
-        print("Starting the MQTT client")
-        try:
-            b = threading.Thread(target=self.start_mqtt_client)
-            b.daemon = True
+        #print("Starting the MQTT client")
+        #try:
+        #    b = threading.Thread(target=self.start_mqtt_client)
+        #    b.daemon = True
             #b.start()
-        except:
-            print("Error starting the MQTT client thread")
+        #except:
+        #    print("Error starting the MQTT client thread")
+
+
+
+        # Get al the things via the API.
+        try:
+            self.things = self.api_get("/things")
+            print("Did the API call")
+        except Exception as ex:
+            print("Error, couldn't load things at init: " + str(ex))
+
+
+        #sleep(6)
 
 
 
@@ -410,13 +427,6 @@ class VocoAdapter(Adapter):
         except:
             print("Could not set initial audio volume")
         
-        
-        # Get al the things via the API.
-        try:
-            self.things = self.api_get("/things")
-            print("Did the API call")
-        except Exception as ex:
-            print("Error, couldn't load things at init: " + str(ex))
 
         try:
             self.devices['voco'].connected = True
@@ -456,8 +466,7 @@ class VocoAdapter(Adapter):
             self.mqtt_client.loop_forever()
         except Exception as ex:
             print("Error creating extra MQTT connection: " + str(ex))
-
-
+        
 
 
     #def notifier_thread(self,message_queue):
@@ -474,7 +483,7 @@ class VocoAdapter(Adapter):
     def run_snips(self):
         
         sleep(1.11)
-        self.play_sound(self.end_of_input_sound)
+        #self.play_sound(self.end_of_input_sound)
         
         
         commands = [
@@ -526,11 +535,16 @@ class VocoAdapter(Adapter):
         #if self.persistent_data['listening'] == True:
         if self.hotword_process == None:
             if self.persistent_data['listening'] == True:
-                hotword_command = '{} -u {} -a {} -c {}'.format(self.hotword_path,self.work_path,self.assistant_path,self.toml_path)
+                #hotword_command = '{} -u {} -a {} -c {}'.format(self.hotword_path,self.work_path,self.assistant_path,self.toml_path)
+                
+                
+                hotword_command = [self.hotword_path,"-u",self.work_path,"-a",self.assistant_path,"-c",self.toml_path]
                 if self.DEBUG:
                     print("hotword_command = " + str(hotword_command))
                 #self.hotword_process = Popen("exec " + hotword_command, stdout=subprocess.PIPE, shell=True)
-                self.hotword_process = subprocess.run([self.hotword_path,"-u",self.work_path,"-a",self.assistant_path,"-c",self.toml_path]) #, check=True)
+                
+                #self.hotword_process = subprocess.run() #, check=True)
+                self.hotword_process = Popen(hotword_command, env=my_env)
 
                 # Reflect the state of Snips on the thing
                 try:
@@ -546,18 +560,40 @@ class VocoAdapter(Adapter):
                 except Exception as ex:
                     print("Error while setting the state on the thing: " + str(ex))
                 
+               
+               
+         
+        #for p in self.external_processes: 
+        #    p.wait()
+        #    print("Waiting...")
+        
         #sleep(3)
         #self.play_sound(self.end_of_input_sound)
+        quick_counter = 0
+        while self.mqtt_client == None:
+            sleep(1)
+            quick_counter += 1
+            if quick_counter == 15:
+                break
+        
+        #print("")
+        #print("DO I HAPPEN??")
+        #self.play_sound(self.alarm_sound)
+        
+        try:
+            self.inject_updated_things_into_snips(True) # will check if there are new things/properties that Snips should learn about
+        except Exception as ex:
+            print("Error, couldn't teach Snips the names of your things: " + str(ex))  
+        
+        
         #print("-- 3 seconds")
         
         # Teach Snips the names of all the things and properties
         #self.inject_updated_things_into_snips(True) # During init we force Snips to learn all the thing names.
         
-        self.speak("Goodbye")
-        
         # Wait for completion
         #print("P.WAIT")
-        #for p in self.external_processes: p.wait()
+        #
         
         # TODO: Add a while loop here that checks if Mosquitto and the other processes are still running, and restarts them if they are not?
         
@@ -576,10 +612,10 @@ class VocoAdapter(Adapter):
         
         print("End of run_snips thread")
         
-    def generate_process_command(self,unique_command):
-        return 'LD_LIBRARY_PATH={}:{} {}/{} -u {} -a {} -c {}'.format(self.snips_path,self.arm_libs_path,self.snips_path,unique_command,self.work_path,self.assistant_path, self.toml_path)
-    def generate_normal_process_command(self,unique_command):
-        return '{}/{} -u {} -a {} -c {}'.format(self.snips_path,unique_command,self.work_path,self.assistant_path, self.toml_path)
+    #def generate_process_command(self,unique_command):
+    #    return 'LD_LIBRARY_PATH={}:{} {}/{} -u {} -a {} -c {}'.format(self.snips_path,self.arm_libs_path,self.snips_path,unique_command,self.work_path,self.assistant_path, self.toml_path)
+    #def generate_normal_process_command(self,unique_command):
+    #    return '{}/{} -u {} -a {} -c {}'.format(self.snips_path,unique_command,self.work_path,self.assistant_path, self.toml_path)
 
 
 
@@ -1128,8 +1164,32 @@ class VocoAdapter(Adapter):
 
     def unload(self):
         print("Shutting down Voco. Talk to you soon!")
-        self.set_snips_state(False)
-
+        #self.set_snips_state(False)
+        try:
+            self.hotword_process.terminate()
+            print("Terminated the hotword")
+        except Exception as ex:
+            print("Error terminating the hotword process: " + str(ex))
+        
+        try:
+            for process in self.external_processes:
+                process.terminate()
+                print("Terminated Snips process")
+                #self.play_sound(self.end_of_input_sound)
+                #sleep(0.1)
+        except Exception as ex:
+            print("Error terminating the hotword process: " + str(ex))
+        
+        try:
+            self.mosquitto_process.terminate()
+            print("Terminated mosquitto")
+        except Exception as ex:
+            print("Error terminating the mosquitto process: " + str(ex))
+        
+        #self.speak("Goodbye")
+        
+        
+        
 
 
     def remove_thing(self, device_id):
@@ -1161,9 +1221,17 @@ class VocoAdapter(Adapter):
                         print("Starting hotword (again)")
                         # (Re)Start the hotword detection
                         try:
-                            hotword_command = '{} -u {} -a {} -c {}'.format(self.hotword_path,self.work_path,self.assistant_path,self.toml_path)
-                            print("hotword_command = " + str(hotword_command))
-                            self.hotword_process = Popen("exec " + hotword_command, stdout=subprocess.PIPE, shell=True)
+                            hotword_command = [self.hotword_path,"-u",self.work_path,"-a",self.assistant_path,"-c",self.toml_path]
+                            if self.DEBUG:
+                                print("hotword_command = " + str(hotword_command))
+                            #self.hotword_process = Popen("exec " + hotword_command, stdout=subprocess.PIPE, shell=True)
+                
+                            #self.hotword_process = subprocess.run() #, check=True)
+                            self.hotword_process = Popen(hotword_command, env=my_env)
+                            
+                            #hotword_command = '{} -u {} -a {} -c {}'.format(self.hotword_path,self.work_path,self.assistant_path,self.toml_path)
+                            #print("hotword_command = " + str(hotword_command))
+                            #self.hotword_process = Popen("exec " + hotword_command, stdout=subprocess.PIPE, shell=True)
 
                             self.set_status_on_thing("Listening")
                         except:
@@ -1421,8 +1489,7 @@ class VocoAdapter(Adapter):
                 intent_name = os.path.basename(os.path.normpath(msg.topic))
                 
                 intent_message = json.loads(msg.payload.decode("utf-8"), object_hook=lambda d: Namespace(**d)) # Allows for the use of dot notation.3
-                print("intent_message.sessionId = " + intent_message.sessionId)
-                
+
                 # End the existing session
                 self.mqtt_client.publish('hermes/dialogueManager/endSession', json.dumps({"text": "", "sessionId": intent_message.sessionId}))
                 
@@ -1523,32 +1590,9 @@ class VocoAdapter(Adapter):
             print("Error during routing: " + str(ex))
 
 
-    def start_blocking(self): 
-        MQTT_address = "{}:{}".format(self.MQTT_IP_address, str(self.MQTT_port))
-        
-        #while True:
-        try:
-            print(">> Starting Hermes")
-            #self.h = Hermes(MQTT_address)
-            with Hermes(MQTT_address) as h:
-                self.h = h
-                try:
-                    site_message = SiteMessage('default')
-                    self.h.disable_sound_feedback(site_message)
-                except:
-                    if self.DEBUG:
-                        print("Error. Was unable to turn off the feedback sounds.")
-                print("")
-                print("SUBSCRIBING NOW")
-                self.h.subscribe_intents(self.master_intent_callback).loop_forever()
-            #self.h.subscribe_intents(self.master_intent_callback).loop_forever()
-
-        except Exception as ex:
-            print("ERROR starting Hermes (the connection to Snips) failed: " + str(ex))
-
 
     # Update Snips with the latest names of things and properties. This helps to improve recognition.
-    def inject_updated_things_into_snips(self, force_injection=True):
+    def inject_updated_things_into_snips(self, force_injection=False):
         """ Teaches Snips what the user's devices and properties are called """
         try:
             # Check if any new things have been created by the user.
@@ -1572,9 +1616,10 @@ class VocoAdapter(Adapter):
                 
                 operations = []
                 
-                print("fresh_thing_titles = " + str(fresh_thing_titles))
-                print("fresh_prop_titles = " + str(fresh_property_titles))
-                print("fresh_prop_strings = " + str(fresh_property_strings))
+                if self.DEBUG:
+                    print("fresh_thing_titles = " + str(fresh_thing_titles))
+                    print("fresh_prop_titles = " + str(fresh_property_titles))
+                    print("fresh_prop_strings = " + str(fresh_property_strings))
                 
                 try:
                     thing_titles = set(self.persistent_data['thing_titles'])
@@ -1592,7 +1637,9 @@ class VocoAdapter(Adapter):
                     operations.append(
                         AddFromVanillaInjectionRequest({"Thing" : list(fresh_thing_titles) })
                     )
-                    #operations.append(('addFromVanilla',{"Thing" : list(fresh_thing_titles) }))
+                    #print("Adding things into operatinos injection.")
+                    #operation = ('addFromVanilla',{"Thing" : list(fresh_thing_titles) })
+                    #operations.append(operation)
                     
                 if len(property_titles^fresh_property_titles) > 0 or force_injection == True:
                     print("Teaching Snips the updated property titles.")
@@ -1620,17 +1667,6 @@ class VocoAdapter(Adapter):
                 
                 if self.DEBUG:
                     print("operations: " + str(operations))
-                
-                #for item in operations:
-                #    try:
-                #        print(str(type(item)))
-                #        print(str(vars(item)))
-                #    except:
-                #        print("not vars")
-                    #try:
-                    #    print(str(dir(item)))
-                    #except:
-                    #    print("not dir")
                         
                 # Remember the current list for the next comparison.
                 if operations != []:
@@ -1644,18 +1680,25 @@ class VocoAdapter(Adapter):
                     
                     try:
                         update_request = InjectionRequestMessage(operations)
-                        print("injection update_request = " + str(vars(update_request)))
+                        #print("injection update_request = " + str(vars(update_request)))
                         
-                        if self.mqtt_client != None:
-                            print("Injection: self.mqtt_client exists, will try to inject")
-                            #self.mqtt_client.publish('hermes/injection/perform', operation_string) #json.dumps(operations))
+                        #if self.mqtt_client != None:
+                        #print("Injection: self.mqtt_client exists, will try to inject")
+                        #print(str(json.dumps(operations)))
+                        #self.mqtt_client.publish('hermes/injection/perform', json.dumps(operations))
+                        
+                        #self.h.request_injection(update_request)
+                        #sleep(10)
                             
-                            #self.h.request_injection(update_request)
-                        else:
-                            print("Warning, could not inject new values into Snips - self.h did not exist")
+                        #else:
+                        #    print("Warning, could not inject new values into Snips - self.h did not exist")
+                        
+                        # TODO: For now Hermes is still relied upon to inject new values into Snips.
                         with Hermes("localhost:1883") as herm:
                             herm.request_injection(update_request)
+                        
                         self.last_injection_time = datetime.utcnow().timestamp()
+                    
                     except Exception as ex:
                          print("Error during injection: " + str(ex))
             else:
