@@ -1,7 +1,7 @@
 {
   "name": "voco",
   "display_name": "Voco",
-  "version": "0.0.4",
+  "version": "0.0.5",
   "description": "Privacy friendly voice control. Say 'Hey Snips' to start a voice command.",
   "author": "CreateCandle",
   "main": "bootstrap.py",
@@ -49,7 +49,7 @@
     "plugin": true,
     "exec": "python3 {path}/bootstrap.py",
     "config": {
-      "Microphone": "Plugged-in (USB) microphone (1,0)",
+      "Microphone": "Attached device (1,0)",
       "Speaker": "Built-in headphone jack (0,0)",
       "Token": "",
       "Time zone": "Europe/Amsterdam",
@@ -70,12 +70,7 @@
           "type": "string",
           "enum": [
             "Built-in microphone (0,0)",
-            "Built-in microphone, channel 2 (0,0)",
-            "Respeaker Pi Hat (1,0)",
-            "Plugged-in (USB) microphone (1,0)",
-            "Plugged-in (USB) microphone, channel 2 (1,1)",
-            "Second plugged-in (USB) microphone (2,0)",
-            "Second plugged-in (USB) microphone, channel 2 (2,1)"
+            "Attached device (1,0)"
           ],
           "description": "What type of microphone have you connected? The Playstation Eye is a cheap and good option. If you want to use the ReSpeaker hat you will have to intall the drivers manually."
         },
@@ -84,13 +79,9 @@
           "enum": [
             "Built-in headphone jack (0,0)",
             "Built-in HDMI (0,1)",
-            "Respeaker Pi Hat (1,0)",
-            "Plugged-in (USB) device (1,0)",
-            "Plugged-in (USB) device, channel 2 (1,1)",
-            "Second plugged-in (USB) device (2,0)",
-            "Second plugged-in (USB) device, channel 2 (2,0)"
+            "Attached device (1,0)"
           ],
-          "description": "By defeault audio is sent out over the built-in headphone jack. If you want to send it out over USB via a ReSpeaker Hat you will have to install the drivers manually."
+          "description": "By defeault audio is sent out over the built-in headphone jack. If you want to send it out via a ReSpeaker Hat you will have to install the drivers manually."
         },
         "Authorization token": {
           "type": "string",
@@ -117,7 +108,7 @@
         },
         "Custom assistant": {
           "type": "string",
-          "description": "Would you like to experiment with creations your own persnalised voice assistant? Copy a URL for a Snips assistant here and click save to install it. You can find the URL when you create your own assistant on snips.com. When you click on 'deploy assistant' choose to download it manually, and then upload it somewhere. If you still want to control your things make sure you add the CreateCandle app to your assistant."
+          "description": "Would you like to experiment with creating your own persnalised voice assistant? Copy a URL for a Snips assistant here and click save to install it. You can find the URL when you create your own assistant on snips.com. Unfortunately you cannot download the assistant directory from the Snips website. When you click on 'deploy assistant' choose to download it manually, and then upload it somewhere. If you still want to control your things make sure you add the CreateCandle app to your assistant."
         },
         "Debugging": {
           "type": "boolean",
