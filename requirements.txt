@@ -1,4 +1,3 @@
-hermes-python
 fuzzywuzzy
 pyalsaaudio
 python-dateutil

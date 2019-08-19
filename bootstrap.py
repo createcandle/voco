@@ -57,7 +57,6 @@ try:
 
     #from hermes_python.hermes import Hermes # noqa: F401
     #from hermes_python.ontology import * # noqa: F401
-    import hermes_python  # noqa: F401
     import fuzzywuzzy  # noqa: F401
     import alsaaudio  # noqa: F401
     import dateutil # noqa: F401
