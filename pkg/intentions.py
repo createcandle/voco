@@ -31,12 +31,12 @@ from dateutil.parser import *
 
 from subprocess import call
 
-try:
-    from hermes_python.hermes import Hermes
-    from hermes_python.ontology.injection import InjectionRequestMessage, AddInjectionRequest, AddFromVanillaInjectionRequest
-    from hermes_python.ontology.feedback import SiteMessage
-except:
-    print("ERROR, hermes is not installed. try 'pip3 install hermes-python'")
+#try:
+#    from hermes_python.hermes import Hermes
+#    from hermes_python.ontology.injection import InjectionRequestMessage, AddInjectionRequest, AddFromVanillaInjectionRequest
+#    from hermes_python.ontology.feedback import SiteMessage
+#except:
+#    print("ERROR, hermes is not installed. try 'pip3 install hermes-python'")
 
 try:
     from fuzzywuzzy import fuzz

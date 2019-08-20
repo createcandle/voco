@@ -151,6 +151,11 @@ class VocoAdapter(Adapter):
                 "unlocked":"locked"
         }
 
+        # Create a process group.
+        #os.setpgrp()
+
+        self.running = True
+
         # self.persistent_data is handled just above
         self.metric = True
         self.DEBUG = True
@@ -278,6 +283,16 @@ class VocoAdapter(Adapter):
             print("Error loading config: " + str(ex))
             
             
+            
+        # Get all the things via the API.
+        try:
+            self.things = self.api_get("/things")
+            print("Did the API call")
+        except Exception as ex:
+            print("Error, couldn't load things at init: " + str(ex))
+
+
+            
         # Setup the sound configuration.
 
         # Fix the audio input.
@@ -365,14 +380,6 @@ class VocoAdapter(Adapter):
             
         sleep(3.14)
 
-
-        # Get al the things via the API.
-        try:
-            self.things = self.api_get("/things")
-            print("Did the API call")
-        except Exception as ex:
-            print("Error, couldn't load things at init: " + str(ex))
-
         
         # Set the correct speaker volume
         try:
@@ -417,8 +424,9 @@ class VocoAdapter(Adapter):
             PORT = 1883
             self.mqtt_client.on_connect = self.on_connect
             self.mqtt_client.on_message = self.on_message
-            self.mqtt_client.connect(HOST, PORT, keepalive=60)
-            self.mqtt_client.loop_forever()
+            self.mqtt_client.connect(HOST, PORT) #, keepalive=60)
+            #self.mqtt_client.loop_forever()
+            self.mqtt_client.loop_start()
         except Exception as ex:
             print("Error creating extra MQTT connection: " + str(ex))
 
@@ -431,80 +439,83 @@ class VocoAdapter(Adapter):
 
     def run_snips(self):
         
-        sleep(1.11)
-        #self.play_sound(self.end_of_input_sound)
-        
-        
-        commands = [
-            'snips-tts',
-            'snips-audio-server',
-            'snips-dialogue',
-            'snips-asr',
-            'snips-nlu',
-            'snips-injection'
-        ]
-        
-        my_env = os.environ.copy()
-        my_env["LD_LIBRARY_PATH"] = '{}:{}'.format(self.snips_path,self.arm_libs_path)
-        
-        if self.DEV:
-            print("--my_env = " + str(my_env))
-        
-        print("starting mosquitto")
-        mosquitto_command = [self.mosquitto_path,"-d"] # -d for daemon
-        self.mosquitto_process = Popen(mosquitto_command, env=my_env)
-
-        sleep(3) # Give mosquitto some time to start
-        #print("-- 3 seconds")
-        #self.play_sound(self.end_of_input_sound)
-        
-        # Start the snips parts
-        for unique_command in commands:
-            #print("")
-            #command = self.generate_normal_process_command(str(unique_command))
-            bin_path = os.path.join(self.snips_path,unique_command)
-            command = [bin_path,"-u",self.work_path,"-a",self.assistant_path,"-c",self.toml_path]
-            if unique_command == 'snips-audio-server':
-                command = command + ["--alsa_capture","plughw:" + str(self.capture_card_id) + "," + str(self.capture_device_id),"--alsa_playback","default:" + str(self.playback_card_id) + "," + str(self.playback_device_id)]
-            elif unique_command == 'snips-injection':
-                command = command + ["-g",self.g2p_models_path]
-            elif unique_command == 'snips-asr':
-                command = command + ["--thread_number","1"] # TODO Check if this actually helps.
-            
-            
-            if self.DEV:
-                print("--generated command = " + str(command))
-            self.external_processes.append( Popen(command, env=my_env) )
-            sleep(1)
-            if self.DEBUG:
-                print("-- waiting 1 seconds in Snips startup loop")
+        try:
+            sleep(1.11)
             #self.play_sound(self.end_of_input_sound)
-            
-        #if self.persistent_data['listening'] == True:
-        if self.hotword_process == None:
-            if self.persistent_data['listening'] == True:
-                
-                hotword_command = [self.hotword_path,"-u",self.work_path,"-a",self.assistant_path,"-c",self.toml_path]
-                if self.DEBUG:
-                    print("hotword_command = " + str(hotword_command))
-                self.hotword_process = Popen(hotword_command, env=my_env)
+        
+        
+            commands = [
+                'snips-tts',
+                'snips-audio-server',
+                'snips-dialogue',
+                'snips-asr',
+                'snips-nlu',
+                'snips-injection'
+            ]
+        
+            my_env = os.environ.copy()
+            my_env["LD_LIBRARY_PATH"] = '{}:{}'.format(self.snips_path,self.arm_libs_path)
+        
+            if self.DEV:
+                print("--my_env = " + str(my_env))
+        
+            print("starting mosquitto")
+            #mosquitto_command = [self.mosquitto_path,"-d"] # -d for daemon
+            mosquitto_command = [self.mosquitto_path] # -d for daemon
+            self.mosquitto_process = Popen(mosquitto_command, env=my_env)
 
-                # Reflect the state of Snips on the thing
-                try:
-                    self.devices['voco'].properties['listening'].update( bool(self.persistent_data['listening']) )
-                    self.set_status_on_thing("OK, Listening")
-                except Exception as ex:
-                    print("Error while setting the state on the thing: " + str(ex))
-            else:
-                # Reflect the state of Snips on the thing
-                try:
-                    self.devices['voco'].properties['listening'].update( bool(self.persistent_data['listening']) )
-                    self.set_status_on_thing("Stopped")
-                except Exception as ex:
-                    print("Error while setting the state on the thing: " + str(ex))
+            sleep(3) # Give mosquitto some time to start
+            #print("-- 3 seconds")
+            #self.play_sound(self.end_of_input_sound)
+        
+            # Start the snips parts
+            for unique_command in commands:
+                #print("")
+                #command = self.generate_normal_process_command(str(unique_command))
+                bin_path = os.path.join(self.snips_path,unique_command)
+                command = [bin_path,"-u",self.work_path,"-a",self.assistant_path,"-c",self.toml_path]
+                if unique_command == 'snips-audio-server':
+                    command = command + ["--alsa_capture","plughw:" + str(self.capture_card_id) + "," + str(self.capture_device_id),"--alsa_playback","default:" + str(self.playback_card_id) + "," + str(self.playback_device_id)]
+                elif unique_command == 'snips-injection':
+                    command = command + ["-g",self.g2p_models_path]
+                elif unique_command == 'snips-asr':
+                    command = command + ["--thread_number","1"] # TODO Check if this actually helps.
+            
+            
+                if self.DEV:
+                    print("--generated command = " + str(command))
+                self.external_processes.append( Popen(command, env=my_env) )
+                sleep(1)
+                if self.DEBUG:
+                    print("-- waiting 1 seconds in Snips startup loop")
+                #self.play_sound(self.end_of_input_sound)
+            
+            #if self.persistent_data['listening'] == True:
+            if self.hotword_process == None:
+                if self.persistent_data['listening'] == True:
+                
+                    hotword_command = [self.hotword_path,"-u",self.work_path,"-a",self.assistant_path,"-c",self.toml_path]
+                    if self.DEBUG:
+                        print("hotword_command = " + str(hotword_command))
+                    self.hotword_process = Popen(hotword_command, env=my_env)
+
+                    # Reflect the state of Snips on the thing
+                    try:
+                        self.devices['voco'].properties['listening'].update( bool(self.persistent_data['listening']) )
+                        self.set_status_on_thing("OK, Listening")
+                    except Exception as ex:
+                        print("Error while setting the state on the thing: " + str(ex))
+                else:
+                    # Reflect the state of Snips on the thing
+                    try:
+                        self.devices['voco'].properties['listening'].update( bool(self.persistent_data['listening']) )
+                        self.set_status_on_thing("Stopped")
+                    except Exception as ex:
+                        print("Error while setting the state on the thing: " + str(ex))
                 
                
-               
+        except Exception as ex:
+            print("Error starting Mosquitto/Snips processes: " + str(ex))    
          
         #for p in self.external_processes: 
         #    p.wait()
@@ -523,7 +534,9 @@ class VocoAdapter(Adapter):
             self.inject_updated_things_into_snips() # Check if there are new things/properties that Snips should learn about
         except Exception as ex:
             print("Error, couldn't teach Snips the names of your things: " + str(ex))  
-     
+        
+        return
+        
 
 
     # Read the settings from the add-on settings page
@@ -850,7 +863,7 @@ class VocoAdapter(Adapter):
     def clock(self, voice_messages_queue):
         """ Runs every second and handles the various timers """
         previous_action_times_count = 0
-        while True:
+        while self.running:
 
             voice_message = ""
             utcnow = datetime.now(tz=pytz.utc)
@@ -1053,29 +1066,78 @@ class VocoAdapter(Adapter):
         except Exception as ex:
             print("Error, could not update timer counts on the voco device: " + str(ex))
 
+
+
     def unload(self):
         print("Shutting down Voco. Talk to you soon!")
+               
+        
+        
+        #Experimental
+        #os.killpg(0, signal.SIGKILL)
+
         try:
             self.hotword_process.terminate()
+            self.hotword_process.wait()
             print("Terminated the hotword")
         except Exception as ex:
             print("Error terminating the hotword process: " + str(ex))
-        
+
+        #try:
+        #    os.kill(self.hotword_process.pid, 0)
+        #    self.hotword_process.kill()
+        #    print("Forced kill")
+        #except OSError, e:
+        #    print("Terminated gracefully")
+
         try:
             for process in self.external_processes:
                 process.terminate()
+                process.wait()
                 print("Terminated Snips process")
         except Exception as ex:
             print("Error terminating the hotword process: " + str(ex))
+
+        #sleep(2) 
+
+        try:
+            #
+            self.mqtt_client.disconnect() # disconnect
+            self.mqtt_client.loop_stop()    #Stop loop 
+            #self.mqtt_client.loop.stop()
+        except Exception as ex:
+            print("Error cleanly closing Paho MQTT client: " + str(ex))
+        
         
         try:
             self.mosquitto_process.terminate()
+            self.mosquitto_process.wait()
             print("Terminated mosquitto")
         except Exception as ex:
             print("Error terminating the mosquitto process: " + str(ex))
         
-        if self.DEBUG:
-            self.speak("Goodbye")
+        self.running = False
+        
+        #sleep(4)
+        #try:
+        #    self.close_proxy()
+        #except:
+        #    print("Could not close proxy")
+        #sleep(2)
+        #sys.exit() 
+
+        
+
+        #try:
+        #    os.kill(self.mosquitto_process.pid, 0)
+        #    self.mosquitto_process.kill()
+        #    print("Forced kill")
+        #except OSError, e:
+        #    print("Terminated gracefully")
+        
+        print("CLOSED ALL PROCESSES. GOODBYE.")
+        #if self.DEBUG:
+        #    self.speak("Goodbye")
         
         
         
@@ -1171,6 +1233,15 @@ class VocoAdapter(Adapter):
         self.pairing = False
         if self.DEBUG:
             print("End of pairing process. Checking if a new injection is required.")
+            
+        # Get all the things via the API.
+        try:
+            self.things = self.api_get("/things")
+            print("Did the API call")
+        except Exception as ex:
+            print("Error, couldn't load things at init: " + str(ex))
+        
+            
         # Teach Snips the names of all the things
         try:
             self.inject_updated_things_into_snips() # will check if there are new things/properties that Snips should learn about
@@ -1265,8 +1336,13 @@ class VocoAdapter(Adapter):
     def speak(self, voice_message="",site_id="default"):
         try:
             # TODO add an environment variable here to set alsa to the USB output device?
+            
+            
+            my_env = os.environ.copy()
+            my_env["ALSA_CARD"] = str(self.playback_card_id)
+            
             ps = subprocess.Popen(('echo', str(voice_message)), stdout=subprocess.PIPE)
-            output = subprocess.check_output((str(os.path.join(self.snips_path,'nanotts')), '-l',str(os.path.join(self.snips_path,'lang')),'-v',str(self.voice),'--speed','0.9','--pitch','1.2','-p'), stdin=ps.stdout)
+            output = subprocess.check_output((str(os.path.join(self.snips_path,'nanotts')), '-l',str(os.path.join(self.snips_path,'lang')),'-v',str(self.voice),'--speed','0.9','--pitch','1.2','-p'), stdin=ps.stdout, env=my_env)
             ps.wait()
             
         except Exception as ex:
