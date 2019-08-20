@@ -116,7 +116,7 @@ class VocoAdapter(Adapter):
         self.DEBUG = True
         self.DEV = True
         self.name = self.__class__.__name__
-        Adapter.__init__(self, 'voco-adapter', 'voco', verbose=verbose)
+        Adapter.__init__(self, 'voco', 'voco', verbose=verbose)
         #print("Adapter ID = " + self.get_id())
 
         self.persistence_file_path = "/home/pi/.mozilla/config/voco-persistence.json"
@@ -592,19 +592,29 @@ class VocoAdapter(Adapter):
                     config['Speaker'] = self.playback_devices[0]      # If the prefered device in config does not actually exist, but the scan did sho connected hardware, then select the first item from the scan results instead.
                     self.speaker = self.playback_devices[0]
                     store_updated_settings = True
-            
-            if 'Custom assistant' in config:
+
+            should_install = True
+            if 'Custom assistant' in config and config['Custom assistant']:
                 print("-Custom assistant was in config")
                 possible_url = str(config['Custom assistant'])
                 #print(str(possible_url))
                 if possible_url.startswith("http") and possible_url.endswith(".zip") and self.snips_installed:
                     print("-Custom assistant data was a good URL.")
                     self.custom_assistant_url = possible_url
+                    if not self.download_assistant():
+                        should_install = False
 
                 elif possible_url == "Your new assistant has succesfully been installed":
                     print("--The 'assistant succesfully installed' message was present in the config")
                 else:
                     print("--Cannot use what is in the Custom assistant input field")
+
+            # Install assistant if it hasn't been installed already
+            if should_install:
+                try:
+                    self.assistant_installed = self.install_assistant()
+                except Exception as ex:
+                    print("Error while trying to install assistant/check if should be installed: " + str(ex))
                         
             # Store the settings that were changed by the add-on.
             if store_updated_settings:
@@ -755,15 +765,13 @@ class VocoAdapter(Adapter):
     def install_assistant(self):
         """Install snips/assistant.zip into /usr/share/snips/assistant"""
         
-        return True
-    
         print("Installing assistant")
         try:
             if not os.path.isfile( os.path.join(self.addon_path,"snips","assistant.zip") ):
                 print("Error: cannot install assistant: there doesn't seem to be an assistant.zip file in the snips folder of the addon.")
-                return
-            command = "unzip " + str(os.path.join(self.addon_path,"snips","assistant.zip")) + " " + str(os.path.join(self.addon_path,"snips"))
-            if run_command(command) == 0:
+                return False
+            command = "unzip assistant.zip"
+            if run_command(command, cwd=os.path.join(self.addon_path,"snips")) == 0:
                 self.set_status_on_thing("Succesfully installed assistant")
                 return True
             else:

@@ -38,13 +38,13 @@ mkdir lib
 # Pull down Python dependencies
 pip3 install -r requirements.txt -t lib --no-binary fuzzywuzzy,python-dateutil,pytz,paho-mqtt --prefix ""
 
-cp -r pkg lib snips.tar sounds LICENSE package.json *.py requirements.txt setup.cfg package/
+cp -r pkg lib snips.tar sounds LICENSE package.json *.py package/
 find package -type f -name '*.pyc' -delete
 find package -type d -empty -delete
 
 # Generate checksums
 cd package
-sha256sum *.py snips.tar pkg/*.py sounds/*.wav LICENSE requirements.txt setup.cfg > SHA256SUMS
+sha256sum *.py snips.tar pkg/*.py sounds/*.wav LICENSE > SHA256SUMS
 cd -
 
 # Make the tarball

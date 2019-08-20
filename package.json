@@ -4,7 +4,7 @@
   "version": "0.0.6",
   "description": "Privacy friendly voice control. Say 'Hey Snips' to start a voice command.",
   "author": "CreateCandle",
-  "main": "bootstrap.py",
+  "main": "main.py",
   "keywords": [
     "mozilla",
     "iot",
@@ -24,7 +24,6 @@
   "files": [
     "LICENSE",
     "SHA256SUMS",
-    "bootstrap.py",
     "main.py",
     "pkg/__init__.py",
     "pkg/voco_adapter.py",
@@ -37,9 +36,7 @@
     "sounds/end_of_input.wav",
     "sounds/end_spot.wav",
     "sounds/error.wav",
-    "snips.tar",
-    "requirements.txt",
-    "setup.cfg"
+    "snips.tar"
   ],
   "moziot": {
     "api": {
@@ -47,7 +44,7 @@
       "max": 2
     },
     "plugin": true,
-    "exec": "python3 {path}/bootstrap.py",
+    "exec": "python3 {path}/main.py",
     "config": {
       "Microphone": "Attached device (1,0)",
       "Speaker": "Built-in headphone jack (0,0)",
