@@ -1,14 +1,13 @@
 """Voco adapter and notifier for Mozilla WebThings Gateway."""
 
+"""MySensors adapter for Mozilla WebThings Gateway."""
+
 from os import path
 import functools
 import gateway_addon
 import signal
 import sys
 import time
-
-import threading
-import queue
 
 sys.path.append(path.join(path.dirname(path.abspath(__file__)), 'lib'))
 
@@ -20,15 +19,15 @@ _API_VERSION = {
 }
 _ADAPTER = None
 
-
-
 print = functools.partial(print, flush=True)
 
 
 def cleanup(signum, frame):
+    print("In cleanup function of main.py")
     """Clean up any resources before exiting."""
     if _ADAPTER is not None:
         _ADAPTER.close_proxy()
+
     sys.exit(0)
 
 
@@ -40,11 +39,9 @@ if __name__ == '__main__':
 
     signal.signal(signal.SIGINT, cleanup)
     signal.signal(signal.SIGTERM, cleanup)
-
-    print("starting adapter")
     _ADAPTER = VocoAdapter(verbose=True)
-    print("Adapter started, beyond init.")
+
     # Wait until the proxy stops running, indicating that the gateway shut us
     # down.
-    while _ADAPTER.proxy_running(): # and _ADAPTER2.proxy_running()
+    while _ADAPTER.proxy_running():
         time.sleep(2)
