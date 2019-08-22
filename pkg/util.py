@@ -212,36 +212,6 @@ def clean_up_string_for_speaking(sentence):
 
 
 
-def run_command(command):
-    try:
-        p = subprocess.Popen(command,
-                            stdout=subprocess.PIPE,
-                            stderr=subprocess.PIPE,
-                            shell=True)
-        # Read stdout from subprocess until the buffer is empty !
-        for bline in iter(p.stdout.readline, b''):
-            line = bline.decode('ASCII') #decodedLine = lines.decode('ISO-8859-1')
-            if line: # Don't print blank lines
-                yield line
-        # This ensures the process has completed, AND sets the 'returncode' attr
-        while p.poll() is None:                                                                                                                                        
-            sleep(.1) #Don't waste CPU-cycles
-        # Empty STDERR buffer
-        err = p.stderr.read()
-        if p.returncode == 0:
-            yield("Command success")
-        else:
-            # The run_command() function is responsible for logging STDERR 
-            #print("len(err) = " + str(len(err)))
-            if len(err) > 1:
-                yield("Error: " + str(err.decode('utf-8')))
-            yield("Command failed")
-            #return False
-    except Exception as ex:
-        print("Error running shell command: " + str(ex))   
-
-
-
 def split_sentences(st):
     sentences = re.split(r'[.?!]\s*', st)
     if sentences[-1]:
@@ -342,9 +312,9 @@ def download_file(url, target_file):
 
 
 
-def run_command(command):
+def run_command(command, cwd=None):
     try:
-        return_code = subprocess.call(command, shell=True) 
+        return_code = subprocess.call(command, shell=True, cwd=cwd)
         return return_code
 
     except Exception as ex:

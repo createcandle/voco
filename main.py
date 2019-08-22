@@ -1,7 +1,5 @@
 """Voco adapter and notifier for Mozilla WebThings Gateway."""
 
-"""MySensors adapter for Mozilla WebThings Gateway."""
-
 from os import path
 import functools
 import gateway_addon

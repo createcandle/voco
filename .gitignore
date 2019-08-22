@@ -1,0 +1,5 @@
+*.tgz
+/SHA256SUMS
+/lib/
+/package/
+/snips.tar
