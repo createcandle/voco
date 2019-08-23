@@ -593,7 +593,7 @@ class VocoAdapter(Adapter):
                     self.speaker = self.playback_devices[0]
                     store_updated_settings = True
 
-            should_install = True
+            should_install = False
             if 'Custom assistant' in config and config['Custom assistant']:
                 print("-Custom assistant was in config")
                 possible_url = str(config['Custom assistant'])
@@ -601,13 +601,17 @@ class VocoAdapter(Adapter):
                 if possible_url.startswith("http") and possible_url.endswith(".zip") and self.snips_installed:
                     print("-Custom assistant data was a good URL.")
                     self.custom_assistant_url = possible_url
-                    if not self.download_assistant():
-                        should_install = False
+                    if self.download_assistant():
+                        should_install = True
 
                 elif possible_url == "Your new assistant has succesfully been installed":
                     print("--The 'assistant succesfully installed' message was present in the config")
                 else:
                     print("--Cannot use what is in the Custom assistant input field")
+
+            # if assistant.json is not in the assistant folder.
+            if not os.path.isdir( os.path.join(self.addon_path,"snips","assistant")):
+                should_install = True
 
             # Install assistant if it hasn't been installed already
             if should_install:
@@ -763,14 +767,14 @@ class VocoAdapter(Adapter):
 
 
     def install_assistant(self):
-        """Install snips/assistant.zip into /usr/share/snips/assistant"""
+        """Install snips/assistant.zip into snips/assistant directory"""
         
         print("Installing assistant")
         try:
             if not os.path.isfile( os.path.join(self.addon_path,"snips","assistant.zip") ):
                 print("Error: cannot install assistant: there doesn't seem to be an assistant.zip file in the snips folder of the addon.")
                 return False
-            command = "unzip assistant.zip"
+            command = "unzip -o assistant.zip"
             if run_command(command, cwd=os.path.join(self.addon_path,"snips")) == 0:
                 self.set_status_on_thing("Succesfully installed assistant")
                 return True
@@ -1079,10 +1083,6 @@ class VocoAdapter(Adapter):
     def unload(self):
         print("Shutting down Voco. Talk to you soon!")
                
-        
-        
-        #Experimental
-        #os.killpg(0, signal.SIGKILL)
 
         try:
             self.hotword_process.terminate()
@@ -1090,13 +1090,6 @@ class VocoAdapter(Adapter):
             print("Terminated the hotword")
         except Exception as ex:
             print("Error terminating the hotword process: " + str(ex))
-
-        #try:
-        #    os.kill(self.hotword_process.pid, 0)
-        #    self.hotword_process.kill()
-        #    print("Forced kill")
-        #except OSError, e:
-        #    print("Terminated gracefully")
 
         try:
             for process in self.external_processes:
@@ -1106,7 +1099,6 @@ class VocoAdapter(Adapter):
         except Exception as ex:
             print("Error terminating the hotword process: " + str(ex))
 
-        #sleep(2) 
 
         try:
             #
@@ -1125,30 +1117,7 @@ class VocoAdapter(Adapter):
             print("Error terminating the mosquitto process: " + str(ex))
         
         self.running = False
-        
-        #sleep(4)
-        #try:
-        #    self.close_proxy()
-        #except:
-        #    print("Could not close proxy")
-        #sleep(2)
-        #sys.exit() 
 
-        
-
-        #try:
-        #    os.kill(self.mosquitto_process.pid, 0)
-        #    self.mosquitto_process.kill()
-        #    print("Forced kill")
-        #except OSError, e:
-        #    print("Terminated gracefully")
-        
-        print("CLOSED ALL PROCESSES. GOODBYE.")
-        #if self.DEBUG:
-        #    self.speak("Goodbye")
-        
-        
-        
 
 
     def remove_thing(self, device_id):
@@ -2076,17 +2045,19 @@ class VocoAdapter(Adapter):
                     minutes = str(minutes) + " minutes"
             
             # Hours
+            if hours != 12:
+                hours = hours % 12
             if hours == 0:
                 hours = "midnight"
                 end_word = ""
-            elif hours != 12:
-                hours = hours % 12
-                        
+            
             nice_time = str(minutes) + str(combo_word) + str(hours) + str(end_word)
 
             if self.DEBUG:
                 print(str(nice_time))
+                
             return nice_time
+            
         except Exception as ex:
             print("Error making human readable time: " + str(ex))
             return ""
