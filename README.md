@@ -50,6 +50,7 @@ These are all examples. You don't have to say things exactly like this. Any comm
 - "Cancel all timers"
 ### Other
 - "What time is it?"
+- "Set the volume of snips to 95"
 # Features
 
 ### Strong focus on privacy
