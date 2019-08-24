@@ -51,26 +51,27 @@ These are all examples. You don't have to say things exactly like this. Any comm
 ### Other
 - "What time is it?"
 - "Set the volume of snips to 95"
+
 # Features
+- Strong focus on privacy. Once installed, there is no internet connection required or used. Listening can be toggled on and off.
+- Extendable. Override the built-in assistant with one you created yourself at snips.ai. To keep the above mentioned abilities, make sure you add the 'Candle' app to your assistant.
 
-### Strong focus on privacy
-- Once installed, there is no internet connection required/used.
-- Snips telemetry is removed
-- Once installed, there is no internet connection required or used.
-- Once installed, there is no internet connection required or used.
-- Once installed, there is no internet connection required or used.
+# Recommended hardware
+The Playstation Eye is a 4-microphone array that can be plugged into your Raspberry Pi via USB.  It can be bought new for about $12.
+https://en.wikipedia.org/wiki/PlayStation_Eye
 
-### Extendable
-- Choose to install a larger vocabulary for even better word recognition (advised if you like to use reminders)
-- Override the built-in assistant with one you created yourself at snips.ai. To keep the above mentioned abilities, make sure you add the 'Candle' app to your assistant.
 # Technology
 Voco is built on Snips
 https://snips.ai/
+
 # Thanks to
-Voco is based on the work by Andre Natal.
+Voco is inspired by the original Voice Addon made by Andre Natal.
 https://github.com/andrenatal/voice-addon/
 
-Work on Voco was supported by the Creative Industries Fund NL and the European Union, via their support for the Candle privacy friendly smart home project.
+Work on Voco was supported by the Creative Industries Fund NL and the Sherpa Project. 
+https://stimuleringsfonds.nl/en
+
+European Union, via their support for the Candle privacy friendly smart home project.
 https://www.createcandle.com
 
 This project has received funding from the European Union’s Horizon 2020 research and innovation programme, under grant agreement No 786641.
