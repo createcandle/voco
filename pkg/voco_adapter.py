@@ -1242,19 +1242,21 @@ class VocoAdapter(Adapter):
                   'Content-Type': 'application/json',
                   'Accept': 'application/json',
                   'Authorization': 'Bearer ' + str(self.token),
-                }, verify=False)
+                }, verify=False, timeout=3)
             if self.DEBUG:
                 print("API GET: " + str(r.status_code) + ", " + str(r.reason))
 
             if r.status_code != 200:
-                return {"error": r.status_code}
+                return {"error": str(r.status_code)}
                 
             else:
                 return json.loads(r.text)
             
         except Exception as ex:
             print("Error doing http request/loading returned json: " + str(ex))
-            return [] # or should this be {} ? Depends on the call perhaps.
+            self.speak("I could not connect. ")
+            #return [] # or should this be {} ? Depends on the call perhaps.
+            return {"error": 500}
 
 
     def api_put(self, api_path, json_dict):
@@ -1269,20 +1271,24 @@ class VocoAdapter(Adapter):
                 self.server + api_path,
                 json=json_dict,
                 headers=headers,
-                verify=False
+                verify=False,
+                timeout=10
             )
             if self.DEBUG:
                 print("API PUT: " + str(r.status_code) + ", " + str(r.reason))
 
             if r.status_code != 200:
-                return {"error": r.status_code}
+                print("Error communicating: " + str(r.status_code))
+                return {"error": str(r.status_code)}
             else:
                 return json.loads(r.text)
 
         except Exception as ex:
             print("Error doing http request/loading returned json: " + str(ex))
-            return {"error": "I could not connect to the web things gateway"}
-
+            self.speak("I could not connect. ")
+            #return {"error": "I could not connect to the web things gateway"}
+            #return [] # or should this be {} ? Depends on the call perhaps.
+            return {"error": 500}
 
 
     def save_persistent_data(self):
