@@ -1,7 +1,7 @@
 {
   "name": "voco",
   "display_name": "Voco",
-  "version": "0.0.7",
+  "version": "0.0.8",
   "description": "Privacy friendly voice control. Say 'Hey Snips' to start a voice command.",
   "author": "CreateCandle",
   "main": "main.py",
