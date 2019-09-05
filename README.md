@@ -68,6 +68,8 @@ https://snips.ai/
 Voco is inspired by the original Voice Addon made by Andre Natal.
 https://github.com/andrenatal/voice-addon/
 
+![alt text](https://www.candlesmarthome.com/images/EU.png)
+
 Work on Voco was supported by the SHERPA project, a H2020 research project into AI issues by the European Union.
 https://project-sherpa.eu
 
