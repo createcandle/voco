@@ -3,3 +3,4 @@ pyalsaaudio
 python-dateutil
 pytz
 paho-mqtt
+requests

@@ -36,7 +36,7 @@ mkdir package
 mkdir lib
 
 # Pull down Python dependencies
-pip3 install -r requirements.txt -t lib --no-binary fuzzywuzzy,python-dateutil,pytz,paho-mqtt --prefix ""
+pip3 install -r requirements.txt -t lib --no-binary fuzzywuzzy,python-dateutil,pytz,paho-mqtt,requests --prefix ""
 
 cp -r pkg lib snips.tar sounds LICENSE package.json *.py package/
 find package -type f -name '*.pyc' -delete
