@@ -26,7 +26,7 @@
 # audio = ["+@mqtt"]
 # partial = false
 # partial_period_ms = 250
-#model = "/usr/share/snips/snips-asr-model-en-500MB"
+# model = "/usr/share/snips/snips-asr-model-en-500MB"
 
 [snips-asr-google]
 # credentials = "/usr/share/snips/googlecredentials.json"
@@ -72,7 +72,7 @@ provider = "customtts"
 ## customtts specific configuration (here configured to use picotts using the en-US language)
 ## available placeholder variables : %%OUTPUT_FILE%%, %%LANG%%, %%TEXT%%
 # customtts = { command = ["pico2wave", "-w", "%%OUTPUT_FILE%%", "-l", "en-US", "%%TEXT%%"] }
-customtts = { command = ["/home/pi/.mozilla/addons/voco/snips/speak.sh", "%%TEXT%%" ] }
+customtts = { command = ["/home/pi/.mozilla-iot/addons/voco/snips/speak.sh", "%%TEXT%%" ] }
 
 
 [snips-pegasus]
