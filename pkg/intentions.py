@@ -560,10 +560,11 @@ def intent_get_value(self, slots, intent_message):
                     continue
                     
                 if key == "error":
-                    if api_result[key] == 500:
-                        if len(found_properties) == 1:
-                            voice_message += "Sorry, " + str(found_property['thing']) + " seems to be disconnected. "
-                        continue
+                    print("Network Error")
+                    if int(api_result[key]) == 500:
+                        print("Network Error 500")
+                        voice_message = "Sorry, " + str(found_property['thing']) + " seems to be disconnected. "
+                        break
                 
                 api_value = api_result[key]
                 
@@ -944,7 +945,9 @@ def intent_set_value(self, slots, intent_message, original_value):
                         if key == "error":
                             if api_result[key] == 500:
                                 voice_message += str(found_property['thing']) + " seems to be disconnected. "
-                                continue
+                                self.speak(voice_message)
+                                return
+                                #continue
                                 
                         else:
                             original_value = api_result[key]
