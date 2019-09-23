@@ -88,7 +88,14 @@ def intent_set_timer(self, slots, intent_message):
     
     sentence = slots['sentence']
     if slots['time_string'] != None:
-        sentence = sentence.replace(slots['time_string'], " ")
+        try:
+            sentence = sentence.replace("in " + slots['time_string'], " ")
+        except:
+            pass
+        try:
+            sentence = sentence.replace(slots['time_string'], " ")
+        except:
+            pass
     voice_message = ""
     time_delta_voice_message = ""
     time_slot_snippet = "" # A snippet from the original sentence that described the time slot.
@@ -407,7 +414,7 @@ def intent_stop_timer(self, slots, intent_message):
                                 current_type = "timer"
                                 
                             if current_type == str(slots['timer_type']):
-                                timer_count += 1
+                                removed_timer_count += 1
                                 del self.action_times[i]
                                 break
                                 

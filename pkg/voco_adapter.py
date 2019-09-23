@@ -84,7 +84,7 @@ from .voco_notifier import *
 
 
 
-os.environ["LD_LIBRARY_PATH"] = "/home/pi/.mozilla/addons/voco/snips/"
+os.environ["LD_LIBRARY_PATH"] = "/home/pi/.mozilla-iot/addons/voco/snips/"
 
 
 _TIMEOUT = 3
@@ -1939,8 +1939,24 @@ class VocoAdapter(Adapter):
         for item in intent_message.slots:
             try:                
                 if item.value.kind == 'InstantTime':
+                    
+                    #d = datetime.utcnow()
+                    #epoch = datetime(1970,1,1)
+                    #t = (d - epoch).total_seconds()
+                    #print("t = " + str(int(t)))
+                    
+                    #print("self.current_utc_time: " + str(self.current_utc_time))
+                    
+                    #print("datetime.now() = " + str(datetime.now()))
                     slots['time_string'] = item.rawValue # The time as it was spoken
-                    utc_timestamp = self.string_to_utc_timestamp(item.value.value)
+                    #print("InstantTime slots['time_string'] = " + slots['time_string'])
+                    #print("instant time object: " + str(item.value.value))
+                    ignore_timezone = True
+                    if slots['time_string'].startswith("in"):
+                        ignore_timezone = False
+                    utc_timestamp = self.string_to_utc_timestamp(item.value.value,ignore_timezone)
+                    #print("current time as stamp: " + str(self.current_utc_time))
+                    #print("target time: " + str(utc_timestamp))
                     if utc_timestamp > self.current_utc_time: # Only allow moments in the future
                         slots['end_time'] = utc_timestamp
                     else:
@@ -1949,7 +1965,7 @@ class VocoAdapter(Adapter):
                     
                 elif item.value.kind == 'TimeInterval':
                     slots['time_string'] = item.rawValue # The time as it was spoken
-                    print("bla")
+                    print("TimeInterval slots['time_string'] = " + slots['time_string']);
                     utc_timestamp = self.string_to_utc_timestamp(item.value.to)
                     if utc_timestamp > self.current_utc_time: # Only allow moments in the future
                         slots['end_time'] = utc_timestamp
@@ -1990,27 +2006,41 @@ class VocoAdapter(Adapter):
 
 
 
-    def string_to_utc_timestamp(self,date_string):
+    def local_time_string_to_epoch_stamp(self,date_string):
+        aware_datetime = parse(date_string)
+        naive_utc_datetime = aware_datetime.astimezone(timezone('utc')).replace(tzinfo=None)
+        epoch_stamp = naive_utc_datetime.timestamp()
+
+    def string_to_utc_timestamp(self,date_string,ignore_timezone=True):
         """ date as a date object """
         
         try:
             if date_string == None:
                 print("string_to_utc_timestamp: date string was None.")
                 return 0
-
-            simpler_times  = date_string.split('+', 1)[0]
-            print("@split string: " + str(simpler_times))
-            naive_datetime = parse(simpler_times)
-            print("@naive datetime: " + str(naive_datetime))
-            localized_datetime = self.user_timezone.localize(naive_datetime)
-            print("@localized_datetime: " + str(localized_datetime))
-            localized_timestamp = int(localized_datetime.timestamp()) #- self.seconds_offset_from_utc
-            print("@" + str(localized_timestamp))
+                
+            if(ignore_timezone):
+                simpler_times = date_string.split('+', 1)[0]
+                #print("@split string: " + str(simpler_times))
+                naive_datetime = parse(simpler_times)
+                #print("@naive datetime: " + str(naive_datetime))
+                localized_datetime = self.user_timezone.localize(naive_datetime)
+                if self.DEBUG:
+                    print("@localized_datetime: " + str(localized_datetime))
+                localized_timestamp = int(localized_datetime.timestamp()) #- self.seconds_offset_from_utc
+            else:
+                aware_datetime = parse(date_string)
+                naive_datetime = aware_datetime.astimezone(timezone(self.time_zone)).replace(tzinfo=None)
+                localized_datetime = self.user_timezone.localize(naive_datetime)
+                localized_timestamp = localized_datetime.timestamp()
+                if self.DEBUG:
+                    print("@localized_timestamp = " + str(localized_timestamp))
+                
+            #print("self.seconds_offset_from_utc (not used) = " + str(self.seconds_offset_from_utc))
             return int(localized_timestamp)
         except Exception as ex:
             print("Error in string to UTC timestamp: " + str(ex))
             return 0
-
 
 
     def human_readable_time(self,utc_timestamp):
