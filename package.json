@@ -36,7 +36,8 @@
     "sounds/end_of_input.wav",
     "sounds/end_spot.wav",
     "sounds/error.wav",
-    "snips.tar"
+    "snips.tar",
+	"manifest.json"
   ],
   "moziot": {
     "api": {
