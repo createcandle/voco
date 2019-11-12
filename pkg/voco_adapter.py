@@ -207,8 +207,9 @@ class VocoAdapter(Adapter):
         # Time
         self.time_zone = "Europe/Amsterdam"
         self.seconds_offset_from_utc = 7200 # Used for quick calculations when dealing with timezones.
-        self.last_injection_time = 0 # The last time the things/property names list was sent to Snips.
-        self.minimum_injection_interval = 30  # Minimum amount of seconds between new thing/property name injections.
+        self.last_injection_time = datetime.utcnow().timestamp() #0 # The last time the things/property names list was sent to Snips.
+        self.minimum_injection_interval = 15  # Minimum amount of seconds between new thing/property name injection attempts.
+        self.attempting_injection = False
         self.current_utc_time = 0
         
         # Some paths
@@ -225,6 +226,16 @@ class VocoAdapter(Adapter):
         self.end_of_input_sound = os.path.join(self.addon_path,"sounds","end_of_input.wav")
         self.alarm_sound = os.path.join(self.addon_path,"sounds","alarm.wav")
         self.error_sound = os.path.join(self.addon_path,"sounds","error.wav")
+
+
+        # Make sure the work directory exists
+        try:
+            if not os.path.isdir(self.work_path):
+                os.mkdir( self.work_path );
+                print("Work directory did not exist, created it now")
+        except:
+            print("Error: could not make sure work dir exists")
+            
 
         # Create Voco device
         try:
@@ -267,6 +278,7 @@ class VocoAdapter(Adapter):
         except Exception as ex:
             print("Error scanning ALSA (audio devices): " + str(ex))
         
+
         
         # Install Snips if it hasn't been installed already
         try:
@@ -427,9 +439,11 @@ class VocoAdapter(Adapter):
             self.mqtt_client.connect(HOST, PORT) #, keepalive=60)
             #self.mqtt_client.loop_forever()
             self.mqtt_client.loop_start()
+            print("Voco MQTT client started")
         except Exception as ex:
             print("Error creating extra MQTT connection: " + str(ex))
 
+        print("")
 
 
 
@@ -462,9 +476,9 @@ class VocoAdapter(Adapter):
             print("starting mosquitto")
             #mosquitto_command = [self.mosquitto_path,"-d"] # -d for daemon
             mosquitto_command = [self.mosquitto_path] # -d for daemon
-            self.mosquitto_process = Popen(mosquitto_command, env=my_env)
+            #self.mosquitto_process = Popen(mosquitto_command, env=my_env)
 
-            sleep(3) # Give mosquitto some time to start
+            #sleep(3) # Give mosquitto some time to start
             #print("-- 3 seconds")
             #self.play_sound(self.end_of_input_sound)
         
@@ -482,8 +496,8 @@ class VocoAdapter(Adapter):
                     command = command + ["--thread_number","1"] # TODO Check if this actually helps.
             
             
-                if self.DEV:
-                    print("--generated command = " + str(command))
+                #if self.DEV:
+                print("--generated command = " + str(command))
                 self.external_processes.append( Popen(command, env=my_env) )
                 sleep(1)
                 if self.DEBUG:
@@ -530,10 +544,10 @@ class VocoAdapter(Adapter):
             if quick_counter == 15:
                 break
         
-        try:
-            self.inject_updated_things_into_snips() # Check if there are new things/properties that Snips should learn about
-        except Exception as ex:
-            print("Error, couldn't teach Snips the names of your things: " + str(ex))  
+        #try:
+        #    self.inject_updated_things_into_snips(True) # Check if there are new things/properties that Snips should learn about
+        #except Exception as ex:
+        #    print("Error, couldn't teach Snips the names of your things: " + str(ex))  
         
         return
         
@@ -860,7 +874,7 @@ class VocoAdapter(Adapter):
 
         except Exception as ex:
             if self.DEBUG:
-                print("Could not set the volume via pyalsaaudio: " + str(ex))
+                print("Could not set the volume via pyalsaaudio: " + str(ex) + " . Will now try setting the vlume via the backup method.")
             try:
                 # backup method of setting the volume
                 call(["amixer", "-q", "sset", "'PCM'", str(volume) + "%"])
@@ -875,7 +889,15 @@ class VocoAdapter(Adapter):
     def clock(self, voice_messages_queue):
         """ Runs every second and handles the various timers """
         previous_action_times_count = 0
+        #previous_injection_time = time.time()
         while self.running:
+
+            # Inject new thing names into snips if necessary
+            if datetime.utcnow().timestamp() - self.minimum_injection_interval > self.last_injection_time: # + self.minimum_injection_interval > datetime.utcnow().timestamp():
+                self.last_injection_time = datetime.utcnow().timestamp()
+                #previous_injection_time = time.time()
+                self.inject_updated_things_into_snips()
+                
 
             voice_message = ""
             utcnow = datetime.now(tz=pytz.utc)
@@ -1220,10 +1242,10 @@ class VocoAdapter(Adapter):
         
             
         # Teach Snips the names of all the things
-        try:
-            self.inject_updated_things_into_snips() # will check if there are new things/properties that Snips should learn about
-        except Exception as ex:
-            print("Error, couldn't teach Snips the names of your things: " + str(ex))  
+        #try:
+        #    self.inject_updated_things_into_snips() # will check if there are new things/properties that Snips should learn about
+        #except Exception as ex:
+        #    print("Error, couldn't teach Snips the names of your things: " + str(ex))  
 
 
 
@@ -1502,14 +1524,20 @@ class VocoAdapter(Adapter):
     # Update Snips with the latest names of things and properties. This helps to improve recognition.
     def inject_updated_things_into_snips(self, force_injection=False):
         """ Teaches Snips what the user's devices and properties are called """
+        if self.DEBUG:
+            print("In injection function")
         try:
             # Check if any new things have been created by the user.
-            if datetime.utcnow().timestamp() - self.last_injection_time < self.minimum_injection_interval:
-                if self.DEBUG:
-                    print("Not enough time has passed - will not try to inject the new thing/property/string names.")
-                return
+            #if datetime.utcnow().timestamp() - self.last_injection_time < self.minimum_injection_interval:
+            #    if self.DEBUG:
+            #        print("Not enough time has passed - will not try to inject the new thing/property/string names.")
+            #        print(str(datetime.utcnow().timestamp() - self.last_injection_time) + " versus " + str(self.minimum_injection_interval))
+            #    return
                 
-            else: 
+            #else: 
+            if True:
+                #self.attempting_injection = True
+                #self.last_injection_time = datetime.utcnow().timestamp()
                 if self.DEBUG:
                     print("Checking if Snips should be updated with new thing/property/string names")
                 
@@ -1546,8 +1574,8 @@ class VocoAdapter(Adapter):
                     property_strings = set()
 
                 if len(thing_titles^fresh_thing_titles) > 0 or force_injection == True:                           # comparing sets to detect changes in thing titles
-                    if self.DEBUG:
-                        print("Teaching Snips the updated thing titles.")
+                    #if self.DEBUG:
+                    print("Teaching Snips the updated thing titles.")
                     #operations.append(
                     #    AddFromVanillaInjectionRequest({"Thing" : list(fresh_thing_titles) })
                     #)
@@ -1555,8 +1583,8 @@ class VocoAdapter(Adapter):
                     operations.append(operation)
                     
                 if len(property_titles^fresh_property_titles) > 0 or force_injection == True:
-                    if self.DEBUG:
-                        print("Teaching Snips the updated property titles.")
+                    #if self.DEBUG:
+                    print("Teaching Snips the updated property titles.")
                     #operations.append(
                     #    AddFromVanillaInjectionRequest({"Property" : list(fresh_property_titles) + self.extra_properties + self.capabilities + self.generic_properties + self.numeric_property_names})
                     #)
@@ -1564,8 +1592,8 @@ class VocoAdapter(Adapter):
                     operations.append(operation)
 
                 if len(property_strings^fresh_property_strings) > 0 or force_injection == True:
-                    if self.DEBUG:
-                        print("Teaching Snips the updated property strings.")
+                    #if self.DEBUG:
+                    print("Teaching Snips the updated property strings.")
                     #operations.append(
                     #    AddFromVanillaInjectionRequest({"string" : list(fresh_property_strings) })
                     #)
@@ -1598,6 +1626,7 @@ class VocoAdapter(Adapter):
                             print(str(json.dumps(operations)))
                             self.mqtt_client.publish('hermes/injection/perform', json.dumps(update_request))
                         
+                            print("Injection published to MQTT")
                         #with Hermes("localhost:1883") as herm:
                         #    herm.request_injection(update_request)
                         
@@ -1606,7 +1635,7 @@ class VocoAdapter(Adapter):
                     except Exception as ex:
                          print("Error during injection: " + str(ex))
 
-                
+                self.attempting_injection = False
 
         except Exception as ex:
             print("Error during analysis and injection of your things into Snips: " + str(ex))
