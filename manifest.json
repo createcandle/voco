@@ -22,7 +22,7 @@
       "Speaker": "Built-in headphone jack (0,0)",
       "Time zone": "Europe/Amsterdam",
 			"Custom assistant": "",
-      "Debugging": false,
+      "Debugging": false
     },
     "schema": {
       "properties": {
@@ -491,7 +491,7 @@
           "type": "string"
         },
         "Debugging": {
-          "description": "DEBUGGING. Debugging allows you to diagnose any issues with the add-on. If enabled it will result in a lot more debug data in the internal log (which can be found under settings -> developer -> view internal logs).",
+          "description": "Debugging allows you to diagnose any issues with the add-on. If enabled it will result in a lot more debug data in the internal log (which can be found under settings -> developer -> view internal logs).",
           "type": "boolean"
         }			
       },
