@@ -16,27 +16,19 @@
   "name": "Voco",
   "options": {
     "default": {
-      "Custom assistant": "",
-      "Debugging": false,
+      "Token": "",
       "Metric": true,
       "Microphone": "Attached device (1,0)",
       "Speaker": "Built-in headphone jack (0,0)",
       "Time zone": "Europe/Amsterdam",
-      "Token": ""
+			"Custom assistant": "",
+      "Debugging": false,
     },
     "schema": {
       "properties": {
         "Authorization token": {
           "description": "To be allowed to get information on all your devices, you have to create an 'authorization' code. It's basically a very long password. You can generate it yourself under Settings -> Developer -> Create local authorization",
           "type": "string"
-        },
-        "Custom assistant": {
-          "description": "Would you like to experiment with creating your own persnalised voice assistant? Copy a URL for a Snips assistant here and click save to install it. You can find the URL when you create your own assistant on snips.com. Unfortunately you cannot download the assistant directory from the Snips website. When you click on 'deploy assistant' choose to download it manually, and then upload it somewhere. If you still want to control your things make sure you add the CreateCandle app to your assistant.",
-          "type": "string"
-        },
-        "Debugging": {
-          "description": "DEBUGGING. Debugging allows you to diagnose any issues with the add-on. If enabled it will result in a lot more debug data in the internal log (which can be found under settings -> developer -> view internal logs).",
-          "type": "boolean"
         },
         "Metric": {
           "description": "METRIC. Check the box to use metric values instead of imperial units. For example: temperature in Celcius or Fahrenheit.",
@@ -493,7 +485,15 @@
             "UTC"
           ],
           "type": "string"
-        }
+        },
+        "Custom assistant": {
+          "description": "Would you like to experiment with creating your own persnalised voice assistant? Copy a URL for a Snips assistant here and click save to install it. You can find the URL when you create your own assistant on snips.com. Unfortunately you cannot download the assistant directory from the Snips website. When you click on 'deploy assistant' choose to download it manually, and then upload it somewhere. If you still want to control your things make sure you add the CreateCandle app to your assistant.",
+          "type": "string"
+        },
+        "Debugging": {
+          "description": "DEBUGGING. Debugging allows you to diagnose any issues with the add-on. If enabled it will result in a lot more debug data in the internal log (which can be found under settings -> developer -> view internal logs).",
+          "type": "boolean"
+        }			
       },
       "required": [
         "Microphone",
@@ -505,5 +505,5 @@
     }
   },
   "short_name": "Voco",
-  "version": "1.0.0"
+  "version": "1.0.1"
 }
