@@ -235,20 +235,31 @@ def intent_get_timer_count(self, slots, intent_message):
         
         voice_message = ""
         
-        timer_count = self.timer_counts[str(slots['timer_type'])]
-        
-        if timer_count == 0:
-            voice_message = "There are zero " + str(slots['timer_type']) + "s."
-        elif timer_count == 1:
-            voice_message = "There is one " + str(slots['timer_type'])
-        else:
-            voice_message = "There are " + str(timer_count) + " " + str(slots['timer_type']) + "s" 
+        if str(slots['timer_type']) == 'countdown':
+            countdown_active = False
+            for index, item in enumerate(self.action_times):
+                if str(item['type']) == 'countdown':
+                    countdown_active = True
+            if countdown_active:
+                self.speak("The countdown is running.")
+            else:
+                self.speak("There is no active countdown.")
             
-        voice_message = clean_up_string_for_speaking(voice_message)
-        if self.DEBUG:
-            print("(...) " + str(voice_message))
+        else:
+            timer_count = self.timer_counts[str(slots['timer_type'])]
         
-        self.speak(voice_message)
+            if timer_count == 0:
+                voice_message = "There are zero " + str(slots['timer_type']) + "s. "
+            elif timer_count == 1:
+                voice_message = "There is one " + str(slots['timer_type']) + ". "
+            else:
+                voice_message = "There are " + str(timer_count) + " " + str(slots['timer_type']) + "s. " 
+            
+            voice_message = clean_up_string_for_speaking(voice_message)
+            if self.DEBUG:
+                print("(...) " + str(voice_message))
+        
+            self.speak(voice_message)
         
     except Exception as ex:
         print("Error while dealing with get_timer_count intent: " + str(ex))
@@ -808,6 +819,7 @@ def intent_set_state(self, slots, intent_message, delayed_action=None):   # If i
                             else:
                                 voice_message += "It's already "
                             voice_message += str(slots['boolean'])
+                            voice_message += ". "
                             
                         # Not already in desired state, so it should be toggled.
                         else:
@@ -1091,6 +1103,7 @@ def intent_set_value(self, slots, intent_message, original_value):
                                 else:
                                     voice_message += "It's already "
                                 voice_message += str(desired_value) + str(addendum)
+                                voice_message += ". "
                                 
                             else:
                                 # Here we change the value.
@@ -1110,9 +1123,9 @@ def intent_set_value(self, slots, intent_message, original_value):
                                         print("PUT to API was successful")
                                         
                                     if len(found_properties) > 1:
-                                        voice_message = "Setting " + str(found_property['property']) + back + " to " + str(desired_value) + str(addendum) + " ." + extra_message
+                                        voice_message = "Setting " + str(found_property['property']) + back + " to " + str(desired_value) + str(addendum) + " . " + extra_message
                                     else:
-                                        voice_message = "Setting " + str(found_property['thing']) + back + " to " + str(desired_value) + str(addendum) + " ." + extra_message
+                                        voice_message = "Setting " + str(found_property['thing']) + back + " to " + str(desired_value) + str(addendum) + " . " + extra_message
                                         
                 except Exception as ex:
                     print("Error while dealing with found non-boolean property: " + str(ex))

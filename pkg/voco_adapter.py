@@ -33,7 +33,7 @@ except ImportError:
     from argparse import Namespace
 
 import time
-from time import sleep
+#from time import sleep
 from datetime import datetime,timedelta
 from dateutil import tz
 from dateutil.parser import *
@@ -84,7 +84,6 @@ from .voco_notifier import *
 
 
 
-os.environ["LD_LIBRARY_PATH"] = "/home/pi/.mozilla-iot/addons/voco/snips/"
 
 
 _TIMEOUT = 3
@@ -92,12 +91,12 @@ _TIMEOUT = 3
 __location__ = os.path.realpath(
     os.path.join(os.getcwd(), os.path.dirname(__file__)))
 
-_CONFIG_PATHS = [
-    os.path.join(os.path.expanduser('~'), '.mozilla-iot', 'config'),
-]
+#_CONFIG_PATHS = [
+#    os.path.join(os.path.expanduser('~'), '.mozilla-iot', 'config'),
+#]
 
-if 'MOZIOT_HOME' in os.environ:
-    _CONFIG_PATHS.insert(0, os.path.join(os.environ['MOZIOT_HOME'], 'config'))
+#if 'MOZIOT_HOME' in os.environ:
+#    _CONFIG_PATHS.insert(0, os.path.join(os.environ['MOZIOT_HOME'], 'config'))
 
 
 
@@ -116,18 +115,22 @@ class VocoAdapter(Adapter):
         self.DEBUG = True
         self.DEV = True
         self.name = self.__class__.__name__
+        print("self.name = " + str(self.name))
         Adapter.__init__(self, 'voco', 'voco', verbose=verbose)
         #print("Adapter ID = " + self.get_id())
 
-        self.persistence_file_path = "/home/pi/.mozilla/config/voco-persistence.json"
-        for path in _CONFIG_PATHS:
-            if os.path.isdir(path):
-                self.persistence_file_path = os.path.join(
-                    path,
-                    'voco-persistence.json'
-                )
-                print("self.persistence_file_path is now: " + str(self.persistence_file_path))
+        os.environ["LD_LIBRARY_PATH"] = os.path.join(self.user_profile['baseDir'],'.mozilla-iot','addons','voco','snips') #"/home/pi/.mozilla-iot/addons/voco/snips/"
 
+        
+        try:
+            self.persistence_file_path = os.path.join(self.user_profile['dataDir'], 'persistence.json')
+        except:
+            try:
+                self.persistence_file_path = os.path.join(os.path.expanduser('~'), '.mozilla-iot', 'data', 'voco','persistence.json')
+            except:
+                print("Double error making persistence file path")
+                self.persistence_file_path = "/home/pi/.mozilla/data/voco/persistence.json"
+        
         if self.DEBUG:
             print("Current working directory: " + str(os.getcwd()))
         
@@ -168,7 +171,7 @@ class VocoAdapter(Adapter):
         self.action_times = [] # will hold all the timers
         self.countdown = 0 # There can only be one timer at a time. It's set the target unix time.
         
-        self.server = 'http://127.0.0.1:8080'
+        self.server = 'http://127.0.0.1:8080' # will be replaced with https://127.0.0.1:4443 later on, if a test call to the api fails.
         self.mqtt_client = None
 
         # Microphone
@@ -192,7 +195,7 @@ class VocoAdapter(Adapter):
         self.custom_assistant_url = None
         self.increase_vocabulary = False
         self.larger_vocabulary_url = "https://raspbian.snips.ai/stretch/pool/s/sn/snips-asr-model-en-500MB_0.6.0-alpha.4_armhf.deb"
-        self.h = None # will hold the Hermes object, which is used to communicate with Snips
+        #self.h = None # will hold the Hermes object, which is used to communicate with Snips
         self.pleasantry_count = 0 # How often Snips has heard "please". Will be used to thank the use for being cordial once in a while.
         self.voice = "en-GB"
         self.hotword_process = None
@@ -207,7 +210,7 @@ class VocoAdapter(Adapter):
         # Time
         self.time_zone = "Europe/Amsterdam"
         self.seconds_offset_from_utc = 7200 # Used for quick calculations when dealing with timezones.
-        self.last_injection_time = datetime.utcnow().timestamp() #0 # The last time the things/property names list was sent to Snips.
+        self.last_injection_time = time.time() #datetime.utcnow().timestamp() #0 # The last time the things/property names list was sent to Snips.
         self.minimum_injection_interval = 15  # Minimum amount of seconds between new thing/property name injection attempts.
         self.attempting_injection = False
         self.current_utc_time = 0
@@ -278,7 +281,6 @@ class VocoAdapter(Adapter):
         except Exception as ex:
             print("Error scanning ALSA (audio devices): " + str(ex))
         
-
         
         # Install Snips if it hasn't been installed already
         try:
@@ -294,15 +296,29 @@ class VocoAdapter(Adapter):
         except Exception as ex:
             print("Error loading config: " + str(ex))
             
-            
+        self.DEBUG = True
             
         # Get all the things via the API.
         try:
             self.things = self.api_get("/things")
-            print("Did the API call")
+            if self.DEBUG:
+                print("Did the initial API call to /things. Result: " + str(self.things))
+            try:
+                if self.things['error'] == '403':
+                    if self.DEBUG:
+                        print("Spotted 403 error, will try to switch to https API calls")
+                    self.server = 'https://127.0.0.1:4443'
+                    self.things = self.api_get("/things")
+                    if self.DEBUG:
+                        print("Tried the API call again, this time at port 4443. Result: " + str(self.things))
+            except Exception as ex:
+                pass
+                #print("Error handling API: " + str(ex))
+                
         except Exception as ex:
             print("Error, couldn't load things at init: " + str(ex))
 
+        print("self.server is now: " + str(self.server))
 
             
         # Setup the sound configuration.
@@ -339,21 +355,25 @@ class VocoAdapter(Adapter):
         
         # Calculate timezone difference between the user set timezone and UTC.
         try:
-            #print("self.time_zone = " + str(self.time_zone))
-            self.user_timezone = timezone(self.time_zone)
-            utcnow = datetime.now(tz=pytz.utc)
-            now = datetime.now() # This is not used
-            #usernow = datetime.now(tz=self.user_timezone)
-            usernow = self.user_timezone.localize(datetime.utcnow()) # utcnow() is naive
+            #self.user_timezone = timezone(self.time_zone)
+            print("timezone name (without DST): " + str(time.tzname[0]) )
+            self.user_timezone = timezone(str(time.tzname[0]))
             
-            print("The universal time is " + str(utcnow))
-            #print("datetime.utcnow() = " + str(datetime.utcnow()))
-            print("In " + str(self.time_zone) + " the current time is " + str(usernow))
-            print("With your current localization settings, your computer will tell you it is now " + str(now))
             
-            tdelta = utcnow - usernow
-            self.seconds_offset_from_utc = round(tdelta.total_seconds())
-            print("The difference between UTC and user selected timezone, in seconds, is " + str(self.seconds_offset_from_utc))
+            #utcnow = datetime.now(tz=pytz.utc)
+            #usernow = self.user_timezone.localize(datetime.utcnow()) # utcnow() is naive
+            
+            #print("The universal time is " + str(utcnow))
+            #print("Simpler, time.time() is: " + str( time.time() ))
+            #print("In " + str(self.time_zone) + " the current time is " + str(usernow))
+            #print("With your current localization settings, your computer will tell you it is now " + str(now))
+
+            
+            #tdelta = utcnow - usernow
+            #self.seconds_offset_from_utc = round(tdelta.total_seconds())
+            #print("The difference between UTC and user selected timezone, in seconds, is " + str(self.seconds_offset_from_utc))
+            self.seconds_offset_from_utc = (time.timezone if (time.localtime().tm_isdst == 0) else time.altzone) * -1
+            print("Simpler timezone offset in seconds = " + str(self.seconds_offset_from_utc))
             
         except Exception as ex:
             print("Error handling time zone calculation: " + str(ex))
@@ -366,7 +386,7 @@ class VocoAdapter(Adapter):
         except:
             print("Error starting the run_snips thread")
             
-        sleep(1.17)
+        time.sleep(1.17)
             
             
         # Create notifier
@@ -378,7 +398,7 @@ class VocoAdapter(Adapter):
         # Start the internal clock which is used to handle timers. It also receives messages from the notifier.
         print("Starting the internal clock")
         try:
-            # Restore the timers, alarms and remindes from persistence.
+            # Restore the timers, alarms and reminders from persistence.
             if 'action_times' in self.persistent_data:
                 self.action_times = self.persistent_data['action_times']
             
@@ -390,7 +410,7 @@ class VocoAdapter(Adapter):
 
 
             
-        sleep(3.14)
+        time.sleep(3.14)
 
         
         # Set the correct speaker volume
@@ -415,17 +435,17 @@ class VocoAdapter(Adapter):
         except:
             print("Error resetting timer counts")
         
-        sleep(5.4)
+        time.sleep(5.4) # Snips needs some time to start
         
         if self.persistent_data['listening'] == True:
             self.speak("Hello, I am Snips. ")
         
             if first_run:
-                sleep(.5)
+                time.sleep(.5)
                 self.speak("If you would like to ask me something, say. Hey Snips. ")
             
             if self.token == None:
-                sleep(1)
+                time.sleep(1)
                 print("PLEASE ENTER YOUR AUTHORIZATION CODE IN THE SETTINGS PAGE")
                 self.set_status_on_thing("Authorization code missing, check settings")
                 self.speak("I cannot connect to your devices because the authorization code is missing. Check the voco settings page for details.")
@@ -451,12 +471,12 @@ class VocoAdapter(Adapter):
         os.system("aplay " + str(sound_file) + " -D plughw:" + str(self.playback_card_id) + "," + str(self.playback_device_id))
 
 
+
     def run_snips(self):
         
         try:
-            sleep(1.11)
+            time.sleep(1.11)
             #self.play_sound(self.end_of_input_sound)
-        
         
             commands = [
                 'snips-tts',
@@ -476,7 +496,7 @@ class VocoAdapter(Adapter):
             print("starting mosquitto")
             #mosquitto_command = [self.mosquitto_path,"-d"] # -d for daemon
             mosquitto_command = [self.mosquitto_path] # -d for daemon
-            #self.mosquitto_process = Popen(mosquitto_command, env=my_env)
+            #self.mosquitto_process = Popen(mosquitto_command, env=my_env) # Mosquitto is now a default part of the Mozilla WebThings Gateway.
 
             #sleep(3) # Give mosquitto some time to start
             #print("-- 3 seconds")
@@ -499,7 +519,7 @@ class VocoAdapter(Adapter):
                 #if self.DEV:
                 print("--generated command = " + str(command))
                 self.external_processes.append( Popen(command, env=my_env) )
-                sleep(1)
+                time.sleep(1)
                 if self.DEBUG:
                     print("-- waiting 1 seconds in Snips startup loop")
                 #self.play_sound(self.end_of_input_sound)
@@ -539,7 +559,7 @@ class VocoAdapter(Adapter):
         
         quick_counter = 0
         while self.mqtt_client == None:
-            sleep(1)
+            time.sleep(1)
             quick_counter += 1
             if quick_counter == 15:
                 break
@@ -702,7 +722,8 @@ class VocoAdapter(Adapter):
         except Exception as ex:
             print("Error, couldn't get volume level: " + str(ex))
 
-            
+
+
     def set_status_on_thing(self,status_string):
         """Set a string to the status property of the snips thing """
         if self.DEBUG:
@@ -712,8 +733,6 @@ class VocoAdapter(Adapter):
                 self.devices['voco'].properties['status'].set_cached_value_and_notify( str(status_string) )
         except:
             print("Error setting status of voco device")
-
-
 
 
 
@@ -893,20 +912,22 @@ class VocoAdapter(Adapter):
         while self.running:
 
             # Inject new thing names into snips if necessary
-            if datetime.utcnow().timestamp() - self.minimum_injection_interval > self.last_injection_time: # + self.minimum_injection_interval > datetime.utcnow().timestamp():
-                self.last_injection_time = datetime.utcnow().timestamp()
+            #if datetime.utcnow().timestamp() - self.minimum_injection_interval > self.last_injection_time: # + self.minimum_injection_interval > datetime.utcnow().timestamp():
+            if time.time() - self.minimum_injection_interval > self.last_injection_time: # + self.minimum_injection_interval > datetime.utcnow().timestamp():
+                self.last_injection_time = time.time() #datetime.utcnow().timestamp()
                 #previous_injection_time = time.time()
                 self.inject_updated_things_into_snips()
                 
 
             voice_message = ""
-            utcnow = datetime.now(tz=pytz.utc)
-            fresh_time = int(utcnow.timestamp())
+            #utcnow = int(time.time()) #datetime.now(tz=pytz.utc)
+            fresh_time = int(time.time()) #int(utcnow.timestamp())
             
             if fresh_time == self.current_utc_time:
-                sleep(.1)
+                time.sleep(.1)
             else:
                 self.current_utc_time = fresh_time
+                #timer_removed = False
                 try:
 
                     #print(str(self.current_utc_time))
@@ -919,6 +940,7 @@ class VocoAdapter(Adapter):
                             if item['type'] == 'wake' and self.current_utc_time >= int(item['moment']):
                                 if self.DEBUG:
                                     print("(...) WAKE UP")
+                                #timer_removed = True
                                 self.play_sound(self.alarm_sound)
                                 self.speak("Good morning, it's time to wake up.")
 
@@ -941,16 +963,16 @@ class VocoAdapter(Adapter):
 
                             # Delayed setting of a boolean state
                             elif item['type'] == 'actuator' and self.current_utc_time >= int(item['moment']):
-                                print("origval:" + str(item['original_value']))
                                 if self.DEBUG:
+                                    print("origval:" + str(item['original_value']))
                                     print("(...) TIMED ACTUATOR SWITCHING")
                                 #delayed_action = True
                                 intent_set_state(self, item['slots'],None, item['original_value'])
 
                             # Delayed setting of a value
                             elif item['type'] == 'value' and self.current_utc_time >= int(item['moment']):
-                                print("origval:" + str(item['original_value']))
                                 if self.DEBUG:
+                                    print("origval:" + str(item['original_value']))
                                     print("(...) TIMED SETTING OF A VALUE")
                                 intent_set_value(self, item['slots'],None, item['original_value'])
 
@@ -1011,9 +1033,9 @@ class VocoAdapter(Adapter):
 
                         except Exception as ex:
                             print("Clock: error recreating event from timer: " + str(ex))
-                            # TODO: currently if this fails is seems the timer item will stay in the list indefinately. If it fails, it should still be removed.
+                            # TODO: currently if this fails it seems the timer item will stay in the list indefinately. If it fails, it should still be removed.
 
-                    # Removed timers whose time has come 
+                    # Remove timers whose time has come 
                     try:
                         timer_removed = False
                         for index, item in enumerate(self.action_times):
@@ -1025,6 +1047,7 @@ class VocoAdapter(Adapter):
                         if timer_removed:
                             if self.DEBUG:
                                 print("at least one timer was removed")
+                                self.save_persistent_data()
                     except Exception as ex:
                         print("Error while removing old timers: " + str(ex))
 
@@ -1284,6 +1307,12 @@ class VocoAdapter(Adapter):
     def api_put(self, api_path, json_dict):
         """Sends data to the WebThings Gateway API."""
 
+        if self.DEBUG:
+            print("PUT > api_path = " + str(api_path))
+            print("PUT > json dict = " + str(json_dict))
+            print("PUT > self.server = " + str(self.server))
+
+
         headers = {
             'Accept': 'application/json',
             'Authorization': 'Bearer {}'.format(self.token),
@@ -1294,7 +1323,7 @@ class VocoAdapter(Adapter):
                 json=json_dict,
                 headers=headers,
                 verify=False,
-                timeout=10
+                timeout=5
             )
             if self.DEBUG:
                 print("API PUT: " + str(r.status_code) + ", " + str(r.reason))
@@ -1311,6 +1340,7 @@ class VocoAdapter(Adapter):
             #return {"error": "I could not connect to the web things gateway"}
             #return [] # or should this be {} ? Depends on the call perhaps.
             return {"error": 500}
+
 
 
     def save_persistent_data(self):
@@ -1476,9 +1506,15 @@ class VocoAdapter(Adapter):
             
             # Alternative route to get_boolean.
             if incoming_intent == 'createcandle:get_value' and str(slots['property']) == "state":          
-                #print("using alternative route to get_boolean")
+                if self.DEBUG:
+                    print("using alternative route to get_boolean")
                 incoming_intent = 'createcandle:get_boolean'
-
+            
+            elif incoming_intent == 'createcandle:set_state' and str(slots['boolean']) == "state":          
+                if self.DEBUG:
+                    print("using alternative route to get_boolean")
+                incoming_intent = 'createcandle:get_boolean'
+                
             # Avoid setting a value if no value is present
             elif incoming_intent == 'createcandle:set_value' and slots['color'] is None and slots['number'] is None and slots['percentage'] is None and slots['string'] is None:
                 if slots['boolean'] != None:
@@ -1524,8 +1560,8 @@ class VocoAdapter(Adapter):
     # Update Snips with the latest names of things and properties. This helps to improve recognition.
     def inject_updated_things_into_snips(self, force_injection=False):
         """ Teaches Snips what the user's devices and properties are called """
-        if self.DEBUG:
-            print("In injection function")
+        #if self.DEBUG:
+        #    print("Checking if new things/properties/strings should be injected into Snips")
         try:
             # Check if any new things have been created by the user.
             #if datetime.utcnow().timestamp() - self.last_injection_time < self.minimum_injection_interval:
@@ -1535,107 +1571,110 @@ class VocoAdapter(Adapter):
             #    return
                 
             #else: 
-            if True:
+            #if True: # just a quick hack
                 #self.attempting_injection = True
                 #self.last_injection_time = datetime.utcnow().timestamp()
-                if self.DEBUG:
-                    print("Checking if Snips should be updated with new thing/property/string names")
-                
-                fresh_thing_titles = set()
-                fresh_property_titles = set()
-                fresh_property_strings = set()
+            #if self.DEBUG:
+            #    print("Checking if Snips should be updated with new thing/property/string names")
+            
+            fresh_thing_titles = set()
+            fresh_property_titles = set()
+            fresh_property_strings = set()
 
-                for thing in self.things:
-                    if 'title' in thing:
-                        fresh_thing_titles.add(clean_up_string_for_speaking(str(thing['title']).lower()))
-                        for thing_property_key in thing['properties']:
-                            if 'type' in thing['properties'][thing_property_key] and 'enum' in thing['properties'][thing_property_key]:
-                                if thing['properties'][thing_property_key]['type'] == 'string':
-                                    for word in thing['properties'][thing_property_key]['enum']:
-                                        fresh_property_strings.add(str(word))
-                            if 'title' in thing['properties'][thing_property_key]:
-                                fresh_property_titles.add(clean_up_string_for_speaking(str(thing['properties'][thing_property_key]['title']).lower()))
-                
-                operations = []
-                
+            for thing in self.things:
+                if 'title' in thing:
+                    fresh_thing_titles.add(clean_up_string_for_speaking(str(thing['title']).lower()))
+                    for thing_property_key in thing['properties']:
+                        if 'type' in thing['properties'][thing_property_key] and 'enum' in thing['properties'][thing_property_key]:
+                            if thing['properties'][thing_property_key]['type'] == 'string':
+                                for word in thing['properties'][thing_property_key]['enum']:
+                                    fresh_property_strings.add(str(word))
+                        if 'title' in thing['properties'][thing_property_key]:
+                            fresh_property_titles.add(clean_up_string_for_speaking(str(thing['properties'][thing_property_key]['title']).lower()))
+            
+            operations = []
+            
+            #if self.DEBUG:
+                #print("fresh_thing_titles = " + str(fresh_thing_titles))
+                #print("fresh_prop_titles = " + str(fresh_property_titles))
+                #print("fresh_prop_strings = " + str(fresh_property_strings))
+            
+            try:
+                thing_titles = set(self.persistent_data['thing_titles'])
+                property_titles = set(self.persistent_data['property_titles'])
+                property_strings = set(self.persistent_data['property_strings'])
+            except:
+                print("Couldn't load previous thing data from persistence. If Snips was just installed this is normal.")
+                thing_titles = set()
+                property_titles = set()
+                property_strings = set()
+
+            if len(thing_titles^fresh_thing_titles) > 0 or force_injection == True:                           # comparing sets to detect changes in thing titles
                 if self.DEBUG:
-                    print("fresh_thing_titles = " + str(fresh_thing_titles))
-                    print("fresh_prop_titles = " + str(fresh_property_titles))
-                    print("fresh_prop_strings = " + str(fresh_property_strings))
+                    print("Teaching Snips the updated thing titles:")
+                    print(str(list(fresh_thing_titles)))
+                #operations.append(
+                #    AddFromVanillaInjectionRequest({"Thing" : list(fresh_thing_titles) })
+                #)
+                operation = ('addFromVanilla',{"Thing" : list(fresh_thing_titles) })
+                operations.append(operation)
+                
+            if len(property_titles^fresh_property_titles) > 0 or force_injection == True:
+                if self.DEBUG:
+                    print("Teaching Snips the updated property titles:")
+                    print(str(list(fresh_property_titles)))
+                #operations.append(
+                #    AddFromVanillaInjectionRequest({"Property" : list(fresh_property_titles) + self.extra_properties + self.capabilities + self.generic_properties + self.numeric_property_names})
+                #)
+                operation = ('addFromVanilla',{"Property" : list(fresh_property_titles) })
+                operations.append(operation)
+
+            if len(property_strings^fresh_property_strings) > 0 or force_injection == True:
+                if self.DEBUG:
+                    print("Teaching Snips the updated property strings:")
+                    print(str(list(fresh_property_strings)))
+                #operations.append(
+                #    AddFromVanillaInjectionRequest({"string" : list(fresh_property_strings) })
+                #)
+                operation = ('addFromVanilla',{"string" : list(fresh_property_strings) })
+                operations.append(operation)
+                
+            #if self.DEBUG:
+            #    print("operations: " + str(operations))
+                    
+                    
+            # Check if Snips should be updated with fresh data
+            if operations != []:
+                update_request = {"operations":operations}
+            
+                if self.DEBUG:
+                    print("Updating Snips! update_request json: " + str(json.dumps(update_request)))
                 
                 try:
-                    thing_titles = set(self.persistent_data['thing_titles'])
-                    property_titles = set(self.persistent_data['property_titles'])
-                    property_strings = set(self.persistent_data['property_strings'])
-                except:
-                    print("Couldn't load previous thing data from persistence. If Snips was just installed this is normal.")
-                    thing_titles = set()
-                    property_titles = set()
-                    property_strings = set()
-
-                if len(thing_titles^fresh_thing_titles) > 0 or force_injection == True:                           # comparing sets to detect changes in thing titles
-                    #if self.DEBUG:
-                    print("Teaching Snips the updated thing titles.")
-                    #operations.append(
-                    #    AddFromVanillaInjectionRequest({"Thing" : list(fresh_thing_titles) })
-                    #)
-                    operation = ('addFromVanilla',{"Thing" : list(fresh_thing_titles) })
-                    operations.append(operation)
-                    
-                if len(property_titles^fresh_property_titles) > 0 or force_injection == True:
-                    #if self.DEBUG:
-                    print("Teaching Snips the updated property titles.")
-                    #operations.append(
-                    #    AddFromVanillaInjectionRequest({"Property" : list(fresh_property_titles) + self.extra_properties + self.capabilities + self.generic_properties + self.numeric_property_names})
-                    #)
-                    operation = ('addFromVanilla',{"Property" : list(fresh_property_titles) })
-                    operations.append(operation)
-
-                if len(property_strings^fresh_property_strings) > 0 or force_injection == True:
-                    #if self.DEBUG:
-                    print("Teaching Snips the updated property strings.")
-                    #operations.append(
-                    #    AddFromVanillaInjectionRequest({"string" : list(fresh_property_strings) })
-                    #)
-                    operation = ('addFromVanilla',{"string" : list(fresh_property_strings) })
-                    operations.append(operation)
-                    
-                if self.DEBUG:
-                    print("operations: " + str(operations))
-                        
-                        
-                # Check if Snips should be updated with fresh data
-                if operations != []:
-                    update_request = {"operations":operations}
+                    self.persistent_data['thing_titles'] = list(fresh_thing_titles)
+                    self.persistent_data['property_titles'] = list(fresh_property_titles)
+                    self.persistent_data['property_strings'] = list(fresh_property_strings)
+                    self.save_persistent_data()
+                except Exception as ex:
+                     print("Error saving thing details to persistence: " + str(ex))
                 
-                    if self.DEBUG:
-                        print("Updating Snips! update_request json: " + str(json.dumps(update_request)))
+                try:
                     
-                    try:
-                        self.persistent_data['thing_titles'] = list(fresh_thing_titles)
-                        self.persistent_data['property_titles'] = list(fresh_property_titles)
-                        self.persistent_data['property_strings'] = list(fresh_property_strings)
-                        self.save_persistent_data()
-                    except Exception as ex:
-                         print("Error saving thing details to persistence: " + str(ex))
+                    if self.mqtt_client != None:
+                        print("Injection: self.mqtt_client exists, will try to inject")
+                        print(str(json.dumps(operations)))
+                        self.mqtt_client.publish('hermes/injection/perform', json.dumps(update_request))
                     
-                    try:
-                        
-                        if self.mqtt_client != None:
-                            print("Injection: self.mqtt_client exists, will try to inject")
-                            print(str(json.dumps(operations)))
-                            self.mqtt_client.publish('hermes/injection/perform', json.dumps(update_request))
-                        
-                            print("Injection published to MQTT")
-                        #with Hermes("localhost:1883") as herm:
-                        #    herm.request_injection(update_request)
-                        
-                        self.last_injection_time = datetime.utcnow().timestamp()
+                        print("Injection published to MQTT")
+                    #with Hermes("localhost:1883") as herm:
+                    #    herm.request_injection(update_request)
                     
-                    except Exception as ex:
-                         print("Error during injection: " + str(ex))
+                    self.last_injection_time = time.time() #datetime.utcnow().timestamp()
+                
+                except Exception as ex:
+                     print("Error during injection: " + str(ex))
 
-                self.attempting_injection = False
+            self.attempting_injection = False
 
         except Exception as ex:
             print("Error during analysis and injection of your things into Snips: " + str(ex))
@@ -1704,7 +1743,6 @@ class VocoAdapter(Adapter):
                         continue
 
                 try:
-                    
                     #if self.DEBUG:
                         #print("")
                         #print("___" + current_thing_title)
@@ -2035,10 +2073,12 @@ class VocoAdapter(Adapter):
 
 
 
-    def local_time_string_to_epoch_stamp(self,date_string):
-        aware_datetime = parse(date_string)
-        naive_utc_datetime = aware_datetime.astimezone(timezone('utc')).replace(tzinfo=None)
-        epoch_stamp = naive_utc_datetime.timestamp()
+    #def local_time_string_to_epoch_stamp(self,date_string):
+    #    aware_datetime = parse(date_string)
+    #    naive_utc_datetime = aware_datetime.astimezone(timezone('utc')).replace(tzinfo=None)
+    #    epoch_stamp = naive_utc_datetime.timestamp()
+
+
 
     def string_to_utc_timestamp(self,date_string,ignore_timezone=True):
         """ date as a date object """
@@ -2049,7 +2089,10 @@ class VocoAdapter(Adapter):
                 return 0
                 
             if(ignore_timezone):
-                simpler_times = date_string.split('+', 1)[0]
+                if '+' in date_string:
+                    simpler_times = date_string.split('+', 1)[0]
+                else:
+                    simpler_times = date_string
                 #print("@split string: " + str(simpler_times))
                 naive_datetime = parse(simpler_times)
                 #print("@naive datetime: " + str(naive_datetime))
