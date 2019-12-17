@@ -12,7 +12,7 @@ then
 fi
 
 # Clean up from previous releases
-rm -rf *.tgz package
+rm -rf ._* *.tgz package
 rm -f SHA256SUMS
 rm -rf lib
 
@@ -38,7 +38,7 @@ mkdir lib
 # Pull down Python dependencies
 pip3 install -r requirements.txt -t lib --no-binary fuzzywuzzy,python-dateutil,pytz,paho-mqtt,requests --prefix ""
 
-cp -r pkg lib requirements.txt package.sh snips.tar sounds LICENSE package.json *.py package/
+cp -r pkg lib requirements.txt package.sh snips.tar sounds LICENSE *.json *.py package/
 find package -type f -name '*.pyc' -delete
 find package -type d -empty -delete
 
