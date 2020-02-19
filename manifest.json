@@ -37,7 +37,8 @@
           "description": "What type of microphone have you connected? The Playstation Eye is a cheap and good option. If you want to use the ReSpeaker hat you will have to intall the drivers manually.",
           "enum": [
             "Built-in microphone (0,0)",
-            "Attached device (1,0)"
+            "Attached device (1,0)",
+						"ReSpeaker (2,0)"
           ],
           "type": "string"
         },
@@ -46,7 +47,8 @@
           "enum": [
             "Built-in headphone jack (0,0)",
             "Built-in HDMI (0,1)",
-            "Attached device (1,0)"
+            "Attached device (1,0)",
+						"ReSpeaker (2,0)"
           ],
           "type": "string"
         },
@@ -62,12 +64,11 @@
       "required": [
         "Microphone",
         "Speaker",
-        "Token",
-        "Time zone"
+        "Token"
       ],
       "type": "object"
     }
   },
   "short_name": "Voco",
-  "version": "1.0.1"
+  "version": "1.0.2"
 }

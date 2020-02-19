@@ -1,7 +1,7 @@
 {
   "name": "voco",
   "display_name": "Voco",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Privacy friendly voice control. Say 'Hey Snips' to start a voice command.",
   "author": "CreateCandle",
   "main": "main.py",
@@ -37,7 +37,8 @@
     "sounds/end_spot.wav",
     "sounds/error.wav",
     "snips.tar",
-	"manifest.json"
+	  "manifest.json",
+		"package.json"
   ],
   "moziot": {
     "api": {
@@ -66,7 +67,8 @@
           "type": "string",
           "enum": [
             "Built-in microphone (0,0)",
-            "Attached device (1,0)"
+            "Attached device (1,0)",
+						"ReSpeaker (2,0)"
           ],
           "description": "What type of microphone have you connected? The Playstation Eye is a cheap and good option. If you want to use the ReSpeaker hat you will have to intall the drivers manually."
         },
@@ -75,7 +77,8 @@
           "enum": [
             "Built-in headphone jack (0,0)",
             "Built-in HDMI (0,1)",
-            "Attached device (1,0)"
+            "Attached device (1,0)",
+						"ReSpeaker (2,0)"
           ],
           "description": "By defeault audio is sent out over the built-in headphone jack. If you want to send it out via a ReSpeaker Hat you will have to install the drivers manually."
         },

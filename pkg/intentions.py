@@ -85,23 +85,35 @@ def intent_set_timer(self, slots, intent_message):
     
     if self.DEBUG:
         print("__intent_set_timer")
+    try:
+        sentence = slots['sentence']
+
+        print("__intent_set_timer sentence: " + str(sentence))
+        #try:
+        #    print("Time string slot: " + str(slots['time_string']))
+        #except:
+        #    print("Error getting time string slot")
+        
+        if slots['time_string'] != None:
+            try:
+                sentence = sentence.replace("in " + slots['time_string'], " ")
+            except:
+                if self.DEBUG:
+                    print("error replacing 'in' in time string")
+            try:
+                sentence = sentence.replace(slots['time_string'], " ")
+            except:
+                if self.DEBUG:
+                    print("error replacing space in time string")
+        
+        voice_message = ""
+        time_delta_voice_message = ""
+        time_slot_snippet = "" # A snippet from the original sentence that described the time slot.
     
-    sentence = slots['sentence']
-    if slots['time_string'] != None:
-        try:
-            sentence = sentence.replace("in " + slots['time_string'], " ")
-        except:
-            pass
-        try:
-            sentence = sentence.replace(slots['time_string'], " ")
-        except:
-            pass
-    voice_message = ""
-    time_delta_voice_message = ""
-    time_slot_snippet = "" # A snippet from the original sentence that described the time slot.
-    
-    current_time = int(time.time())
-    moment = None
+        current_time = int(time.time())
+        moment = None
+    except Exception as ex:
+        print("__intent_set_timer error: " + str(ex))
 
     try:
         # Get the target moment
@@ -380,24 +392,41 @@ def intent_stop_timer(self, slots, intent_message):
             if self.DEBUG:
                 print("Removing all " + str(slots['timer_type']))
                 
+            timers_to_remove = []
             # Removing all timers of selected timer type
+            print("self.action_times = " + str(self.action_times))
             for index,item in enumerate(self.action_times):
                 
                 current_type = str(item['type'])
+                print("inspecting timer item: " + str(current_type))
+                
                 if current_type == "wake":
                     current_type = 'alarm' # wake up alarms count as normal alarms.
                     
                 if current_type == "actuator" or current_type == "value":
+                    print("spotted actuator timer")
                     current_type = "timer"
                     
-                if str(item['type']) == current_type:
+                print(str(slots['timer_type']) + " =?= " + str(current_type))
+                if str(slots['timer_type']) == current_type:
                     if self.DEBUG:
                         print("Removing " + str(item['type']) + " item from list")
                         removed_timer_count += 1
+                        timers_to_remove.append(index)
+                        #del self.action_times[index]
+                  
+            print("timers_to_remove = " + str(timers_to_remove))
+            try:
+                for index in reversed(timers_to_remove):
+                #for index in timers_to_remove:
+                    if self.DEBUG:
+                        print("deleting item")
                     del self.action_times[index]
+            except Exception as ex:
+                print("error deleting timers: " + str(ex))
                     
             if removed_timer_count > 1:
-                voice_message = str(removed_timer_count) + " " + str(slots['timer_type']) + "s have all been removed"
+                voice_message = str(removed_timer_count) + " " + str(slots['timer_type']) + "s have been removed"
             elif removed_timer_count == 1:
                 voice_message =  str(removed_timer_count) + " " + str(slots['timer_type']) + " has been removed"
             else:

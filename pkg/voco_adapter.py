@@ -113,7 +113,7 @@ class VocoAdapter(Adapter):
         print("initialising adapter from class")
         self.pairing = False
         self.DEBUG = True
-        self.DEV = True
+        self.DEV = False
         self.name = self.__class__.__name__
         print("self.name = " + str(self.name))
         Adapter.__init__(self, 'voco', 'voco', verbose=verbose)
@@ -123,9 +123,10 @@ class VocoAdapter(Adapter):
 
         
         try:
-            self.persistence_file_path = os.path.join(self.user_profile['dataDir'], 'persistence.json')
+            self.persistence_file_path = os.path.join(self.user_profile['dataDir'], 'voco', 'persistence.json')
         except:
             try:
+                print("setting persistence file path failed, will try older method.")
                 self.persistence_file_path = os.path.join(os.path.expanduser('~'), '.mozilla-iot', 'data', 'voco','persistence.json')
             except:
                 print("Double error making persistence file path")
@@ -140,6 +141,24 @@ class VocoAdapter(Adapter):
                 self.persistent_data = json.load(f)
                 if self.DEBUG:
                     print("Persistence data was loaded succesfully.")
+                    
+                try:
+                    self.action_times = self.persistent_data['action_times']
+                    try:
+                        for index, item in enumerate(self.action_times):
+                            if str(item['type']) == 'countdown':
+                                print(str( item['moment'] ))
+                                if int(item['moment']) > time.time():
+                                    self.countdown = int(item['moment'])
+                                    print("countdown restored, counting down to UTC: " + str(self.countdown))
+                                else:
+                                    print("Countdown not restored as the target time was in the past")
+                        
+                    except:
+                        print("no countdown to restore")
+                except:
+                    print("self.action_times could not be loaded yet.")
+                
         except:
             first_run = True
             print("Could not load persistent data (if you just installed the add-on then this is normal)")
@@ -161,15 +180,13 @@ class VocoAdapter(Adapter):
 
         # self.persistent_data is handled just above
         self.metric = True
-        self.DEBUG = True
-        self.DEV = False
         self.things = []
         self.token = None
         self.timer_counts = {'timer':0,'alarm':0,'reminder':0}
         self.temperature_unit = 'degrees celsius'
 
         self.action_times = [] # will hold all the timers
-        self.countdown = 0 # There can only be one timer at a time. It's set the target unix time.
+        self.countdown = int(time.time()) # There can only be one timer at a time. It's set the target unix time.
         
         self.server = 'http://127.0.0.1:8080' # will be replaced with https://127.0.0.1:4443 later on, if a test call to the api fails.
         self.mqtt_client = None
@@ -208,7 +225,8 @@ class VocoAdapter(Adapter):
         self.numeric_property_names = ["first","second","third","fourth","fifth","sixth","seventh"]
          
         # Time
-        self.time_zone = "Europe/Amsterdam"
+        #self.time_zone = "Europe/Amsterdam"
+        self.time_zone = str(time.tzname[0])
         self.seconds_offset_from_utc = 7200 # Used for quick calculations when dealing with timezones.
         self.last_injection_time = time.time() #datetime.utcnow().timestamp() #0 # The last time the things/property names list was sent to Snips.
         self.minimum_injection_interval = 15  # Minimum amount of seconds between new thing/property name injection attempts.
@@ -296,8 +314,6 @@ class VocoAdapter(Adapter):
         except Exception as ex:
             print("Error loading config: " + str(ex))
             
-        self.DEBUG = True
-            
         # Get all the things via the API.
         try:
             self.things = self.api_get("/things")
@@ -328,9 +344,13 @@ class VocoAdapter(Adapter):
             print("Setting audio input to built-in")
             self.capture_card_id = 0
             self.capture_device_id = 0
-        if self.microphone == "Attached device (1,0)":
+        elif self.microphone == "Attached device (1,0)":
             print("Setting audio input to USB/Hat")
             self.capture_card_id = 1
+            self.capture_device_id = 0
+        elif self.microphone == "ReSpeaker (2,0)":
+            print("Setting audio input to ReSpeaker")
+            self.capture_card_id = 2
             self.capture_device_id = 0
 
         # Fix the audio output. The default on the WebThings image is HDMI.
@@ -339,26 +359,27 @@ class VocoAdapter(Adapter):
             run_command("amixer cset numid=3 1")
             self.playback_card_id = 0
             self.playback_device_id = 0
-        if self.speaker == "Built-in HDMI (0,1)":
+        elif self.speaker == "Built-in HDMI (0,1)":
             print("Setting audio output to HDMI")
             run_command("amixer cset numid=3 2")
             self.playback_card_id = 0
             self.playback_device_id = 1
-        if self.speaker == "Attached device (1,0)":
+        elif self.speaker == "Attached device (1,0)":
             print("Setting audio output to USB/Hat")
             #run_command("amixer cset numid=3 0")
             self.playback_card_id = 1
             self.playback_device_id = 0
-            
+        elif self.speaker == "ReSpeaker (2,0)":
+            print("Setting audio output to ReSpeaker")
+            #run_command("amixer cset numid=3 0")
+            self.playback_card_id = 2
+            self.playback_device_id = 0
         
         # TIME
         
         # Calculate timezone difference between the user set timezone and UTC.
         try:
-            #self.user_timezone = timezone(self.time_zone)
-            print("timezone name (without DST): " + str(time.tzname[0]) )
-            self.user_timezone = timezone(str(time.tzname[0]))
-            
+            self.user_timezone = timezone(self.time_zone)
             
             #utcnow = datetime.now(tz=pytz.utc)
             #usernow = self.user_timezone.localize(datetime.utcnow()) # utcnow() is naive
@@ -400,6 +421,7 @@ class VocoAdapter(Adapter):
         try:
             # Restore the timers, alarms and reminders from persistence.
             if 'action_times' in self.persistent_data:
+                print("loading action times from persistence") 
                 self.action_times = self.persistent_data['action_times']
             
             t = threading.Thread(target=self.clock, args=(self.voice_messages_queue,))
@@ -684,9 +706,9 @@ class VocoAdapter(Adapter):
             
         # Time zone
         try:
-            if 'Time zone' in config:
-                print("-Time zone is present in the config data.")
-                self.time_zone = str(config['Time zone'])
+            #if 'Time zone' in config:
+            #    print("-Time zone is present in the config data.")
+            #    self.time_zone = str(config['Time zone'])
                 
         # Metric or Imperial
             if 'Metric' in config:
@@ -983,8 +1005,11 @@ class VocoAdapter(Adapter):
                                     countdown_delta = self.countdown - self.current_utc_time
 
                                     # Update the countdown on the voco thing
-                                    self.devices['voco'].properties[ 'countdown' ].set_cached_value_and_notify( int(countdown_delta) )
-
+                                    if countdown_delta > 0:
+                                        self.devices['voco'].properties[ 'countdown' ].set_cached_value_and_notify( int(countdown_delta) )
+                                    else:    
+                                        self.devices['voco'].properties[ 'countdown' ].set_cached_value_and_notify( 0 )
+                                        
                                     # Create speakable countdown message
                                     if countdown_delta > 86400:
                                         if countdown_delta % 86400 == 0:
@@ -1016,13 +1041,21 @@ class VocoAdapter(Adapter):
                                     elif countdown_delta == 30:
                                         voice_message = "Counting down 30 seconds"
 
-                                    elif countdown_delta < 11:
+                                    elif countdown_delta > 0 and countdown_delta < 11:
                                         voice_message = str(int(countdown_delta))
 
+                                    else:
+                                        print("countdown delta was negative, strange.")
+                                        del self.action_times[index]
+                                        self.save_persistent_data()
+                                        
                                     if voice_message != "":
                                         if self.DEBUG:
                                             print("(...) " + str(voice_message))
                                         self.speak(voice_message)
+                                else:
+                                    print("removing countdown item")
+                                    del self.action_times[index]
 
                             # Anything without a type will be treated as a normal timer.
                             elif self.current_utc_time >= int(item['moment']):
@@ -1039,6 +1072,7 @@ class VocoAdapter(Adapter):
                     try:
                         timer_removed = False
                         for index, item in enumerate(self.action_times):
+                            #print(str(self.current_utc_time) + " ==?== " + str(int(item['moment'])))
                             if int(item['moment']) <= self.current_utc_time:
                                 timer_removed = True
                                 if self.DEBUG:
@@ -1505,27 +1539,38 @@ class VocoAdapter(Adapter):
             # Alternative routing. Some heuristics, since Snips sometimes chooses the wrong intent.
             
             # Alternative route to get_boolean.
-            if incoming_intent == 'createcandle:get_value' and str(slots['property']) == "state":          
-                if self.DEBUG:
-                    print("using alternative route to get_boolean")
-                incoming_intent = 'createcandle:get_boolean'
+            try:
+                if incoming_intent == 'createcandle:get_value' and str(slots['property']) == "state":          
+                    if self.DEBUG:
+                        print("using alternative route to get_boolean")
+                    incoming_intent = 'createcandle:get_boolean'
+            except:
+                print("alternate route 1 failed")
             
-            elif incoming_intent == 'createcandle:set_state' and str(slots['boolean']) == "state":          
-                if self.DEBUG:
-                    print("using alternative route to get_boolean")
-                incoming_intent = 'createcandle:get_boolean'
+            try:
+                if incoming_intent == 'createcandle:set_state' and str(slots['boolean']) == "state":          
+                    if self.DEBUG:
+                        print("using alternative route to get_boolean")
+                    incoming_intent = 'createcandle:get_boolean'
+            except:
+                print("alternate route 2 failed")
+            
                 
             # Avoid setting a value if no value is present
-            elif incoming_intent == 'createcandle:set_value' and slots['color'] is None and slots['number'] is None and slots['percentage'] is None and slots['string'] is None:
-                if slots['boolean'] != None:
-                    #print("Routing set_value to set_state instead")
-                    incoming_intent == 'createcandle:set_state' # Switch to another intent type which has a better shot.
-                else:
-                    if self.DEBUG:
-                        print("request did not contain a valid value to set to")
-                    self.speak("Your request did not contain a valid value.")
-                    #hermes.publish_end_session_notification(intent_message.site_id, "Your request did not contain a valid value.", "")
-                    return
+            try:
+                if incoming_intent == 'createcandle:set_value' and slots['color'] is None and slots['number'] is None and slots['percentage'] is None and slots['string'] is None:
+                    if slots['boolean'] != None:
+                        #print("Routing set_value to set_state instead")
+                        incoming_intent == 'createcandle:set_state' # Switch to another intent type which has a better shot.
+                    else:
+                        if self.DEBUG:
+                            print("request did not contain a valid value to set to")
+                        self.speak("Your request did not contain a valid value.")
+                        #hermes.publish_end_session_notification(intent_message.site_id, "Your request did not contain a valid value.", "")
+                        return
+            except:
+                print("alternate route 3 failed")
+            
 
             # Normal routing
             if incoming_intent == 'createcandle:get_time':
@@ -2006,42 +2051,63 @@ class VocoAdapter(Adapter):
         for item in intent_message.slots:
             try:                
                 if item.value.kind == 'InstantTime':
+                    if self.DEBUG:
+                        print("handling instantTime")
+                        
+                    try:
+                        #d = datetime.utcnow()
+                        #epoch = datetime(1970,1,1)
+                        #t = (d - epoch).total_seconds()
+                        #print("t = " + str(int(t)))
                     
-                    #d = datetime.utcnow()
-                    #epoch = datetime(1970,1,1)
-                    #t = (d - epoch).total_seconds()
-                    #print("t = " + str(int(t)))
+                        #print("self.current_utc_time: " + str(self.current_utc_time))
                     
-                    #print("self.current_utc_time: " + str(self.current_utc_time))
-                    
-                    #print("datetime.now() = " + str(datetime.now()))
-                    slots['time_string'] = item.rawValue # The time as it was spoken
-                    #print("InstantTime slots['time_string'] = " + slots['time_string'])
-                    #print("instant time object: " + str(item.value.value))
-                    ignore_timezone = True
-                    if slots['time_string'].startswith("in"):
-                        ignore_timezone = False
-                    utc_timestamp = self.string_to_utc_timestamp(item.value.value,ignore_timezone)
-                    #print("current time as stamp: " + str(self.current_utc_time))
-                    #print("target time: " + str(utc_timestamp))
-                    if utc_timestamp > self.current_utc_time: # Only allow moments in the future
-                        slots['end_time'] = utc_timestamp
-                    else:
-                        self.speak("The time you stated seems to be in the past.") # If after all that the moment is still in the past
-                        return
+                        #print("datetime.now() = " + str(datetime.now()))
+                        slots['time_string'] = item.rawValue # The time as it was spoken
+                        #print("InstantTime slots['time_string'] = " + slots['time_string'])
+                        #print("instant time object: " + str(item.value.value))
+                        ignore_timezone = True
+                        if slots['time_string'].startswith("in"):
+                            ignore_timezone = False
+                        utc_timestamp = self.string_to_utc_timestamp(item.value.value,ignore_timezone)
+                        #print("current time as stamp: " + str(self.current_utc_time))
+                        #print("target time: " + str(utc_timestamp))
+                        if utc_timestamp > self.current_utc_time: # Only allow moments in the future
+                            slots['end_time'] = utc_timestamp
+                        else:
+                            slots['end_time'] = utc_timestamp + 43200 # add 12 hours
+                            #self.speak("The time you stated seems to be in the past.") # If after all that the moment is still in the past
+                            #return []
+                    except Exception as ex:
+                        print("instantTime extraction error: " + str(ex))
                     
                 elif item.value.kind == 'TimeInterval':
-                    slots['time_string'] = item.rawValue # The time as it was spoken
-                    print("TimeInterval slots['time_string'] = " + slots['time_string']);
-                    utc_timestamp = self.string_to_utc_timestamp(item.value.to)
-                    if utc_timestamp > self.current_utc_time: # Only allow moments in the future
-                        slots['end_time'] = utc_timestamp
-                    utc_timestamp = self.string_to_utc_timestamp(item.value['from'])
-                    if utc_timestamp > self.current_utc_time: # Only allow moments in the future
-                        slots['start_time'] = utc_timestamp        
-                    else:
-                        self.speak("The time you stated seems to be in the past.") # If after all that the moment is still in the past
-                        return
+                    try:
+                        slots['time_string'] = item.rawValue # The time as it was spoken
+                        print("TimeInterval slots['time_string'] = " + slots['time_string']);
+                        print("a")
+                        try:
+                            utc_timestamp = self.string_to_utc_timestamp(item.value.to)
+                            if utc_timestamp > self.current_utc_time: # Only allow moments in the future
+                                slots['end_time'] = utc_timestamp
+                            else:
+                                slots['end_time'] = utc_timestamp + 43200 # add 12 hours
+                            print("b")
+                        except Exception as ex:
+                            print("timeInterval end time extraction error" + str(ex))
+                        try:
+                            utc_timestamp = self.string_to_utc_timestamp(item.value['from'])
+                            print("c")
+                            if utc_timestamp > self.current_utc_time: # Only allow moments in the future
+                                slots['start_time'] = utc_timestamp        
+                            else:
+                                slots['start_time'] = utc_timestamp + 43200 # add 12 hours
+                                #self.speak("The time you stated seems to be in the past.") # If after all that the moment is still in the past
+                                #return []
+                        except Exception as ex:
+                            print("timeInterval start time extraction error" + str(ex))
+                    except Exception as ex:
+                        print("timeInterval extraction error: " + str(ex))
 
                 elif item.value.kind == 'Duration':
                     slots['time_string'] = item.rawValue # The time as it was spoken
@@ -2088,23 +2154,32 @@ class VocoAdapter(Adapter):
                 print("string_to_utc_timestamp: date string was None.")
                 return 0
                 
+            if self.DEBUG:
+                print("string_to_utc_timestamp. Date string: " + str(date_string))
+            
             if(ignore_timezone):
+                print("ignoring timezone")
                 if '+' in date_string:
                     simpler_times = date_string.split('+', 1)[0]
                 else:
                     simpler_times = date_string
-                #print("@split string: " + str(simpler_times))
+                print("@split string: " + str(simpler_times))
                 naive_datetime = parse(simpler_times)
-                #print("@naive datetime: " + str(naive_datetime))
+                print("@naive datetime: " + str(naive_datetime))
                 localized_datetime = self.user_timezone.localize(naive_datetime)
                 if self.DEBUG:
                     print("@localized_datetime: " + str(localized_datetime))
                 localized_timestamp = int(localized_datetime.timestamp()) #- self.seconds_offset_from_utc
             else:
+                print("accounting for timezone")
                 aware_datetime = parse(date_string)
+                print("aware datetime = " + str(aware_datetime))
                 naive_datetime = aware_datetime.astimezone(timezone(self.time_zone)).replace(tzinfo=None)
+                print("naive date object: " + str(naive_datetime))
                 localized_datetime = self.user_timezone.localize(naive_datetime)
                 localized_timestamp = localized_datetime.timestamp()
+                print("localized_timestamp = " + str(localized_timestamp))
+                print("time.time = " + str(time.time()))
                 if self.DEBUG:
                     print("@localized_timestamp = " + str(localized_timestamp))
                 
