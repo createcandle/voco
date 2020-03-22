@@ -57,10 +57,10 @@ except:
     print("ERROR, paho is not installed. try 'pip3 install paho'")
 
 try:
-    from fuzzywuzzy import fuzz
-    from fuzzywuzzy import process
+    from rapidfuzz import fuzz
+    from rapidfuzz import process
 except:
-    print("ERROR, fuzzywuzzy is not installed. try 'pip3 install fuzzywuzzy'")
+    print("ERROR, rapidfuzz is not installed. try 'pip3 install rapidfuzz'")
 
 try:
     import alsaaudio

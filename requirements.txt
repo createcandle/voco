@@ -1,4 +1,4 @@
-fuzzywuzzy
+rapidfuzz
 pyalsaaudio
 python-dateutil
 pytz

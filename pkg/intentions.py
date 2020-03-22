@@ -39,10 +39,10 @@ from subprocess import call
 #    print("ERROR, hermes is not installed. try 'pip3 install hermes-python'")
 
 try:
-    from fuzzywuzzy import fuzz
-    from fuzzywuzzy import process
+    from rapidfuzz import fuzz
+    from rapidfuzz import process
 except:
-    print("ERROR, fuzzywuzzy is not installed. try 'pip3 install fuzzywuzzy'")
+    print("ERROR, rapidfuzz is not installed. try 'pip3 install rapidfuzz'")
 
 try:
     import alsaaudio
