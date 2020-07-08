@@ -1,16 +1,19 @@
 """Utility functions."""
 
-import subprocess
 
+
+import re
 import time
-from time import sleep
-from datetime import datetime,timedelta #timezone
-#from dateutil.tz import *
-from dateutil import tz
-from dateutil.parser import *
-
-import requests
 import shutil
+import requests
+import subprocess
+from time import sleep
+from dateutil import tz
+#from dateutil.tz import *
+from dateutil.parser import *
+from datetime import datetime,timedelta #timezone
+
+
 
 try:
     #from pytz import timezone
@@ -312,14 +315,30 @@ def download_file(url, target_file):
 
 
 
-def run_command(command, cwd=None):
-    try:
-        return_code = subprocess.call(command, shell=True, cwd=cwd)
-        return return_code
-
-    except Exception as ex:
-        print("Error running shell command: " + str(ex))
+#def run_command(command, cwd=None):
+#    try:
+#        return_code = subprocess.call(command, shell=True, cwd=cwd)
+#        return return_code
+#
+#    except Exception as ex:
+#        print("Error running shell command: " + str(ex))
         
+
+def run_command(cmd, timeout_seconds=20):
+    try:
+        
+        p = subprocess.run(cmd, timeout=timeout_seconds, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True, universal_newlines=True)
+
+        if p.returncode == 0:
+            return p.stdout # + '\n' + "Command success" #.decode('utf-8')
+            #yield("Command success")
+        else:
+            if p.stderr:
+                return "Error: " + str(p.stderr) # + '\n' + "Command failed"   #.decode('utf-8'))
+
+    except Exception as e:
+        print("Error running command: "  + str(e))
+
 
 
 
@@ -355,3 +374,159 @@ def run_command_with_lines(command):
     except Exception as ex:
         print("Error running shell command: " + str(ex))
         
+
+
+
+
+
+def get_audio_controls():
+
+    audio_controls = []
+    
+    aplay_result = run_command('aplay -l') 
+    lines = aplay_result.splitlines()
+    device_id = 0
+    previous_card_id = 0
+    for line in lines:
+        if line.startswith( 'card ' ):
+            
+            try:
+                #print(line)
+                line_parts = line.split(',')
+            
+                line_a = line_parts[0]
+                #print(line_a)
+                line_b = line_parts[1]
+                #print(line_b)
+            except:
+                continue
+            
+            card_id = int(line_a[5])
+            #print("card id = " + str(card_id))
+            
+            
+            if card_id != previous_card_id:
+                device_id = 0
+            
+            #print("device id = " + str(device_id))
+            
+            
+            simple_card_name = re.findall(r"\:([^']+)\[", line_a)[0]
+            simple_card_name = str(simple_card_name).strip()
+            
+            #print("simple card name = " + str(simple_card_name))
+            
+            full_card_name   = re.findall(r"\[([^']+)\]", line_a)[0]
+            #print("full card name = " + str(full_card_name))
+            
+            full_device_name = re.findall(r"\[([^']+)\]", line_b)[0]
+            #print("full device name = " + str(full_device_name))
+            
+            human_device_name = str(full_device_name)
+            
+            # Raspberry Pi 4
+            human_device_name = human_device_name.replace("bcm2835 ALSA","Built-in headphone jack")
+            human_device_name = human_device_name.replace("bcm2835 IEC958/HDMI","Built-in video")
+            human_device_name = human_device_name.replace("bcm2835 IEC958/HDMI1","Built-in video two")
+            
+            # Raspberry Pi 3
+            human_device_name = human_device_name.replace("bcm2835 Headphones","Built-in headphone jack")
+            
+            # ReSpeaker dual microphone pi hat
+            human_device_name = human_device_name.replace("bcm2835-i2s-wm8960-hifi wm8960-hifi-0","ReSpeaker headphone jack")
+            #print("human device name = " + human_device_name)
+            
+            
+            control_name = None
+            complex_control_id = None
+            complex_max = None
+            complex_count = None
+            
+            amixer_result = run_command('amixer -c ' + str(card_id) + ' scontrols') 
+            lines = amixer_result.splitlines()
+            #print(str(lines))
+            #print("amixer lines array length: " + str(len(lines)))
+            if len(lines) > 0:
+                for line in lines:
+                    if "'" in line:
+                        #print("line = " + line)
+                        control_name = re.findall(r"'([^']+)'", line)[0]
+                        #print("control name = " + control_name)
+                        if control_name is not 'mic':
+                            break
+                        else:
+                            continue # in case the first control is 'mic', ignore it.
+                    else:
+                        control_name = None
+            
+            # if there is no 'simple control', then a backup method is to get the normal control options.  
+            else:
+                #print("get audio controls: no simple control found, getting complex one instead")
+                #line_counter = 0
+                amixer_result = run_command('amixer -c ' + str(card_id) + ' controls')
+                lines = amixer_result.splitlines()
+                if len(lines) > 0:
+                    for line in lines:
+                        #line_counter += 1
+                        
+                        line = line.lower()
+                        #print("line.lower = " + line)
+                        if "playback" in line:
+                            #print("playback spotted")
+                            
+                            numid_part = line.split(',')[0]
+                            
+                            if numid_part.startswith("numid="):
+                                numid_part = numid_part[6:]
+                                #print("numid_part = " + str(numid_part))
+                            
+                                #complex_max = 36
+                                complex_count = 1 # mono
+                                complex_control_id = int(numid_part)
+                                #print("complex_control_id = " + str(complex_control_id))
+                            
+                                info_result = run_command('amixer -c ' + str(card_id) + ' cget numid=' + str(numid_part)) #amixer -c 1 cget numid=
+                            
+                                if 'values=2' in info_result:
+                                    complex_count = 2 # stereo
+                                
+                                info_result_parts = info_result.split(',')
+                                for info_part in info_result_parts:
+                                    if info_part.startswith('max='):
+                                        complex_max = int(info_part[4:])
+                                        #complex_max = int(part)
+                                        #break
+                                        
+                                
+                            
+                            break
+                            
+                else:
+                    print("getting audio volume in complex way failed") 
+                            
+                            
+                
+            
+                
+            if control_name is 'mic':
+                control_name = None
+            
+            audio_controls.append({'card_id':card_id, 
+                                'device_id':device_id, 
+                                'simple_card_name':simple_card_name, 
+                                'full_card_name':str(full_card_name), 
+                                'full_device_name':str(full_device_name), 
+                                'human_device_name':str(human_device_name), 
+                                'control_name':control_name,
+                                'complex_control_id':complex_control_id, 
+                                'complex_count':complex_count, 
+                                'complex_max':complex_max }) # ,'controls':lines
+
+
+            if card_id == previous_card_id:
+                device_id += 1
+            
+            previous_card_id = card_id
+
+    return audio_controls
+

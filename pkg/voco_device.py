@@ -8,7 +8,7 @@ from gateway_addon import Device, Property, Notifier, Outlet
 class VocoDevice(Device):
     """Candle device type."""
 
-    def __init__(self, adapter):
+    def __init__(self, adapter, audio_output_list):
         """
         Initialize the object.
         adapter -- the Adapter managing this device
@@ -25,6 +25,7 @@ class VocoDevice(Device):
         self.description = 'Manage the Voco voice control add-on'
         self._type = ['MultiLevelSwitch']
         self.connected = False
+        
         try:
             #volume_property = VocoProperty(self,"volume",)
             self.properties["volume"] = VocoProperty(
@@ -38,7 +39,7 @@ class VocoDevice(Device):
                                 'maximum': 100,
                                 'unit':'percent'
                             },
-                            75)
+                            int(self.adapter.persistent_data['speaker_volume']) )
 
             self.properties["status"] = VocoProperty(
                             self,
@@ -48,7 +49,7 @@ class VocoDevice(Device):
                                 'type': 'string',
                                 'readOnly': True
                             },
-                            "hello")
+                            "Hello")
 
             self.properties["listening"] = VocoProperty(
                             self,
@@ -58,7 +59,7 @@ class VocoDevice(Device):
                                 'label': "Listening",
                                 'type': 'boolean'
                             },
-                            True)
+                            bool(self.adapter.persistent_data['listening']) )
 
             self.properties["feedback-sounds"] = VocoProperty(
                             self,
@@ -67,7 +68,7 @@ class VocoDevice(Device):
                                 'label': "Feedback sounds",
                                 'type': 'boolean'
                             },
-                            True)
+                            bool(self.adapter.persistent_data['feedback_sounds']) )
 
             self.properties["timer"] = VocoProperty(
                             self,
@@ -105,9 +106,24 @@ class VocoDevice(Device):
                                     'readOnly': True
                                 },
                                 0)
+                                
+                                
+                                
+            print("adding audio output property with list: " + str(audio_output_list))
+            self.properties["audio output"] = VocoProperty(
+                            self,
+                            "audio output",
+                            {
+                                'label': "Audio output",
+                                'type': 'string',
+                                'enum': audio_output_list,
+                            },
+                            self.adapter.persistent_data['audio_output'])
+                                
+                                
         except Exception as ex:
             print("error adding properties: " + str(ex))
-        print("Voco thing has been created.")
+        print("Voco thing has been created")
         #self.adapter.handle_device_added(self)
 
 
@@ -129,28 +145,39 @@ class VocoProperty(Property):
         self.value = value
         self.set_cached_value(value)
 
+
     def set_value(self, value):
         #print(str(value))
         try:
-            print("set_value called for " + str(self.title))
+            print("set_value called for: " + str(self.title))
             if self.title == 'volume':
                 self.device.adapter.set_speaker_volume(int(value))
-                self.update(value)
+                #self.update(value)
 
             if self.title == 'feedback-sounds':
                 self.device.adapter.set_feedback_sounds(bool(value))
-                self.update(value)
+                #self.update(value)
 
             if self.title == 'listening':
                 self.device.adapter.set_snips_state(bool(value))
-                self.update(value)
+                #self.update(value)
+                
+            if self.title == 'audio output':
+                self.device.adapter.set_audio_output(str(value))
+                #self.update(value)
+                
         except Exception as ex:
             print("set_value error: " + str(ex))
 
+
     def update(self, value):         
-        print("property -> update")
+        print("property -> update. Value = " + str(value))
         
         if value != self.value:
+            print("new value")
             self.value = value
+            
+            #set_cached_value_and_notify
+            
             self.set_cached_value(value)
             self.device.notify_property_changed(self)

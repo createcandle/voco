@@ -1,7 +1,7 @@
 {
   "name": "voco",
   "display_name": "Voco",
-  "version": "1.0.2",
+  "version": "1.1.0",
   "description": "Privacy friendly voice control. Say 'Hey Snips' to start a voice command.",
   "author": "CreateCandle",
   "main": "main.py",
@@ -37,8 +37,8 @@
     "sounds/end_spot.wav",
     "sounds/error.wav",
     "snips.tar",
-	  "manifest.json",
-		"package.json"
+	"manifest.json",
+	"package.json"
   ],
   "moziot": {
     "api": {
@@ -48,11 +48,10 @@
     "plugin": true,
     "exec": "python3 {path}/main.py",
     "config": {
-      "Microphone": "Attached device (1,0)",
-      "Speaker": "Built-in headphone jack (0,0)",
       "Token": "",
+      "Microphone": "Attached device (1,0)",
+      "Speaker": "Auto",
       "Metric": true,
-      "Custom assistant":"",
       "Debugging": false
     },
     "schema": {
@@ -63,36 +62,31 @@
         "Speaker"
       ],
       "properties": {
-        "Microphone": {
-          "type": "string",
-          "enum": [
-            "Built-in microphone (0,0)",
-            "Attached device (1,0)",
-						"ReSpeaker (2,0)"
-          ],
-          "description": "What type of microphone have you connected? The Playstation Eye is a cheap and good option. If you want to use the ReSpeaker hat you will have to intall the drivers manually."
-        },
-        "Speaker": {
-          "type": "string",
-          "enum": [
-            "Built-in headphone jack (0,0)",
-            "Built-in HDMI (0,1)",
-            "Attached device (1,0)",
-						"ReSpeaker (2,0)"
-          ],
-          "description": "By defeault audio is sent out over the built-in headphone jack. If you want to send it out via a ReSpeaker Hat you will have to install the drivers manually."
-        },
         "Authorization token": {
           "type": "string",
           "description": "To be allowed to get information on all your devices, you have to create an 'authorization' code. It's basically a very long password. You can generate it yourself under Settings -> Developer -> Create local authorization"
         },
+        "Microphone": {
+          "type": "string",
+          "description": "What type of microphone have you connected? The Playstation Eye is a cheap and good option. If you want to use the ReSpeaker hat you will have to intall the drivers manually.",
+          "enum": [
+            "Built-in microphone (0,0)",
+            "Attached device (1,0)",
+			"ReSpeaker (2,0)"
+          ]
+        },
+        "Speaker": {
+          "type": "string",
+          "description": "In some cases the Raspberry Pi might be set to a specific audio output. Here you can 'force' it to be a certain output.",
+          "enum": [
+            "Auto",
+            "Headphone jack",
+            "HDMI"
+          ]
+        },
         "Metric": {
           "type": "boolean",
           "description": "METRIC. Check the box to use metric values instead of imperial units. For example: temperature in Celcius or Fahrenheit."
-        },
-        "Custom assistant": {
-          "type": "string",
-          "description": "Would you like to experiment with creating your own persnalised voice assistant? Copy a URL for a Snips assistant here and click save to install it. You can find the URL when you create your own assistant on snips.com. Unfortunately you cannot download the assistant directory from the Snips website. When you click on 'deploy assistant' choose to download it manually, and then upload it somewhere. If you still want to control your things make sure you add the CreateCandle app to your assistant."
         },
         "Debugging": {
           "type": "boolean",

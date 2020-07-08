@@ -37,7 +37,7 @@ if __name__ == '__main__':
 
     signal.signal(signal.SIGINT, cleanup)
     signal.signal(signal.SIGTERM, cleanup)
-    _ADAPTER = VocoAdapter(verbose=True)
+    _ADAPTER = VocoAdapter(verbose=False)
 
     # Wait until the proxy stops running, indicating that the gateway shut us
     # down.

@@ -19,8 +19,7 @@
       "Token": "",
       "Metric": true,
       "Microphone": "Attached device (1,0)",
-      "Speaker": "Built-in headphone jack (0,0)",
-			"Custom assistant": "",
+      "Speaker": "Auto",
       "Debugging": false
     },
     "schema": {
@@ -34,26 +33,21 @@
           "type": "boolean"
         },
         "Microphone": {
-          "description": "What type of microphone have you connected? The Playstation Eye is a cheap and good option. If you want to use the ReSpeaker hat you will have to intall the drivers manually.",
+          "description": "What type of microphone have you connected? If you want to use the ReSpeaker Pi Hat you will have to intall the drivers manually.",
           "enum": [
             "Built-in microphone (0,0)",
             "Attached device (1,0)",
-						"ReSpeaker (2,0)"
+			"Attached device (2,0)"
           ],
           "type": "string"
         },
         "Speaker": {
-          "description": "By defeault audio is sent out over the built-in headphone jack. If you want to send it out via a ReSpeaker Hat you will have to install the drivers manually.",
+          "description": "In some cases the Raspberry Pi might be set to a specific audio output. Here you can 'force' it to be a certain output.",
           "enum": [
-            "Built-in headphone jack (0,0)",
-            "Built-in HDMI (0,1)",
-            "Attached device (1,0)",
-						"ReSpeaker (2,0)"
+            "Auto",
+            "Headphone jack",
+            "HDMI"
           ],
-          "type": "string"
-        },
-        "Custom assistant": {
-          "description": "Would you like to experiment with creating your own persnalised voice assistant? Copy a URL for a Snips assistant here and click save to install it. You can find the URL when you create your own assistant on snips.com. Unfortunately you cannot download the assistant directory from the Snips website. When you click on 'deploy assistant' choose to download it manually, and then upload it somewhere. If you still want to control your things make sure you add the CreateCandle app to your assistant.",
           "type": "string"
         },
         "Debugging": {
@@ -70,5 +64,5 @@
     }
   },
   "short_name": "Voco",
-  "version": "1.0.2"
+  "version": "1.1.0"
 }

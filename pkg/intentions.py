@@ -39,10 +39,10 @@ from subprocess import call
 #    print("ERROR, hermes is not installed. try 'pip3 install hermes-python'")
 
 try:
-    from fuzzywuzzy import fuzz
-    from fuzzywuzzy import process
+    from rapidfuzz import fuzz
+    from rapidfuzz import process
 except:
-    print("ERROR, fuzzywuzzy is not installed. try 'pip3 install fuzzywuzzy'")
+    print("ERROR, rapidfuzz is not installed. try 'pip3 install rapidfuzz'")
 
 try:
     import alsaaudio
@@ -206,6 +206,12 @@ def intent_set_timer(self, slots, intent_message):
                 pattern = r'(?:remind(?:er)?\s?(?:me|us)?\s?(to)?)([\w\s\']*)'
                 matches = re.search(pattern, sentence)
                 print("Reminder text:" + str(matches.group(2)))
+                
+                # a little heuristic to prevent reminders being set for "for".
+                if str(matches.group(2)) == "for":
+                    self.speak("I didn't understand")
+                    return
+                
                 if matches != None:
                     self.action_times.append({"moment":moment,"type":"reminder","reminder_text":matches.group(2),"slots":slots})
                     voice_message = "Ok, I have set a reminder to " + str(matches.group(2))
@@ -724,6 +730,10 @@ def intent_set_state(self, slots, intent_message, delayed_action=None):   # If i
                 # We're only interested in actuators that we can switch.
                 if str(found_property['type']) == "boolean" and found_property['readOnly'] != True: # can be None or False
                     
+                    # if we already toggled one property, that's enough. Skip others.
+                    if voice_message != "":
+                        continue
+                    
                     if self.DEBUG:
                         print("Checking found property. url:" + str(found_property['property_url']))
 
@@ -859,26 +869,34 @@ def intent_set_state(self, slots, intent_message, delayed_action=None):   # If i
                             system_property_name = str(found_property['property_url'].rsplit('/', 1)[-1])
                             json_dict = {system_property_name:desired_state}
                             
-                            if self.DEV:
-                                print("str(json_dict) = " + str(json_dict))
+                            if self.DEBUG:
+                                print("json_dict: " + str(json_dict) + " will be sent to API endpoint: " + str(found_property['property_url']))
                             
-                            api_result = self.api_put(str(found_property['property_url']), json_dict)
+                            try:
+                                api_result = self.api_put(str(found_property['property_url']), json_dict)
                             
-                            #print("PUT api_result: " + str(api_result))
-                            if api_result[system_property_name] == desired_state:
-                                #print("PUT was succesfull")
-                                if slots['period'] == 'for' and delayed_action == None:
-                                    # The property will be switch to the desired state for a while and then turned off again.
-                                    # In this case the voice message just needs to state that it will be turned off again, and this has already been done at this point.
-                                    pass
-                                else:
-                                    #if len(found_properties) > 1:
-                                    voice_message += " Setting " + str(found_property['property']) + " of " + str(found_property['thing']) + back + " to " + str(human_readable_desired_state)
-                                    #else:
-                                    #    voice_message += " Setting " + str(found_property['thing']) + back + " to " + str(human_readable_desired_state)
-                                                                                        # should the 'thing' above be property?
+                                #print("PUT api_result: " + str(api_result))
+                                if api_result[system_property_name] == desired_state:
+                                    #print("PUT was succesfull")
+                                    if slots['period'] == 'for' and delayed_action == None:
+                                        # The property will be switched to the desired state for a while and then turned off again.
+                                        # In this case the voice message just needs to state that it will be turned off again, and this has already been done at this point.
+                                        pass
+                                    else:
+                                        #if len(found_properties) > 1:
+                                        voice_message += " Setting " + str(found_property['property']) + " of " + str(found_property['thing']) + str(back) + " to " + str(human_readable_desired_state)
+                                        if self.DEBUG:
+                                            print(str(voice_message))
+                                        #else:
+                                        #    voice_message += " Setting " + str(found_property['thing']) + back + " to " + str(human_readable_desired_state)
+                                                                                            # should the 'thing' above be property?
+                            except Exception as ex:
+                                print("Error switching boolean property via API: " + str(ex))
+                            
                     except Exception as ex:
                         print("Error while dealing with found boolean property: " + str(ex))    
+                    
+                    #break # don't handle multiple toggle properties as once.
                         
         else:
             if slots['thing'] != None and slots['thing'] != 'all':
