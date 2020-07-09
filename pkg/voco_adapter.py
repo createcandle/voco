@@ -164,9 +164,10 @@ class VocoAdapter(Adapter):
                         
                     except:
                         print("no countdown to restore")
+                    
                     try:
                         if 'audio_output' not in self.persistent_data:
-                            self.persistent_data['audio_output'] = str(self.audio_controls[0]['human_device_name']
+                            self.persistent_data['audio_output'] = str(self.audio_controls[0]['human_device_name'])
                     except:
                         print("Error fixing audio output in persistent data")
                         
