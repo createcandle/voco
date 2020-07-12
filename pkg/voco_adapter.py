@@ -43,13 +43,6 @@ import queue
 
 from .intentions import *
 
-#try:
-#    from hermes_python.hermes import Hermes
-#    from hermes_python.ontology.injection import InjectionRequestMessage, AddInjectionRequest, AddFromVanillaInjectionRequest
-#    from hermes_python.ontology.feedback import SiteMessage
-#except:
-#    print("ERROR, hermes is not installed. try 'pip3 install hermes-python'")
-
 try:
     import paho.mqtt.publish as publish
     import paho.mqtt.client as client
@@ -79,9 +72,6 @@ from .util import *
 from .voco_device import *
 from .voco_notifier import *
 
-#print('Python:', sys.version)
-#print('requests:', requests.__version__)
-
 
 
 
@@ -90,15 +80,6 @@ _TIMEOUT = 3
 
 __location__ = os.path.realpath(
     os.path.join(os.getcwd(), os.path.dirname(__file__)))
-
-#_CONFIG_PATHS = [
-#    os.path.join(os.path.expanduser('~'), '.mozilla-iot', 'config'),
-#]
-
-#if 'MOZIOT_HOME' in os.environ:
-#    _CONFIG_PATHS.insert(0, os.path.join(os.environ['MOZIOT_HOME'], 'config'))
-
-
 
 
 class VocoAdapter(Adapter):
@@ -216,9 +197,9 @@ class VocoAdapter(Adapter):
         
         # Speaker
         self.speaker = None
-        self.playback_card_id = 0 # 0 is internal, 1 is usb.
-        self.playback_device_id = 0
-        #self.playback_devices = []
+        self.current_simple_card_name = "ALSA"
+        self.current_card_id = 0
+        self.current_device_id = 0
 
         # Snips settings
         self.external_processes = [] # Will hold all the spawned processes
@@ -230,9 +211,13 @@ class VocoAdapter(Adapter):
         self.larger_vocabulary_url = "https://raspbian.snips.ai/stretch/pool/s/sn/snips-asr-model-en-500MB_0.6.0-alpha.4_armhf.deb"
         #self.h = None # will hold the Hermes object, which is used to communicate with Snips
         self.pleasantry_count = 0 # How often Snips has heard "please". Will be used to thank the use for being cordial once in a while.
-        self.voice = "en-GB"
         self.hotword_process = None
         self.intent_received = True # Used to create a 'no voice input received' sound effect if no intent was heard.
+        
+        # Voice settings
+        self.voice_accent = "en-GB"
+        self.voice_pitch = "1.2"
+        self.voice_speed = "0.9"
         
         # These will be injected ino Snips for better recognition.
         self.extra_properties = ["state","set point"]
@@ -274,9 +259,6 @@ class VocoAdapter(Adapter):
             print("Error: could not make sure work dir exists. Work path: " + str(self.work_path))
             
 
-
-
-
         
         # create list of human readable audio-only output options for thing property
         self.audio_output_options = []
@@ -293,16 +275,6 @@ class VocoAdapter(Adapter):
             self.handle_device_added(voco_device)
             if self.DEBUG:
                 print("Voco thing created")
-            try:
-                self.set_status_on_thing("Checking...")
-                #self.update_timer_counts()
-                #self.devices['voco'].properties[ 'listening' ].set_cached_value_and_notify( bool(self.persistent_data['listening']) ) # TODO: store the last state of the listening switch in the persistence file. That way it can be restored on reboot.
-                #self.devices['voco'].properties[ 'feedback-sounds' ].set_cached_value_and_notify( bool(self.persistent_data['feedback_sounds']) )
-                #self.devices['voco'].properties['listening'].set_value( bool(self.persistent_data['listening']) )
-                #self.devices['voco'].properties['feedback-sounds'].update( bool(self.persistent_data['feedback_sounds']) )
-                print("Updated voco thing")
-            except Exception as ex:
-                print("Could not update voco thing: " + str(ex))
         except Exception as ex:
             print("Could not create voco device:" + str(ex))
 
@@ -322,8 +294,6 @@ class VocoAdapter(Adapter):
             
         # Pre-scan ALSA
         try:
-            #self.playback_devices = self.scan_alsa('playback')
-            #print("Possible audio playback devices: " + str(self.playback_devices))
             self.capture_devices = self.scan_alsa('capture')
             print("Possible audio capture devices: " + str(self.capture_devices))
             
@@ -368,7 +338,7 @@ class VocoAdapter(Adapter):
         print("self.server is now: " + str(self.server))
 
             
-        # Setup the sound configuration.
+        # AUDIO
 
         # Fix the audio input.
         if self.microphone == "Built-in microphone (0,0)":
@@ -388,29 +358,19 @@ class VocoAdapter(Adapter):
         if self.speaker == "Headphone jack":
             print("Setting audio output to headphone jack")
             run_command("amixer cset numid=3 1")
-            #self.playback_card_id = 0
-            #self.playback_device_id = 0
         elif self.speaker == "HDMI":
             print("Setting audio output to HDMI")
             run_command("amixer cset numid=3 2")
-            #self.playback_card_id = 0
-            #self.playback_device_id = 1
         elif self.speaker == "Auto":
             print("Setting audio output to automatically switch")
             run_command("amixer cset numid=3 0")
-            #self.playback_card_id = 1
-            #self.playback_device_id = 0
-        #elif self.speaker == "ReSpeaker (2,0)":
-            #print("Setting audio output to ReSpeaker")
-            #run_command("amixer cset numid=3 0")
-            #self.playback_card_id = 2
-            #self.playback_device_id = 0
             
-            
+        # Get the initial speaker settings
         for option in self.audio_controls:
             if option['human_device_name'] == str(self.persistent_data['audio_output']):
-                self.playback_card_id = option['card_id']
-                self.playback_device_id = option['device_id']
+                self.current_simple_card_name = option['simple_card_name']
+                self.current_card_id = option['card_id']
+                self.current_device_id = option['device_id']
             
         
         # TIME
@@ -427,7 +387,6 @@ class VocoAdapter(Adapter):
             #print("In " + str(self.time_zone) + " the current time is " + str(usernow))
             #print("With your current localization settings, your computer will tell you it is now " + str(now))
 
-            
             #tdelta = utcnow - usernow
             #self.seconds_offset_from_utc = round(tdelta.total_seconds())
             #print("The difference between UTC and user selected timezone, in seconds, is " + str(self.seconds_offset_from_utc))
@@ -528,194 +487,10 @@ class VocoAdapter(Adapter):
 
 
 
-    def set_speaker_volume(self, volume):
-        if self.DEBUG:
-            print("in set_speaker_volume with " + str(volume))
-        if volume != self.persistent_data['speaker_volume']:
-            self.persistent_data['speaker_volume'] = int(volume)
-            self.save_persistent_data()
-            try:
-                self.devices['voco'].properties['volume'].update(int(volume))
-            except:
-                if self.DEBUG:
-                    print("error setting volume property on thing")
 
-
-
-
-    # Called by user to change audio output
-    def set_audio_output(self, selection):
-        if self.DEBUG:
-            print("Setting audio output selection to: " + str(selection))
-            
-        # Get the latest audio controls
-        self.audio_controls = get_audio_controls()
-        print(self.audio_controls)
-        
-        try:        
-            for option in self.audio_controls:
-                if str(option['human_device_name']) == str(selection):
-                    # Set selection in persistence data
-                    self.persistent_data['audio_output'] = str(selection)
-                    self.save_persistent_data()
-                    
-                    if self.DEBUG:
-                        print("new output selection on thing: " + str(selection))
-                    try:
-                        if self.DEBUG:
-                            print("self.devices = " + str(self.devices))
-                        if self.devices['voco'] != None:
-                            self.devices['voco'].properties['audio output'].update( str(selection) )
-                    except Exception as ex:
-                        print("Error setting new audio output selection:" + str(ex))
-        
-                    break
-            
-        except Exception as ex:
-            print("Error in set_audio_output: " + str(ex))
-
-
-
-    def play_sound(self,sound_file):
-        #os.system("aplay " + str(sound_file) + " -D plughw:" + str(self.playback_card_id) + "," + str(self.playback_device_id))
-        
-        try:
-            environment = {}
-            for option in self.audio_controls:
-                if option['human_device_name'] == str(self.persistent_data['audio_output']):
-                    environment["ALSA_CARD"] = str(option['simple_card_name'])
-                    
-        
-                    try:
-                        if self.sound_player != None:
-                            self.sound_player.terminate()
-                    except:
-                        if self.DEBUG:
-                            print("Sound player process did not exist yet")
-                    
-                    #sound_command = 'ALSA_CARD=plughw:' + str(self.playback_card_id) + ',' + str(self.playback_device_id) +  ' ffplay -nodisp -vn -infbuf -autoexit -v 0 -volume ' + str(self.persistent_data['speaker_volume']) + ' ' +  str(sound_file)
-                    sound_command = ("ffplay", "-nodisp", "-vn", "-infbuf","-autoexit", "-v","0","-volume",str(self.persistent_data['speaker_volume']), str(sound_file) )
-                    if self.DEBUG:
-                        #print("environment = " + str(environment))
-                        print("sound_command = " + str(sound_command))
-                        print("playing sound file: " + str(sound_file))
-                    self.sound_player = subprocess.Popen(sound_command, 
-                                    env=environment,
-                                    stdin=subprocess.PIPE,
-                                    stdout=subprocess.PIPE,
-                                    stderr=subprocess.PIPE)
-        except Exception as ex:
-            print("Error playing sound: " + str(ex))
-
-
-
-
-    def run_snips(self):
-        
-        try:
-            time.sleep(1.11)
-            #self.play_sound(self.end_of_input_sound)
-        
-            commands = [
-                'snips-tts',
-                'snips-audio-server',
-                'snips-dialogue',
-                'snips-asr',
-                'snips-nlu',
-                'snips-injection'
-            ]
-        
-            my_env = os.environ.copy()
-            my_env["LD_LIBRARY_PATH"] = '{}:{}'.format(self.snips_path,self.arm_libs_path)
-        
-            if self.DEV:
-                print("--my_env = " + str(my_env))
-        
-            #print("starting mosquitto")
-            #mosquitto_command = [self.mosquitto_path,"-d"] # -d for daemon
-            #mosquitto_command = [self.mosquitto_path] # -d for daemon
-            #self.mosquitto_process = Popen(mosquitto_command, env=my_env) # Mosquitto is now a default part of the Mozilla WebThings Gateway.
-
-            #sleep(3) # Give mosquitto some time to start
-            #print("-- 3 seconds")
-            #self.play_sound(self.end_of_input_sound)
-        
-            # Start the snips parts
-            for unique_command in commands:
-                #print("")
-                #command = self.generate_normal_process_command(str(unique_command))
-                bin_path = os.path.join(self.snips_path,unique_command)
-                command = [bin_path,"-u",self.work_path,"-a",self.assistant_path,"-c",self.toml_path]
-                if unique_command == 'snips-audio-server':
-                    #command = command + ["--alsa_capture","plughw:" + str(self.capture_card_id) + "," + str(self.capture_device_id),"--alsa_playback","default:" + str(self.playback_card_id) + "," + str(self.playback_device_id)]
-                    command = command + ["--alsa_capture","plughw:" + str(self.capture_card_id) + "," + str(self.capture_device_id),"--alsa_playback","default:CARD=ALSA"]
-                    
-                
-                elif unique_command == 'snips-injection':
-                    command = command + ["-g",self.g2p_models_path]
-                elif unique_command == 'snips-asr':
-                    command = command + ["--thread_number","1"] # TODO Check if this actually helps.
-            
-            
-                #if self.DEV:
-                print("--generated command = " + str(command))
-                self.external_processes.append( Popen(command, env=my_env) )
-                time.sleep(1)
-                if self.DEBUG:
-                    print("-- waiting 1 seconds in Snips startup loop")
-                #self.play_sound(self.end_of_input_sound)
-            
-            #if self.persistent_data['listening'] == True:
-            if self.hotword_process == None:
-                #if self.persistent_data['listening'] == True:
-                
-                hotword_command = [self.hotword_path,"-u",self.work_path,"-a",self.assistant_path,"-c",self.toml_path]
-                if self.DEBUG:
-                    print("hotword_command = " + str(hotword_command))
-                self.hotword_process = Popen(hotword_command, env=my_env)
-
-                # Reflect the state of Snips on the thing
-                try:
-                    #self.devices['voco'].properties['listening'].update( bool(self.persistent_data['listening']) )
-                    self.devices['voco'].properties['listening'].update( True )
-                    if self.token != None:
-                        self.set_status_on_thing("Listening")
-                except Exception as ex:
-                    print("Error while setting the state on the thing: " + str(ex))
-                        
-                #else:
-                #    # Reflect the state of Snips on the thing
-                #    try:
-                #        self.devices['voco'].properties['listening'].update( bool(self.persistent_data['listening']) )
-                #        self.set_status_on_thing("Stopped")
-                #    except Exception as ex:
-                #        print("Error while setting the state on the thing: " + str(ex))
-                
-               
-        except Exception as ex:
-            print("Error starting Mosquitto/Snips processes: " + str(ex))    
-         
-        #for p in self.external_processes: 
-        #    p.wait()
-        #    print("Waiting...")
-        
-        #self.play_sound(self.end_of_input_sound)
-        
-        quick_counter = 0
-        while self.mqtt_client == None:
-            time.sleep(1)
-            quick_counter += 1
-            if quick_counter == 15:
-                break
-        
-        #try:
-        #    self.inject_updated_things_into_snips(True) # Check if there are new things/properties that Snips should learn about
-        #except Exception as ex:
-        #    print("Error, couldn't teach Snips the names of your things: " + str(ex))  
-        
-        return
-        
-
+#
+#  GET CONFIG
+#
 
     # Read the settings from the add-on settings page
     def add_from_config(self):
@@ -761,16 +536,13 @@ class VocoAdapter(Adapter):
                 
             if 'Speaker' in config:
                 print("-Speaker is present in the config data: " + str(config['Speaker']))
-                
-                #if len(self.playback_devices) == 0 or str(config['Speaker']) in self.playback_devices:
-                #    print("--Using speaker from config")
                 self.speaker = str(config['Speaker'])               # If the prefered device in config also exists in hardware, then select it.
-                #else:
-                #    print("--Overriding the selected speaker because that device did not actually exist/was not plugged in.")
-                #    config['Speaker'] = self.playback_devices[0]      # If the prefered device in config does not actually exist, but the scan did sho connected hardware, then select the first item from the scan results instead.
-                #    self.speaker = self.playback_devices[0]
-                #    store_updated_settings = True
 
+        except:
+            print("Error loading microphone settings")
+
+
+        try:
             should_install = False
 
             # if assistant.json is not in the assistant folder.
@@ -782,39 +554,48 @@ class VocoAdapter(Adapter):
                 try:
                     self.assistant_installed = self.install_assistant()
                 except Exception as ex:
-                    print("Error while trying to install assistant/check if should be installed: " + str(ex))
-                        
+                    print("Error while trying to install assistant/check if should be installed: " + str(ex))     
+        except:
+            print("Error starting snips install process from settings")
+               
+               
+        try:
             # Store the settings that were changed by the add-on.
             if store_updated_settings:
-
                 print("Storing overridden settings")
-                try:
-                    database = Database('voco')
-                    if not database.open():
-                        print("Error, could not open settings database")
-                        #return
-                    else:
-                        database.save_config(config)
-                        database.close()
-                        if self.DEBUG:
-                            print("Stored overridden preferences into the database")
-                        
-                except:
-                    print("Error! Failed to store overridden settings in database.")
-                
-                
+
+                database = Database('voco')
+                if not database.open():
+                    print("Error, could not open settings database")
+                    #return
+                else:
+                    database.save_config(config)
+                    database.close()
+                    if self.DEBUG:
+                        print("Stored overridden preferences into the database")
         except:
-            print("Error loading part 1 of settings")
+            print("Error! Failed to store overridden settings in database.")
             
             
             
         # Time zone
         try:
-            #if 'Time zone' in config:
-            #    print("-Time zone is present in the config data.")
-            #    self.time_zone = str(config['Time zone'])
+            if 'Voice accent' in config:
+                print("-Voice accent is present in the config data.")
+                self.voice_accent = str(config['Voice accent'])
+            if 'Voice pitch' in config:
+                print("-Voice pitch is present in the config data.")
+                self.voice_pitch = str(config['Voice pitch'])
+            if 'Voice speed' in config:
+                print("-Voice speed is present in the config data.")
+                self.voice_speed = str(config['Voice speed']) 
                 
+        except Exception as ex:
+            print("Error loading voice setting(s) from config: " + str(ex))
+                
+              
         # Metric or Imperial
+        try:   
             if 'Metric' in config:
                 print("-Metric preference is present in the config data.")
                 self.metric = bool(config['Metric'])
@@ -822,7 +603,6 @@ class VocoAdapter(Adapter):
                     self.temperature_unit = 'degrees fahrenheit'
             else:
                 self.metric = True
-                
         except Exception as ex:
             print("Error loading locale information from config: " + str(ex))
             
@@ -851,16 +631,333 @@ class VocoAdapter(Adapter):
 
 
 
-    def set_status_on_thing(self,status_string):
-        """Set a string to the status property of the snips thing """
-        if self.DEBUG:
-            print("Setting status on thing to: " +str(status_string))
-        try:
-            if self.devices['voco'] != None:
-                self.devices['voco'].properties['status'].update( str(status_string) )
-        except:
-            print("Error setting status of voco device")
 
+#
+#  AUDIO
+#
+
+
+    def scan_alsa(self,device_type):
+        """ Checks what audio hardware is available """
+        result = []
+        try:
+            if device_type == "playback":
+                command = "aplay -l"
+            if device_type == "capture":
+                command = "arecord -l"
+                
+            for line in run_command_with_lines(command):
+                #print(str(line))
+                
+                if line.startswith('card 0'):
+                    if 'device 0' in line:
+                        if device_type == 'playback':
+                            result.append('Built-in headphone jack (0,0)')
+                        if device_type == 'capture':
+                            result.append('Built-in microphone (0,0)')
+                    elif 'device 1' in line:
+                        if device_type == 'playback':
+                            result.append('Built-in HDMI (0,1)')
+                        if device_type == 'capture':
+                            result.append('Built-in microphone, channel 2 (0,1)')
+                            
+                if line.startswith('card 1'):
+                    if 'device 0' in line:
+                        result.append('Attached device (1,0)')
+                    #elif 'device 1' in line:
+                    #    if device_type == 'playback':
+                    #        result.append('Plugged-in (USB) device, channel 2 (1,1)')
+                    #    if device_type == 'capture':
+                    #        result.append('Plugged-in (USB) microphone, channel 2 (1,1)')
+                            
+                if line.startswith('card 2'):
+                    if 'device 0' in line:
+                        result.append('Second attached device (2,0)')
+                    elif 'device 1' in line:
+                        result.append('Second attached device, channel 2 (2,1)')
+                            
+        except Exception as e:
+            print("Error during ALSA scan: " + str(e))
+        return result
+
+
+
+    def set_speaker_volume(self, volume):
+        if self.DEBUG:
+            print("in set_speaker_volume with " + str(volume))
+        if volume != self.persistent_data['speaker_volume']:
+            self.persistent_data['speaker_volume'] = int(volume)
+            self.save_persistent_data()
+            try:
+                self.devices['voco'].properties['volume'].update(int(volume))
+            except:
+                if self.DEBUG:
+                    print("error setting volume property on thing")
+                    
+
+
+    # Called by user to change audio output
+    def set_audio_output(self, selection):
+        if self.DEBUG:
+            print("Setting audio output selection to: " + str(selection))
+            
+        # Get the latest audio controls
+        self.audio_controls = get_audio_controls()
+        print(self.audio_controls)
+        
+        try:        
+            for option in self.audio_controls:
+                if str(option['human_device_name']) == str(selection):
+                    
+                    self.current_simple_card_name = option['simple_card_name']
+                    self.current_card_id = option['card_id']
+                    self.current_device_id = option['device_id']
+                    
+                    # Set selection in persistence data
+                    self.persistent_data['audio_output'] = str(selection)
+                    self.save_persistent_data()
+                    
+                    if self.DEBUG:
+                        print("new output selection on thing: " + str(selection))
+                    try:
+                        if self.DEBUG:
+                            print("self.devices = " + str(self.devices))
+                        if self.devices['voco'] != None:
+                            self.devices['voco'].properties['audio output'].update( str(selection) )
+                    except Exception as ex:
+                        print("Error setting new audio output selection:" + str(ex))
+        
+                    break
+            
+        except Exception as ex:
+            print("Error in set_audio_output: " + str(ex))
+
+
+
+    def play_sound(self,sound_file):
+        #os.system("aplay " + str(sound_file) + " -D plughw:" + str(self.current_card_id) + "," + str(self.current_device_id))
+        sound_file = os.path.splitext(sound_file)[0] + str(self.persistent_data['speaker_volume']) + '.wav'
+        
+        #os.system("aplay " + str(sound_file) + str(self.persistent_data['speaker_volume']) + " -D plughw:" + str(self.current_card_id) + "," + str(self.current_device_id))
+        
+        os.system("aplay " + str(sound_file) + " -D plughw:" + str(self.current_card_id) + "," + str(self.current_device_id))
+        #os.system("aplay " + str(sound_file) + " -D dmix:CARD=" + str(self.current_simple_card_name) + ",DEV=" + str(self.current_device_id))
+        
+        try:
+            #environment = {}
+            for option in self.audio_controls:
+                if option['human_device_name'] == str(self.persistent_data['audio_output']):
+                    #environment["ALSA_CARD"] = str(option['simple_card_name'])
+                    pass
+        
+                    #try:
+                    #    if self.sound_player != None:
+                    #        self.sound_player.terminate()
+                    #except:
+                    #    if self.DEBUG:
+                    #        print("Sound player process did not exist yet")
+                    
+                    #sound_command = 'ALSA_CARD=plughw:' + str(self.current_card_id) + ',' + str(self.current_device_id) +  ' ffplay -nodisp -vn -infbuf -autoexit -v 0 -volume ' + str(self.persistent_data['speaker_volume']) + ' ' +  str(sound_file)
+                    #sound_command = ("ffplay", "-nodisp", "-vn", "-infbuf","-autoexit", "-v","0","-volume",str(self.persistent_data['speaker_volume']), str(sound_file) )
+                    #if self.DEBUG:
+                        #print("environment = " + str(environment))
+                    #    print("sound_command = " + str(sound_command))
+                    #    print("playing sound file: " + str(sound_file))
+                    #self.sound_player = subprocess.Popen(sound_command, 
+                    #                env=environment,
+                    #                stdin=subprocess.PIPE,
+                    #                stdout=subprocess.PIPE,
+                    #                stderr=subprocess.PIPE)
+        except Exception as ex:
+            print("Error playing sound: " + str(ex))
+
+
+
+    def speak(self, voice_message="",site_id="default"):
+        try:
+            # TODO create a queue?
+
+            environment = os.environ.copy()
+            FNULL = open(os.devnull, 'w')
+            
+            for option in self.audio_controls:
+                if option['human_device_name'] == str(self.persistent_data['audio_output']):
+                    environment["ALSA_CARD"] = str(option['simple_card_name'])
+                    if self.DEBUG:
+                        print("environment = " + str(environment))
+            
+            
+                    try:
+                        if self.nanotts_process != None:
+                            self.nanotts_process.terminate()
+                    except:
+                        if self.DEBUG:
+                            print("nanotts_process did not exist yet")
+                    
+                    #my_env = os.environ.copy()
+                    #my_env["ALSA_CARD"] = str(self.current_card_id)
+                    #print('my_env["ALSA_CARD"] = ' + str(my_env["ALSA_CARD"]))
+            
+                   
+            
+                    nanotts_volume = int(self.persistent_data['speaker_volume']) / 100
+            
+                    if self.DEBUG:
+                        print("nanotts_volume = " + str(nanotts_volume))
+            
+                    #nanotts_command = (str(os.path.join(self.snips_path,'nanotts')), '-l',str(os.path.join(self.snips_path,'lang')),'-v',str(self.voice_accent),'--volume',str(nanotts_volume),'--speed',str(self.voice_speed),'--pitch',str(self.voice_pitch),'-p')
+            
+                    #if self.DEBUG:
+                    #    print("nanotts_command = " + str(nanotts_command))
+            
+            
+                    self.nanotts_process = subprocess.Popen(('echo', str(voice_message)), stdout=subprocess.PIPE)
+                    output = subprocess.check_output((str(os.path.join(self.snips_path,'nanotts')),'-l',str(os.path.join(self.snips_path,'lang')),'-v',str(self.voice_accent),'--volume',str(nanotts_volume),'--speed',str(self.voice_speed),'--pitch',str(self.voice_pitch),'-p'), stdin=self.nanotts_process.stdout, env=environment)
+                    self.nanotts_process.wait()
+                    
+                    #ps = subprocess.Popen(('echo', str(voice_message)), stdout=subprocess.PIPE)
+                    #output = subprocess.check_output((str(os.path.join(self.snips_path,'nanotts')), '-l',str(os.path.join(self.snips_path,'lang')),'-v',str(self.voice),'--volume',nanotts_volume,'--speed','0.9','--pitch','1.2','-p'), stdin=ps.stdout, env=my_env)
+                    #ps.wait()
+            
+                    #self.nanotts_process = subprocess.Popen(nanotts_command, 
+                    #                env=environment,
+                    #                stdin=subprocess.PIPE,
+                    #                stdout=subprocess.PIPE,
+                    #                stderr=subprocess.PIPE)
+            
+        except Exception as ex:
+            print("Error speaking: " + str(ex))
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#
+#  RUN SNIPS
+#
+
+
+    def run_snips(self):
+        
+        try:
+            time.sleep(1.11)
+            #self.play_sound(self.end_of_input_sound)
+        
+            commands = [
+                'snips-tts',
+                'snips-audio-server',
+                'snips-dialogue',
+                'snips-asr',
+                'snips-nlu',
+                'snips-injection'
+            ]
+        
+            my_env = os.environ.copy()
+            my_env["LD_LIBRARY_PATH"] = '{}:{}'.format(self.snips_path,self.arm_libs_path)
+        
+            #FNULL = open(os.devnull, 'w')
+            
+            if self.DEV:
+                print("--my_env = " + str(my_env))
+        
+            #print("starting mosquitto")
+            #mosquitto_command = [self.mosquitto_path,"-d"] # -d for daemon
+            #mosquitto_command = [self.mosquitto_path] # -d for daemon
+            #self.mosquitto_process = Popen(mosquitto_command, env=my_env) # Mosquitto is now a default part of the Mozilla WebThings Gateway.
+
+            #sleep(3) # Give mosquitto some time to start
+            #print("-- 3 seconds")
+            #self.play_sound(self.end_of_input_sound)
+        
+            # Start the snips parts
+            for unique_command in commands:
+                #print("")
+                #command = self.generate_normal_process_command(str(unique_command))
+                bin_path = os.path.join(self.snips_path,unique_command)
+                command = [bin_path,"-u",self.work_path,"-a",self.assistant_path,"-c",self.toml_path]
+                if unique_command == 'snips-audio-server':
+                    #command = command + ["--alsa_capture","plughw:" + str(self.capture_card_id) + "," + str(self.capture_device_id),"--alsa_playback","default:" + str(self.current_card_id) + "," + str(self.current_device_id)]
+                    command = command + ["--alsa_capture","plughw:" + str(self.capture_card_id) + "," + str(self.capture_device_id),"--alsa_playback","default:CARD=ALSA"]
+                    
+                
+                elif unique_command == 'snips-injection':
+                    command = command + ["-g",self.g2p_models_path]
+                #elif unique_command == 'snips-asr':
+                #    command = command + ["--thread_number","1"] # TODO Check if this actually helps.
+            
+                #command = command + ["&>","/dev/null"] #&> /dev/null
+                
+                #if self.DEV:
+                if self.DEBUG:
+                    print("--generated command = " + str(command))
+                
+                self.external_processes.append( Popen(command, env=my_env, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT) )
+                #retcode = subprocess.call(['echo', 'foo'], stdout=FNULL, stderr=subprocess.STDOUT)
+                
+                time.sleep(1)
+                if self.DEBUG:
+                    print("-- waiting 1 seconds in Snips startup loop")
+                #self.play_sound(self.end_of_input_sound)
+            
+            #if self.persistent_data['listening'] == True:
+            if self.hotword_process == None:
+                #if self.persistent_data['listening'] == True:
+                
+                hotword_command = [self.hotword_path,"-u",self.work_path,"-a",self.assistant_path,"-c",self.toml_path]
+                if self.DEBUG:
+                    print("hotword_command = " + str(hotword_command))
+                self.hotword_process = Popen(hotword_command, env=my_env, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
+
+                # Reflect the state of Snips on the thing
+                try:
+                    #self.devices['voco'].properties['listening'].update( bool(self.persistent_data['listening']) )
+                    self.devices['voco'].properties['listening'].update( True )
+                    if self.token != None:
+                        self.set_status_on_thing("Listening")
+                except Exception as ex:
+                    print("Error while setting the state on the thing: " + str(ex))
+                        
+                #else:
+                #    # Reflect the state of Snips on the thing
+                #    try:
+                #        self.devices['voco'].properties['listening'].update( bool(self.persistent_data['listening']) )
+                #        self.set_status_on_thing("Stopped")
+                #    except Exception as ex:
+                #        print("Error while setting the state on the thing: " + str(ex))
+                
+               
+        except Exception as ex:
+            print("Error starting Mosquitto/Snips processes: " + str(ex))    
+         
+        #for p in self.external_processes: 
+        #    p.wait()
+        #    print("Waiting...")
+        
+        #self.play_sound(self.end_of_input_sound)
+        
+        quick_counter = 0
+        while self.mqtt_client == None:
+            time.sleep(1)
+            quick_counter += 1
+            if quick_counter == 15:
+                break
+        
+        #try:
+        #    self.inject_updated_things_into_snips(True) # Check if there are new things/properties that Snips should learn about
+        #except Exception as ex:
+        #    print("Error, couldn't teach Snips the names of your things: " + str(ex))  
+        
+        return
+        
 
 
     def install_snips(self):
@@ -915,50 +1012,17 @@ class VocoAdapter(Adapter):
 
 
 
-    def scan_alsa(self,device_type):
-        """ Checks what audio hardware is available """
-        result = []
-        try:
-            if device_type == "playback":
-                command = "aplay -l"
-            if device_type == "capture":
-                command = "arecord -l"
-                
-            for line in run_command_with_lines(command):
-                #print(str(line))
-                
-                if line.startswith('card 0'):
-                    if 'device 0' in line:
-                        if device_type == 'playback':
-                            result.append('Built-in headphone jack (0,0)')
-                        if device_type == 'capture':
-                            result.append('Built-in microphone (0,0)')
-                    elif 'device 1' in line:
-                        if device_type == 'playback':
-                            result.append('Built-in HDMI (0,1)')
-                        if device_type == 'capture':
-                            result.append('Built-in microphone, channel 2 (0,1)')
-                            
-                if line.startswith('card 1'):
-                    if 'device 0' in line:
-                        result.append('Attached device (1,0)')
-                    #elif 'device 1' in line:
-                    #    if device_type == 'playback':
-                    #        result.append('Plugged-in (USB) device, channel 2 (1,1)')
-                    #    if device_type == 'capture':
-                    #        result.append('Plugged-in (USB) microphone, channel 2 (1,1)')
-                            
-                if line.startswith('card 2'):
-                    if 'device 0' in line:
-                        result.append('Second attached device (2,0)')
-                    elif 'device 1' in line:
-                        result.append('Second attached device, channel 2 (2,1)')
-                            
-        except Exception as e:
-            print("Error during ALSA scan: " + str(e))
-        return result
 
 
+
+
+
+
+
+
+#
+#  CLOCK
+#
 
     def clock(self, voice_messages_queue):
         """ Runs every second and handles the various timers """
@@ -1013,8 +1077,6 @@ class VocoAdapter(Adapter):
                                 self.play_sound(self.end_of_input_sound)
                                 voice_message = "This is a reminder to " + str(item['reminder_text'])
                                 self.speak(voice_message)
-
-
 
                             # Delayed setting of a boolean state
                             elif item['type'] == 'actuator' and self.current_utc_time >= int(item['moment']):
@@ -1146,6 +1208,21 @@ class VocoAdapter(Adapter):
 
 
 
+#
+#  THINGS PROPERTIES
+#
+
+    def set_status_on_thing(self,status_string):
+        """Set a string to the status property of the snips thing """
+        if self.DEBUG:
+            print("Setting status on thing to: " +str(status_string))
+        try:
+            if self.devices['voco'] != None:
+                self.devices['voco'].properties['status'].update( str(status_string) )
+        except:
+            print("Error setting status of voco device")
+
+
 
     # Count how many timers, alarms and reminders have now been set, and update the voco device
     def update_timer_counts(self):
@@ -1175,57 +1252,6 @@ class VocoAdapter(Adapter):
                 self.devices['voco'].properties[ str(timer_type) ].set_cached_value_and_notify( int(count) ) # Update the counts on the thing
         except Exception as ex:
             print("Error, could not update timer counts on the voco device: " + str(ex))
-
-
-
-    def unload(self):
-        print("Shutting down Voco. Talk to you soon!")
-               
-
-        try:
-            self.hotword_process.terminate()
-            self.hotword_process.wait()
-            print("Terminated the hotword")
-        except Exception as ex:
-            print("Error terminating the hotword process: " + str(ex))
-
-        try:
-            for process in self.external_processes:
-                process.terminate()
-                process.wait()
-                print("Terminated Snips process")
-        except Exception as ex:
-            print("Error terminating the hotword process: " + str(ex))
-
-
-        try:
-            #
-            self.mqtt_client.disconnect() # disconnect
-            self.mqtt_client.loop_stop()    #Stop loop 
-            #self.mqtt_client.loop.stop()
-        except Exception as ex:
-            print("Error cleanly closing Paho MQTT client: " + str(ex))
-        
-        
-        #try:
-            #self.mosquitto_process.terminate()
-            #self.mosquitto_process.wait()
-            #print("Terminated mosquitto")
-        #except Exception as ex:
-        #    print("Error terminating the mosquitto process: " + str(ex))
-        
-        self.running = False
-
-
-
-    def remove_thing(self, device_id):
-        try:
-            obj = self.get_device(device_id)        
-            self.handle_device_removed(obj)                     # Remove voco thing from device dictionary
-            if self.DEBUG:
-                print("User removed Voco device")
-        except:
-            print("Could not remove things from devices")
 
 
 
@@ -1307,6 +1333,25 @@ class VocoAdapter(Adapter):
             print("Error settings Snips feedback sounds preference: " + str(ex))
 
  
+ 
+ 
+    def remove_thing(self, device_id):
+        try:
+            obj = self.get_device(device_id)        
+            self.handle_device_removed(obj)                     # Remove voco thing from device dictionary
+            if self.DEBUG:
+                print("User removed Voco device")
+        except:
+            print("Could not remove things from devices")
+
+
+
+
+
+
+#
+#  PAIRING
+#
 
     def start_pairing(self, timeout):
         """
@@ -1344,6 +1389,56 @@ class VocoAdapter(Adapter):
         #    print("Error, couldn't teach Snips the names of your things: " + str(ex))  
 
 
+
+
+#
+#  UNLOAD
+#
+
+    def unload(self):
+        print("Shutting down Voco. Talk to you soon!")
+               
+
+        try:
+            self.hotword_process.terminate()
+            self.hotword_process.wait()
+            print("Terminated the hotword")
+        except Exception as ex:
+            print("Error terminating the hotword process: " + str(ex))
+
+        try:
+            for process in self.external_processes:
+                process.terminate()
+                process.wait()
+                print("Terminated Snips process")
+        except Exception as ex:
+            print("Error terminating the hotword process: " + str(ex))
+
+
+        try:
+            #
+            self.mqtt_client.disconnect() # disconnect
+            self.mqtt_client.loop_stop()    #Stop loop 
+            #self.mqtt_client.loop.stop()
+        except Exception as ex:
+            print("Error cleanly closing Paho MQTT client: " + str(ex))
+        
+        
+        #try:
+            #self.mosquitto_process.terminate()
+            #self.mosquitto_process.wait()
+            #print("Terminated mosquitto")
+        #except Exception as ex:
+        #    print("Error terminating the mosquitto process: " + str(ex))
+        
+        self.running = False
+
+
+
+
+#
+#  API
+#
 
     def api_get(self, api_path):
         """Returns data from the WebThings Gateway API."""
@@ -1418,6 +1513,10 @@ class VocoAdapter(Adapter):
 
 
 
+#
+#  PERSISTENCE
+#
+
     def save_persistent_data(self):
         if self.DEBUG:
             print("Saving to persistence data store at path: " + str(self.persistence_file_path))
@@ -1441,57 +1540,6 @@ class VocoAdapter(Adapter):
             print("Error: could not store data in persistent store: " + str(ex) )
             return False
 
-
-
-    def speak(self, voice_message="",site_id="default"):
-        try:
-            # TODO create a queue?
-
-            environment = os.environ.copy()
-            
-            for option in self.audio_controls:
-                if option['human_device_name'] == str(self.persistent_data['audio_output']):
-                    environment["ALSA_CARD"] = str(option['simple_card_name'])
-                    print("environment = " + str(environment))
-            
-            
-                    try:
-                        if self.nanotts_process != None:
-                            self.nanotts_process.terminate()
-                    except:
-                        print("nanotts_process did not exist yet")
-                    
-                    #my_env = os.environ.copy()
-                    #my_env["ALSA_CARD"] = str(self.playback_card_id)
-                    #print('my_env["ALSA_CARD"] = ' + str(my_env["ALSA_CARD"]))
-            
-                   
-            
-                    nanotts_volume = int(self.persistent_data['speaker_volume']) / 100
-            
-                    print("nanotts_volume = " + str(nanotts_volume))
-            
-                    nanotts_command = (str(os.path.join(self.snips_path,'nanotts')), '-l',str(os.path.join(self.snips_path,'lang')),'-v',str(self.voice),'--volume',str(nanotts_volume),'--speed','0.9','--pitch','1.2','-p')
-            
-                    print("nanotts_command = " + str(nanotts_command))
-            
-            
-                    self.nanotts_process = subprocess.Popen(('echo', str(voice_message)), stdout=subprocess.PIPE)
-                    output = subprocess.check_output((str(os.path.join(self.snips_path,'nanotts')), '-l',str(os.path.join(self.snips_path,'lang')),'-v',str(self.voice),'--volume',str(nanotts_volume),'--speed','0.9','--pitch','1.2','-p'), stdin=self.nanotts_process.stdout, env=environment)
-                    self.nanotts_process.wait()
-                    
-                    #ps = subprocess.Popen(('echo', str(voice_message)), stdout=subprocess.PIPE)
-                    #output = subprocess.check_output((str(os.path.join(self.snips_path,'nanotts')), '-l',str(os.path.join(self.snips_path,'lang')),'-v',str(self.voice),'--volume',nanotts_volume,'--speed','0.9','--pitch','1.2','-p'), stdin=ps.stdout, env=my_env)
-                    #ps.wait()
-            
-                    #self.nanotts_process = subprocess.Popen(nanotts_command, 
-                    #                env=environment,
-                    #                stdin=subprocess.PIPE,
-                    #                stdout=subprocess.PIPE,
-                    #                stderr=subprocess.PIPE)
-            
-        except Exception as ex:
-            print("Error speaking: " + str(ex))
 
 
 
@@ -1542,14 +1590,17 @@ class VocoAdapter(Adapter):
                     if self.DEBUG:
                         print(">> Hotword detected")
                     if self.persistent_data['feedback_sounds'] == True:
-                        self.play_sound(str(self.start_of_input_sound) )
+                        self.play_sound( str(self.start_of_input_sound) )
 
                 #elif msg.topic.endswith('/toggleOff'):
                 #    self.play_sound(str(self.alarm_sound) )
                 
                 elif msg.topic.endswith('/toggleOn'):
                     if self.persistent_data['feedback_sounds'] == True and self.intent_received == False:
+                        if self.DEBUG:
+                            print("No intent received")
                         self.play_sound(str(self.end_of_input_sound) )
+                        self.intent_received = True
                 
                 # TODO: To support satelites it will be necessary to 'throw the voice' via the Snips audio server:
                 #binaryFile = open(self.listening_sound, mode='rb')
@@ -1588,6 +1639,8 @@ class VocoAdapter(Adapter):
 #
 
     def master_intent_callback(self, intent_message):    # Triggered everytime Snips succesfully recognizes a voice intent
+        self.intent_received = True
+        
         try:
             incoming_intent = str(intent_message.intent.intentName)
             sentence = str(intent_message.input).lower()
@@ -1601,8 +1654,7 @@ class VocoAdapter(Adapter):
                 print(">> intent_message    : " + sentence)
                 print(">> session ID        : " + str(intent_message.sessionId))
                 print(">>")
-                
-                
+                  
 
             # check if there are multiple words in the sentence
             word_count = 1

@@ -13,7 +13,7 @@ class VocoNotifier(Notifier):
         Initialize the object.
         adapter -- the Adapter managing this device
         """
-        print("Initialisation of notifier")
+        #print("Initialisation of notifier")
         name = 'voco-notifier'
         self.name = name
         Notifier.__init__(self, 'voco-notifier', 'voco', verbose=True)
