@@ -301,13 +301,6 @@ class VocoAdapter(Adapter):
             print("Error scanning ALSA (audio devices): " + str(ex))
         
         
-        # Install Snips if it hasn't been installed already
-        try:
-            self.snips_installed = self.install_snips()
-        except Exception as ex:
-            print("Error while trying to install Snips/check if Snips should be installed: " + str(ex))
-            
-            
         # LOAD CONFIG
         
         try:
@@ -540,23 +533,6 @@ class VocoAdapter(Adapter):
 
         except:
             print("Error loading microphone settings")
-
-
-        try:
-            should_install = False
-
-            # if assistant.json is not in the assistant folder.
-            if not os.path.isdir( os.path.join(self.addon_path,"snips","assistant")):
-                should_install = True
-
-            # Install assistant if it hasn't been installed already
-            if should_install:
-                try:
-                    self.assistant_installed = self.install_assistant()
-                except Exception as ex:
-                    print("Error while trying to install assistant/check if should be installed: " + str(ex))     
-        except:
-            print("Error starting snips install process from settings")
                
                
         try:
@@ -957,58 +933,6 @@ class VocoAdapter(Adapter):
         #    print("Error, couldn't teach Snips the names of your things: " + str(ex))  
         
         return
-        
-
-
-    def install_snips(self):
-        """Install Snips using a shell command"""
-
-        try:
-            if os.path.isdir(self.snips_path):
-                print("Snips has already been extracted")
-                return True
-            
-            else:
-                print("It seems Snips hasn't been extracted yet - snips directory could not be found..")
-                
-                command = "tar xzf " + str(os.path.join(self.addon_path,"snips.tar")) + " --directory " + str(self.addon_path)
-                #print("Snips install command: " + str(command))
-                self.set_status_on_thing("Unpacking Snips")
-                if self.DEBUG:
-                    print("Snips install command: " + str(command))
-                if run_command(command) == 0:
-                    print("Succesfully extracted")
-                else:
-                    print("Error in call to extract")
-                        
-        except Exception as ex:
-            self.set_status_on_thing("Error during Snips installation")
-            print("Error in Snips installation: " + str(ex))
-            
-        return False
-
-
-
-
-
-    def install_assistant(self):
-        """Install snips/assistant.zip into snips/assistant directory"""
-        
-        print("Installing assistant")
-        try:
-            if not os.path.isfile( os.path.join(self.addon_path,"snips","assistant.zip") ):
-                print("Error: cannot install assistant: there doesn't seem to be an assistant.zip file in the snips folder of the addon.")
-                return False
-            command = "unzip -o assistant.zip"
-            if run_command(command, cwd=os.path.join(self.addon_path,"snips")) == 0:
-                self.set_status_on_thing("Succesfully installed assistant")
-                return True
-            else:
-                self.set_status_on_thing("Error installing assistant")
-                return False
-        except Exception as ex:
-            print("installing assistant: error: " + str(ex))
-        return False
 
 
 

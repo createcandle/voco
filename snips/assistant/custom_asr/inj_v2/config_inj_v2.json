@@ -1,0 +1,114 @@
+{
+    "snips/duration": {
+        "vanilla": "1998661d-aa99-4c0c-99a0-a6aaf1fbe95c.vanilla", 
+        "ngram": false, 
+        "added": "1998661d-aa99-4c0c-99a0-a6aaf1fbe95c.added", 
+        "pruningThresholds": [], 
+        "order": 0
+    }, 
+    "snips/ordinal": {
+        "vanilla": "1c743415-e9d2-49fc-aebb-0b70f830ece6.vanilla", 
+        "ngram": false, 
+        "added": "1c743415-e9d2-49fc-aebb-0b70f830ece6.added", 
+        "pruningThresholds": [], 
+        "order": 0
+    }, 
+    "string": {
+        "vanilla": "f20e77e7-9220-4834-8776-f32a0fbcb468.vanilla", 
+        "ngram": true, 
+        "added": "f20e77e7-9220-4834-8776-f32a0fbcb468.added", 
+        "pruningThresholds": [], 
+        "order": 3
+    }, 
+    "space": {
+        "vanilla": "2fd09929-a338-4a2f-ba53-2301ac33e2ac.vanilla", 
+        "ngram": true, 
+        "added": "2fd09929-a338-4a2f-ba53-2301ac33e2ac.added", 
+        "pruningThresholds": [], 
+        "order": 3
+    }, 
+    "color": {
+        "vanilla": "5955fbcf-a1f7-4b58-93b0-e54a544145b3.vanilla", 
+        "ngram": true, 
+        "added": "5955fbcf-a1f7-4b58-93b0-e54a544145b3.added", 
+        "pruningThresholds": [], 
+        "order": 3
+    }, 
+    "pleasantries": {
+        "vanilla": "d6f3e7c7-9bda-4c51-8c11-199da369eb04.vanilla", 
+        "ngram": true, 
+        "added": "d6f3e7c7-9bda-4c51-8c11-199da369eb04.added", 
+        "pruningThresholds": [], 
+        "order": 3
+    }, 
+    "period": {
+        "vanilla": "dd82315e-4735-4093-aba7-3c5d753e4e56.vanilla", 
+        "ngram": true, 
+        "added": "dd82315e-4735-4093-aba7-3c5d753e4e56.added", 
+        "pruningThresholds": [], 
+        "order": 3
+    }, 
+    "snips/number": {
+        "vanilla": "0c8987d9-bfe5-44af-b86a-4850ffc9fc1a.vanilla", 
+        "ngram": false, 
+        "added": "0c8987d9-bfe5-44af-b86a-4850ffc9fc1a.added", 
+        "pruningThresholds": [], 
+        "order": 0
+    }, 
+    "timer_last": {
+        "vanilla": "7ece76ea-50ca-446d-ac69-4d01bbf71b3c.vanilla", 
+        "ngram": true, 
+        "added": "7ece76ea-50ca-446d-ac69-4d01bbf71b3c.added", 
+        "pruningThresholds": [], 
+        "order": 3
+    }, 
+    "Thing": {
+        "vanilla": "a704bad0-1a04-4336-b205-84d94405b5a1.vanilla", 
+        "ngram": true, 
+        "added": "a704bad0-1a04-4336-b205-84d94405b5a1.added", 
+        "pruningThresholds": [], 
+        "order": 3
+    }, 
+    "snips/percentage": {
+        "vanilla": "989aabf8-be8d-4ef9-a1b4-5b1fbd78d886.vanilla", 
+        "ngram": false, 
+        "added": "989aabf8-be8d-4ef9-a1b4-5b1fbd78d886.added", 
+        "pruningThresholds": [], 
+        "order": 0
+    }, 
+    "special_time": {
+        "vanilla": "d9b49247-4250-4e12-bafa-ba6bf108c142.vanilla", 
+        "ngram": true, 
+        "added": "d9b49247-4250-4e12-bafa-ba6bf108c142.added", 
+        "pruningThresholds": [], 
+        "order": 3
+    }, 
+    "timer_type": {
+        "vanilla": "8f8816cb-8466-44b1-bf24-fbef4a85f9a3.vanilla", 
+        "ngram": true, 
+        "added": "8f8816cb-8466-44b1-bf24-fbef4a85f9a3.added", 
+        "pruningThresholds": [], 
+        "order": 3
+    }, 
+    "boolean": {
+        "vanilla": "ee091f5d-6b01-41a0-a24e-89a1a645c807.vanilla", 
+        "ngram": true, 
+        "added": "ee091f5d-6b01-41a0-a24e-89a1a645c807.added", 
+        "pruningThresholds": [], 
+        "order": 3
+    }, 
+    "Property": {
+        "vanilla": "e1ffde7b-6d4d-4bd8-adda-5375235c92bc.vanilla", 
+        "ngram": true, 
+        "added": "e1ffde7b-6d4d-4bd8-adda-5375235c92bc.added", 
+        "pruningThresholds": [], 
+        "order": 3
+    }, 
+    "snips/datetime": {
+        "vanilla": "d18b1457-d0b0-4bb2-9f9a-ab63233adbc8.vanilla", 
+        "ngram": false, 
+        "added": "d18b1457-d0b0-4bb2-9f9a-ab63233adbc8.added", 
+        "pruningThresholds": [], 
+        "order": 0
+    }
+}

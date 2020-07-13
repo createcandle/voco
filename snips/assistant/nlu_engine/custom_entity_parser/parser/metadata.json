@@ -1,0 +1,48 @@
+{
+  "parsers_metadata": [
+    {
+      "entity_identifier": "Property",
+      "entity_parser": "parser_1"
+    },
+    {
+      "entity_identifier": "Thing",
+      "entity_parser": "parser_2"
+    },
+    {
+      "entity_identifier": "boolean",
+      "entity_parser": "parser_3"
+    },
+    {
+      "entity_identifier": "color",
+      "entity_parser": "parser_4"
+    },
+    {
+      "entity_identifier": "period",
+      "entity_parser": "parser_5"
+    },
+    {
+      "entity_identifier": "pleasantries",
+      "entity_parser": "parser_6"
+    },
+    {
+      "entity_identifier": "space",
+      "entity_parser": "parser_7"
+    },
+    {
+      "entity_identifier": "special_time",
+      "entity_parser": "parser_8"
+    },
+    {
+      "entity_identifier": "string",
+      "entity_parser": "parser_9"
+    },
+    {
+      "entity_identifier": "timer_last",
+      "entity_parser": "parser_10"
+    },
+    {
+      "entity_identifier": "timer_type",
+      "entity_parser": "parser_11"
+    }
+  ]
+}
