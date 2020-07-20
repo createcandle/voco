@@ -133,18 +133,19 @@ class VocoAdapter(Adapter):
                 try:
                     self.persistent_data['listening'] = True
                     self.action_times = self.persistent_data['action_times']
-                    try:
-                        for index, item in enumerate(self.action_times):
-                            if str(item['type']) == 'countdown':
-                                print(str( item['moment'] ))
-                                if int(item['moment']) > time.time():
-                                    self.countdown = int(item['moment'])
-                                    print("countdown restored, counting down to UTC: " + str(self.countdown))
-                                else:
-                                    print("Countdown not restored as the target time was in the past")
-                        
-                    except:
-                        print("no countdown to restore")
+                    
+                    #try:
+                    #    for index, item in enumerate(self.action_times):
+                    #        if str(item['type']) == 'countdown':
+                    #            print(str( item['moment'] ))
+                    #            if int(item['moment']) > time.time():
+                    #                self.countdown = int(item['moment'])
+                    #                print("countdown restored, counting down to UTC: " + str(self.countdown))
+                    #            else:
+                    #                print("Countdown not restored as the target time was in the past")
+                    #    
+                    #except:
+                    #    print("no countdown to restore")
                     
                     try:
                         if 'audio_output' not in self.persistent_data:
@@ -783,8 +784,8 @@ class VocoAdapter(Adapter):
             for option in self.audio_controls:
                 if option['human_device_name'] == str(self.persistent_data['audio_output']):
                     environment["ALSA_CARD"] = str(option['simple_card_name'])
-                    if self.DEBUG:
-                        print("environment = " + str(environment))
+                    #if self.DEBUG:
+                    #    print("environment = " + str(environment))
             
             
                     try:
@@ -1048,11 +1049,13 @@ class VocoAdapter(Adapter):
                 self.current_utc_time = fresh_time
                 #timer_removed = False
                 try:
-
+                    
+                    
+                    
                     #print(str(self.current_utc_time))
 
                     for index, item in enumerate(self.action_times):
-                        #print("timer item = " + str(item))
+                        print("timer item = " + str(item))
 
                         try:
                             # Wake up alarm
@@ -1095,62 +1098,68 @@ class VocoAdapter(Adapter):
 
                             # Countdown
                             elif item['type'] == 'countdown':
-                                if item['moment'] >= self.current_utc_time: # This one is reversed - it's only trigger as long as it hasn't reached the target time.
-
-                                    countdown_delta = self.countdown - self.current_utc_time
-
-                                    # Update the countdown on the voco thing
-                                    if countdown_delta > 0:
-                                        self.devices['voco'].properties[ 'countdown' ].set_cached_value_and_notify( int(countdown_delta) )
-                                    else:    
-                                        self.devices['voco'].properties[ 'countdown' ].set_cached_value_and_notify( 0 )
+                                print("in countdown type")
+                                try:
+                                    if int(item['moment']) >= int(self.current_utc_time): # This one is reversed - it's only trigger as long as it hasn't reached the target time.
                                         
-                                    # Create speakable countdown message
-                                    if countdown_delta > 86400:
-                                        if countdown_delta % 86400 == 0:
+                                        #countdown_delta = self.countdown - self.current_utc_time
+                                        countdown_delta = int(item['moment']) - self.current_utc_time
+                                        
+                                        print("Countdown delta:" + str(countdown_delta))   
+                                        # Update the countdown on the voco thing
+                                        if countdown_delta > 0:
+                                            self.devices['voco'].properties[ 'countdown' ].set_cached_value_and_notify( int(countdown_delta) )
+                                        else:    
+                                            self.devices['voco'].properties[ 'countdown' ].set_cached_value_and_notify( 0 )
+                                        
+                                        # Create speakable countdown message
+                                        if countdown_delta > 86400:
+                                            if countdown_delta % 86400 == 0:
 
-                                            days_to_go = countdown_delta//86400
-                                            if days_to_go > 1:
-                                                voice_message = "countdown has " + str(days_to_go) + " days to go"
-                                            else:
-                                                voice_message = "countdown has " + str(days_to_go) + " day to go"
+                                                days_to_go = countdown_delta//86400
+                                                if days_to_go > 1:
+                                                    voice_message = "countdown has " + str(days_to_go) + " days to go"
+                                                else:
+                                                    voice_message = "countdown has " + str(days_to_go) + " day to go"
 
-                                    elif countdown_delta > 3599:
-                                        if countdown_delta % 3600 == 0:
+                                        elif countdown_delta > 3599:
+                                            if countdown_delta % 3600 == 0:
 
-                                            hours_to_go = countdown_delta//3600
-                                            if hours_to_go > 1:
-                                                voice_message = "countdown has " + str(hours_to_go) + " hours to go"
-                                            else:
-                                                voice_message = "countdown has " + str(hours_to_go) + " hour to go"
+                                                hours_to_go = countdown_delta//3600
+                                                if hours_to_go > 1:
+                                                    voice_message = "countdown has " + str(hours_to_go) + " hours to go"
+                                                else:
+                                                    voice_message = "countdown has " + str(hours_to_go) + " hour to go"
 
-                                    elif countdown_delta > 59:
-                                        if countdown_delta % 60 == 0:
+                                        elif countdown_delta > 59:
+                                            if countdown_delta % 60 == 0:
 
-                                            minutes_to_go = countdown_delta//60
-                                            if minutes_to_go > 1:
-                                                voice_message = "countdown has " + str(minutes_to_go) + " minutes to go"
-                                            else:
-                                                voice_message = "countdown has " + str(minutes_to_go) + " minute to go"
+                                                minutes_to_go = countdown_delta//60
+                                                if minutes_to_go > 1:
+                                                    voice_message = "countdown has " + str(minutes_to_go) + " minutes to go"
+                                                else:
+                                                    voice_message = "countdown has " + str(minutes_to_go) + " minute to go"
 
-                                    elif countdown_delta == 30:
-                                        voice_message = "Counting down 30 seconds"
+                                        elif countdown_delta == 30:
+                                            voice_message = "Counting down 30 seconds"
 
-                                    elif countdown_delta > 0 and countdown_delta < 11:
-                                        voice_message = str(int(countdown_delta))
+                                        elif countdown_delta > 0 and countdown_delta < 11:
+                                            voice_message = str(int(countdown_delta))
 
+                                        elif countdown_delta < 0:
+                                            print("countdown delta was negative, strange.")
+                                            del self.action_times[index]
+                                            self.save_persistent_data()
+                                        
+                                        if voice_message != "":
+                                            if self.DEBUG:
+                                                print("(...) " + str(voice_message))
+                                            self.speak(voice_message)
                                     else:
-                                        print("countdown delta was negative, strange.")
+                                        print("removing countdown item")
                                         del self.action_times[index]
-                                        self.save_persistent_data()
-                                        
-                                    if voice_message != "":
-                                        if self.DEBUG:
-                                            print("(...) " + str(voice_message))
-                                        self.speak(voice_message)
-                                else:
-                                    print("removing countdown item")
-                                    del self.action_times[index]
+                                except Exception as ex:
+                                    print("Error updating countdown: " + str(ex))
 
                             # Anything without a type will be treated as a normal timer.
                             elif self.current_utc_time >= int(item['moment']):
@@ -1194,11 +1203,11 @@ class VocoAdapter(Adapter):
                 except:
                     pass
 
-                # Update the persistence data is the number of timers has changed
+                # Update the persistence data if the number of timers has changed
                 try:
                     if len(self.action_times) != previous_action_times_count:
                         if self.DEBUG:
-                            print("New total amount of reminders+alarms+timers: " + str(len(self.action_times)))
+                            print("New total amount of reminders+alarms+timers+countdown: " + str(len(self.action_times)))
                         previous_action_times_count = len(self.action_times)
                         self.update_timer_counts()
                         self.persistent_data['action_times'] = self.action_times
@@ -1611,7 +1620,7 @@ class VocoAdapter(Adapter):
                 self.intent_received = True
                 if self.DEBUG:
                     print("-----------------------------------")
-                    print(">> other message.")
+                    print(">> Received intent message.")
                     print("message received "  + str(msg.payload.decode("utf-8")))
                     print("message topic = " + str(msg.topic))
                 intent_name = os.path.basename(os.path.normpath(msg.topic))
