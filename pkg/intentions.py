@@ -10,7 +10,7 @@ from os import path
 import sys
 
 import re
-
+import math
 import subprocess
 from subprocess import call
 
@@ -130,7 +130,8 @@ def intent_set_timer(self, slots, intent_message):
             return
         
         time_delta_seconds = moment - current_time
-        #print("time delta seconds: " + str(time_delta_seconds))
+        if self.DEBUG:
+            print("Countdown in seconds: " + str(time_delta_seconds))
         
         weeks_left = time_delta_seconds // 604800
         #print("weeks left: " + str(weeks_left))
@@ -172,19 +173,32 @@ def intent_set_timer(self, slots, intent_message):
             
         if str(slots['timer_type']) == "countdown": # only one countdown can exist. It's a special case.
             # first removing old countdown, if it existed.
-            for index, item in enumerate(self.action_times):
-                if str(item['type']) == 'countdown':
-                    if self.DEBUG:
-                        print("countdown already existed. Removing the old one.")
-                    item['moment'] = moment
-                    #countdown_existed = True
-                    del self.action_times[index]
+            try:
+                for index, item in enumerate(self.action_times):
+                    if str(item['type']) == 'countdown':
+                        if time_delta_seconds < 24192001: # only replace the old countdown if the new one is for a reasonable duration
+                            if self.DEBUG:
+                                print("countdown already existed. Removing the old one.")
+                            item['moment'] = moment
+                            #countdown_existed = True
+                            del self.action_times[index]
+                            voice_message += "The previous countdown has been removed. "
+            except Exception as ex:
+                print("Error removing previous countdown: " + str(ex))
             
             if self.DEBUG:
                 print("Creating new countdown")
-            self.countdown = moment
-            self.action_times.append({"moment":moment,"type":"countdown","slots":slots})
-            voice_message = "Starting countdown for " + time_delta_voice_message
+                
+            if time_delta_seconds < 24192001: # Countdown can be four weeks at maximum
+                self.countdown = moment
+                self.action_times.append({"moment":moment,"type":"countdown","slots":slots})
+                # Only tell the user the countdown details if there is enough time.
+                if len(voice_message) > 0 and time_delta_seconds > 15:
+                    voice_message += "Starting a new countdown for " + time_delta_voice_message
+                elif time_delta_seconds > 10:
+                    voice_message = "Starting countdown for " + time_delta_voice_message
+            else:
+                voice_message = "A countdown can not last longer than 4 weeks"
             
         elif str(slots['timer_type']) == "wake":
             self.action_times.append({"moment":moment,"type":"wake","slots":slots})
@@ -254,6 +268,8 @@ def intent_get_timer_count(self, slots, intent_message):
         voice_message = ""
         
         if str(slots['timer_type']) == 'countdown':
+            if self.DEBUG:
+                print("user asked about countdown")
             countdown_active = False
             for index, item in enumerate(self.action_times):
                 if str(item['type']) == 'countdown':
@@ -285,7 +301,7 @@ def intent_get_timer_count(self, slots, intent_message):
 
 
 
-def intent_list_timers(self, slots, intent_message): # TODO: try creating a timers object.
+def intent_list_timers(self, slots, intent_message):
     """ Tells the user details about their timers/reminders"""
     
     try:
@@ -299,59 +315,78 @@ def intent_list_timers(self, slots, intent_message): # TODO: try creating a time
         
         voice_message = ""
         
-        if self.timer_counts[str(slots['timer_type'])] == 0:
-            voice_message = "There are zero " + str(slots['timer_type']) + "s. "
+        print("self.timer_counts = " + str(self.timer_counts))
+        
+        # If the user asked about a countdown, say how much time is left.
+        if str(slots['timer_type']) == "countdown":
+            
+            countdown_delta = self.countdown - self.current_utc_time
+            
+            if countdown_delta > 7200:
+                hours_count = math.floor(countdown_delta / 3600)
+                countdown_delta = countdown_delta - (hours_count * 3600)
+                voice_message += "The countdown has " + str(hours_count) + " hours and " + str(math.floor(countdown_delta / 60)) + " minutes to go."
+            elif countdown_delta > 120:
+                voice_message += "The countdown has " + str(math.floor(countdown_delta / 60)) + " minutes and " + str(countdown_delta % 60) + " seconds to go."
+            else:
+                voice_message += "The countdown has " + str(countdown_delta) + " seconds to go."
+
+            
+            
         else:
-            if str(slots['timer_type']) != "countdown":
+            # If there are no timers of this type, then just say so.
+            if self.timer_counts[str(slots['timer_type'])] == 0:
+                voice_message = "There are zero " + str(slots['timer_type']) + "s. "
+                
+            else:
+                # If there is at least one timer, tell the user about all of them.
                 if int(self.timer_counts[ str(slots['timer_type'])]) > 1:
                     voice_message = "There are " + str(self.timer_counts[str(slots['timer_type'])]) + " " + str(slots['timer_type']) + "s. "
                     
-            timer_count = 0
-            for index, item in enumerate(self.action_times):
-                #print("timer item = " + str(item))
-                try:
-                    current_type = str(item['type'])
-                    if current_type == "wake":
-                        current_type = 'alarm' # wake up alarms count as normal alarms.
+                timer_count = 0
+                for index, item in enumerate(self.action_times):
+                    print("timer item = " + str(item))
+                    try:
+                        current_type = str(item['type'])
+                        if current_type == "wake":
+                            current_type = 'alarm' # wake up alarms count as normal alarms.
                         
-                    if current_type == "actuator" or current_type == "value":
-                        current_type = "timer"
+                        if current_type == "actuator" or current_type == "value":
+                            current_type = "timer"
                         
-                    if current_type == slots['timer_type']:
+                        if current_type == slots['timer_type']:
                         
-                        #if timer_count > 0:
-                        #    voice_message += " and "
+                            #if timer_count > 0:
+                            #    voice_message += " and "
                         
-                        timer_count += 1
+                            timer_count += 1
                         
-                        if str(slots['timer_type']) == 'countdown':
-                            voice_message += "The countdown"
-                        elif str(slots['timer_type']) == 'reminder':
-                            voice_message += "A reminder to " + str(item['reminder_text'])
-                        elif str(slots['timer_type']) == 'alarm':
-                            voice_message += "Alarm number " + str(timer_count)
-                        elif str(slots['timer_type']) == 'timer':
-                            voice_message += "Timer number " + str(timer_count)
-                            print(">> type = " + str(item['type']))
-                            if str(item['type']) == 'actuator':
-                                print("actuator timer")
-                                voice_message += ", which will toggle "
-                                if item['slots']['property'] != None:
-                                    voice_message += str(item['slots']['property']) + " of "
-                                voice_message += str(item['slots']['thing'])
-                                    # + " to " + str(item['original_value']) + ", "
-                                voice_message += ", "
-                            elif str(item['type']) == 'value':
-                                print("value timer")
-                                voice_message += ", which will set "
-                                if item['slots']['property'] != None:
-                                    voice_message += str(item['slots']['property']) + " of "
-                                voice_message += str(item['slots']['thing'])
-                                voice_message += " to " + str(item['original_value']) + ", "
+                            if str(slots['timer_type']) == 'reminder':
+                                voice_message += "A reminder to " + str(item['reminder_text'])
+                            elif str(slots['timer_type']) == 'alarm':
+                                voice_message += "Alarm number " + str(timer_count)
+                            elif str(slots['timer_type']) == 'timer':
+                                voice_message += "Timer number " + str(timer_count)
+                                print(">> type = " + str(item['type']))
+                                if str(item['type']) == 'actuator':
+                                    print("actuator timer")
+                                    voice_message += ", which will toggle "
+                                    if item['slots']['property'] != None:
+                                        voice_message += str(item['slots']['property']) + " of "
+                                    voice_message += str(item['slots']['thing'])
+                                        # + " to " + str(item['original_value']) + ", "
+                                    voice_message += ", "
+                                elif str(item['type']) == 'value':
+                                    print("value timer")
+                                    voice_message += ", which will set "
+                                    if item['slots']['property'] != None:
+                                        voice_message += str(item['slots']['property']) + " of "
+                                    voice_message += str(item['slots']['thing'])
+                                    voice_message += " to " + str(item['original_value']) + ", "
                                 
-                        voice_message += " is set for " + str(self.human_readable_time( int(item['moment']) )) + ". "
-                except Exception as ex:
-                    print("Error while building timer list voice_message: " + str(ex))
+                            voice_message += " is set for " + str(self.human_readable_time( int(item['moment']) )) + ". "
+                    except Exception as ex:
+                        print("Error while building timer list voice_message: " + str(ex))
                     
         voice_message = clean_up_string_for_speaking(voice_message)
         if self.DEBUG:
