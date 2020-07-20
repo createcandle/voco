@@ -91,9 +91,9 @@ class VocoAdapter(Adapter):
         
         verbose -- whether or not to enable verbose logging
         """
-        print("initialising Voco")
+        print("Starting Voco...")
         self.pairing = False
-        self.DEBUG = True
+        self.DEBUG = False
         self.DEV = False
         self.addon_name = 'voco'
         self.name = self.__class__.__name__ # VocoAdapter
@@ -161,7 +161,7 @@ class VocoAdapter(Adapter):
             print("Could not load persistent data (if you just installed the add-on then this is normal)")
             self.persistent_data = {'listening':True, 'feedback_sounds':True, 'speaker_volume':100, 'audio_output': str(self.audio_controls[0]['human_device_name'])}
             
-        print("self.persistent_data is now: " + str(self.persistent_data))
+        #print("self.persistent_data is now: " + str(self.persistent_data))
             
         self.opposites = {
                 "on":"off",
@@ -329,7 +329,8 @@ class VocoAdapter(Adapter):
         except Exception as ex:
             print("Error, couldn't load things at init: " + str(ex))
 
-        print("self.server is now: " + str(self.server))
+        if self.DEBUG:
+            print("self.server is now: " + str(self.server))
 
             
         # AUDIO
@@ -350,13 +351,13 @@ class VocoAdapter(Adapter):
 
         # Fix the audio output. The default on the WebThings image is HDMI.
         if self.speaker == "Headphone jack":
-            print("Setting audio output to headphone jack")
+            print("Setting Pi audio output to headphone jack")
             run_command("amixer cset numid=3 1")
         elif self.speaker == "HDMI":
-            print("Setting audio output to HDMI")
+            print("Setting Pi audio output to HDMI")
             run_command("amixer cset numid=3 2")
         elif self.speaker == "Auto":
-            print("Setting audio output to automatically switch")
+            print("Setting Pi audio output to automatically switch")
             run_command("amixer cset numid=3 0")
             
         # Get the initial speaker settings
@@ -410,11 +411,13 @@ class VocoAdapter(Adapter):
 
 
         # Start the internal clock which is used to handle timers. It also receives messages from the notifier.
-        print("Starting the internal clock")
+        if self.DEBUG:
+            print("Starting the internal clock")
         try:
             # Restore the timers, alarms and reminders from persistence.
             if 'action_times' in self.persistent_data:
-                print("loading action times from persistence") 
+                if self.DEBUG:
+                    print("loading action times from persistence") 
                 self.action_times = self.persistent_data['action_times']
             
             t = threading.Thread(target=self.clock, args=(self.voice_messages_queue,))
@@ -430,7 +433,8 @@ class VocoAdapter(Adapter):
         
         # Set the correct speaker volume
         try:
-            print("Speaker volume from persistence was: " + str(self.persistent_data['speaker_volume']))
+            if self.DEBUG:
+                print("Speaker volume from persistence was: " + str(self.persistent_data['speaker_volume']))
             self.set_speaker_volume(self.persistent_data['speaker_volume'])
         except Exception as ex:
             print("Could not set initial audio volume: " + str(ex))
@@ -477,7 +481,6 @@ class VocoAdapter(Adapter):
         except Exception as ex:
             print("Error creating extra MQTT connection: " + str(ex))
 
-        print("")
 
 
 
@@ -505,8 +508,7 @@ class VocoAdapter(Adapter):
             print("Error loading config from database")
             return
         
-        if self.DEV:
-            print(str(config))
+        #print(str(config))
 
         if 'Debugging' in config:
             print("-Debugging was in config")
@@ -539,11 +541,12 @@ class VocoAdapter(Adapter):
         try:
             # Store the settings that were changed by the add-on.
             if store_updated_settings:
-                print("Storing overridden settings")
+                if self.DEBUG:
+                    print("Storing overridden settings")
 
                 database = Database('voco')
                 if not database.open():
-                    print("Error, could not open settings database")
+                    print("Error, could not open settings database to store modified settings")
                     #return
                 else:
                     database.save_config(config)
@@ -558,13 +561,16 @@ class VocoAdapter(Adapter):
         # Time zone
         try:
             if 'Voice accent' in config:
-                print("-Voice accent is present in the config data.")
+                if self.DEBUG:
+                    print("-Voice accent is present in the config data.")
                 self.voice_accent = str(config['Voice accent'])
             if 'Voice pitch' in config:
-                print("-Voice pitch is present in the config data.")
+                if self.DEBUG:
+                    print("-Voice pitch is present in the config data.")
                 self.voice_pitch = str(config['Voice pitch'])
             if 'Voice speed' in config:
-                print("-Voice speed is present in the config data.")
+                if self.DEBUG:
+                    print("-Voice speed is present in the config data.")
                 self.voice_speed = str(config['Voice speed']) 
                 
         except Exception as ex:
@@ -574,7 +580,8 @@ class VocoAdapter(Adapter):
         # Metric or Imperial
         try:   
             if 'Metric' in config:
-                print("-Metric preference is present in the config data.")
+                if self.DEBUG:
+                    print("-Metric preference is present in the config data.")
                 self.metric = bool(config['Metric'])
                 if self.metric == False:
                     self.temperature_unit = 'degrees fahrenheit'
@@ -588,23 +595,12 @@ class VocoAdapter(Adapter):
         try:
             if 'Authorization token' in config:
                 self.token = str(config['Authorization token'])
-                print("-Authorization token is present in the config data.")
+                if self.DEBUG:
+                    print("-Authorization token is present in the config data.")
         except:
             print("Error loading api token from settings")
 
 
-        # Speaker volume
-        try:
-            if 'Speaker volume' in config:
-                print("-Speaker volume is present in the config data")
-                if 'speaker_volume' not in self.persistent_data:
-                    print("There was no volume level set in persistent data")
-                    self.persistent_data['speaker_volume'] = int(config['Speaker volume'])
-                else:
-                    print("--Using audio volume from persistent data")
-
-        except Exception as ex:
-            print("Error, couldn't get volume level: " + str(ex))
 
 
 
@@ -680,7 +676,8 @@ class VocoAdapter(Adapter):
             
         # Get the latest audio controls
         self.audio_controls = get_audio_controls()
-        print(self.audio_controls)
+        if self.DEBUG:
+            print(self.audio_controls)
         
         try:        
             for option in self.audio_controls:
@@ -712,14 +709,9 @@ class VocoAdapter(Adapter):
 
 
     def play_sound(self,sound_file):
-        #os.system("aplay " + str(sound_file) + " -D plughw:" + str(self.current_card_id) + "," + str(self.current_device_id))
         sound_file = os.path.splitext(sound_file)[0] + str(self.persistent_data['speaker_volume']) + '.wav'
-        
-        #os.system("aplay " + str(sound_file) + str(self.persistent_data['speaker_volume']) + " -D plughw:" + str(self.current_card_id) + "," + str(self.current_device_id))
-        
         os.system("aplay " + str(sound_file) + " -D plughw:" + str(self.current_card_id) + "," + str(self.current_device_id))
-        #os.system("aplay " + str(sound_file) + " -D dmix:CARD=" + str(self.current_simple_card_name) + ",DEV=" + str(self.current_device_id))
-        
+
         try:
             #environment = {}
             for option in self.audio_controls:
@@ -760,47 +752,22 @@ class VocoAdapter(Adapter):
             for option in self.audio_controls:
                 if option['human_device_name'] == str(self.persistent_data['audio_output']):
                     environment["ALSA_CARD"] = str(option['simple_card_name'])
-                    #if self.DEBUG:
-                    #    print("environment = " + str(environment))
-            
-            
+
                     try:
                         if self.nanotts_process != None:
                             self.nanotts_process.terminate()
                     except:
                         if self.DEBUG:
                             print("nanotts_process did not exist yet")
-                    
-                    #my_env = os.environ.copy()
-                    #my_env["ALSA_CARD"] = str(self.current_card_id)
-                    #print('my_env["ALSA_CARD"] = ' + str(my_env["ALSA_CARD"]))
-            
-                   
             
                     nanotts_volume = int(self.persistent_data['speaker_volume']) / 100
             
                     if self.DEBUG:
                         print("nanotts_volume = " + str(nanotts_volume))
             
-                    #nanotts_command = (str(os.path.join(self.snips_path,'nanotts')), '-l',str(os.path.join(self.snips_path,'lang')),'-v',str(self.voice_accent),'--volume',str(nanotts_volume),'--speed',str(self.voice_speed),'--pitch',str(self.voice_pitch),'-p')
-            
-                    #if self.DEBUG:
-                    #    print("nanotts_command = " + str(nanotts_command))
-            
-            
                     self.nanotts_process = subprocess.Popen(('echo', str(voice_message)), stdout=subprocess.PIPE)
                     output = subprocess.check_output((str(os.path.join(self.snips_path,'nanotts')),'-l',str(os.path.join(self.snips_path,'lang')),'-v',str(self.voice_accent),'--volume',str(nanotts_volume),'--speed',str(self.voice_speed),'--pitch',str(self.voice_pitch),'-p'), stdin=self.nanotts_process.stdout, env=environment)
                     self.nanotts_process.wait()
-                    
-                    #ps = subprocess.Popen(('echo', str(voice_message)), stdout=subprocess.PIPE)
-                    #output = subprocess.check_output((str(os.path.join(self.snips_path,'nanotts')), '-l',str(os.path.join(self.snips_path,'lang')),'-v',str(self.voice),'--volume',nanotts_volume,'--speed','0.9','--pitch','1.2','-p'), stdin=ps.stdout, env=my_env)
-                    #ps.wait()
-            
-                    #self.nanotts_process = subprocess.Popen(nanotts_command, 
-                    #                env=environment,
-                    #                stdin=subprocess.PIPE,
-                    #                stdout=subprocess.PIPE,
-                    #                stderr=subprocess.PIPE)
             
         except Exception as ex:
             print("Error speaking: " + str(ex))
@@ -827,7 +794,6 @@ class VocoAdapter(Adapter):
         
         try:
             time.sleep(1.11)
-            #self.play_sound(self.end_of_input_sound)
         
             commands = [
                 'snips-tts',
@@ -840,29 +806,15 @@ class VocoAdapter(Adapter):
         
             my_env = os.environ.copy()
             my_env["LD_LIBRARY_PATH"] = '{}:{}'.format(self.snips_path,self.arm_libs_path)
-        
-            #FNULL = open(os.devnull, 'w')
-            
-            if self.DEV:
-                print("--my_env = " + str(my_env))
-        
-            #print("starting mosquitto")
-            #mosquitto_command = [self.mosquitto_path,"-d"] # -d for daemon
-            #mosquitto_command = [self.mosquitto_path] # -d for daemon
-            #self.mosquitto_process = Popen(mosquitto_command, env=my_env) # Mosquitto is now a default part of the Mozilla WebThings Gateway.
 
-            #sleep(3) # Give mosquitto some time to start
-            #print("-- 3 seconds")
-            #self.play_sound(self.end_of_input_sound)
+            #print("--my_env = " + str(my_env))
         
             # Start the snips parts
             for unique_command in commands:
-                #print("")
-                #command = self.generate_normal_process_command(str(unique_command))
+                
                 bin_path = os.path.join(self.snips_path,unique_command)
                 command = [bin_path,"-u",self.work_path,"-a",self.assistant_path,"-c",self.toml_path]
                 if unique_command == 'snips-audio-server':
-                    #command = command + ["--alsa_capture","plughw:" + str(self.capture_card_id) + "," + str(self.capture_device_id),"--alsa_playback","default:" + str(self.current_card_id) + "," + str(self.current_device_id)]
                     command = command + ["--alsa_capture","plughw:" + str(self.capture_card_id) + "," + str(self.capture_device_id),"--alsa_playback","default:CARD=ALSA"]
                     
                 
@@ -871,21 +823,15 @@ class VocoAdapter(Adapter):
                 #elif unique_command == 'snips-asr':
                 #    command = command + ["--thread_number","1"] # TODO Check if this actually helps.
             
-                #command = command + ["&>","/dev/null"] #&> /dev/null
-                
-                #if self.DEV:
                 if self.DEBUG:
                     print("--generated command = " + str(command))
                 
                 self.external_processes.append( Popen(command, env=my_env, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT) )
-                #retcode = subprocess.call(['echo', 'foo'], stdout=FNULL, stderr=subprocess.STDOUT)
-                
+
                 time.sleep(1)
                 if self.DEBUG:
                     print("-- waiting 1 seconds in Snips startup loop")
-                #self.play_sound(self.end_of_input_sound)
             
-            #if self.persistent_data['listening'] == True:
             if self.hotword_process == None:
                 #if self.persistent_data['listening'] == True:
                 
@@ -914,24 +860,15 @@ class VocoAdapter(Adapter):
                
         except Exception as ex:
             print("Error starting Mosquitto/Snips processes: " + str(ex))    
-         
-        #for p in self.external_processes: 
-        #    p.wait()
-        #    print("Waiting...")
         
-        #self.play_sound(self.end_of_input_sound)
         
+        # Wait for the MQTT client to be up before continuing
         quick_counter = 0
         while self.mqtt_client == None:
             time.sleep(1)
             quick_counter += 1
             if quick_counter == 15:
                 break
-        
-        #try:
-        #    self.inject_updated_things_into_snips(True) # Check if there are new things/properties that Snips should learn about
-        #except Exception as ex:
-        #    print("Error, couldn't teach Snips the names of your things: " + str(ex))  
         
         return
 
@@ -956,16 +893,13 @@ class VocoAdapter(Adapter):
         while self.running:
 
             # Inject new thing names into snips if necessary
-            #if datetime.utcnow().timestamp() - self.minimum_injection_interval > self.last_injection_time: # + self.minimum_injection_interval > datetime.utcnow().timestamp():
             if time.time() - self.minimum_injection_interval > self.last_injection_time: # + self.minimum_injection_interval > datetime.utcnow().timestamp():
-                self.last_injection_time = time.time() #datetime.utcnow().timestamp()
-                #previous_injection_time = time.time()
+                self.last_injection_time = time.time()
                 self.inject_updated_things_into_snips()
                 
 
             voice_message = ""
-            #utcnow = int(time.time()) #datetime.now(tz=pytz.utc)
-            fresh_time = int(time.time()) #int(utcnow.timestamp())
+            fresh_time = int(time.time())
             
             if fresh_time == self.current_utc_time:
                 time.sleep(.1)
@@ -973,13 +907,10 @@ class VocoAdapter(Adapter):
                 self.current_utc_time = fresh_time
                 #timer_removed = False
                 try:
-                    
-                    
-                    
-                    #print(str(self.current_utc_time))
 
+                    # Loop over all action times
                     for index, item in enumerate(self.action_times):
-                        print("timer item = " + str(item))
+                        #print("timer item = " + str(item))
 
                         try:
                             # Wake up alarm
@@ -1029,7 +960,6 @@ class VocoAdapter(Adapter):
                                         #countdown_delta = self.countdown - self.current_utc_time
                                         countdown_delta = int(item['moment']) - self.current_utc_time
                                         
-                                        print("Countdown delta:" + str(countdown_delta))   
                                         # Update the countdown on the voco thing
                                         if countdown_delta > 0:
                                             self.devices['voco'].properties[ 'countdown' ].set_cached_value_and_notify( int(countdown_delta) )
@@ -1071,7 +1001,8 @@ class VocoAdapter(Adapter):
                                             voice_message = str(int(countdown_delta))
 
                                         elif countdown_delta < 0:
-                                            print("countdown delta was negative, strange.")
+                                            if self.DEBUG:
+                                                print("countdown delta was negative, strange.")
                                             del self.action_times[index]
                                             self.save_persistent_data()
                                         
@@ -1080,7 +1011,8 @@ class VocoAdapter(Adapter):
                                                 print("(...) " + str(voice_message))
                                             self.speak(voice_message)
                                     else:
-                                        print("removing countdown item")
+                                        if self.DEBUG:
+                                            print("removing countdown item")
                                         del self.action_times[index]
                                 except Exception as ex:
                                     print("Error updating countdown: " + str(ex))
@@ -1115,7 +1047,6 @@ class VocoAdapter(Adapter):
 
                 except Exception as ex:
                     print("Clock error: " + str(ex))
-
 
                 # Check if anything from the notifier should be spoken
                 try:
@@ -1176,7 +1107,7 @@ class VocoAdapter(Adapter):
                     self.timer_counts[current_type] += 1
             
             if self.DEBUG:
-                if self.DEBUG:print("updated timer counts = " + str(self.timer_counts))
+                print("updated timer counts = " + str(self.timer_counts))
 
             if countdown_active == False:
                 self.devices['voco'].properties[ 'countdown' ].set_cached_value_and_notify( 0 )
@@ -1215,13 +1146,15 @@ class VocoAdapter(Adapter):
         
         try:
             if active == True:
-                print("Setting to on")
+                #print("Setting to on")
                 if self.hotword_process != None:
                     poll = self.hotword_process.poll()
                     if poll == None:
-                        print("Hotword process seemed to already be running")
+                        if self.DEBUG:
+                            print("Hotword process seemed to already be running")
                     else:
-                        print("Starting hotword (again)")
+                        if self.DEBUG:
+                            print("Starting hotword (again)")
                         # (Re)Start the hotword detection
                         try:
                             hotword_command = [self.hotword_path,"-u",self.work_path,"-a",self.assistant_path,"-c",self.toml_path]
@@ -1233,7 +1166,8 @@ class VocoAdapter(Adapter):
                         except:
                             self.set_status_on_thing("Error starting")
                 else:
-                    print("self.hotword_process was None?")
+                    if self.DEBUG:
+                        print("self.hotword_process was None?")
                     try:
                         self.devices['voco'].connected = True
                         self.devices['voco'].connected_notify(True)
@@ -1241,7 +1175,8 @@ class VocoAdapter(Adapter):
                     except:
                         print("Could not set thing as connected")
             else:
-                print("stopping. Terminating hotword process.")
+                if self.DEBUG:
+                    print("stopping. Terminating hotword process.")
                 try:
                     self.hotword_process.kill()
                     self.set_status_on_thing("Stopped")
@@ -1310,16 +1245,9 @@ class VocoAdapter(Adapter):
         # Get all the things via the API.
         try:
             self.things = self.api_get("/things")
-            print("Did the API call")
+            #print("Did the things API call")
         except Exception as ex:
             print("Error, couldn't load things at init: " + str(ex))
-        
-            
-        # Teach Snips the names of all the things
-        #try:
-        #    self.inject_updated_things_into_snips() # will check if there are new things/properties that Snips should learn about
-        #except Exception as ex:
-        #    print("Error, couldn't teach Snips the names of your things: " + str(ex))  
 
 
 
@@ -1330,8 +1258,16 @@ class VocoAdapter(Adapter):
 
     def unload(self):
         print("Shutting down Voco. Talk to you soon!")
-               
-
+        self.running = False
+        
+        try:
+            #
+            self.mqtt_client.disconnect() # disconnect
+            self.mqtt_client.loop_stop()    #Stop loop 
+            #self.mqtt_client.loop.stop()
+        except Exception as ex:
+            print("Error cleanly closing Paho MQTT client: " + str(ex))
+            
         try:
             self.hotword_process.terminate()
             self.hotword_process.wait()
@@ -1347,24 +1283,7 @@ class VocoAdapter(Adapter):
         except Exception as ex:
             print("Error terminating the hotword process: " + str(ex))
 
-
-        try:
-            #
-            self.mqtt_client.disconnect() # disconnect
-            self.mqtt_client.loop_stop()    #Stop loop 
-            #self.mqtt_client.loop.stop()
-        except Exception as ex:
-            print("Error cleanly closing Paho MQTT client: " + str(ex))
         
-        
-        #try:
-            #self.mosquitto_process.terminate()
-            #self.mosquitto_process.wait()
-            #print("Terminated mosquitto")
-        #except Exception as ex:
-        #    print("Error terminating the mosquitto process: " + str(ex))
-        
-        self.running = False
 
 
 
@@ -1432,7 +1351,8 @@ class VocoAdapter(Adapter):
                 print("API PUT: " + str(r.status_code) + ", " + str(r.reason))
 
             if r.status_code != 200:
-                print("Error communicating: " + str(r.status_code))
+                if self.DEBUG:
+                    print("Error communicating: " + str(r.status_code))
                 return {"error": str(r.status_code)}
             else:
                 return json.loads(r.text)
@@ -1847,7 +1767,8 @@ class VocoAdapter(Adapter):
             print("SCANNING THINGS")
 
         if target_thing_title == None and target_property_title == None and target_space == None:
-            print("No useful input available for a search through the things. Cancelling...")
+            if self.DEBUG:
+                print("No useful input available for a search through the things. Cancelling...")
             return []
         
         
@@ -2195,20 +2116,17 @@ class VocoAdapter(Adapter):
                 elif item.value.kind == 'TimeInterval':
                     try:
                         slots['time_string'] = item.rawValue # The time as it was spoken
-                        print("TimeInterval slots['time_string'] = " + slots['time_string'])
-                        print("a")
+                        #print("TimeInterval slots['time_string'] = " + slots['time_string'])
                         try:
                             utc_timestamp = self.string_to_utc_timestamp(item.value.to)
                             if utc_timestamp > self.current_utc_time: # Only allow moments in the future
                                 slots['end_time'] = utc_timestamp
                             else:
                                 slots['end_time'] = utc_timestamp + 43200 # add 12 hours
-                            print("b")
                         except Exception as ex:
                             print("timeInterval end time extraction error" + str(ex))
                         try:
                             utc_timestamp = self.string_to_utc_timestamp(item.value['from'])
-                            print("c")
                             if utc_timestamp > self.current_utc_time: # Only allow moments in the future
                                 slots['start_time'] = utc_timestamp        
                             else:
@@ -2262,35 +2180,37 @@ class VocoAdapter(Adapter):
         
         try:
             if date_string == None:
-                print("string_to_utc_timestamp: date string was None.")
+                if self.DEBUG:
+                    print("string_to_utc_timestamp: date string was None.")
                 return 0
                 
             if self.DEBUG:
                 print("string_to_utc_timestamp. Date string: " + str(date_string))
             
             if(ignore_timezone):
-                print("ignoring timezone")
+                if self.DEBUG:
+                    print("ignoring timezone")
                 if '+' in date_string:
                     simpler_times = date_string.split('+', 1)[0]
                 else:
                     simpler_times = date_string
-                print("@split string: " + str(simpler_times))
+                #print("@split string: " + str(simpler_times))
                 naive_datetime = parse(simpler_times)
-                print("@naive datetime: " + str(naive_datetime))
+                #print("@naive datetime: " + str(naive_datetime))
                 localized_datetime = self.user_timezone.localize(naive_datetime)
                 if self.DEBUG:
                     print("@localized_datetime: " + str(localized_datetime))
                 localized_timestamp = int(localized_datetime.timestamp()) #- self.seconds_offset_from_utc
             else:
-                print("accounting for timezone")
+                #print("accounting for timezone")
                 aware_datetime = parse(date_string)
-                print("aware datetime = " + str(aware_datetime))
+                #print("aware datetime = " + str(aware_datetime))
                 naive_datetime = aware_datetime.astimezone(timezone(self.time_zone)).replace(tzinfo=None)
-                print("naive date object: " + str(naive_datetime))
+                #print("naive date object: " + str(naive_datetime))
                 localized_datetime = self.user_timezone.localize(naive_datetime)
                 localized_timestamp = localized_datetime.timestamp()
-                print("localized_timestamp = " + str(localized_timestamp))
-                print("time.time = " + str(time.time()))
+                #print("localized_timestamp = " + str(localized_timestamp))
+                #print("time.time = " + str(time.time()))
                 if self.DEBUG:
                     print("@localized_timestamp = " + str(localized_timestamp))
                 
