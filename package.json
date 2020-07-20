@@ -1,7 +1,7 @@
 {
   "name": "voco",
   "display_name": "Voco",
-  "version": "1.1.2",
+  "version": "1.1.3",
   "description": "Privacy friendly voice control. Say 'Hey Snips' to start a voice command.",
   "author": "CreateCandle",
   "main": "main.py",
@@ -36,9 +36,9 @@
     "sounds/end_of_input.wav",
     "sounds/end_spot.wav",
     "sounds/error.wav",
-    "snips.tar",
-	"manifest.json",
-	"package.json"
+    "snips",
+    "manifest.json",
+    "package.json"
   ],
   "moziot": {
     "api": {
@@ -52,9 +52,9 @@
       "Microphone": "Attached device (1,0)",
       "Speaker": "Auto",
       "Metric": true,
-	  "Voice accent": "en-GB",
-	  "Voice pitch": "1.2",
-	  "Voice speed": "0.9",
+      "Voice accent": "en-GB",
+      "Voice pitch": "1.2",
+      "Voice speed": "0.9",
       "Debugging": false
     },
     "schema": {
@@ -78,7 +78,7 @@
           "enum": [
             "Built-in microphone (0,0)",
             "Attached device (1,0)",
-			"ReSpeaker (2,0)"
+            "ReSpeaker (2,0)"
           ]
         },
         "Speaker": {
@@ -97,52 +97,52 @@
         "Voice accent": {
           "description": "Select an accent that you'd like the speaking voice to have. Default is en-GB.",
           "enum": [
-			  "en-US", 
-			  "en-GB"
+			      "en-US", 
+			      "en-GB"
           ],
           "type": "string"
         },
         "Voice pitch": {
           "description": "Select how high or low you'd like to voice to sound. Default is 1.2.",
           "enum": [
-			  "0.5", 
-			  "0.6", 
-			  "0.7", 
-			  "0.8", 
-			  "0.9", 
-			  "1.0", 
-			  "1.1", 
-			  "1.2", 
-			  "1.3", 
-			  "1.4", 
-			  "1.5", 
-			  "1.6", 
-			  "1.7", 
-			  "1.8", 
-			  "1.9", 
-			  "2.0"
+            "0.5",
+            "0.6",
+            "0.7",
+            "0.8",
+            "0.9",
+            "1.0",
+            "1.1",
+            "1.2",
+            "1.3",
+            "1.4",
+            "1.5",
+            "1.6",
+            "1.7",
+            "1.8",
+            "1.9",
+            "2.0"
           ],
           "type": "string"
         },
         "Voice speed": {
           "description": "Select fast should the voice speak? Default is 0.9.",
           "enum": [
-			  "0.5", 
-			  "0.6", 
-			  "0.7", 
-			  "0.8", 
-			  "0.9", 
-			  "1.0", 
-			  "1.1", 
-			  "1.2", 
-			  "1.3", 
-			  "1.4", 
-			  "1.5", 
-			  "1.6", 
-			  "1.7", 
-			  "1.8", 
-			  "1.9", 
-			  "2.0"
+            "0.5",
+            "0.6",
+            "0.7",
+            "0.8",
+            "0.9",
+            "1.0",
+            "1.1",
+            "1.2",
+            "1.3",
+            "1.4",
+            "1.5",
+            "1.6",
+            "1.7",
+            "1.8",
+            "1.9",
+            "2.0"
           ],
           "type": "string"
         },

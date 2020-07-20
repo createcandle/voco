@@ -58,7 +58,6 @@ These are all examples. You don't have to say things exactly like this. Any comm
 
 # Features
 - Strong focus on privacy. Once installed, there is no internet connection required or used. Listening can be toggled on and off.
-- Extendable. Override the built-in assistant with one you created yourself at snips.ai. To keep the above mentioned abilities, make sure you add the 'Candle' app to your assistant.
 
 # Recommended hardware
 The Playstation Eye is a 4-microphone array that can be plugged into your Raspberry Pi via USB.  It can be bought new for about $12.
