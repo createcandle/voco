@@ -923,6 +923,9 @@ def intent_set_state(self, slots, intent_message, delayed_action=None):   # If i
                                         pass
                                     else:
                                         #if len(found_properties) > 1:
+                                        if str(found_property['property']) == 'on/off':
+                                            found_property['property'] = 'power'
+                                        
                                         voice_message += " Setting " + str(found_property['property']) + " of " + str(found_property['thing']) + str(back) + " to " + str(human_readable_desired_state)
                                         if self.DEBUG:
                                             print(str(voice_message))
@@ -1208,6 +1211,9 @@ def intent_set_value(self, slots, intent_message, original_value):
                                         print("PUT to API was successful")
                                         
                                     if len(found_properties) > 1:
+                                        if str(found_property['property']) == 'on/off':
+                                            found_property['property'] = 'power'
+                                        
                                         voice_message = "Setting " + str(found_property['property']) + back + " to " + str(desired_value) + str(addendum) + " . " + extra_message
                                     else:
                                         voice_message = "Setting " + str(found_property['thing']) + back + " to " + str(desired_value) + str(addendum) + " . " + extra_message
