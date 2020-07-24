@@ -341,24 +341,34 @@ class VocoAdapter(Adapter):
             self.capture_card_id = 0
             self.capture_device_id = 0
         elif self.microphone == "Attached device (1,0)":
-            print("Setting audio input to USB/Hat")
+            print("Setting audio input to attached device")
             self.capture_card_id = 1
             self.capture_device_id = 0
-        elif self.microphone == "ReSpeaker (2,0)":
-            print("Setting audio input to ReSpeaker")
+        elif self.microphone == "Attached device, channel 2 (1,1)":
+            print("Setting audio input to attached device, channel 2")
+            self.capture_card_id = 1
+            self.capture_device_id = 1
+        elif self.microphone == "Second attached device (2,0)":
+            print("Setting audio input to second attached device")
             self.capture_card_id = 2
             self.capture_device_id = 0
+        elif self.microphone == "Second attached device, channel 2 (2,1)":
+            print("Setting audio input to second attached device, channel 2")
+            self.capture_card_id = 2
+            self.capture_device_id = 1
+
 
         # Fix the audio output. The default on the WebThings image is HDMI.
-        if self.speaker == "Headphone jack":
+        if self.speaker == "Auto":
+            print("Setting Pi audio output to automatically switch")
+            run_command("amixer cset numid=3 0")
+        elif self.speaker == "Headphone jack":
             print("Setting Pi audio output to headphone jack")
             run_command("amixer cset numid=3 1")
         elif self.speaker == "HDMI":
             print("Setting Pi audio output to HDMI")
             run_command("amixer cset numid=3 2")
-        elif self.speaker == "Auto":
-            print("Setting Pi audio output to automatically switch")
-            run_command("amixer cset numid=3 0")
+
             
         # Get the initial speaker settings
         for option in self.audio_controls:
@@ -711,34 +721,6 @@ class VocoAdapter(Adapter):
     def play_sound(self,sound_file):
         sound_file = os.path.splitext(sound_file)[0] + str(self.persistent_data['speaker_volume']) + '.wav'
         os.system("aplay " + str(sound_file) + " -D plughw:" + str(self.current_card_id) + "," + str(self.current_device_id))
-
-        try:
-            #environment = {}
-            for option in self.audio_controls:
-                if option['human_device_name'] == str(self.persistent_data['audio_output']):
-                    #environment["ALSA_CARD"] = str(option['simple_card_name'])
-                    pass
-        
-                    #try:
-                    #    if self.sound_player != None:
-                    #        self.sound_player.terminate()
-                    #except:
-                    #    if self.DEBUG:
-                    #        print("Sound player process did not exist yet")
-                    
-                    #sound_command = 'ALSA_CARD=plughw:' + str(self.current_card_id) + ',' + str(self.current_device_id) +  ' ffplay -nodisp -vn -infbuf -autoexit -v 0 -volume ' + str(self.persistent_data['speaker_volume']) + ' ' +  str(sound_file)
-                    #sound_command = ("ffplay", "-nodisp", "-vn", "-infbuf","-autoexit", "-v","0","-volume",str(self.persistent_data['speaker_volume']), str(sound_file) )
-                    #if self.DEBUG:
-                        #print("environment = " + str(environment))
-                    #    print("sound_command = " + str(sound_command))
-                    #    print("playing sound file: " + str(sound_file))
-                    #self.sound_player = subprocess.Popen(sound_command, 
-                    #                env=environment,
-                    #                stdin=subprocess.PIPE,
-                    #                stdout=subprocess.PIPE,
-                    #                stderr=subprocess.PIPE)
-        except Exception as ex:
-            print("Error playing sound: " + str(ex))
 
 
 

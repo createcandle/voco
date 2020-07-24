@@ -1,4 +1,4 @@
-from gateway_addon import Device, Property, Notifier, Outlet
+from gateway_addon import Device, Property
 
 
 #
@@ -98,14 +98,14 @@ class VocoDevice(Device):
                             },
                             0)
             self.properties["countdown"] = VocoProperty(
-                                self,
-                                "countdown",
-                                {
-                                    'label': "Countdown",
-                                    'type': 'integer',
-                                    'readOnly': True
-                                },
-                                0)
+                            self,
+                            "countdown",
+                            {
+                                'label': "Countdown",
+                                'type': 'integer',
+                                'readOnly': True
+                            },
+                            0)
                                 
                                 
                                 
@@ -118,7 +118,7 @@ class VocoDevice(Device):
                                 'type': 'string',
                                 'enum': audio_output_list,
                             },
-                            self.adapter.persistent_data['audio_output'])
+                            str(self.adapter.persistent_data['audio_output']))
                                 
                                 
         except Exception as ex:
