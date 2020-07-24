@@ -36,16 +36,19 @@
           "type": "boolean"
         },
         "Microphone": {
-          "description": "What type of microphone have you connected? If you want to use the ReSpeaker Pi Hat you will have to intall the drivers manually.",
+          "description": "What type of microphone have you connected? With a USB microphone it's most likely 'Attached device (1,0)'. If you want to use the ReSpeaker Pi Hat you will have to intall the drivers manually.",
           "enum": [
             "Built-in microphone (0,0)",
+			"Built-in microphone, channel 2 (0,1)",
             "Attached device (1,0)",
-            "Attached device (2,0)"
+			"Attached device, channel 2 (1,1)",
+            "Second attached device (2,0)",
+			"Second attached device, channel 2 (2,1)"
           ],
           "type": "string"
         },
         "Speaker": {
-          "description": "In some cases the Raspberry Pi might be set to a specific audio output. Here you can 'force' it to be a certain output.",
+          "description": "In some cases the Raspberry Pi might be set to a specific audio output. Here you can 'force' it to be a certain output. Default is 'auto'.",
           "enum": [
             "Auto",
             "Headphone jack",
@@ -122,5 +125,5 @@
     }
   },
   "short_name": "Voco",
-  "version": "1.1.3"
+  "version": "1.1.4"
 }

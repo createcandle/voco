@@ -752,6 +752,9 @@ class VocoAdapter(Adapter):
             for option in self.audio_controls:
                 if option['human_device_name'] == str(self.persistent_data['audio_output']):
                     environment["ALSA_CARD"] = str(option['simple_card_name'])
+                    if self.DEBUG:
+                        print("Alsa environment variable for speech output set to: " + str(option['simple_card_name']))
+                        
 
                     try:
                         if self.nanotts_process != None:

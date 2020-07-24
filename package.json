@@ -1,7 +1,7 @@
 {
   "name": "voco",
   "display_name": "Voco",
-  "version": "1.1.3",
+  "version": "1.1.4",
   "description": "Privacy friendly voice control. Say 'Hey Snips' to start a voice command.",
   "author": "CreateCandle",
   "main": "main.py",
@@ -74,12 +74,15 @@
         },
         "Microphone": {
           "type": "string",
-          "description": "What type of microphone have you connected? The Playstation Eye is a cheap and good option. If you want to use the ReSpeaker hat you will have to intall the drivers manually.",
+          "description": "What type of microphone have you connected? With a USB microphone it's most likely 'Attached device (1,0)'. If you want to use the ReSpeaker Pi Hat you will have to intall the drivers manually.",
           "enum": [
             "Built-in microphone (0,0)",
+			"Built-in microphone, channel 2 (0,1)",
             "Attached device (1,0)",
-            "ReSpeaker (2,0)"
-          ]
+			"Attached device, channel 2 (1,1)",
+            "Second attached device (2,0)",
+			"Second attached device, channel 2 (2,1)"
+          ],
         },
         "Speaker": {
           "type": "string",
