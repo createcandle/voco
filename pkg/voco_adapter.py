@@ -106,7 +106,7 @@ class VocoAdapter(Adapter):
 
         # Get initial audio output options
         self.audio_controls = get_audio_controls()
-        print(self.audio_controls)
+        print("audio controls: " + str(self.audio_controls))
 
         
         # Get persistent data
@@ -149,6 +149,7 @@ class VocoAdapter(Adapter):
                     
                     try:
                         if 'audio_output' not in self.persistent_data:
+                            print("audio output was not in persistent data, adding it now.")
                             self.persistent_data['audio_output'] = str(self.audio_controls[0]['human_device_name'])
                     except:
                         print("Error fixing audio output in persistent data")
@@ -159,9 +160,17 @@ class VocoAdapter(Adapter):
         except:
             first_run = True
             print("Could not load persistent data (if you just installed the add-on then this is normal)")
-            self.persistent_data = {'listening':True, 'feedback_sounds':True, 'speaker_volume':100, 'audio_output': str(self.audio_controls[0]['human_device_name'])}
-            
-        #print("self.persistent_data is now: " + str(self.persistent_data))
+            try:
+                self.persistent_data = {'listening':True, 'feedback_sounds':True, 'speaker_volume':100, 'audio_output': str(self.audio_controls[0]['human_device_name'])}
+            except Exception as ex:
+                print("Error setting initial audio output device: " + str(ex))
+                self.persistent_data = {'listening':True, 'feedback_sounds':True, 'speaker_volume':100, 'audio_output': 'Built-in headphone jack'}
+                
+        print("self.persistent_data is now: " + str(self.persistent_data))
+        
+        if 'audio_output' not in self.persistent_data:
+            print("audio output was still not in self.persistent_data")
+            self.persistent_data['audio_output'] = 'Built-in headphone jack'
             
         self.opposites = {
                 "on":"off",
@@ -264,7 +273,7 @@ class VocoAdapter(Adapter):
         # create list of human readable audio-only output options for thing property
         self.audio_output_options = []
         for option in self.audio_controls:
-            self.audio_output_options.append( option['human_device_name'] )
+            self.audio_output_options.append( str(option['human_device_name']) )
 
         if self.DEBUG:
             print("self.audio_output_options = " + str(self.audio_output_options))
@@ -335,48 +344,59 @@ class VocoAdapter(Adapter):
             
         # AUDIO
 
-        # Fix the audio input.
-        if self.microphone == "Built-in microphone (0,0)":
-            print("Setting audio input to built-in")
-            self.capture_card_id = 0
-            self.capture_device_id = 0
-        elif self.microphone == "Attached device (1,0)":
-            print("Setting audio input to attached device")
-            self.capture_card_id = 1
-            self.capture_device_id = 0
-        elif self.microphone == "Attached device, channel 2 (1,1)":
-            print("Setting audio input to attached device, channel 2")
-            self.capture_card_id = 1
-            self.capture_device_id = 1
-        elif self.microphone == "Second attached device (2,0)":
-            print("Setting audio input to second attached device")
-            self.capture_card_id = 2
-            self.capture_device_id = 0
-        elif self.microphone == "Second attached device, channel 2 (2,1)":
-            print("Setting audio input to second attached device, channel 2")
-            self.capture_card_id = 2
-            self.capture_device_id = 1
+        try:
+            # Fix the audio input.
+            if self.microphone == "Built-in microphone (0,0)":
+                print("Setting audio input to built-in")
+                self.capture_card_id = 0
+                self.capture_device_id = 0
+            elif self.microphone == "Attached device (1,0)":
+                print("Setting audio input to attached device")
+                self.capture_card_id = 1
+                self.capture_device_id = 0
+            elif self.microphone == "Attached device, channel 2 (1,1)":
+                print("Setting audio input to attached device, channel 2")
+                self.capture_card_id = 1
+                self.capture_device_id = 1
+            elif self.microphone == "Second attached device (2,0)":
+                print("Setting audio input to second attached device")
+                self.capture_card_id = 2
+                self.capture_device_id = 0
+            elif self.microphone == "Second attached device, channel 2 (2,1)":
+                print("Setting audio input to second attached device, channel 2")
+                self.capture_card_id = 2
+                self.capture_device_id = 1
 
 
-        # Fix the audio output. The default on the WebThings image is HDMI.
-        if self.speaker == "Auto":
-            print("Setting Pi audio output to automatically switch")
-            run_command("amixer cset numid=3 0")
-        elif self.speaker == "Headphone jack":
-            print("Setting Pi audio output to headphone jack")
-            run_command("amixer cset numid=3 1")
-        elif self.speaker == "HDMI":
-            print("Setting Pi audio output to HDMI")
-            run_command("amixer cset numid=3 2")
+            # Fix the audio output. The default on the WebThings image is HDMI.
+            if self.speaker == "Auto":
+                print("Setting Pi audio output to automatically switch")
+                run_command("amixer cset numid=3 0")
+            elif self.speaker == "Headphone jack":
+                print("Setting Pi audio output to headphone jack")
+                run_command("amixer cset numid=3 1")
+            elif self.speaker == "HDMI":
+                print("Setting Pi audio output to HDMI")
+                run_command("amixer cset numid=3 2")
 
+            
+
+        except Exception as ex:
+            print("error setting initial audio output settings: " + str(ex))
+        
             
         # Get the initial speaker settings
         for option in self.audio_controls:
-            if option['human_device_name'] == str(self.persistent_data['audio_output']):
-                self.current_simple_card_name = option['simple_card_name']
-                self.current_card_id = option['card_id']
-                self.current_device_id = option['device_id']
-            
+            try:
+                if str(option['human_device_name']) == str(self.persistent_data['audio_output']):
+                    self.current_simple_card_name = option['simple_card_name']
+                    self.current_card_id = option['card_id']
+                    self.current_device_id = option['device_id']
+            except Exception as ex:
+                print("error getting initial audio settings: " + str(ex))
+                self.current_simple_card_name = "ALSA"
+                self.current_card_id = 0
+                self.current_device_id = 0
         
         # TIME
         
@@ -732,7 +752,7 @@ class VocoAdapter(Adapter):
             FNULL = open(os.devnull, 'w')
             
             for option in self.audio_controls:
-                if option['human_device_name'] == str(self.persistent_data['audio_output']):
+                if str(option['human_device_name']) == str(self.persistent_data['audio_output']):
                     environment["ALSA_CARD"] = str(option['simple_card_name'])
                     if self.DEBUG:
                         print("Alsa environment variable for speech output set to: " + str(option['simple_card_name']))
