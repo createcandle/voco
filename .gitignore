@@ -3,5 +3,7 @@
 *.swp
 *.tgz
 *~
+.DS_Store
+._*
 /lib/
 /package/
