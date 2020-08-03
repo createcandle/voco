@@ -106,7 +106,7 @@ class VocoAdapter(Adapter):
 
         # Get initial audio output options
         self.audio_controls = get_audio_controls()
-        print(self.audio_controls)
+        print("audio controls: " + str(self.audio_controls))
 
         
         # Get persistent data
@@ -149,6 +149,7 @@ class VocoAdapter(Adapter):
                     
                     try:
                         if 'audio_output' not in self.persistent_data:
+                            print("audio output was not in persistent data, adding it now.")
                             self.persistent_data['audio_output'] = str(self.audio_controls[0]['human_device_name'])
                     except:
                         print("Error fixing audio output in persistent data")
@@ -159,9 +160,17 @@ class VocoAdapter(Adapter):
         except:
             first_run = True
             print("Could not load persistent data (if you just installed the add-on then this is normal)")
-            self.persistent_data = {'listening':True, 'feedback_sounds':True, 'speaker_volume':100, 'audio_output': str(self.audio_controls[0]['human_device_name'])}
-            
-        #print("self.persistent_data is now: " + str(self.persistent_data))
+            try:
+                self.persistent_data = {'listening':True, 'feedback_sounds':True, 'speaker_volume':100, 'audio_output': str(self.audio_controls[0]['human_device_name'])}
+            except Exception as ex:
+                print("Error setting initial audio output device: " + str(ex))
+                self.persistent_data = {'listening':True, 'feedback_sounds':True, 'speaker_volume':100, 'audio_output': 'Built-in headphone jack'}
+                
+        print("self.persistent_data is now: " + str(self.persistent_data))
+        
+        if 'audio_output' not in self.persistent_data:
+            print("audio output was still not in self.persistent_data")
+            self.persistent_data['audio_output'] = 'Built-in headphone jack'
             
         self.opposites = {
                 "on":"off",
@@ -249,6 +258,7 @@ class VocoAdapter(Adapter):
         self.end_of_input_sound = os.path.join(self.addon_path,"sounds","end_of_input.wav")
         self.alarm_sound = os.path.join(self.addon_path,"sounds","alarm.wav")
         self.error_sound = os.path.join(self.addon_path,"sounds","error.wav")
+        self.response_wav = os.path.join(self.addon_path,"snips","response.wav")
 
 
         # Make sure the work directory exists
@@ -264,7 +274,7 @@ class VocoAdapter(Adapter):
         # create list of human readable audio-only output options for thing property
         self.audio_output_options = []
         for option in self.audio_controls:
-            self.audio_output_options.append( option['human_device_name'] )
+            self.audio_output_options.append( str(option['human_device_name']) )
 
         if self.DEBUG:
             print("self.audio_output_options = " + str(self.audio_output_options))
@@ -335,48 +345,59 @@ class VocoAdapter(Adapter):
             
         # AUDIO
 
-        # Fix the audio input.
-        if self.microphone == "Built-in microphone (0,0)":
-            print("Setting audio input to built-in")
-            self.capture_card_id = 0
-            self.capture_device_id = 0
-        elif self.microphone == "Attached device (1,0)":
-            print("Setting audio input to attached device")
-            self.capture_card_id = 1
-            self.capture_device_id = 0
-        elif self.microphone == "Attached device, channel 2 (1,1)":
-            print("Setting audio input to attached device, channel 2")
-            self.capture_card_id = 1
-            self.capture_device_id = 1
-        elif self.microphone == "Second attached device (2,0)":
-            print("Setting audio input to second attached device")
-            self.capture_card_id = 2
-            self.capture_device_id = 0
-        elif self.microphone == "Second attached device, channel 2 (2,1)":
-            print("Setting audio input to second attached device, channel 2")
-            self.capture_card_id = 2
-            self.capture_device_id = 1
+        try:
+            # Fix the audio input.
+            if self.microphone == "Built-in microphone (0,0)":
+                print("Setting audio input to built-in")
+                self.capture_card_id = 0
+                self.capture_device_id = 0
+            elif self.microphone == "Attached device (1,0)":
+                print("Setting audio input to attached device")
+                self.capture_card_id = 1
+                self.capture_device_id = 0
+            elif self.microphone == "Attached device, channel 2 (1,1)":
+                print("Setting audio input to attached device, channel 2")
+                self.capture_card_id = 1
+                self.capture_device_id = 1
+            elif self.microphone == "Second attached device (2,0)":
+                print("Setting audio input to second attached device")
+                self.capture_card_id = 2
+                self.capture_device_id = 0
+            elif self.microphone == "Second attached device, channel 2 (2,1)":
+                print("Setting audio input to second attached device, channel 2")
+                self.capture_card_id = 2
+                self.capture_device_id = 1
 
 
-        # Fix the audio output. The default on the WebThings image is HDMI.
-        if self.speaker == "Auto":
-            print("Setting Pi audio output to automatically switch")
-            run_command("amixer cset numid=3 0")
-        elif self.speaker == "Headphone jack":
-            print("Setting Pi audio output to headphone jack")
-            run_command("amixer cset numid=3 1")
-        elif self.speaker == "HDMI":
-            print("Setting Pi audio output to HDMI")
-            run_command("amixer cset numid=3 2")
+            # Fix the audio output. The default on the WebThings image is HDMI.
+            if self.speaker == "Auto":
+                print("Setting Pi audio output to automatically switch")
+                run_command("amixer cset numid=3 0")
+            elif self.speaker == "Headphone jack":
+                print("Setting Pi audio output to headphone jack")
+                run_command("amixer cset numid=3 1")
+            elif self.speaker == "HDMI":
+                print("Setting Pi audio output to HDMI")
+                run_command("amixer cset numid=3 2")
 
+            
+
+        except Exception as ex:
+            print("error setting initial audio output settings: " + str(ex))
+        
             
         # Get the initial speaker settings
         for option in self.audio_controls:
-            if option['human_device_name'] == str(self.persistent_data['audio_output']):
-                self.current_simple_card_name = option['simple_card_name']
-                self.current_card_id = option['card_id']
-                self.current_device_id = option['device_id']
-            
+            try:
+                if str(option['human_device_name']) == str(self.persistent_data['audio_output']):
+                    self.current_simple_card_name = option['simple_card_name']
+                    self.current_card_id = option['card_id']
+                    self.current_device_id = option['device_id']
+            except Exception as ex:
+                print("error getting initial audio settings: " + str(ex))
+                self.current_simple_card_name = "ALSA"
+                self.current_card_id = 0
+                self.current_device_id = 0
         
         # TIME
         
@@ -415,10 +436,11 @@ class VocoAdapter(Adapter):
             
             
         # Create notifier
-        
-        self.voice_messages_queue = queue.Queue()
-        self.notifier = VocoNotifier(self,self.voice_messages_queue,verbose=True) # TODO: It could be nice to move speech completely to a queue system so that voice never overlaps.
-
+        try:
+            self.voice_messages_queue = queue.Queue()
+            self.notifier = VocoNotifier(self,self.voice_messages_queue,verbose=True) # TODO: It could be nice to move speech completely to a queue system so that voice never overlaps.
+        except:
+            print("Error creating notifier")
 
         # Start the internal clock which is used to handle timers. It also receives messages from the notifier.
         if self.DEBUG:
@@ -466,17 +488,20 @@ class VocoAdapter(Adapter):
         time.sleep(5.4) # Snips needs some time to start
         
         #if self.persistent_data['listening'] == True:
-        self.speak("Hello, I am Snips. ")
+        try:
+            self.speak("Hello, I am Snips. ")
     
-        if first_run:
-            time.sleep(.5)
-            self.speak("If you would like to ask me something, say. Hey Snips. ")
+            if first_run:
+                time.sleep(.5)
+                self.speak("If you would like to ask me something, say. Hey Snips. ")
         
-        if self.token == None:
-            time.sleep(1)
-            print("PLEASE ENTER YOUR AUTHORIZATION CODE IN THE SETTINGS PAGE")
-            self.set_status_on_thing("Authorization code missing, check settings")
-            self.speak("I cannot connect to your devices because the authorization code is missing. Check the voco settings page for details.")
+            if self.token == None:
+                time.sleep(1)
+                print("PLEASE ENTER YOUR AUTHORIZATION CODE IN THE SETTINGS PAGE")
+                self.set_status_on_thing("Authorization code missing, check settings")
+                self.speak("I cannot connect to your devices because the authorization code is missing. Check the voco settings page for details.")
+        except:
+            print("Error saying hello")
             
         try:
             self.mqtt_client = client.Client(client_id="voco_mqtt_snips_client")
@@ -719,8 +744,11 @@ class VocoAdapter(Adapter):
 
 
     def play_sound(self,sound_file):
-        sound_file = os.path.splitext(sound_file)[0] + str(self.persistent_data['speaker_volume']) + '.wav'
-        os.system("aplay " + str(sound_file) + " -D plughw:" + str(self.current_card_id) + "," + str(self.current_device_id))
+        try:
+            sound_file = os.path.splitext(sound_file)[0] + str(self.persistent_data['speaker_volume']) + '.wav'
+            os.system("aplay " + str(sound_file) + " -D plughw:" + str(self.current_card_id) + "," + str(self.current_device_id))
+        except Exception as ex:
+            print("Error playing sound: " + str(ex))
 
 
 
@@ -732,7 +760,7 @@ class VocoAdapter(Adapter):
             FNULL = open(os.devnull, 'w')
             
             for option in self.audio_controls:
-                if option['human_device_name'] == str(self.persistent_data['audio_output']):
+                if str(option['human_device_name']) == str(self.persistent_data['audio_output']):
                     environment["ALSA_CARD"] = str(option['simple_card_name'])
                     if self.DEBUG:
                         print("Alsa environment variable for speech output set to: " + str(option['simple_card_name']))
@@ -751,8 +779,12 @@ class VocoAdapter(Adapter):
                         print("nanotts_volume = " + str(nanotts_volume))
             
                     self.nanotts_process = subprocess.Popen(('echo', str(voice_message)), stdout=subprocess.PIPE)
-                    output = subprocess.check_output((str(os.path.join(self.snips_path,'nanotts')),'-l',str(os.path.join(self.snips_path,'lang')),'-v',str(self.voice_accent),'--volume',str(nanotts_volume),'--speed',str(self.voice_speed),'--pitch',str(self.voice_pitch),'-p'), stdin=self.nanotts_process.stdout, env=environment)
+                    output = subprocess.check_output((str(os.path.join(self.snips_path,'nanotts')),'-l',str(os.path.join(self.snips_path,'lang')),'-v',str(self.voice_accent),'--volume',str(nanotts_volume),'--speed',str(self.voice_speed),'--pitch',str(self.voice_pitch),'-w','-o',self.response_wav), stdin=self.nanotts_process.stdout, env=environment)
                     self.nanotts_process.wait()
+                    try:
+                        os.system("aplay -D plughw:" + str(self.current_card_id) + "," + str(self.current_device_id) + ' ' + self.response_wav )
+                    except Exception as ex:
+                        print("Error playing spoken voice response: " + str(ex))
             
         except Exception as ex:
             print("Error speaking: " + str(ex))
@@ -1124,7 +1156,7 @@ class VocoAdapter(Adapter):
                 print("Error setting listening state: " + str(ex))
         else:
             self.set_status_on_thing("Missing token, check settings")
-            
+
         return
         
         # This is no longer used. It used to try and disable the hotword service, but this wasn't robust.
@@ -1184,7 +1216,7 @@ class VocoAdapter(Adapter):
                 self.save_persistent_data()
         except Exception as ex:
             print("Error settings Snips feedback sounds preference: " + str(ex))
-
+        
  
  
  

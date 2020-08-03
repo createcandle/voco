@@ -44,4 +44,4 @@ tar czf ${TARFILE} package
 shasum --algorithm 256 ${TARFILE} > ${TARFILE}.sha256sum
 cat ${TARFILE}.sha256sum
 
-rm -rf SHA256SUMS package
+#rm -rf SHA256SUMS package
