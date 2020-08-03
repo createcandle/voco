@@ -258,6 +258,7 @@ class VocoAdapter(Adapter):
         self.end_of_input_sound = os.path.join(self.addon_path,"sounds","end_of_input.wav")
         self.alarm_sound = os.path.join(self.addon_path,"sounds","alarm.wav")
         self.error_sound = os.path.join(self.addon_path,"sounds","error.wav")
+        self.response_wav = os.path.join(self.addon_path,"snips","response.wav")
 
 
         # Make sure the work directory exists
@@ -435,10 +436,11 @@ class VocoAdapter(Adapter):
             
             
         # Create notifier
-        
-        self.voice_messages_queue = queue.Queue()
-        self.notifier = VocoNotifier(self,self.voice_messages_queue,verbose=True) # TODO: It could be nice to move speech completely to a queue system so that voice never overlaps.
-
+        try:
+            self.voice_messages_queue = queue.Queue()
+            self.notifier = VocoNotifier(self,self.voice_messages_queue,verbose=True) # TODO: It could be nice to move speech completely to a queue system so that voice never overlaps.
+        except:
+            print("Error creating notifier")
 
         # Start the internal clock which is used to handle timers. It also receives messages from the notifier.
         if self.DEBUG:
@@ -486,17 +488,20 @@ class VocoAdapter(Adapter):
         time.sleep(5.4) # Snips needs some time to start
         
         #if self.persistent_data['listening'] == True:
-        self.speak("Hello, I am Snips. ")
+        try:
+            self.speak("Hello, I am Snips. ")
     
-        if first_run:
-            time.sleep(.5)
-            self.speak("If you would like to ask me something, say. Hey Snips. ")
+            if first_run:
+                time.sleep(.5)
+                self.speak("If you would like to ask me something, say. Hey Snips. ")
         
-        if self.token == None:
-            time.sleep(1)
-            print("PLEASE ENTER YOUR AUTHORIZATION CODE IN THE SETTINGS PAGE")
-            self.set_status_on_thing("Authorization code missing, check settings")
-            self.speak("I cannot connect to your devices because the authorization code is missing. Check the voco settings page for details.")
+            if self.token == None:
+                time.sleep(1)
+                print("PLEASE ENTER YOUR AUTHORIZATION CODE IN THE SETTINGS PAGE")
+                self.set_status_on_thing("Authorization code missing, check settings")
+                self.speak("I cannot connect to your devices because the authorization code is missing. Check the voco settings page for details.")
+        except:
+            print("Error saying hello")
             
         try:
             self.mqtt_client = client.Client(client_id="voco_mqtt_snips_client")
@@ -739,8 +744,11 @@ class VocoAdapter(Adapter):
 
 
     def play_sound(self,sound_file):
-        sound_file = os.path.splitext(sound_file)[0] + str(self.persistent_data['speaker_volume']) + '.wav'
-        os.system("aplay " + str(sound_file) + " -D plughw:" + str(self.current_card_id) + "," + str(self.current_device_id))
+        try:
+            sound_file = os.path.splitext(sound_file)[0] + str(self.persistent_data['speaker_volume']) + '.wav'
+            os.system("aplay " + str(sound_file) + " -D plughw:" + str(self.current_card_id) + "," + str(self.current_device_id))
+        except Exception as ex:
+            print("Error playing sound: " + str(ex))
 
 
 
@@ -771,8 +779,12 @@ class VocoAdapter(Adapter):
                         print("nanotts_volume = " + str(nanotts_volume))
             
                     self.nanotts_process = subprocess.Popen(('echo', str(voice_message)), stdout=subprocess.PIPE)
-                    output = subprocess.check_output((str(os.path.join(self.snips_path,'nanotts')),'-l',str(os.path.join(self.snips_path,'lang')),'-v',str(self.voice_accent),'--volume',str(nanotts_volume),'--speed',str(self.voice_speed),'--pitch',str(self.voice_pitch),'-p'), stdin=self.nanotts_process.stdout, env=environment)
+                    output = subprocess.check_output((str(os.path.join(self.snips_path,'nanotts')),'-l',str(os.path.join(self.snips_path,'lang')),'-v',str(self.voice_accent),'--volume',str(nanotts_volume),'--speed',str(self.voice_speed),'--pitch',str(self.voice_pitch),'-w','-o',self.response_wav), stdin=self.nanotts_process.stdout, env=environment)
                     self.nanotts_process.wait()
+                    try:
+                        os.system("aplay -D plughw:" + str(self.current_card_id) + "," + str(self.current_device_id) + ' ' + self.response_wav )
+                    except Exception as ex:
+                        print("Error playing spoken voice response: " + str(ex))
             
         except Exception as ex:
             print("Error speaking: " + str(ex))
@@ -1144,7 +1156,7 @@ class VocoAdapter(Adapter):
                 print("Error setting listening state: " + str(ex))
         else:
             self.set_status_on_thing("Missing token, check settings")
-            
+
         return
         
         # This is no longer used. It used to try and disable the hotword service, but this wasn't robust.
@@ -1204,7 +1216,7 @@ class VocoAdapter(Adapter):
                 self.save_persistent_data()
         except Exception as ex:
             print("Error settings Snips feedback sounds preference: " + str(ex))
-
+        
  
  
  
