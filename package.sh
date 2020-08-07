@@ -3,7 +3,7 @@
 version=$(grep '"version"' manifest.json | cut -d: -f2 | cut -d\" -f2)
 
 # Clean up from previous releases
-rm -rf *.tgz package SHA256SUMS lib
+rm -rf *.tgz *.shasum package SHA256SUMS lib
 
 # Remove the injections
 if [ -d "snips/work/injections" ]

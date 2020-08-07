@@ -109,7 +109,8 @@ class VocoDevice(Device):
                                 
                                 
                                 
-            print("adding audio output property with list: " + str(audio_output_list))
+            if self.adapter.DEBUG:
+                print("adding audio output property to Voco thing with list: " + str(audio_output_list))
             self.properties["audio output"] = VocoProperty(
                             self,
                             "audio output",
@@ -149,7 +150,8 @@ class VocoProperty(Property):
     def set_value(self, value):
         #print(str(value))
         try:
-            print("set_value called for: " + str(self.title))
+            if self.device.adapter.DEBUG:
+                print("set_value called for: " + str(self.title))
             if self.title == 'volume':
                 self.device.adapter.set_speaker_volume(int(value))
                 #self.update(value)
@@ -159,6 +161,7 @@ class VocoProperty(Property):
                 #self.update(value)
 
             if self.title == 'listening':
+                self.device.adapter.was_listening_when_microphone_disconnected = bool(value) # if the user consciously changes this, then override the setting.
                 self.device.adapter.set_snips_state(bool(value))
                 #self.update(value)
                 
@@ -171,13 +174,19 @@ class VocoProperty(Property):
 
 
     def update(self, value):         
-        print("property -> update. Value = " + str(value))
+        if self.device.adapter.DEBUG:
+            print("property -> update. Value = " + str(value))
         
         if value != self.value:
-            print("new value")
+            
             self.value = value
             
             #set_cached_value_and_notify
             
             self.set_cached_value(value)
             self.device.notify_property_changed(self)
+            if self.device.adapter.DEBUG:
+                print("property updated to new value")
+        else:
+            if self.device.adapter.DEBUG:
+                print("property was already that value")

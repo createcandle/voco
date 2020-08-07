@@ -1,5 +1,5 @@
 {
-  "author": "CreateCandle",
+  "author": "CandleSmartHome.com",
   "description": "Privacy friendly voice control. Say 'Hey Snips' to start a voice command.",
   "gateway_specific_settings": {
     "webthings": {
@@ -23,6 +23,10 @@
       "Voice accent": "en-GB",
       "Voice pitch": "1.2",
       "Voice speed": "0.9",
+	  "Hotword sensitivity": "0.5",
+	  "MQTT server": "localhost",
+	  "MQTT port": "1883",
+	  "satellite":false,
       "Debugging": false
     },
     "schema": {
@@ -108,6 +112,34 @@
           ],
           "type": "string"
         },
+        "Hotword sensitivity": {
+          "description": "How sensitive should the system be to 'hey snips'? If it's often responding when nobody said the actual hotword, the you could try lowering this sensitivity. Default is 0.5.",
+          "enum": [
+              "0.1",
+              "0.2",
+              "0.3",
+              "0.4",
+              "0.5",
+              "0.6",
+              "0.7",
+              "0.8",
+              "0.9",
+              "1.0"
+          ],
+          "type": "string"
+        },
+        "MQTT server": {
+          "description": "Advanced. You can override what server acts as the MQTT hub. For example, you could set the IP address of the 'main device' that runs Voco in your network. Default is 'localhost', which means it's the device itself.",
+          "type": "string"
+        },
+        "MQTT port": {
+          "description": "Advanced. You can override which MQTT port will be used. Default is 1883.",
+          "type": "string"
+        },
+        "Satellite": {
+          "description": "Is this device the primary voice control server in your home, or is it a satellite that should talk to another central server? It can only be a satellite if a MQTT server address is set that is not 'localhost'.",
+          "type": "boolean"
+        },
         "Debugging": {
           "description": "Debugging allows you to diagnose any issues with the add-on. If enabled it will result in a lot more debug data in the internal log (which can be found under settings -> developer -> view internal logs).",
           "type": "boolean"
@@ -116,14 +148,11 @@
       "required": [
         "Microphone",
         "Speaker",
-        "Token",
-		"Voice accent",
-		"Voice pitch",
-		"Voice speed"
+        "Token"
       ],
       "type": "object"
     }
   },
   "short_name": "Voco",
-  "version": "1.2.0"
+  "version": "2.0.0"
 }
