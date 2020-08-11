@@ -42,7 +42,7 @@
     "schema": {
       "properties": {
         "Authorization token": {
-          "description": "To be allowed to get information on all your devices, you have to create an 'authorization' code. It's basically a very long password. You can generate it yourself under Settings -> Developer -> Create local authorization",
+          "description": "To be allowed to get information on all your devices, you have to create an 'authorization' code. It's basically a very long password. You can generate it yourself under Settings -> Developer -> Create local authorization. Any code you add here will override the code set througn the interface.",
           "type": "string"
         },
         "Metric": {
@@ -140,18 +140,6 @@
               "1.0"
           ],
           "type": "string"
-        },
-        "MQTT server": {
-          "description": "Advanced. You can override what server acts as the MQTT hub. For example, you could set the IP address of the 'main device' that runs Voco in your network. Default is 'localhost', which means it's the device itself.",
-          "type": "string"
-        },
-        "MQTT port": {
-          "description": "Advanced. You can override which MQTT port will be used. Default is 1883.",
-          "type": "string"
-        },
-        "Satellite": {
-          "description": "Is this device the primary voice control server in your home, or is it a satellite that should talk to another central server? It can only be a satellite if a MQTT server address is set that is not 'localhost'.",
-          "type": "boolean"
         },
         "Debugging": {
           "description": "Debugging allows you to diagnose any issues with the add-on. If enabled it will result in a lot more debug data in the internal log (which can be found under settings -> developer -> view internal logs).",
