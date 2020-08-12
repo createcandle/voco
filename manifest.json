@@ -1,10 +1,20 @@
 {
-  "author": "CreateCandle",
+  "author": "CandleSmartHome.com",
   "description": "Privacy friendly voice control. Say 'Hey Snips' to start a voice command.",
+  "content_scripts": [
+    {
+      "css": [
+        "css/extension.css"
+      ],
+      "js": [
+        "js/extension.js"
+      ]
+    }
+  ],  
   "gateway_specific_settings": {
     "webthings": {
       "exec": "python3 {path}/main.py",
-      "primary_type": "adapter",
+	  "primary_type": "adapter",
       "strict_max_version": "*",
       "strict_min_version": "0.10.0"
     }
@@ -23,12 +33,16 @@
       "Voice accent": "en-GB",
       "Voice pitch": "1.2",
       "Voice speed": "0.9",
+	  "Hotword sensitivity": "0.5",
+	  "MQTT server": "localhost",
+	  "MQTT port": "1883",
+	  "satellite":false,
       "Debugging": false
     },
     "schema": {
       "properties": {
         "Authorization token": {
-          "description": "To be allowed to get information on all your devices, you have to create an 'authorization' code. It's basically a very long password. You can generate it yourself under Settings -> Developer -> Create local authorization",
+          "description": "To be allowed to get information on all your devices, you have to create an 'authorization' code. It's basically a very long password. You can generate it yourself under Settings -> Developer -> Create local authorization. Any code you add here will override the code set througn the interface.",
           "type": "string"
         },
         "Metric": {
@@ -59,8 +73,8 @@
         "Voice accent": {
           "description": "Select an accent that you'd like the speaking voice to have. Default is en-GB",
           "enum": [
-			      "en-US", 
-			      "en-GB"
+			  "en-US", 
+			  "en-GB"
           ],
           "type": "string"
         },
@@ -108,6 +122,25 @@
           ],
           "type": "string"
         },
+        "Hotword sensitivity": {
+          "description": "How sensitive should the system be to 'hey snips'? If it's often responding when nobody said the actual hotword, the you could try lowering this sensitivity. Default is 0.5.",
+          "enum": [
+              "0.1",
+              "0.2",
+              "0.3",
+              "0.4",
+			  "0.45",
+              "0.5",
+			  "0.55",
+              "0.6",
+			  "0.65",
+              "0.7",
+              "0.8",
+              "0.9",
+              "1.0"
+          ],
+          "type": "string"
+        },
         "Debugging": {
           "description": "Debugging allows you to diagnose any issues with the add-on. If enabled it will result in a lot more debug data in the internal log (which can be found under settings -> developer -> view internal logs).",
           "type": "boolean"
@@ -116,14 +149,18 @@
       "required": [
         "Microphone",
         "Speaker",
-        "Token",
-		"Voice accent",
-		"Voice pitch",
-		"Voice speed"
+        "Token"
       ],
       "type": "object"
     }
   },
   "short_name": "Voco",
-  "version": "1.2.0"
+  "version": "2.0.0",
+  "web_accessible_resources": [
+    "css/*.css",
+    "images/*.svg",
+	"images/*.png",
+    "js/*.js",
+    "views/*.html"
+  ]
 }

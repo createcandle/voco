@@ -1,0 +1,179 @@
+<div id="extension-voco-content" class="extension-voco-show-tab-timers">
+  
+    <div id="extension-voco-content-container">
+        <h3 id="extension-voco-title">Voco <span id="extension-voco-tutorial-button">?</span></h3>
+		
+		<div id="extension-voco-add-token">
+			<p>To fully use Voco you will first need to create an 'authorization token'. Without this code you will not be able to control your devices using voice commands.</p>
+			<ol>
+				<li>Generate and copy an authorization token from <a href="/oauth/authorize?response_type=code&client_id=local-token&scope=/things:readwrite&state=asdf">this page</a>. It's basically a very long password.</li>
+				<li>Copy that code into the field below, and click 'save'.</li>
+			</ol>
+			<textarea id="extension-voco-token-input"></textarea>
+			<button id="extension-voco-token-save-button">Save token</button><span id="extension-voco-add-token-message"></span>
+			<p class="extension-voco-select-satellites extension-voco-italic">If you want to use this device as a satellite only, you can ignore this step.</p>
+		</div>
+		
+		
+		<div class="extension-voco-tab-buttons">
+            <button id="extension-voco-tab-button-timers" class="extension-voco-main-tab-button">Timers</button>
+			<button id="extension-voco-tab-button-satellites" class="extension-voco-main-tab-button">Satellites</button>
+            <button id="extension-voco-tab-button-tutorial" class="extension-voco-main-tab-button">?</button>
+        </div>
+		
+		<div id="extension-voco-tabs-container">
+			
+			<div id="extension-voco-tab-timers" class="extension-voco-tab">
+				<div id="extension-voco-list">    
+				</div>
+
+				<div id="extension-voco-original-item" class="extension-voco-item">
+
+					<div class="extension-voco-item-setter">
+						<div class="extension-voco-icon">
+						</div>
+
+						<div class="extension-voco-sentence"></div>
+
+
+						<div class="extension-voco-line2">
+							<div class="extension-voco-time"></div>
+							<div class="extension-voco-change"></div>
+						</div>
+
+
+					</div>
+
+					<div class="extension-voco-item-menu">
+						<div class="extension-voco-item-right">
+							<div class="extension-voco-item-delete-button">&nbsp;</div>
+						</div>
+					</div>
+
+				</div>
+			</div>
+
+			
+			<div id="extension-voco-tab-satellites" class="extension-voco-tab">
+				<div id="extension-voco-satellites" class="extension-voco-centered-page">
+					<img src="/extensions/voco/images/satellites.png" alt="Satellites example"/>
+					<p>One microphone might not be enough to cover your entire home. That's why it's possible to create 'satellites'.</p> 
+					
+					<div class="extension-voco-no-satellites">
+						<p>You currently seem to have only one controller on your network. Once you create a second one it should automatically be detected, and satellite mode will become available.</p>
+						
+					</div>
+					<div class="extension-voco-select-satellites">
+						<h4>Satellite mode</h4>
+						<div class="extension-voco-select-satellites-question">
+							<div id="extension-voco-server-list"></div>
+							<div id="extension-voco-server-list-toggle">
+								<form class="rule-switch switch">
+									<input type="checkbox" id="extension-voco-select-satellite-checkbox" class="switch-checkbox">
+									<label class="switch-slider extension-voco-switch-slider" for="extension-voco-select-satellite-checkbox">
+									</label>
+								</form>
+							</div>
+						</div>
+						<p>Select the main controller you wish to connect to, and then enable satelite mode.</p>
+						<p class="extension-voco-italic">Note: once in satellite mode, this device will no longer be able to control it's own things. It will only be able to control the things on the main controller.</p>
+					
+					</div>
+				</div>
+
+			</div>
+
+
+			<div id="extension-voco-tab-tutorial" class="extension-voco-tab">
+				<div id="extension-voco-tutorial" class="extension-voco-centered-page">
+					<h2>How to use voco</h2>
+					<p>Voice control is really fun and useful, especially when you know your data stays in your own home. Here are some example commands. Voco is very flexible, you can say the commands in many different ways.</p>
+
+					<p>Turn things on and off</p>
+					<ul>
+						<li>Turn on the livingroom light</li>
+						<li>Switch on the livingroom light</li>
+						<li>Switch on the livingroom light for five minutes</li>
+						<li>Turn on the livingroom light in five minutes</li>
+						<li>Disable the livingroom light at a quarter past 4</li>
+						<li>Disable the security camera at lunchtime</li>
+						<li>Turn on the livingroom light from 4 pm until 5 pm</li>
+						<li>Turn off the livingroom light between 6 and 7</li>
+						<li>Open the front door</li>
+						<li>For 5 minutes lock the front door</li>
+						<li>Is the front door unlocked?</li>
+						<li>Is the livingroom light on or off?</li>
+					</ul>
+
+					<p>Set things to certain values</p>
+					<ul>
+						<li>Set the color of the livingroom light to red</li>
+						<li>Set the brightness of the livingroom light to 88</li>
+						<li>Set the brightness of the livingroom light to 88 percent for 5 minutes</li>
+						<li>For 5 minutes set the brightness of the livingroom light to 88</li>
+						<li>Set the brightness of the livingroom light to 100 percent from 4 until 5 o' clock</li>
+					</ul>
+
+					<p>Ask about certain values</p>
+					<ul>
+						<li>What is the brightness of the livingroom light?</li>
+						<li>Can you tell me the color of the livingroom light?</li>
+						<li>What is the humidity level of the weather station?</li>
+						<li>What are the levels of the fine dust sensor?</li>
+						<li>What is the carbon dioxide value of the carbon sensor?</li>
+					</ul>
+
+					<p>Set timers, alarms, reminders or a countdown</p>
+					<ul>
+						<li>Set a countdown for midnight</li>
+						<li>Disable the countdown</li>
+						<li>Set a timer for 5 minutes</li>
+						<li>Set a timer for 3 o' clock</li>
+						<li>At 9 pm remind me to go to the supermarket</li>
+						<li>Remind me to go to the supermarket at 2 o' clock tomorrow afternoon</li>
+						<li>In one hour and 15 minutes remind me to empty the washing machine</li>
+						<li>Set an alarm for 8 o' clock tomorrow morning</li>
+					</ul>
+
+					<p>Manage your timers</p>
+					<ul>
+						<li>What is my last reminder?</li>
+						<li>Tell me about the timers</li>
+						<li>What are my alarms?</li>
+						<li>How much time does the countdown have to go?</li>
+						<li>Remove the last reminder</li>
+						<li>Remove all reminders please</li>
+						<li>Could you delete all reminders?</li>
+						<li>Please disable all the reminders</li>
+					</ul>
+
+					<p>Other</p>
+					<ul>
+						<li>Hello</li>
+						<li>What time is it?</li>
+					</ul>
+
+				</div>
+			</div>
+		</div>
+		
+		
+		
+		
+
+        <br/>
+        <br/>
+
+        <div id="extension-voco-response">
+            <p id="extension-voco-response-data" class="extension-voco-centered-error"></p>
+        </div>
+        <br/>
+
+    </div>
+    
+</div>
+
+
+
+
+

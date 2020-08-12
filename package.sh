@@ -2,8 +2,9 @@
 
 version=$(grep '"version"' manifest.json | cut -d: -f2 | cut -d\" -f2)
 
+echo "removing old files"
 # Clean up from previous releases
-rm -rf *.tgz package SHA256SUMS lib
+rm -rf *.tgz *.shasum package SHA256SUMS lib
 
 # Remove the injections
 if [ -d "snips/work/injections" ]
@@ -13,19 +14,20 @@ then
 fi
 
 # Make sure files exist and are initially empty
-if [ -e snips/playme.wav ]
+if [ -e snips/response.wav ]
 then
-    rm -f snips/playme.wav
+    rm -f snips/response.wav
 fi
 
+echo "creating package"
 # Prep new package
-mkdir lib package
+mkdir -p lib package
 
 # Pull down Python dependencies
 pip3 install -r requirements.txt -t lib --no-binary :all: --prefix ""
 
 # Put package together
-cp -r lib pkg LICENSE manifest.json *.py README.md snips sounds package/
+cp -r lib pkg LICENSE manifest.json *.py README.md snips sounds css js images views package/
 find package -type f -name '*.pyc' -delete
 find package -type f -name '._*' -delete
 find package -type d -empty -delete
@@ -41,6 +43,7 @@ echo "creating archive"
 TARFILE="voco-${version}.tgz"
 tar czf ${TARFILE} package
 
+echo "creating shasums"
 shasum --algorithm 256 ${TARFILE} > ${TARFILE}.sha256sum
 cat ${TARFILE}.sha256sum
 

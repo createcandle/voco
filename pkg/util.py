@@ -188,10 +188,21 @@ def is_a_number(s):
 def get_int_or_float(v):
     number_as_float = float(v)
     number_as_int = int(number_as_float)
-    if number_as_float == number_as_int:
+    #print("number_as_float=" + str(number_as_float))
+    #print("number_as_int=" + str(number_as_int))
+    
+    if round(v) != v:
+        #print("vvvv float")
+        return float( int( number_as_float * 100) / 100) 
+    else:
+        #print("vvvv int")
+        return number_as_int
+    
+    if str(number_as_float) == str(number_as_int):
+        #print("--int was same as float")
         return number_as_int
     else:
-        
+        #print("--int was NOT the same as float")
         #tamed_float = float( int(number_as_float * 100) / 100)
         
         return float( int( number_as_float * 100) / 100) 
