@@ -46,8 +46,10 @@
 # resources = "/usr/share/snips/dialogue"
 # session_timeout = 15
 # lambda_timeout = 5
+sites_in_same_group_default = true
 retry_count = 1
 sound_feedback_disabled_default = true
+
 
 [snips-hotword]
 # model = "/usr/share/snips/hotword"
