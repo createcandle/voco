@@ -39,7 +39,7 @@
 				console.log("no interval to clear? " + e);
 			}
 			
-			console.log("getting /init");
+			//console.log("getting /init");
 			//this.interval = setInterval(function(){
 			
 			
@@ -48,42 +48,42 @@
 		          `/extensions/${this.id}/api/init`
 
 		        ).then((body) => {
-					console.log("Init API result:");
-					console.log(body);
+					//console.log("Init API result:");
+					//console.log(body);
 					if('satellite_targets' in body){
-						console.log("satellite_targets in body: " + body['satellite_targets']);
+						//console.log("satellite_targets in body: " + body['satellite_targets']);
 						if(Object.keys(body['satellite_targets']).length > 0){
-							console.log("A satellite is possible");
+							//console.log("A satellite is possible");
 							if('is_satellite' in body){
-								console.log("is_satellite: " + body['is_satellite']);
+								//console.log("is_satellite: " + body['is_satellite']);
 								if(body['is_satellite']){
-									console.log("It is a satellite");
+									//console.log("It is a satellite");
 									document.getElementById('extension-voco-select-satellite-checkbox').checked = true;
 									// TODO show servers
 								}
 							}
 							document.getElementById('extension-voco-content-container').classList.add('extension-voco-potential-satellite');
 							document.getElementById('extension-voco-select-satellite-checkbox').addEventListener('change', (event) => {
-								console.log(event);
+								//console.log(event);
 								const is_sat = document.getElementById('extension-voco-select-satellite-checkbox').checked;
 								
 								var mqtt_server = 'localhost'; 
 								try{
 									mqtt_server = document.querySelector('input[name="mqtt_server"]:checked').value;
 								
-									console.log("mqtt_server = " + mqtt_server);
-									console.log("is_satellite = " + is_sat);
+									//console.log("mqtt_server = " + mqtt_server);
+									//console.log("is_satellite = " + is_sat);
 							        window.API.postJson(
 							          `/extensions/${this.id}/api/update`,
 										{'action':'satellite','is_satellite': is_sat,'mqtt_server': mqtt_server}
 
 							        ).then((body) => {
-										console.log("Python API satellite result:");
-										console.log(body);
+										//console.log("Python API satellite result:");
+										//console.log(body);
 										//console.log(body['items']);
 										
 										if(body['state'] == true){
-											console.log("satellite update state was true");
+											//console.log("satellite update state was true");
 											if(is_sat){
 												
 												document.getElementById('extension-voco-content-container').classList.remove('extension-voco-add-token');
@@ -95,7 +95,7 @@
 											}
 										}
 										else{
-											console.log("Server reported error while changing satellite state");
+											//console.log("Server reported error while changing satellite state");
 											pre.innerText = body['update'];
 										}
 		
@@ -118,29 +118,22 @@
 							
 							var list_html = "";
 							for (const key in body['satellite_targets']) {
-								console.log(`${key}: ${body['satellite_targets'][key]}`);
+								//console.log(`${key}: ${body['satellite_targets'][key]}`);
 								var checked_value = "";
 								if(key == body['mqtt_server'] || Object.keys(body['satellite_targets']).length == 1){
-		
-									console.log("mqtt_server match at " + key);
 									checked_value = 'checked="checked"';
 								}
-								
 								list_html += '<div class="extension-voco-radio-select-item"><input type="radio" name="mqtt_server" value="' + key + '" ' + checked_value + ' /><span>' + key + '</span></div>';
-							    
 							}
 							document.getElementById('extension-voco-server-list').innerHTML = list_html;
-							
-							
 						}
-
 					}
 					
 					
 					
 					if('has_token' in body){
 						if(body['has_token'] == false){
-							console.log("token is false");
+							//console.log("token is false");
 							
 							if('is_satellite' in body){
 								if(body['is_satellite'] == false){
@@ -159,7 +152,7 @@
 							
 							
 							document.getElementById('extension-voco-token-save-button').addEventListener('click', (event) => {
-								console.log("should save token");
+								//console.log("should save token");
 								const token = document.getElementById("extension-voco-token-input").value;
 						  		// Save token
 						        window.API.postJson(
@@ -167,12 +160,12 @@
 									{'action':'token','token':token}
 
 						        ).then((body) => {
-									console.log("save token result:");
-									console.log(body);
+									//console.log("save token result:");
+									//console.log(body);
 									
 									if('state' in body){
 										if(body['state'] == true){
-											console.log("succesfully stored token");
+											//console.log("succesfully stored token");
 											
 											document.getElementById('extension-voco-add-token').classList.add('extension-voco-fade-out');
 											setTimeout(function(){
@@ -219,7 +212,7 @@
 						this.regenerate_items();
 					}
 					else{
-						list.innerHTML = '<div class="extension-voco-centered-page"><p>There are currently no timers, reminders or alarms set.</p><p>Try saying: <span class="extension-voco-italic">Hey snips... set a timer for 5 minutes.</span></p></div>';
+						list.innerHTML = '<div class="extension-voco-centered-page" style="text-align:center"><p>There are currently no timers, reminders or alarms set.</p><p>Try saying: <span class="extension-voco-italic">Hey snips... set a timer for 5 minutes.</span></p></div>';
 					}
 					//clearInterval(this.interval); // used to debug CSS
 				}
@@ -256,18 +249,18 @@
 						if(body['state'] == true){
 							this.items_list = body['items'];
 							this.current_time = body['current_time'];
+							pre.innerText = "";
 							if(this.items_list.length > 0 ){
 								this.regenerate_items();
-								pre.innerText = "";
 							}
 							else{
-								list.innerHTML = '<div class="extension-voco-centered-page"><p>There are currently no timers, reminders or alarms set.</p><p>Try saying: <span class="extension-voco-italic">Hey snips... set a timer for 5 minutes.</span></p></div>';
+								list.innerHTML = '<div class="extension-voco-centered-page" style="text-align:center"><p>There are currently no timers, reminders or alarms set.</p><p>Try saying: <span class="extension-voco-italic">Hey snips... set a timer for 5 minutes.</span></p></div>';
 							}
 						
 					
 						}
 						else{
-							console.log("not ok response while getting items list");
+							//console.log("not ok response while getting items list");
 							pre.innerText = body['update'];
 						}
 			
@@ -279,7 +272,7 @@
 			        });	
 				}
 				else{
-					pre.innerText = "Lost connection. Refresh the page to try again.";
+					pre.innerText = "Lost connection.";
 				}
 		        
 		
@@ -293,7 +286,7 @@
 			// TABS
 
 			document.getElementById('extension-voco-tab-button-timers').addEventListener('click', (event) => {
-				console.log(event);
+				//console.log(event);
 				document.getElementById('extension-voco-content').classList = ['extension-voco-show-tab-timers'];
 			});
 			document.getElementById('extension-voco-tab-button-satellites').addEventListener('click', (event) => {

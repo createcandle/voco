@@ -588,7 +588,7 @@ class VocoAdapter(Adapter):
                 time.sleep(1)
                 print("PLEASE ENTER YOUR AUTHORIZATION CODE IN THE SETTINGS PAGE")
                 self.set_status_on_thing("Authorization code missing, check settings")
-                self.speak("I cannot connect to your devices because the authorization code is missing. Please create an authorization code.",intent={'siteId':self.hostname})
+                self.speak("I cannot connect to your devices because the authorization token is missing. Please create an authorization token.",intent={'siteId':self.hostname})
             
             if first_run:
                 time.sleep(1)
@@ -1085,12 +1085,6 @@ class VocoAdapter(Adapter):
         #previous_injection_time = time.time()
         while self.running:
 
-            # Inject new thing names into snips if necessary
-            if time.time() - self.minimum_injection_interval > self.last_injection_time: # + self.minimum_injection_interval > datetime.utcnow().timestamp():
-                self.last_injection_time = time.time()
-                self.inject_updated_things_into_snips()
-                
-
             voice_message = ""
             fresh_time = int(time.time())
             
@@ -1098,6 +1092,12 @@ class VocoAdapter(Adapter):
                 time.sleep(.1)
             else:
                 self.current_utc_time = fresh_time
+                
+                # Inject new thing names into snips if necessary
+                if time.time() - self.minimum_injection_interval > self.last_injection_time: # + self.minimum_injection_interval > datetime.utcnow().timestamp():
+                    self.last_injection_time = time.time()
+                    self.inject_updated_things_into_snips()
+                
                 #timer_removed = False
                 try:
 
@@ -1446,7 +1446,7 @@ class VocoAdapter(Adapter):
                     process.close()
                 except:
                     pass
-                print("Terminated Snips process")
+                #print("Terminated Snips process")
         except Exception as ex:
             print("Error terminating the hotword process: " + str(ex))
 
@@ -1595,11 +1595,11 @@ class VocoAdapter(Adapter):
 
     def run_mqtt(self):
         # Create mqtt client
-        print("run_mqtt")
+        #print("run_mqtt")
         # First, close any existing MQTT client
         try:
             if self.mqtt_client != None:
-                print("disconnecting mqtt first")
+                #print("disconnecting mqtt first")
                 self.mqtt_client.disconnect() # disconnect
                 self.mqtt_client.loop_stop()
         except Exception as ex:
@@ -1615,7 +1615,7 @@ class VocoAdapter(Adapter):
             self.mqtt_client.on_connect = self.on_connect
             self.mqtt_client.on_message = self.on_message
             #self.mqtt_client.on_publish = self.on_publish
-            print("self.persistent_data['mqtt_server'] = " + str(self.persistent_data['mqtt_server']))
+            #print("self.persistent_data['mqtt_server'] = " + str(self.persistent_data['mqtt_server']))
             self.mqtt_client.connect(str(self.persistent_data['mqtt_server']), int(self.mqtt_port))
             #self.mqtt_client.loop_forever()
             #self.mqtt_client.loop_start()
@@ -1637,12 +1637,12 @@ class VocoAdapter(Adapter):
                 self.mqtt_client.subscribe("hermes/intent/#")
             else:
                 if self.satellite_local_intent_parsing == True:
-                    print("** Satellite with forced local intent parsing")
+                    #print("** Satellite with forced local intent parsing")
                     #self.mqtt_client.subscribe("hermes/hotword/#")
                     self.mqtt_client.subscribe("hermes/intent/#")
                 else:
                     #print("** Satellite. Local intent parsing is false, I will listen to the main site for commands")
-                    print("SUBSCRIBING TO " + "hermes/voco/" + str(self.hostname) + "/#")
+                    #print("SUBSCRIBING TO " + "hermes/voco/" + str(self.hostname) + "/#")
                     self.mqtt_client.subscribe("hermes/voco/" + str(self.hostname) + "/#")
                     try:
                         self.mqtt_client.unsubscribe("hermes/intent/#")
@@ -1778,7 +1778,7 @@ class VocoAdapter(Adapter):
                         self.play_sound( self.start_of_input_sound )
                     
                 elif msg.topic.endswith('/play'):
-                    print("message ends in /play")
+                    #print("message ends in /play")
                     if 'sound_file' in payload:
                         if self.DEBUG:
                             print(payload['sound_file'])
@@ -1788,7 +1788,7 @@ class VocoAdapter(Adapter):
                 
                 
                 elif msg.topic.endswith('/speak'):
-                    print("message ends in /speak")
+                    #print("message ends in /speak")
                     if 'message' in payload:
                         if self.DEBUG:
                             print("Satellite is speaking: " + payload['message'])
@@ -2018,6 +2018,7 @@ class VocoAdapter(Adapter):
                 thing_titles = set()
                 property_titles = set()
                 property_strings = set()
+                self.save_persistent_data()
 
             if len(thing_titles^fresh_thing_titles) > 0 or force_injection == True:                           # comparing sets to detect changes in thing titles
                 if self.DEBUG:

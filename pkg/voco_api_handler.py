@@ -332,13 +332,13 @@ class VocoAPIHandler(APIHandler):
                             html = ""
                             try:
                                 response = requests.get(test_url_a, allow_redirects=True, timeout=1)
-                                print("http response: " + str(response.content.decode('utf-8')))
+                                #print("http response: " + str(response.content.decode('utf-8')))
                                 html += response.content.decode('utf-8').lower()
                             except:
                                 pass
                             try:
                                 response = requests.get(test_url_b, allow_redirects=True, timeout=1)
-                                print("https response: " + str(response.content.decode('utf-8')))
+                                #print("https response: " + str(response.content.decode('utf-8')))
                                 html += response.content.decode('utf-8').lower()
                             except:
                                 pass

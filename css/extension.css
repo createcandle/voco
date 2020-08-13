@@ -50,6 +50,10 @@
     outline: none;
 }
 
+#extension-voco-view a{
+	color:white;
+	font-weight:bold;
+}
 
 .extension-voco-italic{
 	font-style:italic;
@@ -309,6 +313,8 @@
 #extension-voco-token-input{
 	width:100%;
 	height:10rem;
+	padding: 1rem;
+	font-size: 1.4rem;
 }
 
 #extension-voco-token-save-button{
@@ -338,6 +344,10 @@
 	margin: 4rem auto;
 }
 
+.extension-voco-centered-error{
+	text-align:center;
+}
+
 .extension-voco-centered-page{
 	border-bottom:1px solid rgba(255,255,255,.3);
 }
@@ -358,8 +368,13 @@
 	border-radius:.5rem;
 	padding:1rem 1.5rem;
 	margin:1rem 0;
-	display:inline-block
+	display:inline-block;
 }
+
+.extension-voco-radio-select-item{
+	width:100%;
+}
+
 
 .extension-voco-radio-select-item span{
 	margin-left:1rem;
