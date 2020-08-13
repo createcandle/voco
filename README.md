@@ -1,5 +1,6 @@
 # Voco
-Privacy friendly voice control for the Mozilla WebThings Gateway
+Privacy friendly voice control for the Mozilla WebThings Gateway. Learn more about is here:
+https://www.candlesmarthome.com/voco-privacy-friendly-voice-control
 
 # Installation
 Visit the add-ons page in your WebThings Gateway, and add the 'Voco' add-on.
