@@ -283,6 +283,8 @@ class VocoAdapter(Adapter):
         self.hotword_path = os.path.join(self.snips_path,"snips-hotword")
         self.mosquitto_path = os.path.join(self.snips_path,"mosquitto")
         self.g2p_models_path = os.path.join(self.snips_path,"g2p-models")
+        self.hey_snips_path = os.path.join(self.snips_path,"assistant","custom_hotword")
+        self.hey_candle_path = os.path.join(self.snips_path,"hey_candle")
         
         self.start_of_input_sound = "start_of_input"
         self.end_of_input_sound = "end_of_input"
@@ -1010,7 +1012,12 @@ class VocoAdapter(Adapter):
                 if unique_command == 'snips-injection':
                     command = command + ["-g",self.g2p_models_path]
                 if unique_command == 'snips-hotword' or unique_command == 'snips-satellite':
-                    command = command + ["-t",str(self.hotword_sensitivity)] # "--no_vad_inhibitor"
+                    #if self.hey_candle:
+                    command = command + ["-t",str(self.hotword_sensitivity)] #,"--model",self.hey_candle_path + "=.5" ]
+                    #else:
+                    #command = command + ["-t",str(self.hotword_sensitivity)] # "--no_vad_inhibitor"
+                    
+                    
                 if unique_command == 'snips-satellite':
                     mqtt_bind = str(self.hostname) + "@mqtt"
                     mqtt_ip = str(self.persistent_data['mqtt_server']) + ":" + str(self.mqtt_port)
@@ -1095,6 +1102,9 @@ class VocoAdapter(Adapter):
                 
                 # Inject new thing names into snips if necessary
                 if time.time() - self.minimum_injection_interval > self.last_injection_time: # + self.minimum_injection_interval > datetime.utcnow().timestamp():
+                    #if self.DEBUG:
+                    #    print("Time to check if thing names should be injected into snips")
+                        #print( str(time.time()) + " - " + str(self.minimum_injection_interval) + " > " + str(self.last_injection_time)  )
                     self.last_injection_time = time.time()
                     self.inject_updated_things_into_snips()
                 
@@ -2011,14 +2021,29 @@ class VocoAdapter(Adapter):
             
             try:
                 thing_titles = set(self.persistent_data['thing_titles'])
+            except:
+                print("Couldn't load previous thing titles from persistence. If Snips was just installed this is normal.")
+                thing_titles = set()
+                self.persistent_data['thing_titles'] = set()
+                self.save_persistent_data()
+
+            try:
                 property_titles = set(self.persistent_data['property_titles'])
+            except:
+                print("Couldn't load previous property titles from persistence. If Snips was just installed this is normal.")
+                property_titles = set()
+                self.persistent_data['property_titles'] = set()
+                self.save_persistent_data()
+
+            try:
                 property_strings = set(self.persistent_data['property_strings'])
             except:
-                print("Couldn't load previous thing data from persistence. If Snips was just installed this is normal.")
-                thing_titles = set()
-                property_titles = set()
+                print("Couldn't load previous property strings from persistence. If Snips was just installed this is normal.")
                 property_strings = set()
+                self.persistent_data['property_strings'] = set()
                 self.save_persistent_data()
+
+
 
             if len(thing_titles^fresh_thing_titles) > 0 or force_injection == True:                           # comparing sets to detect changes in thing titles
                 if self.DEBUG:
