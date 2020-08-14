@@ -58,6 +58,7 @@ sound_feedback_disabled_default = true
 # audio = ["+@mqtt"]
 # no_vad_inhibitor = false
 # vad_messages = false
+model = ["/home/pi/.mozilla-iot/addons/voco/snips/hey_candle=.6", "/home/pi/.mozilla-iot/addons/voco/snips/assistant/custom_hotword=.5"]
 
 [snips-injection]
 #asr_model = "/usr/share/snips/asr"
