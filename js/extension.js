@@ -137,13 +137,7 @@
 							
 							if('is_satellite' in body){
 								if(body['is_satellite'] == false){
-									document.getElementById('extension-voco-content-container').classList.remove('extension-voco-is-satellite');
 									document.getElementById('extension-voco-content-container').classList.add('extension-voco-add-token');
-								}
-								else{
-									document.getElementById('extension-voco-content-container').classList.add('extension-voco-is-satellite');
-									document.getElementById('extension-voco-content').classList.remove('extension-voco-show-tab-timers');
-									document.getElementById('extension-voco-content').classList.add('extension-voco-show-tab-satellites');
 								}
 							}
 							else{
@@ -185,6 +179,15 @@
 							});
 							
 						}
+					}
+					
+					if('is_satellite' in body){
+						if(body['is_satellite']){
+							document.getElementById('extension-voco-content-container').classList.add('extension-voco-is-satellite');
+							document.getElementById('extension-voco-content').classList.remove('extension-voco-show-tab-timers');
+							document.getElementById('extension-voco-content').classList.add('extension-voco-show-tab-satellites');
+						}
+						
 					}
 				
 		        }).catch((e) => {

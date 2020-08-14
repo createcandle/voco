@@ -1,6 +1,6 @@
 {
   "author": "CandleSmartHome.com",
-  "description": "Privacy friendly voice control. Say 'Hey Snips' to start a voice command.",
+  "description": "Privacy friendly voice control. Control devices, set timers, reminders and alarms, and more. Supports satelites in multiple rooms.",
   "content_scripts": [
     {
       "css": [
@@ -155,7 +155,7 @@
     }
   },
   "short_name": "Voco",
-  "version": "2.0.1",
+  "version": "2.1.0",
   "web_accessible_resources": [
     "css/*.css",
     "images/*.svg",
