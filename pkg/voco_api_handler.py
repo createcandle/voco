@@ -9,6 +9,8 @@ import requests
 import subprocess
 #import threading
 
+from .util import get_ip,valid_ip
+
 from datetime import datetime,timedelta
 #from dateutil import tz
 #from dateutil.parser import *
@@ -88,7 +90,14 @@ class VocoAPIHandler(APIHandler):
                             
                         try:
                             
-                            satellite_targets = self.arpa()
+                            gateway_ip_addresses = self.arpa()
+                            satellite_targets = {}
+                            for ip_address in gateway_ip_addresses:
+                                if ip_address in self.adapter.mqtt_others:
+                                    satellite_targets[ip_address] = self.adapter.mqtt_others[ip_address] # should give the siteId
+                                else:
+                                    satellite_targets[ip_address] = ip_address # if there is no known siteId for this IP addres, just give it the ip address as the name
+                            
                             
                             has_token = False
                             if self.adapter.token == "" or self.adapter.token == None:
@@ -103,14 +112,16 @@ class VocoAPIHandler(APIHandler):
                                 print("Error getting is_satellite from persistent data")
                             
                             if self.DEBUG:
+                                print("- satellite_targets: " + str(satellite_targets))
                                 print("- has_token: " + str(has_token))
-                                print("-is_satellite: " + str(is_sat))
-                                print("-mqtt_server: " + str(self.adapter.persistent_data['mqtt_server']))
+                                print("- is_satellite: " + str(is_sat))
+                                print("- hostname/siteId: " + str(self.adapter.hostname))
+                                print("- mqtt_server: " + str(self.adapter.persistent_data['mqtt_server']))
                             
                             return APIResponse(
                                 status=200,
                                 content_type='application/json',
-                                content=json.dumps({'state': True, 'satellite_targets': satellite_targets, 'has_token':has_token, 'is_satellite':is_sat, 'mqtt_server':self.adapter.persistent_data['mqtt_server']}),
+                                content=json.dumps({'state': True, 'satellite_targets': satellite_targets, 'hostname': self.adapter.hostname, 'has_token':has_token, 'is_satellite':is_sat, 'mqtt_server':self.adapter.persistent_data['mqtt_server']}),
                             )
                         except Exception as ex:
                             print("Error getting init data: " + str(ex))
@@ -174,7 +185,6 @@ class VocoAPIHandler(APIHandler):
                     elif request.path == '/update':
                         if self.DEBUG:
                             print("handling /update")
-                            
 
                         try:
                             state = True
@@ -309,7 +319,7 @@ class VocoAPIHandler(APIHandler):
     #
     def arpa(self):
         command = "arp -a"
-        gateway_list = {}
+        gateway_list = []
         try:
             result = subprocess.run(command, shell=True, universal_newlines=True, stdout=subprocess.PIPE) #.decode())
             for line in result.stdout.split('\n'):
@@ -347,7 +357,7 @@ class VocoAPIHandler(APIHandler):
                                 if self.DEBUG:
                                     print("arp: WebThings controller spotted at: " + str(ip_address))
                                 #print(str(response.content.decode('utf-8')))
-                                gateway_list[ip_address] = "option"
+                                gateway_list.append(ip_address) #[ip_address] = "option"
                         
                         except Exception as ex:
                             if self.DEBUG:
@@ -362,11 +372,3 @@ class VocoAPIHandler(APIHandler):
             print("Arp -a error: " + str(ex))
             
         return gateway_list
-
-
-def valid_ip(ip):
-    return ip.count('.') == 3 and \
-        all(0 <= int(num) < 256 for num in ip.rstrip().split('.')) and \
-        len(ip) < 16 and \
-        all(num.isdigit() for num in ip.rstrip().split('.'))
-

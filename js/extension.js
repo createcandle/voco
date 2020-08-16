@@ -48,87 +48,8 @@
 		          `/extensions/${this.id}/api/init`
 
 		        ).then((body) => {
-					//console.log("Init API result:");
-					//console.log(body);
-					if('satellite_targets' in body){
-						//console.log("satellite_targets in body: " + body['satellite_targets']);
-						if(Object.keys(body['satellite_targets']).length > 0){
-							//console.log("A satellite is possible");
-							if('is_satellite' in body){
-								//console.log("is_satellite: " + body['is_satellite']);
-								if(body['is_satellite']){
-									//console.log("It is a satellite");
-									document.getElementById('extension-voco-select-satellite-checkbox').checked = true;
-									// TODO show servers
-								}
-							}
-							document.getElementById('extension-voco-content-container').classList.add('extension-voco-potential-satellite');
-							document.getElementById('extension-voco-select-satellite-checkbox').addEventListener('change', (event) => {
-								//console.log(event);
-								const is_sat = document.getElementById('extension-voco-select-satellite-checkbox').checked;
-								
-								var mqtt_server = 'localhost'; 
-								try{
-									mqtt_server = document.querySelector('input[name="mqtt_server"]:checked').value;
-								
-									//console.log("mqtt_server = " + mqtt_server);
-									//console.log("is_satellite = " + is_sat);
-							        window.API.postJson(
-							          `/extensions/${this.id}/api/update`,
-										{'action':'satellite','is_satellite': is_sat,'mqtt_server': mqtt_server}
-
-							        ).then((body) => {
-										//console.log("Python API satellite result:");
-										//console.log(body);
-										//console.log(body['items']);
-										
-										if(body['state'] == true){
-											//console.log("satellite update state was true");
-											if(is_sat){
-												
-												document.getElementById('extension-voco-content-container').classList.remove('extension-voco-add-token');
-												document.getElementById('extension-voco-content-container').classList.add('extension-voco-is-satellite');
-											}
-											else{
-												document.getElementById('extension-voco-content-container').classList.remove('extension-voco-is-satellite');
-												document.getElementById('extension-voco-select-satellite-checkbox').checked = false;
-											}
-										}
-										else{
-											//console.log("Server reported error while changing satellite state");
-											pre.innerText = body['update'];
-										}
-		
-
-							        }).catch((e) => {
-							          	//pre.innerText = e.toString();
-							  			//console.log("voco: error in calling init via API handler");
-							  			console.log("Error getting timer items: " + e.toString());
-										pre.innerText = "Loading items failed - connection error";
-							        });	
-								
-								}
-								catch(e){
-									console.log("Error getting radio buttons value: " + e);
-								}
-								//console.log("event.returnValue = " + event.returnValue);
-								
-								
-							});
-							
-							var list_html = "";
-							for (const key in body['satellite_targets']) {
-								//console.log(`${key}: ${body['satellite_targets'][key]}`);
-								var checked_value = "";
-								if(key == body['mqtt_server'] || Object.keys(body['satellite_targets']).length == 1){
-									checked_value = 'checked="checked"';
-								}
-								list_html += '<div class="extension-voco-radio-select-item"><input type="radio" name="mqtt_server" value="' + key + '" ' + checked_value + ' /><span>' + key + '</span></div>';
-							}
-							document.getElementById('extension-voco-server-list').innerHTML = list_html;
-						}
-					}
-					
+					console.log("Init API result:");
+					console.log(body);
 					
 					
 					if('has_token' in body){
@@ -183,12 +104,107 @@
 					
 					if('is_satellite' in body){
 						if(body['is_satellite']){
+							console.log("is satellite, so should start with satellite tab");
 							document.getElementById('extension-voco-content-container').classList.add('extension-voco-is-satellite');
 							document.getElementById('extension-voco-content').classList.remove('extension-voco-show-tab-timers');
 							document.getElementById('extension-voco-content').classList.add('extension-voco-show-tab-satellites');
 						}
 						
 					}
+					
+					if('hostname' in body){
+						if(body['hostname'] == 'gateway'){
+							document.getElementById('extension-voco-content-container').classList.add('extension-voco-change-hostname');
+						}
+						else{
+							
+							if('satellite_targets' in body){
+								//console.log("satellite_targets in body: " + body['satellite_targets']);
+								if(Object.keys(body['satellite_targets']).length > 0){
+									//console.log("A satellite is possible");
+									if('is_satellite' in body){
+										//console.log("is_satellite: " + body['is_satellite']);
+										if(body['is_satellite']){
+											//console.log("It is a satellite");
+											document.getElementById('extension-voco-select-satellite-checkbox').checked = true;
+											// TODO show servers
+										}
+									}
+									document.getElementById('extension-voco-content-container').classList.add('extension-voco-potential-satellite');
+									document.getElementById('extension-voco-select-satellite-checkbox').addEventListener('change', (event) => {
+										//console.log(event);
+										const is_sat = document.getElementById('extension-voco-select-satellite-checkbox').checked;
+								
+										var mqtt_server = 'localhost'; 
+										try{
+											mqtt_server = document.querySelector('input[name="mqtt_server"]:checked').value;
+								
+											//console.log("mqtt_server = " + mqtt_server);
+											//console.log("is_satellite = " + is_sat);
+									        window.API.postJson(
+									          `/extensions/${this.id}/api/update`,
+												{'action':'satellite','is_satellite': is_sat,'mqtt_server': mqtt_server}
+
+									        ).then((body) => {
+												//console.log("Python API satellite result:");
+												//console.log(body);
+												//console.log(body['items']);
+										
+												if(body['state'] == true){
+													//console.log("satellite update state was true");
+													if(is_sat){
+												
+														document.getElementById('extension-voco-content-container').classList.remove('extension-voco-add-token');
+														document.getElementById('extension-voco-content-container').classList.add('extension-voco-is-satellite');
+													}
+													else{
+														document.getElementById('extension-voco-content-container').classList.remove('extension-voco-is-satellite');
+														document.getElementById('extension-voco-select-satellite-checkbox').checked = false;
+													}
+												}
+												else{
+													//console.log("Server reported error while changing satellite state");
+													pre.innerText = body['update'];
+												}
+		
+
+									        }).catch((e) => {
+									          	//pre.innerText = e.toString();
+									  			//console.log("voco: error in calling init via API handler");
+									  			console.log("Error getting timer items: " + e.toString());
+												pre.innerText = "Loading items failed - connection error";
+									        });	
+								
+										}
+										catch(e){
+											console.log("Error getting radio buttons value: " + e);
+										}
+										//console.log("event.returnValue = " + event.returnValue);
+								
+								
+									});
+							
+									var list_html = "";
+									for (const key in body['satellite_targets']) {
+										//console.log(`${key}: ${body['satellite_targets'][key]}`);
+										var checked_value = "";
+										if(key == body['mqtt_server'] || Object.keys(body['satellite_targets']).length == 1){
+											checked_value = 'checked="checked"';
+										}
+										list_html += '<div class="extension-voco-radio-select-item"><input type="radio" name="mqtt_server" value="' + key + '" ' + checked_value + ' /><span>' + key + '</span></div>';
+									}
+									document.getElementById('extension-voco-server-list').innerHTML = list_html;
+								}
+								else{
+									console.log("satellites length was 0 - no other potential satellites spotted");
+								}
+							}
+							
+							
+						}
+					}
+					
+					
 				
 		        }).catch((e) => {
 		  			console.log("Error getting init data: " + e.toString());

@@ -34,9 +34,8 @@
       "Voice pitch": "1.2",
       "Voice speed": "0.9",
 	  "Hotword sensitivity": "0.5",
-	  "MQTT server": "localhost",
-	  "MQTT port": "1883",
-	  "satellite":false,
+	  "Raise the volume":true,
+	  "Hey Candle":false,
       "Debugging": false
     },
     "schema": {
@@ -140,6 +139,14 @@
               "1.0"
           ],
           "type": "string"
+        },
+        "Raise the volume": {
+          "description": "When enabled, the system volume will be set to 100% when Voco starts",
+          "type": "boolean"
+        },
+        "Hey Candle": {
+          "description": "When enabled, you can also say 'Hey Candle' to start a command.",
+          "type": "boolean"
         },
         "Debugging": {
           "description": "Debugging allows you to diagnose any issues with the add-on. If enabled it will result in a lot more debug data in the internal log (which can be found under settings -> developer -> view internal logs).",

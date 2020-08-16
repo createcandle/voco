@@ -5,6 +5,7 @@
 import re
 import time
 import shutil
+import socket
 import requests
 import subprocess
 from time import sleep
@@ -541,3 +542,23 @@ def get_audio_controls():
 
     return audio_controls
 
+
+
+def get_ip():
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        s.connect(('10.255.255.255', 1))
+        IP = s.getsockname()[0]
+    except:
+        IP = None
+    finally:
+        s.close()
+    return IP
+
+
+
+def valid_ip(ip):
+    return ip.count('.') == 3 and \
+        all(0 <= int(num) < 256 for num in ip.rstrip().split('.')) and \
+        len(ip) < 16 and \
+        all(num.isdigit() for num in ip.rstrip().split('.'))

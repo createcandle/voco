@@ -20,8 +20,8 @@ class VocoDevice(Device):
         self.id = 'voco'
         self.adapter = adapter
 
-        self.name = 'Snips'
-        self.title = 'Snips'
+        self.name = 'voco'
+        self.title = 'Voice control'
         self.description = 'Manage the Voco voice control add-on'
         self._type = ['MultiLevelSwitch']
         self.connected = False

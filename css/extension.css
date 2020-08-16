@@ -293,6 +293,16 @@
 
 
 
+/*   VOCO please change hostname  */
+
+
+.extension-voco-change-hostname-target{
+	display:none;
+}
+.extension-voco-change-hostname .extension-voco-change-hostname-target{
+	display:block;
+}
+
 
 /*   VOCO token input  */
 
@@ -438,6 +448,10 @@
 
 .extension-voco-type-alarm .extension-voco-icon{
 	background-image:url('../images/alarm.svg');
+}
+
+.extension-voco-type-wake .extension-voco-icon{
+	background-image:url('../images/wake.svg');
 }
 
 .extension-voco-type-reminder .extension-voco-icon{
