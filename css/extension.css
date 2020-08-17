@@ -118,11 +118,15 @@
 	text-align:center;
 }
 
+#extension-voco-server-list{
+	width:calc(100% - 8rem);
+}
+
 #extension-voco-server-list-toggle{
 	border-left: 1px solid rgba(255,255,255,.3);
 }
 
-.extension-voco-item .rule-switch{
+#extension-voco-view .rule-switch{
 	padding-right:0;
 }
 
@@ -383,6 +387,8 @@
 
 .extension-voco-radio-select-item{
 	width:100%;
+	display:block;
+	box-sizing: border-box;
 }
 
 
@@ -425,10 +431,6 @@
 
 .extension-voco-time{
 	
-}
-
-.extension-voco-short-time{
-	margin-right:4rem;
 }
 
 .extension-voco-icon{
@@ -493,14 +495,26 @@
 	content:'s ';
 }
 
-.extension-voco-short-time{
+
+.extension-voco-time > div{
+	display:inline-block;
+}
+
+.extension-voco-time > div:first-of-type{
 	font-weight:bold;
+}
+
+.extension-voco-date{
+	margin-right:1rem;
+}
+
+.extension-voco-short-time{
 	display: inline-block;
 }
 
 .extension-voco-time-to-go{
 	font-style:italic;
-	display: inline-block;
+	margin-left:4rem;
 }
 
 .extension-voco-to-go{
@@ -520,6 +534,10 @@
 	display:block;
 }
 
+#extension-voco-loading{
+	text-align:center;
+	padding:2rem;
+}
 
 .extension-voco-select-satellites-question{
 	display:flex;

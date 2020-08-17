@@ -19,7 +19,7 @@
       "strict_min_version": "0.10.0"
     }
   },
-  "homepage_url": "https://github.com/createcandle/voco",
+  "homepage_url": "https://www.candlesmarthome.com/voco-privacy-friendly-voice-control",
   "id": "voco",
   "license": "MPL-2.0",
   "manifest_version": 1,
@@ -34,8 +34,9 @@
       "Voice pitch": "1.2",
       "Voice speed": "0.9",
 	  "Hotword sensitivity": "0.5",
-	  "Raise the volume":true,
-	  "Hey Candle":false,
+	  "Raise the volume": true,
+	  "Sound detection": false,
+	  "Hey Candle": false,
       "Debugging": false
     },
     "schema": {
@@ -144,6 +145,10 @@
           "description": "When enabled, the system volume will be set to 100% when Voco starts",
           "type": "boolean"
         },
+        "Sound detection": {
+          "description": "When enabled, an extra switch will be created that will be turned on for 10 seconds whenever a voice or sound is detected.",
+          "type": "boolean"
+        },
         "Hey Candle": {
           "description": "When enabled, you can also say 'Hey Candle' to start a command.",
           "type": "boolean"
@@ -167,6 +172,7 @@
     "css/*.css",
     "images/*.svg",
 	"images/*.png",
+	"images/*.gif",
     "js/*.js",
     "views/*.html"
   ]

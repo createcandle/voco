@@ -5,11 +5,12 @@ import re
 import json
 import time
 from time import sleep
+#import socket
 import requests
 import subprocess
 #import threading
 
-from .util import get_ip,valid_ip
+from .util import valid_ip
 
 from datetime import datetime,timedelta
 #from dateutil import tz
@@ -90,6 +91,14 @@ class VocoAPIHandler(APIHandler):
                             
                         try:
                             
+                            # Update IP address and hostname
+                            self.adapter.update_network_info()
+                            
+                            # Ask for latest info from other Voco instances
+                            self.adapter.mqtt_client.publish("hermes/voco/ping",json.dumps({'ip':self.adapter.ip_address,'siteId':self.adapter.hostname}))
+                            sleep(1)
+                            
+                            # Satellite targets
                             gateway_ip_addresses = self.arpa()
                             satellite_targets = {}
                             for ip_address in gateway_ip_addresses:
@@ -98,24 +107,30 @@ class VocoAPIHandler(APIHandler):
                                 else:
                                     satellite_targets[ip_address] = ip_address # if there is no known siteId for this IP addres, just give it the ip address as the name
                             
-                            
+                            # Token
                             has_token = False
                             if self.adapter.token == "" or self.adapter.token == None:
                                 pass
                             else:
                                 has_token = True
                             
+                            
+                            # Is satellite
                             is_sat = False
                             try:
                                 is_sat = self.adapter.persistent_data['is_satellite']
                             except:
                                 print("Error getting is_satellite from persistent data")
                             
+                            
+
+                            
+                            
                             if self.DEBUG:
                                 print("- satellite_targets: " + str(satellite_targets))
                                 print("- has_token: " + str(has_token))
                                 print("- is_satellite: " + str(is_sat))
-                                print("- hostname/siteId: " + str(self.adapter.hostname))
+                                print("- hostname: " + str(self.adapter.hostname))
                                 print("- mqtt_server: " + str(self.adapter.persistent_data['mqtt_server']))
                             
                             return APIResponse(
@@ -153,7 +168,7 @@ class VocoAPIHandler(APIHandler):
             
                                     clock = {} 
                                     clock['month'] = hacky_datetime.month
-                                    clock['days'] = hacky_datetime.day
+                                    clock['day'] = hacky_datetime.day
                                     clock['hours'] = hacky_datetime.hour
                                     clock['minutes'] = hacky_datetime.minute
                                     clock['seconds'] = hacky_datetime.second
@@ -194,7 +209,7 @@ class VocoAPIHandler(APIHandler):
                             if self.DEBUG:
                                 print("update action: " + str(action))
                             
-                            
+                            # DELETE
                             if action == 'delete':
                                 item_to_delete = None
                                 moment = int(request.body['moment'])
@@ -219,6 +234,7 @@ class VocoAPIHandler(APIHandler):
                                         state = False
                        
                        
+                            # TOKEN
                             elif action == 'token':
                                 if self.DEBUG:
                                     print("adding token")
@@ -241,6 +257,8 @@ class VocoAPIHandler(APIHandler):
                                     update = 'Token is too short. Is it an actual token?'
 
 
+
+                            # SATELLITE
                             elif action == 'satellite':
                                 if self.DEBUG:
                                     print("handling satellite command")
@@ -258,12 +276,16 @@ class VocoAPIHandler(APIHandler):
                                         self.adapter.stop_snips()
                                         self.adapter.run_snips()
                                         update = 'Satellite mode enabled'
+                                        if self.DEBUG:
+                                            print("- Satellite mode enabled")
                                     else:
                                         self.adapter.persistent_data['mqtt_server'] = 'localhost'
                                         self.adapter.run_mqtt()
                                         self.adapter.stop_snips()
                                         self.adapter.run_snips()
                                         update = 'Satellite mode disabled'
+                                        if self.DEBUG:
+                                            print("- Satellite mode disabled")
                             
                                     self.adapter.save_persistent_data()
                             

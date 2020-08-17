@@ -70,7 +70,7 @@ def intent_get_time(self, slots, intent_message):
         utcnow = datetime.now(tz=pytz.utc)
         utc_timestamp = int(utcnow.timestamp())
         
-        voice_message = "It is " + str(self.human_readable_time(utc_timestamp))
+        voice_message = "It is " + str(self.human_readable_time(utc_timestamp, False))
         voice_message = clean_up_string_for_speaking(voice_message)
         if self.DEBUG:
             print("(...) " + str(voice_message))
@@ -388,7 +388,7 @@ def intent_list_timers(self, slots, intent_message):
                                     voice_message += str(item['slots']['thing'])
                                     voice_message += " to " + str(item['original_value']) + ", "
                                 
-                            voice_message += " is set for " + str(self.human_readable_time( int(item['moment']) )) + ". "
+                            voice_message += " is set for " + str(self.human_readable_time( int(item['moment']) , True)) + ". "
                     except Exception as ex:
                         print("Error while building timer list voice_message: " + str(ex))
                     
@@ -849,10 +849,12 @@ def intent_set_state(self, slots, intent_message, delayed_action=None):   # If i
                                 #print("print(str(slots['start_time']))" + str(slots['end_time']))
                                 self.persistent_data['action_times'].append({"intent_message":intent_message,"moment":slots['start_time'],"type":"actuator","original_value":str(slots['boolean']),"slots":slots})
                                 self.persistent_data['action_times'].append({"intent_message":intent_message,"moment":slots['end_time'],"type":"actuator","original_value":opposite,"slots":slots})
+                                if voice_message == "":
+                                    voice_message = "OK, "
                                 voice_message += "Switching to " + slots['boolean'] 
-                                voice_message += " at " + self.human_readable_time(slots['start_time']) + ", and "
+                                voice_message += " at " + self.human_readable_time(slots['start_time'], True) + ", and "
                                 voice_message += "Switching to " + str(opposite)
-                                voice_message += " at " + self.human_readable_time(slots['end_time']) + ". "
+                                voice_message += " at " + self.human_readable_time(slots['end_time'], True) + ". "
                                 
                             # Only a single time value was provided
                             else:
@@ -867,8 +869,10 @@ def intent_set_state(self, slots, intent_message, delayed_action=None):   # If i
                                 else:
                                     #print("Only one end_time, and no 'until' in sentence.")
                                     self.persistent_data['action_times'].append({"intent_message":intent_message,"moment":slots['end_time'],"type":"actuator","original_value":str(slots['boolean']),"slots":slots})
+                                    if voice_message == "":
+                                        voice_message = "OK, "
                                     voice_message += "switching to " + str(slots['boolean'])
-                                    voice_message += " at " + self.human_readable_time(slots['end_time'])
+                                    voice_message += " at " + self.human_readable_time(slots['end_time'], True)
                                     voice_message = clean_up_string_for_speaking(voice_message)
                                     if self.DEBUG:
                                         print("(...) " + str(voice_message))
@@ -1130,7 +1134,7 @@ def intent_set_value(self, slots, intent_message, original_value):
                                     #desired_value = original_value
                                 
                                     voice_message += "it will change to " + str(desired_value) + str(addendum)
-                                    voice_message += " at " + self.human_readable_time(slots['start_time']) + ", and "
+                                    voice_message += " at " + self.human_readable_time(slots['start_time'], True) + ", and "
                                     back = " back "
                                     voice_message += "it will switch " + back + " to " + str(original_value) + str(addendum)
                                     self.persistent_data['action_times'].append({"intent_message":intent_message,"moment":slots['end_time'],"type":"value","original_value":original_value,"slots":slots})
@@ -1138,7 +1142,7 @@ def intent_set_value(self, slots, intent_message, original_value):
                                     voice_message += "it will switch to " + str(desired_value) + str(addendum)
                                     self.persistent_data['action_times'].append({"intent_message":intent_message,"moment":slots['end_time'],"type":"value","original_value":desired_value,"slots":slots})
                                    
-                                voice_message += " at " + self.human_readable_time(slots['end_time'])
+                                voice_message += " at " + self.human_readable_time(slots['end_time'], True)
                                 voice_message = clean_up_string_for_speaking(voice_message)
                                 
                                 

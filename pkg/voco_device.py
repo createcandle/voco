@@ -33,7 +33,7 @@ class VocoDevice(Device):
                             "volume",
                             {
                                 '@type': 'LevelProperty',
-                                'label': "Volume",
+                                'title': "Volume",
                                 'type': 'integer',
                                 'minimum': 0,
                                 'maximum': 100,
@@ -45,7 +45,7 @@ class VocoDevice(Device):
                             self,
                             "status",
                             {
-                                'label': "Status",
+                                'title': "Status",
                                 'type': 'string',
                                 'readOnly': True
                             },
@@ -56,7 +56,7 @@ class VocoDevice(Device):
                             "listening",
                             {
                                 '@type':'OnOffProperty',
-                                'label': "Listening",
+                                'title': "Listening",
                                 'type': 'boolean'
                             },
                             bool(self.adapter.persistent_data['listening']) )
@@ -65,7 +65,7 @@ class VocoDevice(Device):
                             self,
                             "feedback-sounds",
                             {
-                                'label': "Feedback sounds",
+                                'title': "Feedback sounds",
                                 'type': 'boolean'
                             },
                             bool(self.adapter.persistent_data['feedback_sounds']) )
@@ -74,7 +74,7 @@ class VocoDevice(Device):
                             self,
                             "timer",
                             {
-                                'label': "Timers",
+                                'title': "Timers",
                                 'type': 'integer',
                                 'readOnly': True
                             },
@@ -83,7 +83,7 @@ class VocoDevice(Device):
                             self,
                             "alarm",
                             {
-                                'label': "Alarms",
+                                'title': "Alarms",
                                 'type': 'integer',
                                 'readOnly': True
                             },
@@ -92,7 +92,7 @@ class VocoDevice(Device):
                             self,
                             "reminder",
                             {
-                                'label': "Reminders",
+                                'title': "Reminders",
                                 'type': 'integer',
                                 'readOnly': True
                             },
@@ -101,25 +101,39 @@ class VocoDevice(Device):
                             self,
                             "countdown",
                             {
-                                'label': "Countdown",
+                                'title': "Countdown",
                                 'type': 'integer',
                                 'readOnly': True
                             },
                             0)
                                 
                                 
-                                
             if self.adapter.DEBUG:
                 print("adding audio output property to Voco thing with list: " + str(audio_output_list))
-            self.properties["audio output"] = VocoProperty(
+            self.properties["audio_output"] = VocoProperty(
                             self,
-                            "audio output",
+                            "audio_output",
                             {
-                                'label': "Audio output",
+                                'title': "Audio output",
                                 'type': 'string',
-                                'enum': audio_output_list,
+                                'enum': audio_output_list
                             },
                             str(self.adapter.persistent_data['audio_output']))
+                                
+            print("")
+            print("-- - - --- - -- - - - - -")
+            if self.adapter.sound_detection:
+                #if self.adapter.DEBUG:
+                print("adding sound detection property")
+                self.properties["sound_detected"] = VocoProperty(
+                                self,
+                                "sound_detected",
+                                {
+                                    'title': "Sound detected",
+                                    'type': 'boolean',
+                                    'readOnly': True
+                                },
+                                False)
                                 
                                 
         except Exception as ex:

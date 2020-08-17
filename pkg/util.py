@@ -6,6 +6,8 @@ import re
 import time
 import shutil
 import socket
+import random
+import string
 import requests
 import subprocess
 from time import sleep
@@ -259,9 +261,9 @@ def color_name_to_hex(target_color):
 
 def hex_to_color_name(target_hx):
     #hx = next(hex_color for hex_color, value in color_dictionary if value == color_name)
-    print("__hex_to_color_name: hex to work with: " + str(target_hx))
+    #print("__hex_to_color_name: hex to work with: " + str(target_hx))
     if len(target_hx) == 7 and target_hx.startswith('#'):
-        print("very likely a hex color")
+        #print("very likely a hex color")
 
         try:
             # if color is found in dict
@@ -270,11 +272,12 @@ def hex_to_color_name(target_hx):
                 quick_color_name = next(key for key, value in color_dictionary.items() if value == str(target_hx))
                 
                 #if str(quick_color_name) != "sorry":
-                print("quick color match: " + str(quick_color_name))
+                #print("quick color match: " + str(quick_color_name))
                 return str(quick_color_name)
 
             except:
-                print("Was not able to get a quick hex-to-color match, will try to find a neighbouring color.")
+                pass
+                #print("Was not able to get a quick hex-to-color match, will try to find a neighbouring color.")
 
             target_hx = target_hx.replace("#", "")
 
@@ -294,25 +297,25 @@ def hex_to_color_name(target_hx):
                 # v = (r1 - r2)^2 + (g1 - g2)^2 + (b1 - b2)^2
 
                 if v <= m:
-                    print("smaller hex distance: " + str(v))
+                    #print("smaller hex distance: " + str(v))
                     m = v
                     k = current_color_name
 
             #print("__hex_to_color_name: matched color: " + str(color_dictionary[k]))
-            print("__hex_to_color_name: closest matching hex color: " + str(k))
+            #print("__hex_to_color_name: closest matching hex color: " + str(k))
             #slow_color_name = next(key for key, value in color_dictionary.items() if value == str(target_hx))
             return str(k)
         except Exception as ex:
             print("Error while translating hex color to human readable name: " + str(ex))
             return "red"
     else:
-        print("String was not a hex color?")
+        #print("String was not a hex color?")
         return target_hx
 
 
 def download_file(url, target_file):
-    print("File to download: " + str(url))
-    print("File to save to:  " + str(target_file))
+    #print("File to download: " + str(url))
+    #print("File to save to:  " + str(target_file))
     try:
         #if intended_filename == None:
         intended_filename = target_file.split('/')[-1]
@@ -322,7 +325,7 @@ def download_file(url, target_file):
     except Exception as ex:
         print("ERROR downloading file: " + str(ex))
         return False
-    print("download_file: returning. Filename = " + str(intended_filename))
+    #print("download_file: returning. Filename = " + str(intended_filename))
     return True
 
 
@@ -562,3 +565,8 @@ def valid_ip(ip):
         all(0 <= int(num) < 256 for num in ip.rstrip().split('.')) and \
         len(ip) < 16 and \
         all(num.isdigit() for num in ip.rstrip().split('.'))
+        
+        
+def generate_random_string(length):
+    letters = string.ascii_lowercase
+    return ''.join(random.choice(letters) for i in range(length))

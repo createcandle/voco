@@ -22,27 +22,41 @@
 	        .catch((e) => console.error('Failed to fetch content:', e));
 	    }
 
-
+		/*
+		// Cannot be used currently because of small bug in gateway
+		hide() {
+			console.log("voco hide called");
+			try{
+				clearInterval(this.interval);
+				console.log("interval cleared");
+			}
+			catch(e){
+				console.log("no interval to clear? " + e);
+			}
+		}
+		*/
 
 	    show() {
-			this.view.innerHTML = this.content;
-		  	//console.log("voco show called");
+			//console.log("voco show called");
+			try{
+				clearInterval(this.interval);
+			}
+			catch(e){
+				console.log("no interval to clear?: " + e);
+			}
+			
+		  	document.getElementById('extension-voco-view').innerHTML = "<h1>poopie</h1>";
+			document.getElementById('extension-voco-view').innerHTML = this.content;
 
 			const pre = document.getElementById('extension-voco-response-data');
 			const list = document.getElementById('extension-voco-list');
 
 			pre.innerText = "";
-			try{
-				clearInterval(this.interval);
-			}
-			catch(e){
-				console.log("no interval to clear? " + e);
-			}
 			
 			//console.log("getting /init");
 			//this.interval = setInterval(function(){
 			
-			
+			try{
 		  		// Init
 		        window.API.postJson(
 		          `/extensions/${this.id}/api/init`
@@ -137,7 +151,7 @@
 										try{
 											mqtt_server = document.querySelector('input[name="mqtt_server"]:checked').value;
 								
-											//console.log("mqtt_server = " + mqtt_server);
+											console.log("mqtt_server = " + mqtt_server);
 											//console.log("is_satellite = " + is_sat);
 									        window.API.postJson(
 									          `/extensions/${this.id}/api/update`,
@@ -176,9 +190,9 @@
 										}
 										catch(e){
 											console.log("Error getting radio buttons value: " + e);
+											document.getElementById('extension-voco-select-satellite-checkbox').checked = false;
 										}
 										//console.log("event.returnValue = " + event.returnValue);
-								
 								
 									});
 							
@@ -198,10 +212,11 @@
 								}
 							}
 							
-							
 						}
 					}
 					
+					// Remove spinner
+					document.getElementById("extension-voco-loading").remove();
 					
 				
 		        }).catch((e) => {
@@ -210,88 +225,92 @@
 		        });	
 				
 			//}.bind(this), 10000);
-			
+
 			
 		
-	  		// Ask for timer updates
-	        window.API.postJson(
-	          `/extensions/${this.id}/api/poll`
+		  		// Ask for timer updates
+		        window.API.postJson(
+		          `/extensions/${this.id}/api/poll`
 
-	        ).then((body) => {
-				//console.log("Python API result:");
-				//console.log(body);
-				//console.log(body['items']);
-				if(body['state'] == true){
-					//console.log("got first extra poll data")
-					this.items_list = body['items'];
-					this.current_time = body['current_time'];
-					if(this.items_list.length > 0 ){
-						this.regenerate_items();
+		        ).then((body) => {
+					//console.log("Python API result:");
+					//console.log(body);
+					//console.log(body['items']);
+					if(body['state'] == true){
+						//console.log("got first extra poll data")
+						this.items_list = body['items'];
+						this.current_time = body['current_time'];
+						if(this.items_list.length > 0 ){
+							this.regenerate_items();
+						}
+						else{
+							list.innerHTML = '<div class="extension-voco-centered-page" style="text-align:center"><p>There are currently no active timers, reminders or alarms.</p></div>';
+						}
+						//clearInterval(this.interval); // used to debug CSS
 					}
 					else{
-						list.innerHTML = '<div class="extension-voco-centered-page" style="text-align:center"><p>There are currently no timers, reminders or alarms set.</p><p>Try saying: <span class="extension-voco-italic">Hey snips... set a timer for 5 minutes.</span></p></div>';
+						console.log("not ok response while getting Voco items list");
+						pre.innerText = body['state'];
 					}
-					//clearInterval(this.interval); // used to debug CSS
-				}
-				else{
-					console.log("not ok response while getting Voco items list");
-					pre.innerText = body['state'];
-				}
 		
 
-	        }).catch((e) => {
-	          	//pre.innerText = e.toString();
-	  			//console.log("voco: error in calling init via API handler");
-	  			console.log("Error getting Voco timer items: " + e.toString());
-				pre.innerText = "Loading items failed - connection error";
-	        });	
+		        }).catch((e) => {
+		          	//pre.innerText = e.toString();
+		  			//console.log("voco: error in calling init via API handler");
+		  			console.log("Error getting Voco timer items: " + e.toString());
+					pre.innerText = "Loading items failed - connection error";
+		        });	
+				
+				
+			}
+			catch(e){
+				console.log("no interval to clear? " + e);
+			}
 		
 		
 			this.interval = setInterval(function(){
 				
-				
-		  		// Get list of items
-				if(this.attempts < 2){
-					this.attempts++;
-					//console.log(this.attempts);
-					
-			        window.API.postJson(
-			          `/extensions/${this.id}/api/poll`
+				try{
+			  		// Get list of items
+					if(this.attempts < 2){
+						this.attempts++;
+						//console.log(this.attempts);
+						//console.log("calling")
+				        window.API.postJson(
+				          `/extensions/${this.id}/api/poll`
 
-			        ).then((body) => {
-						//console.log("Python API poll result:");
-						//console.log(body);
-						this.attempts = 0;
-						//console.log(body['items']);
-						if(body['state'] == true){
-							this.items_list = body['items'];
-							this.current_time = body['current_time'];
-							pre.innerText = "";
-							if(this.items_list.length > 0 ){
-								this.regenerate_items();
+				        ).then((body) => {
+							//console.log("Python API poll result:");
+							//console.log(body);
+							this.attempts = 0;
+							//console.log(body['items']);
+							if(body['state'] == true){
+								this.items_list = body['items'];
+								this.current_time = body['current_time'];
+								pre.innerText = "";
+								if(this.items_list.length > 0 ){
+									this.regenerate_items();
+								}
+								else{
+									list.innerHTML = '<div class="extension-voco-centered-page" style="text-align:center"><p>There are currently no active timers, reminders or alarms.</p></div>';
+								}
+					
 							}
 							else{
-								list.innerHTML = '<div class="extension-voco-centered-page" style="text-align:center"><p>There are currently no timers, reminders or alarms set.</p><p>Try saying: <span class="extension-voco-italic">Hey snips... set a timer for 5 minutes.</span></p></div>';
+								//console.log("not ok response while getting items list");
+								pre.innerText = body['update'];
 							}
-						
-					
-						}
-						else{
-							//console.log("not ok response while getting items list");
-							pre.innerText = body['update'];
-						}
-			
 
-			        }).catch((e) => {
-			  			console.log("Error getting timer items: " + e.toString());
-						pre.innerText = "Loading items failed - connection error";
-						this.attempts = 0;
-			        });	
-				}
-				else{
-					pre.innerText = "Lost connection.";
-				}
-		        
+				        }).catch((e) => {
+				  			console.log("Error getting timer items: " + e.toString());
+							pre.innerText = "Loading items failed - connection error";
+							this.attempts = 0;
+				        });	
+					}
+					else{
+						pre.innerText = "Lost connection.";
+					}
+				}catch(e){"Voco polling error: " + console.log(e)}
 		
 			}.bind(this), 1000);
 			
@@ -316,10 +335,12 @@
 		}
 	
 	
+		/*
 		hide(){
 			clearInterval(this.interval);
 			this.view.innerHTML = "";
 		}
+		*/
 	
 	
 	
@@ -328,20 +349,19 @@
 		//
 	
 		regenerate_items(){
-		
-			//console.log("regenerating");
-			//console.log(this.items_list);
-		
-			const pre = document.getElementById('extension-voco-response-data');
-			const list = document.getElementById('extension-voco-list');
-		
 			try {
+				console.log("regenerating");
+				console.log(this.items_list);
+		
+				const pre = document.getElementById('extension-voco-response-data');
+				const list = document.getElementById('extension-voco-list');
+				const original = document.getElementById('extension-voco-original-item');
+			
 				const items = this.items_list
 			
 				items.sort((a, b) => (a.moment > b.moment) ? 1 : -1)
 		
-				const original = document.getElementById('extension-voco-original-item');
-				const list = document.getElementById('extension-voco-list');
+				
 				list.innerHTML = "";
 		
 				// Loop over all items
@@ -424,17 +444,20 @@
 					var time_output = "";
 				
 					const time_delta = clock.seconds_to_go - this.current_time;
-					//console.log("time delta: " + time_delta);
+					console.log("time delta: " + time_delta);
 				
-					if( time_delta > 43200 ){
+					if( clock.seconds_to_go >= 86400 ){
 					
 						const month_names = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 					
-						time_output += '<span class="extension-voco-day">' + clock.days + '</span>';
-						time_output += '<span class="extension-voco-month">' + month_names[clock.month] + '</span>';
-					
+						time_output += '<div class="extension-voco-date"><span class="extension-voco-day">' + clock.day + '</span>';
+						time_output += '<span class="extension-voco-month">' + month_names[clock.month - 1] + '</span></div>';
+						
 					}
+
+					
 					var spacer = "";
+					
 					if(clock.hours < 10){spacer = "0";}
 					time_output += '<div class="extension-voco-short-time"><span class="extension-voco-hours">' + spacer + clock.hours + '</span>';
 				
@@ -442,15 +465,21 @@
 					if(clock.minutes < 10){spacer = "0";}
 					time_output += '<span class="extension-voco-minutes">' + spacer + clock.minutes + '</span></div>';
 
+
+					// Show time to go
 					if( clock.seconds_to_go < 86400 ){
+						
+						time_output += '<div class="extension-voco-time-to-go">'
+						
 						if( clock.seconds_to_go > 300 ){
-							time_output += '<div class="extension-voco-time-to-go"><span class="extension-voco-hours-to-go">' + Math.floor(clock.seconds_to_go / 3600) + '</span>';
+							time_output += '<span class="extension-voco-hours-to-go">' + Math.floor(clock.seconds_to_go / 3600) + '</span>';
 						}
 						time_output += '<span class="extension-voco-minutes-to-go">' + Math.floor( Math.floor(clock.seconds_to_go % 3600)  / 60) + '</span>';
 						if( clock.seconds_to_go <= 300 ){
 							time_output += '<span class="extension-voco-seconds-to-go">' + Math.floor(clock.seconds_to_go % 60) + '</span>';
 						}
-						time_output += '<span class="extension-voco-to-go"> to go</span></div>';
+						time_output += '<span class="extension-voco-to-go"> to go</span>';
+						time_output += '</div>'
 
 
 					}
