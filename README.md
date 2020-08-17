@@ -1,5 +1,9 @@
 # Voco
-Privacy friendly voice control for the Mozilla WebThings Gateway
+Privacy friendly voice control for the Mozilla WebThings Gateway.
+
+For more details, visit:
+
+https://www.candlesmarthome.com/voco-privacy-friendly-voice-control
 
 # Installation
 Visit the add-ons page in your WebThings Gateway, and add the 'Voco' add-on.
@@ -14,6 +18,7 @@ These are all examples. You don't have to say things exactly like this. Any comm
 - "Lock the back door"
 - "Set the color of the living room light to green"
 - "Set the brightness of the kitchen light to 70 percent"
+- "Set the kitchen light to 70"
 #### Toggle devices at a certain time
 - "Turn on the blender in 3 minutes"
 - "Close the garage door at 23 minutes past 4"
