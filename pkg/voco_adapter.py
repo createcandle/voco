@@ -816,7 +816,8 @@ class VocoAdapter(Adapter):
         try:
             if 'System audio volume' in config:
                 if int(config['System audio volume']) == None:
-                    volume_percentage = int(config['System audio volume']) 
+                    volume_percentage = int(config['System audio volume'])
+                    print("System audio volume percentage was set to: " + str(volume_percentage))
                     if volume_percentage >= 0 and volume_percentage <= 100:
                         os.system("sudo amixer cset numid=1 " + volume_percentage + "%")
                         #os.system("sudo amixer cset numid=3 " + volume_percentage + "%")

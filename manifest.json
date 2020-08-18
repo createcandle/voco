@@ -42,15 +42,15 @@
     "schema": {
       "properties": {
         "Authorization token": {
-          "description": "To be allowed to get information on all your devices, you have to create an 'authorization' code. It's basically a very long password. You can generate it yourself under Settings -> Developer -> Create local authorization. Any code you add here will override the code set througn the interface.",
+          "description": "To be allowed to get information on all your devices, you have to create an 'authorization' code. It's basically a very long password. You can generate it yourself under Settings -> Developer -> Create local authorization. Any code you add here will override the code set throug the interface.",
           "type": "string"
         },
         "Metric": {
-          "description": "METRIC. Check the box to use metric values instead of imperial units. For example: temperature in Celcius or Fahrenheit.",
+          "description": "Check the box to use metric values instead of imperial units. For example: temperature in Celcius or Fahrenheit.",
           "type": "boolean"
         },
         "Microphone": {
-          "description": "What type of microphone have you connected? With a USB microphone it's most likely 'Attached device (1,0)'. If you want to use the ReSpeaker Pi Hat you will have to intall the drivers manually.",
+          "description": "What type of microphone are you using? With a USB microphone it's most likely 'Attached device (1,0)'.",
           "enum": [
             "Built-in microphone (0,0)",
 			"Built-in microphone, channel 2 (0,1)",
@@ -62,7 +62,7 @@
           "type": "string"
         },
         "Speaker": {
-          "description": "In some cases the Raspberry Pi might be set to a specific audio output. Here you can 'force' it to be a certain output. Default is 'auto'.",
+          "description": "In some cases the Raspberry Pi might be set to a specific audio output. Here you can 'force' it to be a certain output. Default is 'auto', where it tries to auto-detect the last thing you plugged in (HDMI cable or audio jack).",
           "enum": [
             "Auto",
             "Headphone jack",
@@ -101,7 +101,7 @@
           "type": "string"
         },
         "Voice speed": {
-          "description": "Select fast should the voice speak? Default is 0.9.",
+          "description": "How fast should the voice speak? Default is 0.9.",
           "enum": [
             "0.5",
             "0.6",
@@ -123,7 +123,7 @@
           "type": "string"
         },
         "Hotword sensitivity": {
-          "description": "How sensitive should the system be to 'hey snips'? If it's often responding when nobody said the actual hotword, the you could try lowering this sensitivity. Default is 0.5.",
+          "description": "How sensitive should the system be to 'hey snips'? If it's often responding when nobody said the actual hotword, then you could try lowering this sensitivity. Default is 0.5.",
           "enum": [
               "0.1",
               "0.2",
@@ -142,11 +142,11 @@
           "type": "string"
         },
         "System audio volume": {
-          "description": "When provided, the system volume will be set to this volume percentage level when Voco starts. This is separate from Voco's own volume, which is relative to the system volume. Can be between 0 and 100.",
+          "description": "When provided, the system volume will be set to this volume percentage level when Voco starts. This is separate from Voco's own volume, which is relative to the system volume. Can be between 0 and 100 percent.",
           "type": "integer"
         },
         "Sound detection": {
-          "description": "When enabled, an extra switch will be created that will be turned on for 10 seconds whenever a voice or sound is detected.",
+          "description": "When enabled, an extra switch will be created in the voice control thing. That switch will be turned on for 10 seconds whenever speech or sound is detected.",
           "type": "boolean"
         },
         "Hey Candle": {
