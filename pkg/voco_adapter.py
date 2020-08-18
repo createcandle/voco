@@ -62,7 +62,7 @@ from .voco_notifier import *
 try:
     #from gateway_addon import APIHandler, APIResponse
     from .voco_api_handler import * #CandleManagerAPIHandler
-    print("VocoAPIHandler imported.")
+    print("VocoAPIHandler imported")
 except Exception as ex:
     print("Unable to load VocoAPIHandler (which is used for UI extention): " + str(ex))
 
@@ -84,7 +84,7 @@ class VocoAdapter(Adapter):
         
         verbose -- whether or not to enable verbose logging
         """
-        print("Starting Voco...")
+        print("Starting Voco addon")
         self.pairing = False
         self.DEBUG = False
         self.DEV = False
@@ -812,11 +812,14 @@ class VocoAdapter(Adapter):
             print("Error loading voice detection preference from settings: " + str(ex))
       
       
-        # Raise the volume
+        # System audio volume
         try:
-            if 'Raise the volume' in config:
-                if bool(config['Raise the volume']) == True:
-                    os.system("sudo amixer cset numid=1 100%")
+            if 'System audio volume' in config:
+                if int(config['System audio volume']) == None:
+                    volume_percentage = int(config['System audio volume']) 
+                    if volume_percentage >= 0 and volume_percentage <= 100:
+                        os.system("sudo amixer cset numid=1 " + volume_percentage + "%")
+                        #os.system("sudo amixer cset numid=3 " + volume_percentage + "%")
                 if self.DEBUG:
                     print("-Raise the volume is present in the config data.")
         except Exception as ex:
@@ -2030,8 +2033,8 @@ class VocoAdapter(Adapter):
                         #        self.play_sound( str(self.start_of_input_sound) )
                         
 
-                    elif msg.topic.endswith('/toggleOff'):
-                        print("hermes -> toggleOff")
+                    #elif msg.topic.endswith('/toggleOff'):
+                    #    print("hermes -> toggleOff")
                     #    self.play_sound(str(self.alarm_sound) )
                 
                     elif msg.topic.endswith('/toggleOn'):
@@ -2188,7 +2191,7 @@ class VocoAdapter(Adapter):
                         print("- - - message ends in /ping. Another Voco server is asking for our ip and hostname")
                     if 'site_id' in payload:
                         #print("The ping request came from: " + str(payload['siteId']))
-                        self.mqtt_others[payload['ip']] = str(payload['site_id']) #{'hostId':payload['siteId'],
+                        self.mqtt_others[payload['ip']] = str(payload['hostname']) #{'hostId':payload['siteId'],
                         
                         self.update_network_info()
                         if self.ip_address != None:
@@ -2205,7 +2208,7 @@ class VocoAdapter(Adapter):
                             print("Got a pong message from: " + payload['site_id'] + " with IP address: " + payload['ip'] + " and hostname: " + payload['hostname'])
                     
                         # Should add/update this in self.mqtt_others
-                        self.mqtt_others[payload['ip']] = payload['site_id']
+                        self.mqtt_others[payload['ip']] = payload['hostname']
                         #print("self.mqtt_others:")
                         #print(str(self.mqtt_others))
                             
@@ -3009,7 +3012,7 @@ class VocoAdapter(Adapter):
     def human_readable_time(self,utc_timestamp,add_part_of_day=False):
         """ moment is as UTC timestamp, timezone_offset is in seconds """
         try:
-            print("add_part_of_day?" + str(add_part_of_day))
+            #print("add_part_of_day?" + str(add_part_of_day))
             localized_timestamp = int(utc_timestamp) + self.seconds_offset_from_utc
             hacky_datetime = datetime.utcfromtimestamp(localized_timestamp)
 

@@ -120,11 +120,9 @@ class VocoDevice(Device):
                             },
                             str(self.adapter.persistent_data['audio_output']))
                                 
-            print("")
-            print("-- - - --- - -- - - - - -")
             if self.adapter.sound_detection:
-                #if self.adapter.DEBUG:
-                print("adding sound detection property")
+                if self.adapter.DEBUG:
+                    print("adding sound detection property")
                 self.properties["sound_detected"] = VocoProperty(
                                 self,
                                 "sound_detected",

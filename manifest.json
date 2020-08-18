@@ -34,7 +34,7 @@
       "Voice pitch": "1.2",
       "Voice speed": "0.9",
 	  "Hotword sensitivity": "0.5",
-	  "Raise the volume": true,
+	  "System audio volume": 100,
 	  "Sound detection": false,
 	  "Hey Candle": false,
       "Debugging": false
@@ -141,9 +141,9 @@
           ],
           "type": "string"
         },
-        "Raise the volume": {
-          "description": "When enabled, the system volume will be set to 100% when Voco starts",
-          "type": "boolean"
+        "System audio volume": {
+          "description": "When provided, the system volume will be set to this volume percentage level when Voco starts. This is separate from Voco's own volume, which is relative to the system volume. Can be between 0 and 100.",
+          "type": "integer"
         },
         "Sound detection": {
           "description": "When enabled, an extra switch will be created that will be turned on for 10 seconds whenever a voice or sound is detected.",
