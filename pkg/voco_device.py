@@ -164,6 +164,7 @@ class VocoProperty(Property):
         try:
             if self.device.adapter.DEBUG:
                 print("set_value called for: " + str(self.title))
+                
             if self.title == 'volume':
                 self.device.adapter.set_speaker_volume(int(value))
                 #self.update(value)
@@ -177,7 +178,7 @@ class VocoProperty(Property):
                 self.device.adapter.set_snips_state(bool(value))
                 #self.update(value)
                 
-            if self.title == 'audio output':
+            if self.title == 'audio_output':
                 self.device.adapter.set_audio_output(str(value))
                 #self.update(value)
                 

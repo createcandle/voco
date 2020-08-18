@@ -45,12 +45,12 @@
 				console.log("no interval to clear?: " + e);
 			}
 			
-		  	document.getElementById('extension-voco-view').innerHTML = "<h1>poopie</h1>";
-			document.getElementById('extension-voco-view').innerHTML = this.content;
+			const main_view = document.getElementById('extension-voco-view');
+			main_view.innerHTML = this.content;
 
-			const pre = document.getElementById('extension-voco-response-data');
 			const list = document.getElementById('extension-voco-list');
-
+		
+			const pre = document.getElementById('extension-voco-response-data');
 			pre.innerText = "";
 			
 			//console.log("getting /init");
@@ -151,7 +151,7 @@
 										try{
 											mqtt_server = document.querySelector('input[name="mqtt_server"]:checked').value;
 								
-											console.log("mqtt_server = " + mqtt_server);
+											//console.log("mqtt_server = " + mqtt_server);
 											//console.log("is_satellite = " + is_sat);
 									        window.API.postJson(
 									          `/extensions/${this.id}/api/update`,
@@ -271,44 +271,47 @@
 			this.interval = setInterval(function(){
 				
 				try{
-			  		// Get list of items
-					if(this.attempts < 2){
-						this.attempts++;
-						//console.log(this.attempts);
-						//console.log("calling")
-				        window.API.postJson(
-				          `/extensions/${this.id}/api/poll`
+					if( main_view.classList.contains('selected') ){
+						
+				  		// Get list of items
+						if(this.attempts < 2){
+							this.attempts++;
+							//console.log(this.attempts);
+							//console.log("calling")
+					        window.API.postJson(
+					          `/extensions/${this.id}/api/poll`
 
-				        ).then((body) => {
-							//console.log("Python API poll result:");
-							//console.log(body);
-							this.attempts = 0;
-							//console.log(body['items']);
-							if(body['state'] == true){
-								this.items_list = body['items'];
-								this.current_time = body['current_time'];
-								pre.innerText = "";
-								if(this.items_list.length > 0 ){
-									this.regenerate_items();
+					        ).then((body) => {
+								//console.log("Python API poll result:");
+								//console.log(body);
+								this.attempts = 0;
+								//console.log(body['items']);
+								if(body['state'] == true){
+									this.items_list = body['items'];
+									this.current_time = body['current_time'];
+									pre.innerText = "";
+									if(this.items_list.length > 0 ){
+										this.regenerate_items();
+									}
+									else{
+										list.innerHTML = '<div class="extension-voco-centered-page" style="text-align:center"><p>There are currently no active timers, reminders or alarms.</p></div>';
+									}
+					
 								}
 								else{
-									list.innerHTML = '<div class="extension-voco-centered-page" style="text-align:center"><p>There are currently no active timers, reminders or alarms.</p></div>';
+									//console.log("not ok response while getting items list");
+									pre.innerText = body['update'];
 								}
-					
-							}
-							else{
-								//console.log("not ok response while getting items list");
-								pre.innerText = body['update'];
-							}
 
-				        }).catch((e) => {
-				  			console.log("Error getting timer items: " + e.toString());
-							pre.innerText = "Loading items failed - connection error";
-							this.attempts = 0;
-				        });	
-					}
-					else{
-						pre.innerText = "Lost connection.";
+					        }).catch((e) => {
+					  			console.log("Error getting timer items: " + e.toString());
+								pre.innerText = "Loading items failed - connection error";
+								this.attempts = 0;
+					        });	
+						}
+						else{
+							pre.innerText = "Lost connection.";
+						}
 					}
 				}catch(e){"Voco polling error: " + console.log(e)}
 		
@@ -333,7 +336,7 @@
 			});
 
 		}
-	
+		
 	
 		/*
 		hide(){

@@ -96,8 +96,11 @@ class VocoAdapter(Adapter):
 
         os.environ["LD_LIBRARY_PATH"] = os.path.join(self.user_profile['baseDir'],'.mozilla-iot','addons','voco','snips') #"/home/pi/.mozilla-iot/addons/voco/snips/"
 
-
-        # Get initial audio output options
+        try:
+            os.system("pkill -f snips")
+        except:
+            pass
+        # Get initial audio_output options
         self.audio_controls = get_audio_controls()
         print("audio controls: " + str(self.audio_controls))
 
@@ -143,38 +146,38 @@ class VocoAdapter(Adapter):
                     
                     try:
                         if 'audio_output' not in self.persistent_data:
-                            print("audio output was not in persistent data, adding it now.")
+                            print("audio_output was not in persistent data, adding it now.")
                             self.persistent_data['audio_output'] = str(self.audio_controls[0]['human_device_name'])
                     except:
-                        print("Error fixing audio output in persistent data")
+                        print("Error fixing audio_output in persistent data")
                     
                     try:
                         if 'action_times' not in self.persistent_data:
                             print("action_times was not in persistent data, adding it now.")
                             self.persistent_data['action_times'] = []
                     except:
-                        print("Error fixing audio output in persistent data")
+                        print("Error fixing audio_output in persistent data")
                         
                     try:
                         if 'is_satellite' not in self.persistent_data:
                             print("action_times was not in persistent data, adding it now.")
                             self.persistent_data['is_satellite'] = False
                     except:
-                        print("Error fixing audio output in persistent data")
+                        print("Error fixing audio_output in persistent data")
                     
                     try:
                         if 'mqtt_server' not in self.persistent_data:
                             print("action_times was not in persistent data, adding it now.")
                             self.persistent_data['mqtt_server'] = 'localhost'
                     except:
-                        print("Error fixing audio output in persistent data")
+                        print("Error fixing audio_output in persistent data")
                     
                     try:
                         if 'site_id' not in self.persistent_data:
                             print("site_id was not in persistent data, generating a random one now.")
                             self.persistent_data['site_id'] = generate_random_string(8)
                     except:
-                        print("Error fixing audio output in persistent data")
+                        print("Error fixing audio_output in persistent data")
                     
                     
                         
@@ -189,12 +192,12 @@ class VocoAdapter(Adapter):
             try:
                 self.persistent_data = {'site_id':random_site_id, 'action_times':[], 'mqtt_server':'localhost', 'is_satellite':False, 'listening':True, 'feedback_sounds':True, 'speaker_volume':100, 'audio_output': str(self.audio_controls[0]['human_device_name'])}
             except Exception as ex:
-                print("Error setting initial audio output device: " + str(ex))
+                print("Error setting initial audio_output device: " + str(ex))
                 self.persistent_data = {'site_id':random_site_id, 'action_times':[], 'mqtt_server':'localhost', 'is_satellite':False, 'listening':True, 'feedback_sounds':True, 'speaker_volume':100, 'audio_output': 'Built-in headphone jack'}
                 
         
         if 'audio_output' not in self.persistent_data:
-            print("audio output was still not in self.persistent_data")
+            print("audio_output was still not in self.persistent_data")
             self.persistent_data['audio_output'] = 'Built-in headphone jack'
             
         self.opposites = {
@@ -250,7 +253,7 @@ class VocoAdapter(Adapter):
         self.hotword_sensitivity = 0.5
         self.intent_received = True # Used to create a 'no voice input received' sound effect if no intent was heard.
         self.missing_microphone = False # If the user disconnects a USB microphone, and this was the actual input device used, this is set to true.
-        self.was_listening_when_microphone_disconnected = True
+        #self.was_listening_when_microphone_disconnected = True
         self.last_sound_activity = 0
         
         # Satellite
@@ -481,22 +484,22 @@ class VocoAdapter(Adapter):
                 self.capture_card_id = 2
                 self.capture_device_id = 1
 
-            # Fix the audio output. The default on the WebThings image is HDMI.
+            # Fix the audio_output. The default on the WebThings image is HDMI.
             if self.speaker == "Auto":
                 if self.DEBUG:
-                    print("Setting Pi audio output to automatically switch")
+                    print("Setting Pi audio_output to automatically switch")
                 run_command("amixer cset numid=3 0")
             elif self.speaker == "Headphone jack":
                 if self.DEBUG:
-                    print("Setting Pi audio output to headphone jack")
+                    print("Setting Pi audio_output to headphone jack")
                 run_command("amixer cset numid=3 1")
             elif self.speaker == "HDMI":
                 if self.DEBUG:
-                    print("Setting Pi audio output to HDMI")
+                    print("Setting Pi audio_output to HDMI")
                 run_command("amixer cset numid=3 2")
 
         except Exception as ex:
-            print("error setting initial audio output settings: " + str(ex))
+            print("error setting initial audio_output settings: " + str(ex))
         
             
         # Get the initial speaker settings
@@ -894,10 +897,10 @@ class VocoAdapter(Adapter):
                     
 
 
-    # Called by user to change audio output
+    # Called by user to change audio_output
     def set_audio_output(self, selection):
         if self.DEBUG:
-            print("Setting audio output selection to: " + str(selection))
+            print("Setting audio_output selection to: " + str(selection))
             
         # Get the latest audio controls
         self.audio_controls = get_audio_controls()
@@ -922,9 +925,9 @@ class VocoAdapter(Adapter):
                         if self.DEBUG:
                             print("self.devices = " + str(self.devices))
                         if self.devices['voco'] != None:
-                            self.devices['voco'].properties['audio output'].update( str(selection) )
+                            self.devices['voco'].properties['audio_output'].update( str(selection) )
                     except Exception as ex:
-                        print("Error setting new audio output selection:" + str(ex))
+                        print("Error setting new audio_output selection:" + str(ex))
         
                     break
             
@@ -951,6 +954,8 @@ class VocoAdapter(Adapter):
                 #os.system()
                 sound_command = ["aplay",str(sound_file),"-D","plughw:" + str(self.current_card_id) + "," + str(self.current_device_id)]
                 #subprocess.check_call(sound_command,stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
+                if self.DEBUG:
+                    print("play_sound aplay command: " + str(sound_command))
                 
                 subprocess.run(sound_command, capture_output=True, shell=False, check=False, encoding=None, errors=None, text=None, env=None, universal_newlines=None)
                 
@@ -1035,6 +1040,9 @@ class VocoAdapter(Adapter):
                             
                             #os.system("aplay -D plughw:" + str(self.current_card_id) + "," + str(self.current_device_id) + ' ' + self.response_wav )
                             speak_command = ["aplay","-D","plughw:" + str(self.current_card_id) + "," + str(self.current_device_id),self.response_wav] #,"2>/dev/null"
+                            if self.DEBUG:
+                                print("speak aplay command: " + str(speak_command))
+                            
                             subprocess.run(speak_command, capture_output=True, shell=False, check=False, encoding=None, errors=None, text=None, env=None, universal_newlines=None)
                             #os.system('rm ' + self.response_wav)
                             #subprocess.check_call(speak_command,stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
@@ -1042,7 +1050,7 @@ class VocoAdapter(Adapter):
                             print("Error playing spoken voice response: " + str(ex))
             
             
-            if site_id != 'default' and site_id != self.persistent_data['site_id']:
+            elif site_id != 'default' and site_id != self.persistent_data['site_id']:
                 if self.DEBUG:
                     print("speaking: siteId '" + str(site_id) + "' is not relevant for this site, will publish to MQTT")
                 self.mqtt_client.publish("hermes/voco/" + str(site_id) + "/speak",json.dumps({"message":voice_message}))
@@ -1676,8 +1684,8 @@ class VocoAdapter(Adapter):
             print("Error terminating the hotword process: " + str(ex))
 
         # Make sure Snips is disabled
-        #time.sleep(1)
-        #os.system("pkill -f snips")
+        time.sleep(.5)
+        os.system("pkill -f snips")
         
 
 
@@ -2035,7 +2043,8 @@ class VocoAdapter(Adapter):
                         #        self.play_sound( str(self.start_of_input_sound) )
                         
 
-                    #elif msg.topic.endswith('/toggleOff'):
+                    elif msg.topic.endswith('/toggleOff'):
+                        pass
                     #    print("hermes -> toggleOff")
                     #    self.play_sound(str(self.alarm_sound) )
                 
@@ -2209,7 +2218,7 @@ class VocoAdapter(Adapter):
                         if self.DEBUG:
                             print("Got a pong message from: " + payload['site_id'] + " with IP address: " + payload['ip'] + " and hostname: " + payload['hostname'])
                     
-                        # Should add/update this in self.mqtt_others
+                        #set Should add/update this in self.mqtt_others
                         self.mqtt_others[payload['ip']] = payload['hostname']
                         #print("self.mqtt_others:")
                         #print(str(self.mqtt_others))
