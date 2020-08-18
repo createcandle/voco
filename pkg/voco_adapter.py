@@ -1716,6 +1716,7 @@ class VocoAdapter(Adapter):
             
         except Exception as ex:
             print("Error doing http request/loading returned json: " + str(ex))
+            
             if self.DEBUG:
                 self.speak("I could not connect. ")
             #return [] # or should this be {} ? Depends on the call perhaps.
@@ -2306,7 +2307,8 @@ class VocoAdapter(Adapter):
         
         # Get all the things data via the API
         try:
-            self.things = self.api_get("/things")
+            if self.persistent_data['is_satellite'] == False:
+                self.things = self.api_get("/things")
         except Exception as ex:
             print("Error, couldn't load things: " + str(ex))
 

@@ -350,8 +350,8 @@
 	
 		regenerate_items(){
 			try {
-				console.log("regenerating");
-				console.log(this.items_list);
+				//console.log("regenerating");
+				//console.log(this.items_list);
 		
 				const pre = document.getElementById('extension-voco-response-data');
 				const list = document.getElementById('extension-voco-list');
@@ -443,8 +443,6 @@
 
 					var time_output = "";
 				
-					const time_delta = clock.seconds_to_go - this.current_time;
-					console.log("time delta: " + time_delta);
 				
 					if( clock.seconds_to_go >= 86400 ){
 					
