@@ -124,7 +124,7 @@ def intent_set_timer(self, slots, intent_message):
         else:
             if self.DEBUG:
                 print("The spoken sentence did not contain a time")
-            self.play_sound(self.error_sound)
+            self.play_sound(self.error_sound,intent=intent_message)
             self.speak("You didn't provide a time.",intent=intent_message)
             # TODO: we could ask for the time via a dialogue
             return
@@ -268,7 +268,7 @@ def intent_get_timer_count(self, slots, intent_message):
         if slots['timer_type'] == None:
             if self.DEBUG:
                 print("No timer type set, cancelling")
-                self.play_sound(self.error_sound)
+                self.play_sound(self.error_sound,intent=intent_message)
             return
         
         voice_message = ""
@@ -410,7 +410,7 @@ def intent_stop_timer(self, slots, intent_message):
         if slots['timer_type'] == None:
             if self.DEBUG:
                 print("No timer type set")
-            self.play_sound(self.error_sound)
+            self.play_sound(self.error_sound,intent=intent_message)
             return
         
         voice_message = ""
@@ -556,7 +556,10 @@ def intent_get_boolean(self, slots, intent_message):
     actuator = True
     found_properties = self.check_things(actuator,slots['thing'],slots['property'],slots['space'])
     if len(found_properties) > 0:
+        loop_counter = 0
         for found_property in found_properties:
+            loop_counter += 1
+            
             if found_property['property_url'] == None or found_property['property'] == None or found_property['type'] != "boolean":
                 #print("Skipping: this result item was not a boolean")
                 continue
@@ -578,9 +581,19 @@ def intent_get_boolean(self, slots, intent_message):
                 
             if key == "error":
                 if api_result[key] == 500:
-                    voice_message += str(found_property['thing']) + " seems to be disconnected. "
+                    if len(found_properties) == 1 or (loop_counter == len(found_properties) and voice_message == ""):
+                        voice_message = "Sorry, " + str(found_property['thing']) + " seems to be disconnected. "
+                        break
+                    else:
+                        continue
+            
+            if api_result[key] == None:
+                if len(found_properties) == 1 or (loop_counter == len(found_properties) and voice_message == ""):
+                    voice_message = "Sorry, " + str(found_property['property']) + " had no value. "
                     break
-                    #continue
+                else:
+                    continue
+                    
             
             if len(found_properties) == 1:
                 voice_message = "it"
@@ -733,13 +746,13 @@ def intent_set_state(self, slots, intent_message, delayed_action=None):   # If i
         if slots['boolean'] is None:
             if self.DEBUG:
                 print("Error, no boolean set")
-            self.play_sound(self.error_sound)
+            self.play_sound(self.error_sound,intent=intent_message)
             return
 
         if slots['boolean'] == 'state':
             if self.DEBUG:
                 print("in wrong intent, boolean was 'state' in intent_set_state, which requires true boolean values.")
-            self.play_sound(self.error_sound)
+            self.play_sound(self.error_sound,intent=intent_message)
             self.speak("Sorry, I couldn't handle your request.",intent=intent_message)
             return
 
@@ -844,11 +857,18 @@ def intent_set_state(self, slots, intent_message, delayed_action=None):   # If i
                             # Two moments were provided (from/to)
                             if slots['start_time'] is not None: # This intent has two moments.
                                 double_time = True
-                                #print("has a start time")
-                                #print("print(str(slots['start_time']))" + str(slots['start_time']))
-                                #print("print(str(slots['start_time']))" + str(slots['end_time']))
+                                print("has both a start and end time:")
+                                print("slots['start_time']: " + str(slots['start_time']))
+                                print("slots['start_time']: " + str(slots['end_time']))
+                                starter = {"moment":slots['start_time'],"type":"actuator","original_value":str(slots['boolean']),"slots":slots}
+                                print("starter: " + str(starter))
+                                ender = {"moment":slots['end_time'],"type":"actuator","original_value":opposite,"slots":slots}
+                                print("ender: " + str(ender))
+                                
                                 self.persistent_data['action_times'].append({"intent_message":intent_message,"moment":slots['start_time'],"type":"actuator","original_value":str(slots['boolean']),"slots":slots})
                                 self.persistent_data['action_times'].append({"intent_message":intent_message,"moment":slots['end_time'],"type":"actuator","original_value":opposite,"slots":slots})
+                                print("ACTION TIMES: ")
+                                print(str(self.persistent_data['action_times']))
                                 if voice_message == "":
                                     voice_message = "OK, "
                                 voice_message += "Switching to " + slots['boolean'] 
@@ -1010,7 +1030,7 @@ def intent_set_value(self, slots, intent_message, original_value):
             desired_value  = str(slots['string'])
             #print("intent to set value to a string (but not a color)")
         else:
-            self.play_sound(self.error_sound)
+            self.play_sound(self.error_sound,intent=intent_message)
             self.speak("Your request did not contain a valid value.",intent=intent_message)
             return
         if self.DEBUG:

@@ -243,6 +243,7 @@ class VocoAPIHandler(APIHandler):
                                 update = 'Unable to store token'
                                 
                                 token = str(request.body['token'])
+                                token = token.replace("\n", "")
                                 if self.DEBUG:
                                     print("incoming token is: " + str(token))
                                 
