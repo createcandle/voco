@@ -58,7 +58,7 @@ sound_feedback_disabled_default = true
 # audio = ["+@mqtt"]
 # no_vad_inhibitor = false
 # vad_messages = false
-model = ["/home/pi/.mozilla-iot/addons/voco/snips/assistant/custom_hotword=.5"]
+model = ["/home/pi/.webthings/addons/voco/snips/assistant/custom_hotword=.5"]
 
 [snips-injection]
 #asr_model = "/usr/share/snips/asr"
@@ -75,7 +75,7 @@ provider = "customtts"
 ## customtts specific configuration (here configured to use picotts using the en-US language)
 ## available placeholder variables : %%OUTPUT_FILE%%, %%LANG%%, %%TEXT%%
 # customtts = { command = ["pico2wave", "-w", "%%OUTPUT_FILE%%", "-l", "en-US", "%%TEXT%%"] }
-customtts = { command = ["/home/pi/.mozilla-iot/addons/voco/snips/speak.sh", "%%TEXT%%" ] }
+customtts = { command = ["/home/pi/.webthings/addons/voco/snips/speak.sh", "%%TEXT%%" ] }
 
 
 [snips-pegasus]
