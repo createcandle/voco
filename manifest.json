@@ -1,6 +1,6 @@
 {
   "author": "CandleSmartHome.com",
-  "description": "Privacy friendly voice control. Control devices, set timers, reminders and alarms, and more. Supports satelites in multiple rooms.",
+  "description": "Privacy friendly voice control. Control devices, set timers, reminders, alarms and more. Supports satellites, so it can be used in multiple rooms.",
   "content_scripts": [
     {
       "css": [
@@ -167,7 +167,7 @@
     }
   },
   "short_name": "Voco",
-  "version": "2.2.1",
+  "version": "2.2.5",
   "web_accessible_resources": [
     "css/*.css",
     "images/*.svg",
