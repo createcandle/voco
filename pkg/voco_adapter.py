@@ -68,11 +68,15 @@ except Exception as ex:
 
 
 
-
-
 _TIMEOUT = 3
 
-__location__ = os.path.realpath(os.path.join(os.getcwd(), os.path.dirname(__file__)))
+_CONFIG_PATHS = [
+    os.path.join(os.path.expanduser('~'), '.webthings', 'config'),
+]
+
+if 'WEBTHINGS_HOME' in os.environ:
+    _CONFIG_PATHS.insert(0, os.path.join(os.environ['WEBTHINGS_HOME'], 'config'))
+
 
 
 class VocoAdapter(Adapter):
