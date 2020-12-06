@@ -94,7 +94,7 @@ class VocoAdapter(Adapter):
         Adapter.__init__(self, self.addon_name, self.addon_name, verbose=verbose)
         #print("Adapter ID = " + self.get_id())
 
-        os.environ["LD_LIBRARY_PATH"] = os.path.join(self.user_profile['baseDir'],'.webthings','addons','voco','snips')
+        os.environ["LD_LIBRARY_PATH"] = os.path.join(self.user_profile['addonsDir'],self.addon_name,'snips')
 
         try:
             os.system("pkill -f snips")
@@ -213,7 +213,7 @@ class VocoAdapter(Adapter):
         #os.setpgrp()
 
         # Detect if SSL is enabled
-        self.ssl_folder = os.path.join(os.path.expanduser('~'), '.webthings', 'ssl')
+        self.ssl_folder = os.path.join(self.user_profile['baseDir'], 'ssl')
         self.certificate_path = os.path.join(self.ssl_folder, 'certificate.pem')
         self.privatekey_path = os.path.join(self.ssl_folder, 'privatekey.pem')
 
@@ -301,7 +301,7 @@ class VocoAdapter(Adapter):
         self.current_utc_time = 0
         
         # Some paths
-        self.addon_path =  os.path.join(os.path.expanduser('~'), '.webthings', 'addons', 'voco')
+        self.addon_path = os.path.join(self.user_profile['addonsDir'], self.addon_name)
         self.snips_path = os.path.join(self.addon_path,"snips")
         self.arm_libs_path = os.path.join(self.snips_path,"arm-linux-gnueabihf")
         self.assistant_path = os.path.join(self.snips_path,"assistant")
@@ -419,8 +419,8 @@ class VocoAdapter(Adapter):
             self.previous_hostname = self.hostname
                 
             # TODO: is this this necessary? Is was done to avoid mqtt connection issue (possibly a race condition)
-            if self.persistent_data['mqtt_server'] == 'localhost':
-                self.persistent_data['mqtt_server'] = self.ip_address
+            #if self.persistent_data['mqtt_server'] == 'localhost':
+            self.persistent_data['mqtt_server'] = self.ip_address
             
             #try:
             #    ip_last_part = self.ip_address.rsplit('/', 1)[-1]
@@ -823,7 +823,7 @@ class VocoAdapter(Adapter):
                     volume_percentage = int(config['System audio volume'])
                     print("System audio volume percentage was set to: " + str(volume_percentage))
                     if volume_percentage >= 0 and volume_percentage <= 100:
-                        os.system("sudo amixer cset numid=1 " + volume_percentage + "%")
+                        os.system("sudo amixer cset numid=1 " + str(volume_percentage) + "%")
                         #os.system("sudo amixer cset numid=3 " + volume_percentage + "%")
                 if self.DEBUG:
                     print("-Raise the volume is present in the config data.")
@@ -1887,19 +1887,21 @@ class VocoAdapter(Adapter):
             self.mqtt_client.on_disconnect = self.on_disconnect
             self.mqtt_client.on_message = self.on_message
             self.mqtt_client.on_publish = self.on_publish
-            #print("self.persistent_data['mqtt_server'] = " + str(self.persistent_data['mqtt_server']))
+            print("self.persistent_data['mqtt_server'] = " + str(self.persistent_data['mqtt_server']))
             
             if self.persistent_data['is_satellite']:
                 if self.DEBUG:
-                    print("MQTT client is connecting to: " + str(self.persistent_data['mqtt_server']))
+                    print("This device is a satellite, so MQTT client is connecting to: " + str(self.persistent_data['mqtt_server']))
                 self.mqtt_client.connect(str(self.persistent_data['mqtt_server']), int(self.mqtt_port), keepalive=60)
             else:
+                if self.DEBUG:
+                    print("This device is NOT a satellite, so MQTT client is connecting to 127.0.0.1 on port: " + str(self.mqtt_port) )
                 self.mqtt_client.connect("127.0.0.1", int(self.mqtt_port), keepalive=60)
                 
             #self.mqtt_client.loop_forever()
             self.mqtt_client.loop_start()
             if self.DEBUG:
-                print("Voco MQTT client started (" + str(self.persistent_data['mqtt_server']) + ")")  
+                print("Voco MQTT client started.")  
             
         except Exception as ex:
             print("Error creating MQTT client connection: " + str(ex))
@@ -1907,7 +1909,7 @@ class VocoAdapter(Adapter):
             self.set_status_on_thing("MQTT error")
         
 
-    def on_disconnect(client,userdata,rc):
+    def on_disconnect(self, client, userdata, rc):
         if self.DEBUG:
             print("MQTT on_disconnect")
         self.mqtt_connected = False
@@ -1918,8 +1920,8 @@ class VocoAdapter(Adapter):
     # Subscribe to the important messages
     def on_connect(self, client, userdata, flags, rc):
         if rc == 0:
-            #if self.DEBUG:
-            #    print("- on_connect: MQTT connect return code was 0 - (everything is ok)")
+            if self.DEBUG:
+                print("- on_connect: MQTT connect return code was 0 - (everything is ok)")
                 
             if self.mqtt_connected == False: # If it's a fresh (re)connection, send out a broadcast ping to ask for the hostnames and site_id's of the other voco devices on the network
                 print("Connection to MQTT (re)established")
@@ -1934,7 +1936,8 @@ class VocoAdapter(Adapter):
                 
             try:
                 if self.persistent_data['is_satellite'] == False:
-                    #print("** I am not a satellite")
+                    if self.DEBUG:
+                        print("** I am not a satellite")
                     
                     pass
                     #self.mqtt_client.subscribe("hermes/hotword/#")
