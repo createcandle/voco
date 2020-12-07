@@ -1,0 +1,43 @@
+name: Release
+
+on:
+  release:
+    types: [created]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - name: Set up Python 3.8
+      uses: actions/setup-python@v2
+      with:
+        python-version: 3.8
+    - name: Package project
+      run: |
+        ./package.sh
+    - name: Get Release
+      id: get_release
+      uses: bruceadams/get-release@v1.2.2
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    - name: Upload Release Asset
+      id: upload-release-asset
+      uses: actions/upload-release-asset@v1.0.1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.get_release.outputs.upload_url }}
+        asset_path: voco-${{ steps.get_release.outputs.tag_name }}.tgz
+        asset_name: voco-${{ steps.get_release.outputs.tag_name }}.tgz
+        asset_content_type: application/gnutar
+    - name: Upload Release Asset Checksum
+      id: upload-release-asset-checksum
+      uses: actions/upload-release-asset@v1.0.1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.get_release.outputs.upload_url }}
+        asset_path: voco-${{ steps.get_release.outputs.tag_name }}.tgz.sha256sum
+        asset_name: voco-${{ steps.get_release.outputs.tag_name }}.tgz.sha256sum
+        asset_content_type: text/plain
