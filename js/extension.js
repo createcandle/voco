@@ -18,6 +18,9 @@
 	        .then((res) => res.text())
 	        .then((text) => {
 	         	this.content = text;
+	  		 	if( document.location.href.endsWith("voco") ){
+	  		  		this.show();
+	  		  	}
 	        })
 	        .catch((e) => console.error('Failed to fetch content:', e));
 	    }

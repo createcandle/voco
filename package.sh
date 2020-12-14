@@ -2,9 +2,13 @@
 
 version=$(grep '"version"' manifest.json | cut -d: -f2 | cut -d\" -f2)
 
-echo "removing old files"
+# Setup environment for building inside Dockerized toolchain
+[ $(id -u) = 0 ] && umask 0
+
+
 # Clean up from previous releases
-rm -rf *.tgz *.shasum *.sha256sum package SHA256SUMS lib
+echo "removing old files"
+rm -rf *.tgz *.shasum package SHA256SUMS lib
 
 # Remove the injections
 if [ -d "snips/work/injections" ]
@@ -19,8 +23,9 @@ then
     rm -f snips/response.wav
 fi
 
-echo "creating package"
+
 # Prep new package
+echo "creating package"
 mkdir -p lib package
 
 # Pull down Python dependencies
