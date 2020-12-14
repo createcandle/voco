@@ -341,7 +341,6 @@ def download_file(url, target_file):
 
 def run_command(cmd, timeout_seconds=20):
     try:
-        
         p = subprocess.run(cmd, timeout=timeout_seconds, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True, universal_newlines=True)
 
         if p.returncode == 0:
@@ -464,7 +463,7 @@ def get_audio_controls():
             if len(lines) > 0:
                 for line in lines:
                     if "'" in line:
-                        #print("line = " + line)
+                        #print("maxier controls line = " + line)
                         control_name = re.findall(r"'([^']+)'", line)[0]
                         #print("control name = " + control_name)
                         if control_name is not 'mic':

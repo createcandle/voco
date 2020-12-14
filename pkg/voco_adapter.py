@@ -244,6 +244,7 @@ class VocoAdapter(Adapter):
         # Speaker
         self.speaker = None
         self.current_simple_card_name = "ALSA"
+        self.current_control_name = ""
         self.current_card_id = 0
         self.current_device_id = 0
 
@@ -513,6 +514,7 @@ class VocoAdapter(Adapter):
                     self.current_simple_card_name = option['simple_card_name']
                     self.current_card_id = option['card_id']
                     self.current_device_id = option['device_id']
+                    self.current_control_name = option['control_name']
             except Exception as ex:
                 print("error getting initial audio settings: " + str(ex))
                 self.current_simple_card_name = "ALSA"
@@ -896,6 +898,9 @@ class VocoAdapter(Adapter):
             self.save_persistent_data()
         try:
             self.devices['voco'].properties['volume'].update(int(volume))
+            
+            # unmute if the audio output was muted.
+            self.unmute()
         except:
             if self.DEBUG:
                 print("error setting volume property on thing")
@@ -982,6 +987,9 @@ class VocoAdapter(Adapter):
                 if self.DEBUG:
                     print("play_sound aplay command: " + str(sound_command))
                 
+                # unmute if the audio output was muted.
+                self.unmute()
+                
                 subprocess.run(sound_command, capture_output=True, shell=False, check=False, encoding=None, errors=None, text=None, env=None, universal_newlines=None)
                 
         except Exception as ex:
@@ -1026,6 +1034,9 @@ class VocoAdapter(Adapter):
                     print("(...) Speaking locally: '" + voice_message + "' at: " + str(site_id))
                 environment = os.environ.copy()
                 #FNULL = open(os.devnull, 'w')
+                
+                # unmute if the audio output was muted.
+                self.unmute()
         
                 for option in self.audio_controls:
                     if str(option['human_device_name']) == str(self.persistent_data['audio_output']):
@@ -1051,6 +1062,8 @@ class VocoAdapter(Adapter):
         
                         #nanotts_command = [nanotts_path,'-l',str(os.path.join(self.snips_path,'lang')),'-v',str(self.voice_accent),'--volume',str(nanotts_volume),'--speed',str(self.voice_speed),'--pitch',str(self.voice_pitch),'-w','-o',self.response_wav,"-i",str(voice_message)]
                         #print(str(nanotts_command))
+                        
+                        
                         
                         # generate wave file
                         self.echo_process = subprocess.Popen(('echo', str(voice_message)), stdout=subprocess.PIPE)
@@ -1088,6 +1101,18 @@ class VocoAdapter(Adapter):
             print("Error speaking: " + str(ex))
 
 
+
+    def mute(self):
+        if self.DEBUG:
+            print("In mute. current_control_name: " + str(self.current_control_name))
+        run_command("amixer sset " + str(self.current_control_name) + " mute")
+        
+        
+        
+    def unmute(self):
+        if self.DEBUG:
+            print("In unmute. current_control_name: " + str(self.current_control_name))
+        run_command("amixer sset " + str(self.current_control_name) + " unmute")
 
 
 
@@ -2053,8 +2078,13 @@ class VocoAdapter(Adapter):
                             if payload['siteId'] == self.persistent_data['site_id'] or payload['siteId'] == 'default' or payload['siteId'] == 'everywhere':
                                 if self.DEBUG:
                                     print("I should play a detected sound")
+                                
                                 if self.persistent_data['feedback_sounds'] == True:
                                     self.play_sound( str(self.start_of_input_sound) )
+                                    
+                                # If the hotword was detected, mute audio output for optimal listening.
+                                self.mute()
+                                
                             else:
                                 if self.DEBUG:
                                     print("Not me, but the satelite '" + str(payload['siteId']) + "' should play a detected sound")
@@ -2093,6 +2123,7 @@ class VocoAdapter(Adapter):
                     #    self.play_sound(str(self.alarm_sound) )
                 
                     elif msg.topic.endswith('/toggleOn'):
+                        
                         if self.persistent_data['feedback_sounds'] == True and self.intent_received == False:
                             if self.DEBUG:
                                 print("No intent received")
@@ -2103,6 +2134,10 @@ class VocoAdapter(Adapter):
                                 if payload['siteId'] == self.persistent_data['site_id'] or payload['siteId'] == 'default' or payload['siteId'] == 'everywhere':
                                     if self.DEBUG:
                                         print("I should play an end-of-input sound")
+                                        
+                                    # unmute if the audio output was muted.
+                                    self.unmute()
+                                        
                                     if self.persistent_data['feedback_sounds'] == True:
                                         self.play_sound( str(self.end_of_input_sound) )
                                 else:
