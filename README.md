@@ -1,5 +1,5 @@
 # Voco
-Privacy friendly voice control for the Mozilla WebThings Gateway.
+Privacy friendly voice control for WebThings Gateway.
 
 For more details, visit:
 

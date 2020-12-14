@@ -5,6 +5,9 @@ version=$(grep '"version"' manifest.json | cut -d: -f2 | cut -d\" -f2)
 # Setup environment for building inside Dockerized toolchain
 [ $(id -u) = 0 ] && umask 0
 
+# Install missing dependencies
+sudo apt update -qq
+sudo apt install -y libasound2-dev
 
 # Clean up from previous releases
 echo "removing old files"
