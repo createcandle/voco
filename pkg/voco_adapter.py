@@ -1323,7 +1323,8 @@ class VocoAdapter(Adapter):
                                 if self.persistent_data['is_satellite']:
                                 
                                     if self.voco_connected == False:
-                                        print("MQTT seems to be up, but main voco server is not responding")
+                                        if self.DEBUG:
+                                            print("MQTT seems to be up, but main voco server is not responding")
                                 
                                 
                                     # TODO: is this extra broadcast ping really necessary?
@@ -2006,7 +2007,8 @@ class VocoAdapter(Adapter):
                 print("- on_connect: MQTT connect return code was 0 - (everything is ok)")
                 
             if self.mqtt_connected == False: # If it's a fresh (re)connection, send out a broadcast ping to ask for the hostnames and site_id's of the other voco devices on the network
-                print("Connection to MQTT (re)established. Will send broadcast ping.")
+                if self.DEBUG:
+                    print("Connection to MQTT (re)established. Will send broadcast ping to " + str(self.persistent_data['mqtt_server']))
                 self.mqtt_connected = True
                 
             self.send_mqtt_ping(True) # broadcast ping                
@@ -2280,7 +2282,7 @@ class VocoAdapter(Adapter):
                     print("broadcast pong, self.mqtt_other is now: " + str(self.mqtt_others))
                 if self.currently_looking_for_missing_mqtt_server and payload['siteId'] == self.persistent_data['main_site_id']:
                     self.currently_looking_for_missing_mqtt_server = False
-                    print("Found the correct main voco server")
+                    print("A network scan found the missing main voco server")
                     self.persistent_data['mqtt_server'] = payload['ip']
                     self.save_persistent_data()
                     
