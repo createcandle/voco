@@ -34,7 +34,7 @@
       "Voice pitch": "1.2",
       "Voice speed": "0.9",
 	  "Hotword sensitivity": "0.5",
-	  "System audio volume": 100,
+	  "System audio volume": 90,
 	  "Sound detection": false,
 	  "Hey Candle": false,
       "Debugging": false
@@ -167,7 +167,7 @@
     }
   },
   "short_name": "Voco",
-  "version": "2.3.1",
+  "version": "2.4.0",
   "web_accessible_resources": [
     "css/*.css",
     "images/*.svg",
