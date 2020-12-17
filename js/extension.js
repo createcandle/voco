@@ -19,6 +19,7 @@
 	        .then((text) => {
 	         	this.content = text;
 	  		 	if( document.location.href.endsWith("voco") ){
+					console.log(document.location.href);
 	  		  		this.show();
 	  		  	}
 	        })
@@ -41,6 +42,8 @@
 
 	    show() {
 			//console.log("voco show called");
+			//console.log("this.content:");
+			//console.log(this.content);
 			try{
 				clearInterval(this.interval);
 			}
@@ -49,24 +52,37 @@
 			}
 			
 			const main_view = document.getElementById('extension-voco-view');
-			main_view.innerHTML = this.content;
+			
+			if(this.content == ''){
+				return;
+			}
+			else{
+				//document.getElementById('extension-voco-view')#extension-voco-view
+				main_view.innerHTML = this.content;
+			}
+			
+			
+			
 
 			const list = document.getElementById('extension-voco-list');
 		
 			const pre = document.getElementById('extension-voco-response-data');
-			pre.innerText = "";
 			
 			//console.log("getting /init");
+			
+			
 			//this.interval = setInterval(function(){
 			
 			try{
+				pre.innerText = "";
+				
 		  		// Init
 		        window.API.postJson(
 		          `/extensions/${this.id}/api/init`
 
 		        ).then((body) => {
-					//console.log("Init API result:");
-					//console.log(body);
+					console.log("Init API result:");
+					console.log(body);
 					
 					
 					if('has_token' in body){
@@ -133,7 +149,7 @@
 							document.getElementById('extension-voco-content-container').classList.add('extension-voco-change-hostname');
 						}
 						else{
-							
+							console.log(body);
 							if('satellite_targets' in body){
 								//console.log("satellite_targets in body: " + body['satellite_targets']);
 								if(Object.keys(body['satellite_targets']).length > 0){
