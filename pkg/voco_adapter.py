@@ -2280,15 +2280,13 @@ class VocoAdapter(Adapter):
                     print("broadcast pong, self.mqtt_other is now: " + str(self.mqtt_others))
                 if self.currently_looking_for_missing_mqtt_server and payload['siteId'] == self.persistent_data['main_site_id']:
                     self.currently_looking_for_missing_mqtt_server = False
-                    print("HURRAY, found the correct main voco server")
+                    print("Found the correct main voco server")
                     self.persistent_data['mqtt_server'] = payload['ip']
                     self.save_persistent_data()
                     
                     self.set_status_on_thing("OK")
                     
                     #self.run_snips()
-                    
-                    
             else:
                 if self.DEBUG:
                     print("got my own broadcast pong message - ignoring")
