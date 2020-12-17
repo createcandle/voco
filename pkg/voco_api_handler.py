@@ -10,7 +10,7 @@ import requests
 import subprocess
 #import threading
 
-from .util import valid_ip
+from .util import valid_ip, arpa_detect_gateways
 
 from datetime import datetime,timedelta
 #from dateutil import tz
@@ -95,17 +95,17 @@ class VocoAPIHandler(APIHandler):
                             self.adapter.update_network_info()
                             
                             # Ask for latest info from other Voco instances
-                            self.adapter.mqtt_client.publish("hermes/voco/ping",json.dumps({'ip':self.adapter.ip_address,'siteId':self.adapter.hostname}))
+                            self.adapter.mqtt_client.publish("hermes/voco/ping",json.dumps({'ip':self.adapter.ip_address,'site_id':self.adapter.persistent_data['site_id']}))
                             sleep(1)
                             
                             # Satellite targets
-                            gateway_ip_addresses = self.arpa()
+                            self.adapter.gateways_ip_list = arpa_detect_gateways()
                             satellite_targets = {}
-                            for ip_address in gateway_ip_addresses:
+                            for ip_address in self.adapter.gateways_ip_list:
                                 if ip_address in self.adapter.mqtt_others:
-                                    satellite_targets[ip_address] = self.adapter.mqtt_others[ip_address] # should give the siteId
+                                    satellite_targets[ip_address] = self.adapter.mqtt_others[ip_address] # should give the site_id
                                 else:
-                                    satellite_targets[ip_address] = ip_address # if there is no known siteId for this IP addres, just give it the ip address as the name
+                                    satellite_targets[ip_address] = ip_address # if there is no known site_id for this IP addres, just give it the ip address as the name
                             
                             # Token
                             has_token = False
@@ -123,7 +123,9 @@ class VocoAPIHandler(APIHandler):
                                 print("Error getting is_satellite from persistent data")
                             
                             
-
+                            if self.adapter.persistent_data['mqtt_server'] not in self.adapter.gateways_ip_list:
+                                if self.DEBUG:
+                                    print("Warning, the current persistent_data['mqtt_server'] IP was not actually spotted in the network by the ARP scan!")
                             
                             
                             if self.DEBUG:
@@ -271,9 +273,10 @@ class VocoAPIHandler(APIHandler):
                                     self.adapter.persistent_data['is_satellite'] = bool(request.body['is_satellite'])
 
                                     #if bool(request.body['is_satellite']) != self.adapter.persistent_data['is_satellite']:
-                                    if bool(request.body['is_satellite']):
+                                    if self.adapter.persistent_data['is_satellite']:
                                         self.adapter.persistent_data['mqtt_server'] = str(request.body['mqtt_server'])
                                         self.adapter.run_mqtt()
+                                        self.adapter.send_mqtt_ping(True)
                                         self.adapter.stop_snips()
                                         self.adapter.run_snips()
                                         update = 'Satellite mode enabled'
@@ -281,6 +284,7 @@ class VocoAPIHandler(APIHandler):
                                             print("- Satellite mode enabled")
                                     else:
                                         self.adapter.persistent_data['mqtt_server'] = 'localhost'
+                                        self.adapter.persistent_data['main_site_id'] = self.adapter.persistent_data['site_id'] #reset to default
                                         self.adapter.run_mqtt()
                                         self.adapter.stop_snips()
                                         self.adapter.run_snips()
@@ -337,61 +341,3 @@ class VocoAPIHandler(APIHandler):
             )
         
 
-    #
-    #  A quick scan of the network.
-    #
-    def arpa(self):
-        command = "arp -a"
-        gateway_list = []
-        try:
-            result = subprocess.run(command, shell=True, universal_newlines=True, stdout=subprocess.PIPE) #.decode())
-            for line in result.stdout.split('\n'):
-                #print(str(line))
-                if not "<incomplete>" in line and len(line) > 10:
-                    #print("--useable")
-                    name = "?"
-
-                    try:
-                        ip_address_list = re.findall(r'(?:\d{1,3}\.)+(?:\d{1,3})', str(line))
-                        #print("ip_address_list = " + str(ip_address_list))
-                        ip_address = str(ip_address_list[0])
-                        if not valid_ip(ip_address):
-                            continue
-                            
-                        #print("found valid IP address")
-                        try:
-                            test_url_a = 'http://' + str(ip_address) + "/"
-                            test_url_b = 'https://' + str(ip_address) + "/"
-                            html = ""
-                            try:
-                                response = requests.get(test_url_a, allow_redirects=True, timeout=1)
-                                #print("http response: " + str(response.content.decode('utf-8')))
-                                html += response.content.decode('utf-8').lower()
-                            except:
-                                pass
-                            try:
-                                response = requests.get(test_url_b, allow_redirects=True, timeout=1)
-                                #print("https response: " + str(response.content.decode('utf-8')))
-                                html += response.content.decode('utf-8').lower()
-                            except:
-                                pass
-                                
-                            if 'webthings' in html:
-                                if self.DEBUG:
-                                    print("arp: WebThings controller spotted at: " + str(ip_address))
-                                #print(str(response.content.decode('utf-8')))
-                                gateway_list.append(ip_address) #[ip_address] = "option"
-                        
-                        except Exception as ex:
-                            if self.DEBUG:
-                                print("Error: could not get IP from arp -a line: " + str(ex))
-                            
-                    except Exception as ex:
-                        print("no IP address in line: " + str(ex))
-                        
-                   
-                    
-        except Exception as ex:
-            print("Arp -a error: " + str(ex))
-            
-        return gateway_list

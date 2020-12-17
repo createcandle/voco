@@ -9,6 +9,7 @@ import socket
 import random
 import string
 import requests
+from requests.adapters import HTTPAdapter
 import subprocess
 from time import sleep
 from dateutil import tz
@@ -569,3 +570,77 @@ def valid_ip(ip):
 def generate_random_string(length):
     letters = string.ascii_lowercase
     return ''.join(random.choice(letters) for i in range(length))
+
+
+
+
+
+#
+#  A quick scan of the network.
+#
+def arpa_detect_gateways(quick=True):
+    command = "arp -a"
+    gateway_list = []
+    try:
+        
+        s = requests.Session()
+        s.mount('http://', HTTPAdapter(max_retries=0))
+        s.mount('https://', HTTPAdapter(max_retries=0))
+        
+        result = subprocess.run(command, shell=True, universal_newlines=True, stdout=subprocess.PIPE) #.decode())
+        for line in result.stdout.split('\n'):
+            #print(str(line))
+            if len(line) > 10:
+                
+                if quick and "<incomplete>" in line:
+                    #print("skipping incomplete ip")
+                    continue
+                    
+                #print("--useable")
+                #name = "?"
+
+                try:
+                    ip_address_list = re.findall(r'(?:\d{1,3}\.)+(?:\d{1,3})', str(line))
+                    #print("ip_address_list = " + str(ip_address_list))
+                    ip_address = str(ip_address_list[0])
+                    if not valid_ip(ip_address):
+                        continue
+                        
+                    #print("found valid IP address: " + str(ip_address))
+                    try:
+                        test_url_a = 'http://' + str(ip_address) + "/"
+                        test_url_b = 'https://' + str(ip_address) + "/"
+                        html = ""
+                        try:
+                            response = s.get(test_url_a, allow_redirects=True, timeout=1)
+                            #print("http response: " + str(response.content.decode('utf-8')))
+                            html += response.content.decode('utf-8').lower()
+                        except Exception as ex:
+                            #print("Error scanning network for gateway using http: " + str(ex))
+                            
+                            
+                            try:
+                                response = s.get(test_url_b, allow_redirects=True, timeout=1)
+                                #print("https response: " + str(response.content.decode('utf-8')))
+                                html += response.content.decode('utf-8').lower()
+                            except Exception as ex:
+                                #print("Error scanning network for gateway using https: " + str(ex))
+                                pass
+                            
+                        if 'webthings' in html:
+                            #print("arp: WebThings controller spotted at: " + str(ip_address))
+                            #print(str(response.content.decode('utf-8')))
+                            gateway_list.append(ip_address) #[ip_address] = "option"
+                    
+                    except Exception as ex:
+                        print("Error: could not analyse IP from arp -a line: " + str(ex))
+                        
+                except Exception as ex:
+                    print("no IP address in line: " + str(ex))
+                    
+               
+                
+    except Exception as ex:
+        print("Arp -a error: " + str(ex))
+        
+    return gateway_list

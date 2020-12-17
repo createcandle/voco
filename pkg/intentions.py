@@ -780,7 +780,7 @@ def intent_set_state(self, slots, intent_message, delayed_action=None):   # If i
         found_properties = self.check_things(actuator,slots['thing'],slots['property'],slots['space'])
         if self.DEBUG:
             print("")
-            print("found " + str(len(found_properties)) + " properties: " + str(found_properties))
+            print("found properties: " + str(found_properties))
             
         if len(found_properties) > 0:
             for found_property in found_properties:
@@ -857,18 +857,22 @@ def intent_set_state(self, slots, intent_message, delayed_action=None):   # If i
                             # Two moments were provided (from/to)
                             if slots['start_time'] is not None: # This intent has two moments.
                                 double_time = True
-                                print("has both a start and end time:")
-                                print("slots['start_time']: " + str(slots['start_time']))
-                                print("slots['start_time']: " + str(slots['end_time']))
+                                if self.DEBUG:
+                                    print("has both a start and end time:")
+                                    print("slots['start_time']: " + str(slots['start_time']))
+                                    print("slots['start_time']: " + str(slots['end_time']))
                                 starter = {"moment":slots['start_time'],"type":"actuator","original_value":str(slots['boolean']),"slots":slots}
-                                print("starter: " + str(starter))
+                                if self.DEBUG:
+                                    print("starter: " + str(starter))
                                 ender = {"moment":slots['end_time'],"type":"actuator","original_value":opposite,"slots":slots}
-                                print("ender: " + str(ender))
+                                if self.DEBUG:
+                                    print("ender: " + str(ender))
                                 
                                 self.persistent_data['action_times'].append({"intent_message":intent_message,"moment":slots['start_time'],"type":"actuator","original_value":str(slots['boolean']),"slots":slots})
                                 self.persistent_data['action_times'].append({"intent_message":intent_message,"moment":slots['end_time'],"type":"actuator","original_value":opposite,"slots":slots})
-                                print("ACTION TIMES: ")
-                                print(str(self.persistent_data['action_times']))
+                                if self.DEBUG:
+                                    print("ACTION TIMES: ")
+                                    print(str(self.persistent_data['action_times']))
                                 if voice_message == "":
                                     voice_message = "OK, "
                                 voice_message += "Switching to " + slots['boolean'] 
