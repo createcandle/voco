@@ -2007,8 +2007,9 @@ class VocoAdapter(Adapter):
         
         
     def is_snips_running(self):
-        print("checking if Snips is already running")
-        print(str(len(self.external_processes)))
+        if self.DEBUG:
+            print("checking if Snips is already running")
+            print(str(len(self.external_processes)))
         return bool(len(self.external_processes))
         
         
@@ -2149,7 +2150,7 @@ class VocoAdapter(Adapter):
                     if msg.topic.endswith('/detected'):
                         self.intent_received = False
                         if self.DEBUG:
-                            print(">> Hotword detected")
+                            print("(...) Hotword detected")
                             
                         if 'siteId' in payload:
                             #print("site_id was in hotword detected payload: " + str(payload['siteId']))
@@ -2419,7 +2420,7 @@ class VocoAdapter(Adapter):
     def on_publish(self, client, userdata, msg):
         #print(".")
         if self.DEBUG:
-            print("..MQTT message published")
+            print("      -> MQTT message published")
         self.periodic_mqtt_attempts = 0
         self.mqtt_connected = True
         #print(str(msg))
@@ -2439,7 +2440,7 @@ class VocoAdapter(Adapter):
                     self.mqtt_client.publish("hermes/voco/ping",json.dumps({'ip':str(self.ip_address),'hostname':str(self.hostname),'siteId':self.persistent_data['site_id']}))
                 elif 'main_site_id' in self.persistent_data:
                     if self.DEBUG:
-                        print("- - -  sending connection check ping to: " + str(self.persistent_data['main_site_id']) + " to MQTT_server at: " + str(self.persistent_data['mqtt_server']) )
+                        print("- - -  sending connection check ping to: " + str(self.persistent_data['main_site_id']) + " at: " + str(self.persistent_data['mqtt_server']) )
                     self.mqtt_client.publish("hermes/voco/" + self.persistent_data['main_site_id'] + "/ping",json.dumps({'ip':str(self.ip_address),'hostname':str(self.hostname),'siteId':self.persistent_data['site_id']}))
                 if self.DEBUG:
                     print("Ping sent")
