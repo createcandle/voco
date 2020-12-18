@@ -630,7 +630,8 @@ def arpa_detect_gateways(quick=True):
                         if 'webthings' in html:
                             #print("arp: WebThings controller spotted at: " + str(ip_address))
                             #print(str(response.content.decode('utf-8')))
-                            gateway_list.append(ip_address) #[ip_address] = "option"
+                            if ip_address not in gateway_list:
+                                gateway_list.append(ip_address) #[ip_address] = "option"
                     
                     except Exception as ex:
                         print("Error: could not analyse IP from arp -a line: " + str(ex))

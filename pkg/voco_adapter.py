@@ -1138,7 +1138,7 @@ class VocoAdapter(Adapter):
 
 
     def run_snips(self):
-        self.snips_running = True
+        #self.snips_running = True
         if self.DEBUG:
             print("running Snips (after killing potential running snips instances)")
             os.system("pkill -f snips")
@@ -1286,8 +1286,9 @@ class VocoAdapter(Adapter):
                 
                 # Inject new thing names into snips if necessary
                 if time.time() - self.minimum_injection_interval > self.last_injection_time: # + self.minimum_injection_interval > datetime.utcnow().timestamp():
-                    #if self.DEBUG:
-                    #    print("Time to check if thing names should be injected into snips")
+                    if self.DEBUG:
+                        print("15 seconds have hassed, time to check if thing names should be injected into snips")
+                        print("external processes count: " + str(self.is_snips_running()))
                         #print( str(time.time()) + " - " + str(self.minimum_injection_interval) + " > " + str(self.last_injection_time)  )
                     self.last_injection_time = time.time()
                     
@@ -1336,12 +1337,14 @@ class VocoAdapter(Adapter):
                                             
                                             
                                     if self.persistent_data['main_site_id'] != self.persistent_data['site_id']: #TODO why this check ?
+                                        if self.DEBUG:
+                                            print('satellite, so sending ping to stay in touch')
                                         self.send_mqtt_ping()
                                         self.periodic_mqtt_attempts += 1
                                         self.periodic_voco_attempts += 1
                                     else:
                                         if self.DEBUG:
-                                            print('main_site_id was not in self.persistent_data')
+                                            print('satellite, but main_site_id was site_id')
                                         self.send_mqtt_ping(True) # broadcast ping
                                         
                                     
@@ -1754,7 +1757,7 @@ class VocoAdapter(Adapter):
         
     
     def stop_snips(self):
-        self.snips_running = False
+        #self.snips_running = False
         os.system("pkill -f snips")
         
         return # this function isn't very useful anymore?
@@ -1925,11 +1928,11 @@ class VocoAdapter(Adapter):
         try:
             if self.mqtt_client != None:
                 try:
-                    if self.mqtt_connected:
-                        if self.DEBUG:
-                            print("disconnecting mqtt first")
-                        self.mqtt_client.disconnect() # disconnect
-                        self.mqtt_client.loop_stop()
+                    #if self.mqtt_connected:
+                    if self.DEBUG:
+                        print("disconnecting mqtt first")
+                    self.mqtt_client.disconnect() # disconnect
+                    self.mqtt_client.loop_stop()
                 except Exception as ex:
                     print("Error closing existing MQTT client: " + str(ex))
             else:
@@ -1989,8 +1992,12 @@ class VocoAdapter(Adapter):
     def on_disconnect(self, client, userdata, rc):
         if self.DEBUG:
             print("MQTT on_disconnect")
-        self.mqtt_connected = False
-        self.voco_connected = False
+        #self.mqtt_connected = False
+        #self.voco_connected = False
+        
+        if rc == 0:
+            if self.DEBUG:
+                print("In on_disconnect, and MQTT connect return code was 0 - (disconnect is ok?)")
         
         #if self.persistent_data['is_satellite']: # Run snips on the local server while the main server is disconnected.
             #self.orphaned = True
@@ -1999,52 +2006,58 @@ class VocoAdapter(Adapter):
             #self.run_snips()
         
         
+    def is_snips_running(self):
+        print("checking if Snips is already running")
+        print(str(len(self.external_processes)))
+        return bool(len(self.external_processes))
+        
         
     # Subscribe to the important messages
     def on_connect(self, client, userdata, flags, rc):
         if rc == 0:
             if self.DEBUG:
-                print("- on_connect: MQTT connect return code was 0 - (everything is ok)")
+                print("In on_connect, and MQTT connect return code was 0 - (everything is ok)")
                 
             if self.mqtt_connected == False: # If it's a fresh (re)connection, send out a broadcast ping to ask for the hostnames and site_id's of the other voco devices on the network
                 if self.DEBUG:
-                    print("Connection to MQTT (re)established. Will send broadcast ping to " + str(self.persistent_data['mqtt_server']))
+                    print("-Connection to MQTT (re)established at self.persistent_data['mqtt_server']: " + str(self.persistent_data['mqtt_server']))
                 self.mqtt_connected = True
                 
-            self.send_mqtt_ping(True) # broadcast ping                
-                
-            if not self.currently_looking_for_missing_mqtt_server:
+ 
+            if not self.is_snips_running() and self.currently_looking_for_missing_mqtt_server == False:
+                if self.DEBUG:
+                    print("restarting snips in on_connect")
                 self.stop_snips()
                 self.run_snips()
                 
                 
-            #self.mqtt_connected = True
+            self.mqtt_connected = True
             #self.mqtt_client.loop_start()
                 
             try:
                 if self.persistent_data['is_satellite'] == False:
                     if self.DEBUG:
-                        print("** I am not a satellite")
+                        print("-on_connect: ** I am not a satellite")
                     
-                    pass
+                    #pass
                     #self.mqtt_client.subscribe("hermes/hotword/#")
                     #self.mqtt_client.subscribe("hermes/intent/#")
                     
                     #self.mqtt_client.subscribe("hermes/voco/" + str(self.hostname) + "/#")
-                else:
-                    if self.satellite_local_intent_parsing == True:
+                #else:
+                #    if self.satellite_local_intent_parsing == True:
                         #print("** Satellite with forced local intent parsing")
-                        self.mqtt_client.subscribe("hermes/intent/#")
-                    else:
+                #        self.mqtt_client.subscribe("hermes/intent/#")
+                #    else:
                         #print("** Satellite. Local intent parsing is false, I will listen to the main site for commands")
-                        self.mqtt_client.unsubscribe("hermes/intent/#")
+                #        self.mqtt_client.unsubscribe("hermes/intent/#")
                         
                         #print("SUBSCRIBING TO " + "hermes/voco/" + str(self.hostname) + "/#")
                         #self.mqtt_client.subscribe("hermes/voco/" + str(self.hostname) + "/#")
-                        try:
-                            pass
-                        except Exception as ex:
-                            print("could not unsubscribe from intents")
+                #        try:
+                #            pass
+                #        except Exception as ex:
+                #            print("could not unsubscribe from intents")
                             
                 self.mqtt_client.subscribe("hermes/hotword/#")
                 self.mqtt_client.subscribe("hermes/intent/#")
@@ -2063,6 +2076,12 @@ class VocoAdapter(Adapter):
                 
             except:
                 print("Error subscribing to Voco MQTT with sitename: " + self.persistent_data['site_id'])
+             
+             
+            if self.DEBUG:
+                print("-sending broadcast ping.")
+            self.send_mqtt_ping(True) # broadcast ping                
+            
                 
         else:
             if self.DEBUG:
@@ -2105,7 +2124,8 @@ class VocoAdapter(Adapter):
                 
 
                 if self.persistent_data['is_satellite'] == True and self.voco_connected == True:
-                    #print("I am a satelite, and I'm connected to Voco, so I'm ignoring all snips hermes messages")
+                    if self.DEBUG:
+                        print("I am a satelite, and I'm connected to Voco, so I'm ignoring all snips hermes messages")
                     pass
                     
                 elif msg.topic.startswith('hermes/hotword/' + self.persistent_data['site_id']) and self.persistent_data['is_satellite'] == True and self.voco_connected == False:
@@ -2286,7 +2306,10 @@ class VocoAdapter(Adapter):
                     self.persistent_data['mqtt_server'] = payload['ip']
                     self.save_persistent_data()
                     
-                    self.set_status_on_thing("OK")
+                    if self.persistent_data['listening']:
+                        self.set_status_on_thing("Listening")
+                    else:
+                        self.set_status_on_thing("Not listening")
                     
                     #self.run_snips()
             else:
@@ -2374,7 +2397,8 @@ class VocoAdapter(Adapter):
                         if payload['siteId'] == self.persistent_data['main_site_id'] and self.persistent_data['main_site_id'] != self.persistent_data['site_id']:
                             self.periodic_voco_attempts = 0 # we got a good response, so set the (unsuccesful) attempts counter back to zero.  
                                 
-                            if self.voco_connected == False:
+                            if not self.is_snips_running():
+                                #self.stop_snips()
                                 self.run_snips()
                                 
                         #set Should add/update this in self.mqtt_others
