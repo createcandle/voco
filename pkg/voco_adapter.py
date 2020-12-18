@@ -1016,11 +1016,13 @@ class VocoAdapter(Adapter):
 
             # Make the voice detection ignore Voco speaking for the next few seconds:
             self.last_sound_activity = time.time() - 1
-            #print("[...]")
-            #print(str(intent))
+            if self.DEBUG:
+                print("[...] speak: " + str(voice_message))
+                print("[...] intent: " + str(intent))
 
             if str(intent) == 'default':
-                #print("intent was provided as 'default'")
+                if self.DEBUG:
+                    print("intent was provided as 'default'")
                 site_id = self.persistent_data['site_id']
             else:
                 if self.DEBUG:
@@ -2288,7 +2290,8 @@ class VocoAdapter(Adapter):
                         if payload['siteId'] != self.persistent_data['site_id']:
                             if self.DEBUG:
                                 print("Received broadcast ping. Responding with broadcast pong, in which I pronounce my IP to be: " + str(self.ip_address))
-                            self.mqtt_others[payload['ip']] = payload['hostname']
+                            if 'hostname' in payload:
+                                self.mqtt_others[payload['ip']] = payload['hostname']
                             self.mqtt_client.publish("hermes/voco/pong",json.dumps({'ip':self.ip_address,'siteId':self.persistent_data['site_id'],'hostname':self.hostname}))
                     else:
                         print("No site id in persistent data?")
