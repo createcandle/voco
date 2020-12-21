@@ -286,7 +286,7 @@ class VocoAdapter(Adapter):
         
         self.periodic_mqtt_attempts = 4
         self.periodic_voco_attempts = 4
-        self.orphaned = False # if the MQTT does a clean disconnect while the device is a satellite, then it's immediately an orpah, and talking to snips will reflect this.
+        #self.orphaned = False # if the MQTT does a clean disconnect while the device is a satellite, then it's immediately an orpah, and talking to snips will reflect this.
         
         # Voice settings
         self.voice_accent = "en-GB"
@@ -398,7 +398,7 @@ class VocoAdapter(Adapter):
 
         # Stop Snips until the init is complete (if it is installed).
         try:
-            os.system("pkill -f snips") # Avoid snips running paralel
+            #os.system("pkill -f snips") # Avoid snips running paralel
             self.devices['voco'].connected = False
             self.devices['voco'].connected_notify(False)
         except Exception as ex:
@@ -958,7 +958,8 @@ class VocoAdapter(Adapter):
 
 
     def play_sound(self,sound_file,intent='default'):
-        
+        if self.DEBUG:
+            print("in play_sound. File: " + str(sound_file))
         if str(intent) == 'default':
             #print("intent was provided as 'default'")
             site_id = self.persistent_data['site_id']
@@ -1042,8 +1043,8 @@ class VocoAdapter(Adapter):
             
                 
             if site_id == 'default' or site_id == 'everywhere' or site_id == self.persistent_data['site_id']:
-                if self.orphaned and self.persistent_data['is_satellite']:
-                    voice_message = "I am not connected to the main voco server. " + voice_message
+                #if self.orphaned and self.persistent_data['is_satellite']:
+                #    voice_message = "I am not connected to the main voco server. " + voice_message
                 
                 if self.DEBUG:
                     print("")
@@ -1143,7 +1144,8 @@ class VocoAdapter(Adapter):
         #self.snips_running = True
         if self.DEBUG:
             print("running Snips (after killing potential running snips instances)")
-            os.system("pkill -f snips")
+            self.stop_snips()
+            #os.system("pkill -f snips")
         try:
             #time.sleep(1.11)
         
@@ -1760,17 +1762,19 @@ class VocoAdapter(Adapter):
     
     def stop_snips(self):
         #self.snips_running = False
-        os.system("pkill -f snips")
+        #os.system("pkill -f snips")
         
-        return # this function isn't very useful anymore?
+        #return # this function isn't very useful anymore?
         
         try:
             for process in self.external_processes:
+                print("killing external process: " + str(process))
                 process.terminate()
                 process.wait()
                 try:
                     process.close()
                 except:
+                    print("unable to close external process")
                     pass
                 #print("Terminated Snips process")
         except Exception as ex:
@@ -1960,7 +1964,7 @@ class VocoAdapter(Adapter):
                 if str(self.persistent_data['mqtt_server']) == self.ip_address:
                     if self.DEBUG:
                         print("the MQTT server IP address was the device IP address, even though it shouldn't be.")
-                    if not self.currently_looking_for_missing_mqtt_server and not self.orphaned:
+                    if not self.currently_looking_for_missing_mqtt_server: #and not self.orphaned:
                         if self.DEBUG:
                             print("starting looking for MQTT server.")
                         self.look_for_mqtt_server()
@@ -2338,7 +2342,7 @@ class VocoAdapter(Adapter):
                 if payload['siteId'] == self.persistent_data['main_site_id']: # we got a pong message from the main voco server we should be connected to
                     self.periodic_voco_attempts = 0
                     self.voco_connected = True
-                    self.orphaned = False # seems to be connected to an outside server again.
+                    #self.orphaned = False # seems to be connected to an outside server again.
                     if self.persistent_data['mqtt_server'] != payload['ip']:
                         if self.DEBUG:
                             print("The IP adress of the main Voco server has changed to " + str(payload['ip'])) # can this even happen? If we don't have the IP of the main MQTT server, then we will never receive this update message?
@@ -2401,17 +2405,17 @@ class VocoAdapter(Adapter):
                         if payload['siteId'] == self.persistent_data['main_site_id'] and self.persistent_data['main_site_id'] != self.persistent_data['site_id']:
                             self.periodic_voco_attempts = 0 # we got a good response, so set the (unsuccesful) attempts counter back to zero.  
                                 
-                            if not self.is_snips_running():
+                            #if not self.is_snips_running():
                                 #self.stop_snips()
-                                self.run_snips()
+                            #    self.run_snips()
                                 
                         #set Should add/update this in self.mqtt_others
                         self.mqtt_others[payload['ip']] = payload['hostname']
                         #print("self.mqtt_others:")
                         #print(str(self.mqtt_others))
                         
-                    self.voco_connected = True
-                    self.orphaned = False
+                    #self.voco_connected = True
+                    #self.orphaned = False
                             
 
             except Exception as ex:
