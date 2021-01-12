@@ -37,6 +37,7 @@
 	  "System audio volume": 90,
 	  "Sound detection": false,
 	  "Hey Candle": false,
+	  "Satellite device control":false,
       "Debugging": false
     },
     "schema": {
@@ -153,6 +154,10 @@
           "description": "When enabled, you can also say 'Hey Candle' to start a command.",
           "type": "boolean"
         },
+        "Satellite device control": {
+          "description": "If this is a satellite, enabling this will allow you to control devices connected to this satellite using your voice. It's recommended to give devices on satellites unique names. For example, call 'radio' something like 'kitchen radio' instead. If a device with the same name exists on the main controller and on a satellite, a voice command will always favour controlling the device connected to a satellite.",
+          "type": "boolean"
+        },
         "Debugging": {
           "description": "Debugging allows you to diagnose any issues with the add-on. If enabled it will result in a lot more debug data in the internal log (which can be found under settings -> developer -> view internal logs).",
           "type": "boolean"
@@ -167,7 +172,7 @@
     }
   },
   "short_name": "Voco",
-  "version": "2.4.0",
+  "version": "2.5.0",
   "web_accessible_resources": [
     "css/*.css",
     "images/*.svg",
