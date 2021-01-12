@@ -63,6 +63,7 @@ These are all examples. You don't have to say things exactly like this. Any comm
 
 # Features
 - Strong focus on privacy. Once installed, there is no internet connection required or used. Listening can be toggled on and off.
+- Supports satellite functionality, so you can expand voice control to all rooms in your home. The devices then communicate over the local network only.
 
 # Recommended hardware
 The Playstation Eye is a 4-microphone array that can be plugged into your Raspberry Pi via USB.  It can be bought new for about $12.
