@@ -1884,10 +1884,11 @@ class VocoAdapter(Adapter):
 #  API
 #
 
-    def api_get(self, api_path):
+    def api_get(self, api_path,intent='default'):
         """Returns data from the WebThings Gateway API."""
         if self.DEBUG:
             print("GET PATH = " + str(api_path))
+            print("intent in api_get: " + str(intent))
         #print("GET TOKEN = " + str(self.token))
         if self.token == None:
             print("PLEASE ENTER YOUR AUTHORIZATION CODE IN THE SETTINGS PAGE")
@@ -1915,19 +1916,20 @@ class VocoAdapter(Adapter):
             print("Error doing http request/loading returned json: " + str(ex))
             
             if self.DEBUG:
-                self.speak("I could not connect. ")
+                self.speak("I could not connect. ", intent=intent)
             #return [] # or should this be {} ? Depends on the call perhaps.
             return {"error": 500}
 
 
-    def api_put(self, api_path, json_dict):
+
+    def api_put(self, api_path, json_dict, intent='default'):
         """Sends data to the WebThings Gateway API."""
 
         if self.DEBUG:
             print("PUT > api_path = " + str(api_path))
             print("PUT > json dict = " + str(json_dict))
             print("PUT > self.api_server = " + str(self.api_server))
-
+            print("PUT > intent = " + str(intent))
 
         headers = {
             'Accept': 'application/json',
@@ -1955,7 +1957,7 @@ class VocoAdapter(Adapter):
 
         except Exception as ex:
             print("Error doing http request/loading returned json: " + str(ex))
-            self.speak("I could not connect. ")
+            self.speak("I could not connect. ", intent=intent)
             #return {"error": "I could not connect to the web things gateway"}
             #return [] # or should this be {} ? Depends on the call perhaps.
             return {"error": 500}

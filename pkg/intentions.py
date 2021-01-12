@@ -558,7 +558,7 @@ def intent_stop_timer(self, slots, intent_message):
 
 
 # The boolean intent. Which should really be called get_state...
-def intent_get_boolean(self, slots, intent_message,found_properties):
+def intent_get_boolean(self, slots, intent_message, found_properties):
     if self.DEBUG:
         print("Getting boolean state")
     
@@ -580,7 +580,7 @@ def intent_get_boolean(self, slots, intent_message,found_properties):
             
             api_path = str(found_property['property_url'])
             #print("api path = " + str(api_path))
-            api_result = self.api_get(api_path)
+            api_result = self.api_get(api_path, intent=intent_message)
             if self.DEBUG:
                 print("called api for data, it gave:" + str(api_result))
                 
@@ -667,7 +667,7 @@ def intent_get_value(self, slots, intent_message,found_properties):
                 api_path = str(found_property['property_url'])
                 if self.DEV:
                     print("api path = " + str(api_path))
-                api_result = self.api_get(api_path)
+                api_result = self.api_get(api_path, intent=intent_message)
                 if self.DEBUG:
                     print("called api for data, it gave:" + str(api_result))
                     
@@ -807,7 +807,7 @@ def intent_set_state(self, slots, intent_message,found_properties, delayed_actio
                         print("Checking found property. url:" + str(found_property['property_url']))
 
                     # Get the current value
-                    api_result = self.api_get(str(found_property['property_url']))
+                    api_result = self.api_get(str(found_property['property_url']), intent=intent_message)
                     if self.DEBUG:
                         print("called api for current switch state, it gave: " + str(api_result))
                     
@@ -959,7 +959,8 @@ def intent_set_state(self, slots, intent_message,found_properties, delayed_actio
                                     print("json_dict: " + str(json_dict) + " will be sent to API endpoint: " + str(found_property['property_url']))
                             
                                 try:
-                                    api_result = self.api_put(str(found_property['property_url']), json_dict)
+                                    print("missing intent_message ?? = " + str(intent_message))
+                                    api_result = self.api_put(str(found_property['property_url']), json_dict, intent=intent_message)
                             
                                     #print("PUT api_result: " + str(api_result))
                                     #if api_result[system_property_name] == desired_state:
@@ -1013,7 +1014,7 @@ def intent_set_state(self, slots, intent_message,found_properties, delayed_actio
 
 
 
-def intent_set_value(self, slots, intent_message,found_properties, original_value=None):
+def intent_set_value(self, slots, intent_message, found_properties, original_value=None):
     
     # TODO The code could be nicer if the action happens first and checking if a timer should be set happens second. 
     # Then the 'switch to something else for a while' timer could re-use the already queried current value.
@@ -1099,7 +1100,7 @@ def intent_set_value(self, slots, intent_message,found_properties, original_valu
                             # The user wants to set the value of something to another level or a short while.
                             # We grab the current value and remember it so that it can be restored later.
                         
-                            api_result = self.api_get( str(found_property['property_url']) )
+                            api_result = self.api_get( str(found_property['property_url']), intent=intent_message)
                             if self.DEBUG:
                                 print("called api for set_level, it gave: " + str(api_result))
                             
@@ -1218,7 +1219,7 @@ def intent_set_value(self, slots, intent_message,found_properties, original_valu
                         #print("Can set value for " + str(found_property['property_url']))
                         
                         try:
-                            api_result = self.api_get( str(found_property['property_url']) )
+                            api_result = self.api_get( str(found_property['property_url']), intent=intent_message )
                             if self.DEBUG:
                                 print("called api for value, it gave: " + str(api_result))
                         except:
@@ -1279,7 +1280,7 @@ def intent_set_value(self, slots, intent_message,found_properties, original_valu
                                 #if self.DEV:
                                 #print("json_dict to PUT to API = " + str(json_dict))
                                 #print(str(found_property['property_url']))
-                                api_result = self.api_put(str(found_property['property_url']), json_dict)
+                                api_result = self.api_put(str(found_property['property_url']), json_dict, intent=intent_message)
                                 #print("api result: " + str(api_result))
                                 #if api_result[system_property_name] == desired_value:
                                 if 'succes' in api_result:
