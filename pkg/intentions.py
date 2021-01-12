@@ -268,7 +268,7 @@ def intent_get_timer_count(self, slots, intent_message):
         if slots['timer_type'] == None:
             if self.DEBUG:
                 print("No timer type set, cancelling")
-                self.play_sound(self.error_sound,intent=intent_message)
+            self.play_sound(self.error_sound,intent=intent_message)
             return
         
         voice_message = ""
@@ -311,22 +311,33 @@ def intent_list_timers(self, slots, intent_message):
     """ Tells the user details about their timers/reminders"""
     
     try:
-        if self.DEBUG:
-            print("Listing all timers for timer type: " + str(slots['timer_type']))
-        
+
         if slots['timer_type'] == None:
             if self.DEBUG:
                 print("No timer type set, cancelling")
+            #self.speak("I didn't quite understand",intent=intent_message)
+            self.play_sound(self.error_sound,intent=intent_message)
             return
+        
+        if self.DEBUG:
+            print("Listing all timers for timer type: " + str(slots['timer_type']))
+        
         
         voice_message = ""
         
         # If the user asked about a countdown, say how much time is left.
         if str(slots['timer_type']) == "countdown":
             
+            countdown_active = False
+            for index, item in enumerate(self.persistent_data['action_times']):
+                if str(item['type']) == 'countdown':
+                    countdown_active = True
+            
             countdown_delta = self.countdown - self.current_utc_time
             
-            if countdown_delta > 7200:
+            if not countdown_active:
+                voice_message += "There is no active countdown."
+            elif countdown_delta > 7200:
                 hours_count = math.floor(countdown_delta / 3600)
                 countdown_delta = countdown_delta - (hours_count * 3600)
                 voice_message += "The countdown has " + str(hours_count) + " hours and " + str(math.floor(countdown_delta / 60)) + " minutes to go."
@@ -393,8 +404,8 @@ def intent_list_timers(self, slots, intent_message):
                         print("Error while building timer list voice_message: " + str(ex))
                     
         voice_message = clean_up_string_for_speaking(voice_message)
-        if self.DEBUG:
-            print("(...) " + str(voice_message))
+        #if self.DEBUG:
+        #    print("(...) " + str(voice_message))
         self.speak(voice_message,intent=intent_message)
         
     except Exception as ex:
@@ -547,14 +558,14 @@ def intent_stop_timer(self, slots, intent_message):
 
 
 # The boolean intent. Which should really be called get_state...
-def intent_get_boolean(self, slots, intent_message):
+def intent_get_boolean(self, slots, intent_message,found_properties):
     if self.DEBUG:
         print("Getting boolean state")
     
     voice_message = ""
         
-    actuator = True
-    found_properties = self.check_things(actuator,slots['thing'],slots['property'],slots['space'])
+    #actuator = True
+    #found_properties = self.check_things(actuator,slots['thing'],slots['property'],slots['space'])
     if len(found_properties) > 0:
         loop_counter = 0
         for found_property in found_properties:
@@ -639,13 +650,13 @@ def intent_get_boolean(self, slots, intent_message):
 
 
 
-def intent_get_value(self, slots, intent_message):
+def intent_get_value(self, slots, intent_message,found_properties):
     
     voice_message = ""
     
     try:
-        actuator = False
-        found_properties = self.check_things(actuator,slots['thing'],slots['property'],slots['space'])
+        #actuator = False
+        #found_properties = self.check_things(actuator,slots['thing'],slots['property'],slots['space'])
         
         if len(found_properties) > 0:
             for found_property in found_properties:
@@ -737,7 +748,7 @@ def intent_get_value(self, slots, intent_message):
 
 
 # Toggling the state of boolean properties
-def intent_set_state(self, slots, intent_message, delayed_action=None):   # If it is called from a timer, the delayed_action will be populated.
+def intent_set_state(self, slots, intent_message,found_properties, delayed_action=None):   # If it is called from a timer, the delayed_action will be populated.
     
     sentence = slots['sentence']
     double_time = False
@@ -776,11 +787,11 @@ def intent_set_state(self, slots, intent_message, delayed_action=None):   # If i
             #print("the oposite is : " + str(opposite))
             
         # Search for a matching thing+property
-        actuator = True
-        found_properties = self.check_things(actuator,slots['thing'],slots['property'],slots['space'])
-        if self.DEBUG:
-            print("")
-            print("found properties: " + str(found_properties))
+        #actuator = True
+        #found_properties = self.check_things(actuator,slots['thing'],slots['property'],slots['space'])
+        #if self.DEBUG:
+        #    print("")
+        #    print("found properties: " + str(found_properties))
             
         if len(found_properties) > 0:
             for found_property in found_properties:
@@ -977,8 +988,11 @@ def intent_set_state(self, slots, intent_message, delayed_action=None):   # If i
                         print("Error while dealing with found boolean property: " + str(ex))    
                     
                     #break # don't handle multiple toggle properties as once.
-                        
+              
         else:
+            #if slots['thing'] in self.satellites_thing_title_list and not self.persistent_data['is_satellite']:
+            #    voice_message = " Acting on a satellite."
+            #el
             if slots['thing'] != None and slots['thing'] != 'all':
                 voice_message += "Sorry, I couldn't do that." #find a thing called " + str(slots['thing'])
             else:
@@ -999,7 +1013,7 @@ def intent_set_state(self, slots, intent_message, delayed_action=None):   # If i
 
 
 
-def intent_set_value(self, slots, intent_message, original_value):
+def intent_set_value(self, slots, intent_message,found_properties, original_value=None):
     
     # TODO The code could be nicer if the action happens first and checking if a timer should be set happens second. 
     # Then the 'switch to something else for a while' timer could re-use the already queried current value.
@@ -1041,9 +1055,9 @@ def intent_set_value(self, slots, intent_message, original_value):
             print("desired_value = " + str(desired_value))
             
         # Search for matching thing and properties
-        actuator = False # TODO: the check_things function could make better use of this actuator variable
+        #actuator = False # TODO: the check_things function could make better use of this actuator variable
         
-        found_properties = self.check_things(actuator,slots['thing'],slots['property'],slots['space'])
+        #found_properties = self.check_things(actuator,slots['thing'],slots['property'],slots['space'])
         
         if self.DEBUG:
             print("")
