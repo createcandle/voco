@@ -1327,9 +1327,18 @@ class VocoAdapter(Adapter):
                     if self.DEBUG:
                         print("15 seconds have passed, time to check if thing names should be injected into snips. Time: " + str(int(time.time()) % 60))
                         #print("external processes count: " + str(self.is_snips_running()))
-                        self.is_snips_running()
+                    
                         #print( str(time.time()) + " - " + str(self.minimum_injection_interval) + " > " + str(self.last_injection_time)  )
                     self.last_injection_time = time.time()
+                    
+                    for process in self.external_processes:
+                        try:
+                            if self.DEBUG:
+                                print("subprocess poll: " + str(process.poll()) )
+                        except Exception as ex:
+                            if self.DEBUG:
+                                print("subprocess poll error: " + str(ex))
+                    
                     
                     try:
                         if self.mqtt_client != None:
@@ -1343,6 +1352,10 @@ class VocoAdapter(Adapter):
                             else:
                                 #if self.DEBUG:
                                 #    print("Periodic check. MQTT is connected.")
+                                
+                                if self.is_snips_running() == 0 and self.currently_scanning_for_missing_mqtt_server == False:
+                                    self.run_snips()
+                                
                                 self.update_network_info()
                                 if self.hostname != self.previous_hostname: # If the hostname was changed by the user
                                     
@@ -1826,11 +1839,19 @@ class VocoAdapter(Adapter):
                     print("stop_snips function is attempting to terminate external process: " + str(process))
                 try:
                     
+                    try:
+                        print("subprocess poll: " + str(process.poll()) )
+                    except Exception as ex:
+                        print("subprocess poll error: " + str(ex))
                     
                     # Get the process id & try to terminate it gracefuly
                     pid = process.pid
                     print("pid = " + str(pid))
                     process.terminate()
+                    time.sleep(0.5)
+                    process.poll()
+
+                    
 
                     # Check if the process has really terminated & force kill if not.
                     try:
@@ -2534,7 +2555,8 @@ class VocoAdapter(Adapter):
                                     self.satellite_thing_titles[payload['siteId']].add(thing_title)
                             else:
                                 self.satellite_thing_titles[payload['siteId']].clear()
-                            print("self.satellite_thing_titles['" + payload['siteId']  + "'] is now this length: " + str(len(self.satellite_thing_titles[payload['siteId']])) )
+                            if self.DEBUG:
+                                print("self.satellite_thing_titles['" + payload['siteId']  + "'] is now this length: " + str(len(self.satellite_thing_titles[payload['siteId']])) )
                                 
                         self.update_network_info()
                         if self.ip_address != None:
@@ -3662,7 +3684,7 @@ class VocoAdapter(Adapter):
         #    print("In is_snips_running")
             
         p1 = subprocess.Popen(["ps", "-A"], stdout=subprocess.PIPE)
-        p2 = subprocess.Popen(["grep", "snips"], stdin=p1.stdout, stdout=subprocess.PIPE)
+        p2 = subprocess.Popen(['grep', 'snips'], stdin=p1.stdout, stdout=subprocess.PIPE)
 
         snips_actual_processes_count = 0
         for s in (str(p2.communicate())[2:-10]).split('\\n'):
