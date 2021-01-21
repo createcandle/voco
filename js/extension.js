@@ -602,7 +602,6 @@
 						time_output += '<span class="extension-voco-to-go"> to go</span>';
 						time_output += '</div>'
 
-
 					}
 
 					clone.querySelectorAll('.extension-voco-time' )[0].innerHTML = time_output;
