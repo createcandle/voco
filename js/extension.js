@@ -75,13 +75,40 @@
 
 			text_input_field.focus();
 			
+			
+			const hints = [
+			    'What time is it?',
+				'Please tell me the time',
+				'Can you tell me the time?',
+				'Can you tell me what time it is?',
+			    'In 10 minutes remind me to go jogging',
+				'Set a countdown for midnight',
+				'Set a timer for 30 seconds',
+				'Wake me up at 8 in the morning',
+				'How many timers do I have?',
+				'How many timers have been set?',
+				'Tell me about my timers',
+				'Tell me about my alarms',
+				'At lunchtime remind me to go to the supermarket',
+				'Remove all the timers',
+				'Disable all the alarms',
+				'Set a timer for 9 o clock',
+				'At 10 o clock tonight remind me to go to bed',
+				'Remove the last timer',
+				'How much longer does the countdown have to go?'
+			];
+			const random_hint_numer = Math.floor(Math.random()*hints.length);
+			
+			text_input_field.placeholder = hints[random_hint_numer];
+			
+			
+			
 				
 			function send_input_text(){
 				var text = text_input_field.value;
 				//console.log(text);
 				if(text == ""){
-					text = "What time is it?";
-					text_input_field.placeholder = "What time is it?";
+					text = text_input_field.placeholder;
 					//document.getElementById('extension-voco-response-data').innerText = "You cannot send an empty command";
 					//return;
 				}

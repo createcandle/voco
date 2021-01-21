@@ -37,7 +37,7 @@
 	  "System audio volume": 90,
 	  "Sound detection": false,
 	  "Hey Candle": false,
-	  "Satellite device control":false,
+	  "Satellite device control":true,
       "Debugging": false
     },
     "schema": {
