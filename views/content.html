@@ -1,7 +1,7 @@
 <div id="extension-voco-content" class="extension-voco-show-tab-timers">
   
     <div id="extension-voco-content-container">
-        <h3 id="extension-voco-title">Voco <span id="extension-voco-tutorial-button">?</span></h3>
+        <h3 id="extension-voco-title">Voco</h3>
 		
 		<div id="extension-voco-add-token">
 			<p>To fully use Voco you will first need to create an 'authorization token'. Without this code you will not be able to control your devices using voice commands.</p>
@@ -14,6 +14,15 @@
 			<p class="extension-voco-select-satellites extension-voco-italic">If you want to use this device as a satellite, you can ignore this step.</p>
 		</div>
 		
+		<div id="extension-voco-text-commands-container">
+			<div id="extension-voco-text-input-container">
+				<input id="extension-voco-text-input-field" placeholder="What time is it?"/>
+				<button id="extension-voco-text-input-send-button">send</button>
+			</div>
+
+			<div id="extension-voco-text-response-container" style="display:none"><span id="extension-voco-text-response-field">response will be here</span></div>
+		</div>
+		
 		
 		<div class="extension-voco-tab-buttons">
             <button id="extension-voco-tab-button-timers" class="extension-voco-main-tab-button">Timers</button>
@@ -24,6 +33,7 @@
 		<div id="extension-voco-tabs-container">
 			
 			<div id="extension-voco-tab-timers" class="extension-voco-tab">
+				
 				<div id="extension-voco-list">    
 				</div>
 

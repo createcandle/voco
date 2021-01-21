@@ -19,7 +19,7 @@
 	        .then((text) => {
 	         	this.content = text;
 	  		 	if( document.location.href.endsWith("voco") ){
-					console.log(document.location.href);
+					//console.log(document.location.href);
 	  		  		this.show();
 	  		  	}
 	        })
@@ -67,11 +67,63 @@
 			const list = document.getElementById('extension-voco-list');
 		
 			const pre = document.getElementById('extension-voco-response-data');
+			const text_input_field = document.getElementById('extension-voco-text-input-field');
+			const text_response_container = document.getElementById('extension-voco-text-response-container');
+			const text_response_field = document.getElementById('extension-voco-text-response-field');
+			text_response_container.style.display = 'none';
 			
-			//console.log("getting /init");
+
+			text_input_field.focus();
 			
+				
+			function send_input_text(){
+				var text = text_input_field.value;
+				//console.log(text);
+				if(text == ""){
+					text = "What time is it?";
+					text_input_field.placeholder = "What time is it?";
+					//document.getElementById('extension-voco-response-data').innerText = "You cannot send an empty command";
+					//return;
+				}
+				
+				if(text.toLowerCase() == "hello"){
+					text_input_field.placeholder = text;
+					text_response_field.innerText = "Hello!";
+					return;
+				}
+				//console.log("Sending text command");
+				
+		  		// Save token
+		        window.API.postJson(
+		          `/extensions/voco/api/parse`,
+					{'text':text}
+
+		        ).then((body) => {
+					//console.log(body);
+					text_input_field.placeholder = text;
+					text_input_field.value = "";
+
+		        }).catch((e) => {
+		  			console.log("Error sending text to be parsed: " + e.toString());
+					document.getElementById('extension-voco-response-data').innerText = "Error sending text command: " + e.toString();
+		        });
+			}
+
+			document.getElementById('extension-voco-text-input-field').addEventListener('keyup', function onEvent(e) {
+			    if (e.keyCode === 13) {
+			        //console.log('Enter pressed');
+					send_input_text();
+			    }
+			});
+
+			document.getElementById('extension-voco-text-input-send-button').addEventListener('click', (event) => {
+				//console.log("send button clicked");
+				send_input_text();
+			});
+				
 			
-			//this.interval = setInterval(function(){
+				
+				
 			
 			try{
 				pre.innerText = "";
@@ -81,8 +133,8 @@
 		          `/extensions/${this.id}/api/init`
 
 		        ).then((body) => {
-					console.log("Init API result:");
-					console.log(body);
+					//console.log("Init API result:");
+					//console.log(body);
 					
 					
 					if('has_token' in body){
@@ -149,7 +201,7 @@
 							document.getElementById('extension-voco-content-container').classList.add('extension-voco-change-hostname');
 						}
 						else{
-							console.log(body);
+							//console.log(body);
 							if('satellite_targets' in body){
 								//console.log("satellite_targets in body: " + body['satellite_targets']);
 								if(Object.keys(body['satellite_targets']).length > 0){
@@ -184,8 +236,10 @@
 												if(body['state'] == true){
 													//console.log("satellite update state was true");
 													if(is_sat){
-												
-														document.getElementById('extension-voco-content-container').classList.remove('extension-voco-add-token');
+														try{
+															document.getElementById('extension-voco-content-container').classList.remove('extension-voco-add-token');
+														}
+														catch(err) {}
 														document.getElementById('extension-voco-content-container').classList.add('extension-voco-is-satellite');
 													}
 													else{
@@ -259,11 +313,12 @@
 						//console.log("got first extra poll data")
 						this.items_list = body['items'];
 						this.current_time = body['current_time'];
+						
 						if(this.items_list.length > 0 ){
 							this.regenerate_items();
 						}
 						else{
-							list.innerHTML = '<div class="extension-voco-centered-page" style="text-align:center"><p>There are currently no active timers, reminders or alarms.</p></div>';
+							list.innerHTML = '<div class="extension-voco-centered-page" style="text-align:center"><p>There are currently no active timers, reminders or alarms.</p><p style="font-size:70%">Satellites will show an empty list because all their timers are managed by the main device.</p></div>';
 						}
 						//clearInterval(this.interval); // used to debug CSS
 					}
@@ -308,6 +363,28 @@
 								if(body['state'] == true){
 									this.items_list = body['items'];
 									this.current_time = body['current_time'];
+									
+									if(body['text_response'].length != 0){
+										var nicer_text = body['text_response'];
+										nicer_text = nicer_text.replace(/ \./g, '\.'); //.replace(" .", ".");
+										
+										function applySentenceCase(str) {
+										    return str.replace(/.+?[\.\?\!](\s|$)/g, function (txt) {
+										        return txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase();
+										    });
+										}
+										
+										nicer_text = applySentenceCase(nicer_text);
+										nicer_text = nicer_text.replace(/\. /g, '\.\<br\/\>');
+										text_response_field.innerHTML = nicer_text;
+										text_response_container.style.display = 'block';
+									}
+									else{
+										text_response_field.innerText = "";
+										text_response_container.style.display = 'none';
+									}
+									
+									
 									pre.innerText = "";
 									if(this.items_list.length > 0 ){
 										this.regenerate_items();
@@ -323,7 +400,8 @@
 								}
 
 					        }).catch((e) => {
-					  			console.log("Error getting timer items: " + e.toString());
+					  			//console.log("Error getting timer items: " + e.toString());
+								console.log(e);
 								pre.innerText = "Loading items failed - connection error";
 								this.attempts = 0;
 					        });	
@@ -333,12 +411,8 @@
 						}
 					}
 				}catch(e){"Voco polling error: " + console.log(e)}
-		
+				
 			}.bind(this), 1000);
-			
-			document.getElementById('extension-voco-tutorial-button').addEventListener('click', (event) => {
-				document.getElementById('extension-voco-tutorial').style.display = 'block';
-			});
 			
 
 			// TABS

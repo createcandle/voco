@@ -27,7 +27,7 @@
 	margin:0 auto;
 }
 
-
+/*
 #extension-voco-title #extension-voco-tutorial-button{
 	opacity:0;
 	cursor:pointer;
@@ -38,6 +38,7 @@
 #extension-voco-title:hover #extension-voco-tutorial-button{
 	opacity:1;
 }
+*/
 
 
 
@@ -518,6 +519,43 @@
 }
 
 .extension-voco-to-go{
+}
+
+
+
+/*  Text input */
+
+#extension-voco-text-input-container{
+	display:flex;
+	flex-wrap:wrap;
+	margin-top:4rem;
+	margin-bottom:2rem;
+}
+
+#extension-voco-text-input-field{
+	padding: .7rem 1.3rem;
+	font-size: 2rem;
+	min-width:20rem;
+	flex-grow:1;
+	border-top-left-radius: .5rem;
+	border-bottom-left-radius: .5rem;
+	border: none;
+	outline: none;
+}
+
+#extension-voco-text-response-container{
+	margin-top:1rem;
+	text-align:right;
+}
+
+#extension-voco-text-response-field{
+	display:inline-block;
+	padding: 1rem 1.5rem;
+	font-size: 2rem;
+	border-radius:.5rem;
+	background-color:rgba(255,255,255,.3);
+	text-align:left;
+	line-height:3rem;
 }
 
 
