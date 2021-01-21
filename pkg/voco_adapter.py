@@ -2216,53 +2216,16 @@ class VocoAdapter(Adapter):
                     if self.DEBUG:
                         print("-on_connect: ** I am not a satellite")
                     
-                    #pass
-                    #self.mqtt_client.subscribe("hermes/hotword/#")
-                    #self.mqtt_client.subscribe("hermes/intent/#")
-                    
-                    #self.mqtt_client.subscribe("hermes/voco/" + str(self.hostname) + "/#")
-                #else:
-                #    if self.satellite_local_intent_parsing == True:
-                        #print("** Satellite with forced local intent parsing")
-                #        self.mqtt_client.subscribe("hermes/intent/#")
-                #    else:
-                        #print("** Satellite. Local intent parsing is false, I will listen to the main site for commands")
-                #        self.mqtt_client.unsubscribe("hermes/intent/#")
-                        
-                        #print("SUBSCRIBING TO " + "hermes/voco/" + str(self.hostname) + "/#")
-                        #self.mqtt_client.subscribe("hermes/voco/" + str(self.hostname) + "/#")
-                #        try:
-                #            pass
-                #        except Exception as ex:
-                #            print("could not unsubscribe from intents")
-                            
-                #self.mqtt_client.unsubscribe("hermes/hotword/#")
-                #self.mqtt_client.unsubscribe("hermes/intent/#")
                 self.mqtt_client.subscribe("hermes/hotword/#")
                 self.mqtt_client.subscribe("hermes/intent/#")
                 
                 self.mqtt_client.subscribe("hermes/asr/textCaptured/#")
                 self.mqtt_client.subscribe("hermes/dialogueManager/sessionStarted/#")
                 
-                
-                
-                
-                
-                
-                #self.mqtt_client.subscribe("hermes/voco/#")
-                #self.mqtt_client.unsubscribe("hermes/voco/ping")
                 self.mqtt_client.subscribe("hermes/voco/ping")
-                #self.mqtt_client.unsubscribe("hermes/voco/pong")
                 self.mqtt_client.subscribe("hermes/voco/pong")
                 self.mqtt_client.subscribe("hermes/voco/parse")
                 self.mqtt_client.subscribe("hermes/voco/" + self.persistent_data['site_id'] + "/#")
-                
-                
-                
-                #self.mqtt_client.subscribe("hermes/voco/#")
-                #self.mqtt_client.subscribe("hermes/voco/" + str(self.hostname) + "/ping")
-                #self.mqtt_client.subscribe("hermes/voco/" + str(self.hostname) + "/pong")
-                #self.mqtt_client.subscribe("hermes/voco/" + str(self.hostname) + "/#")
                 
                 if self.sound_detection:
                     self.mqtt_client.subscribe("hermes/voiceActivity/#")
@@ -2457,10 +2420,10 @@ class VocoAdapter(Adapter):
                         intent_message['origin'] = 'voice'
 
                     # Brute-force end the existing session
-                    #try:
-                    #    self.mqtt_client.publish('hermes/dialogueManager/endSession', json.dumps({"text": "", "sessionId": intent_message['sessionId']}))
-                    #except Exception as ex:
-                    #    print("error ending session: " + str(ex))
+                    try:
+                        self.mqtt_client.publish('hermes/dialogueManager/endSession', json.dumps({"text": "", "sessionId": intent_message['sessionId']}))
+                    except Exception as ex:
+                        print("error ending session: " + str(ex))
                     
                     
                     # Deal with the user's command
@@ -2800,12 +2763,13 @@ class VocoAdapter(Adapter):
                     
             if word_count < 2:
                 if sentence == 'hello' or sentence == 'allow' or sentence == 'alarm':
-                    print("hello intent_message: " + str(intent_message))
-                    self.speak("Hello",intent=intent_message)
+                    #print("hello intent_message: " + str(intent_message))
+                    if intent_message['siteId'] == self.persistent_data['site_id']:
+                        self.speak("Hello",intent=intent_message)
                 else: 
                     if self.DEBUG:
                         print("Heard just one word, but not 'hello'.")
-                    pass   
+                    #pass   
                     #self.speak("I didn't get that",intent=intent_message)
 
                 return
