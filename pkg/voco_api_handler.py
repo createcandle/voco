@@ -78,7 +78,7 @@ class VocoAPIHandler(APIHandler):
             if request.method != 'POST':
                 return APIResponse(status=404)
             
-            if request.path == '/init' or request.path == '/poll' or request.path == '/update':
+            if request.path == '/init' or request.path == '/poll' or request.path == '/parse' or request.path == '/update':
 
                 try:
                     #if self.DEBUG:
@@ -90,6 +90,9 @@ class VocoAPIHandler(APIHandler):
                             print("Handling request to /init")
                             
                         try:
+                            
+                            # reset text response in UI
+                            self.adapter.last_text_response = ""
                             
                             # Update IP address and hostname
                             self.adapter.update_network_info()
@@ -187,7 +190,7 @@ class VocoAPIHandler(APIHandler):
                             return APIResponse(
                                 status=200,
                                 content_type='application/json',
-                                content=json.dumps({'state' : state, 'update': '', 'items' : self.adapter.persistent_data['action_times'],'current_time':self.adapter.current_utc_time}),
+                                content=json.dumps({'state' : state, 'update': '', 'items' : self.adapter.persistent_data['action_times'],'current_time':self.adapter.current_utc_time,'text_response':self.adapter.last_text_response}),
                             )
                         except Exception as ex:
                             print("Error getting init data: " + str(ex))
@@ -197,6 +200,28 @@ class VocoAPIHandler(APIHandler):
                                 content=json.dumps({'state' : False, 'update': "Internal error: no thing data", 'items' : [], 'current_time':0}),
                             )
                        
+                    
+                    
+                    
+                    elif request.path == '/parse':
+                        try:
+                            if self.DEBUG:
+                                print("handling /parse. Incoming text: " + str(request.body['text']))
+                            self.adapter.last_text_command = str(request.body['text'])
+                            self.adapter.parse_text()
+                            return APIResponse(
+                                status=200,
+                                content_type='application/json',
+                                content=json.dumps({'state' : 'ok'}),
+                            )
+                        except Exception as ex:
+                            print("Error handling parse data: " + str(ex))
+                            return APIResponse(
+                                status=500,
+                                content_type='application/json',
+                                content=json.dumps({'state' : False, 'update': "Internal error while handling text command"}),
+                            )
+                            
                     
                     
                     elif request.path == '/update':

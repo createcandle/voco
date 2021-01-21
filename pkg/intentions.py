@@ -14,7 +14,11 @@ import math
 import subprocess
 from subprocess import call
 
-sys.path.append(path.join(path.dirname(path.abspath(__file__)), 'lib'))
+lib_path = path.join(path.dirname(path.abspath(__file__)), 'lib')
+if lib_path not in sys.path:
+    print("intentions.py is appending lib path: " + str(lib_part))
+    sys.path.append(sys.path)
+#print("in intentions.py. sys.path = " + str(sys.path))
 
 import json
 import asyncio
@@ -959,7 +963,7 @@ def intent_set_state(self, slots, intent_message,found_properties, delayed_actio
                                     print("json_dict: " + str(json_dict) + " will be sent to API endpoint: " + str(found_property['property_url']))
                             
                                 try:
-                                    print("missing intent_message ?? = " + str(intent_message))
+                                    #print("missing intent_message ? = " + str(intent_message))
                                     api_result = self.api_put(str(found_property['property_url']), json_dict, intent=intent_message)
                             
                                     #print("PUT api_result: " + str(api_result))
@@ -1320,3 +1324,4 @@ def intent_set_value(self, slots, intent_message, found_properties, original_val
     except Exception as ex:
         print("Error in intent_set_value: " + str(ex))
 
+print("end of intentions file")
