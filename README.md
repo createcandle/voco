@@ -35,8 +35,7 @@ These are all examples. You don't have to say things exactly like this. Any comm
 - "What is the humidity level of the weather station?"
 #### More general queries
 - What are the levels of the plant sensor?" -> Will give you all sensor values of the plant sensor
-#### Queries accros multiple devices
-- "How warm is it?" -> Will get you all temperature values in the home
+
 ### Timers
 #### Set timers
 - "Set a timer for 5 minutes"
