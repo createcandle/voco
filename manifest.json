@@ -165,7 +165,7 @@
           "type": "boolean"
         },
         "Satellite device control": {
-          "description": "If this is a satellite, enabling this will allow you to control devices connected to this satellite using your voice. It's recommended to give devices on satellites unique names. For example, call 'radio' something like 'kitchen radio' instead. If a device with the same name exists on the main controller and on a satellite, a voice command will always favour controlling the device connected to a satellite.",
+          "description": "If this is a satellite, enabling this will allow you to control things on this satellite using your voice. It's recommended to give things on satellites unique names. For example, call 'radio' something like 'kitchen radio' instead. If a thing with the same name exists on the main controller and on a satellite, a voice command will always favour controlling the satellite's thing.",
           "type": "boolean"
         },
         "Debugging": {
