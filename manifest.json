@@ -30,6 +30,7 @@
       "Metric": true,
       "Microphone": "Attached device (1,0)",
       "Speaker": "Auto",
+	  "Audio sample rate": "16000",
       "Voice accent": "en-GB",
       "Voice pitch": "1.2",
       "Voice speed": "0.9",
@@ -68,6 +69,15 @@
             "Auto",
             "Headphone jack",
             "HDMI"
+          ],
+          "type": "string"
+        },
+        "Audio sample rate": {
+          "description": "In rare cases, if you are using a USB speaker you may need to set a specific samplerate before the speaker will play audio, or play it at the correct speed. If you use a Jabra USB speaker you probably have to set this to 48000.",
+          "enum": [
+              "16000",
+              "44100",
+              "48000"
           ],
           "type": "string"
         },
@@ -172,7 +182,7 @@
     }
   },
   "short_name": "Voco",
-  "version": "2.5.2",
+  "version": "2.5.3",
   "web_accessible_resources": [
     "css/*.css",
     "images/*.svg",
