@@ -32,7 +32,7 @@ from dateutil.parser import *
 
 try:
     from .intentions import *
-    print("imported intentions, in theory")
+    print("succesfully imported intentions.py file")
 except Exception as ex:
     print("ERROR loading intentions.py: " + str(ex))
     
@@ -259,6 +259,7 @@ class VocoAdapter(Adapter):
         self.current_control_name = ""
         self.current_card_id = 0
         self.current_device_id = 0
+        self.sample_rate = 16000
 
         # Snips settings
         self.external_processes = [] # Will hold all the spawned processes        
@@ -320,10 +321,16 @@ class VocoAdapter(Adapter):
         #self.time_zone = "Europe/Amsterdam"
         self.time_zone = str(time.tzname[0])
         self.seconds_offset_from_utc = 7200 # Used for quick calculations when dealing with timezones.
-        self.last_injection_time = time.time() #datetime.utcnow().timestamp() #0 # The last time the things/property names list was sent to Snips.
-        self.minimum_injection_interval = 15  # Minimum amount of seconds between new thing/property name injection attempts.
-        self.attempting_injection = False
+        self.last_slow_loop_time = time.time()
+        
+        self.slow_loop_interval = 15
+        #self.attempting_injection = False
         self.current_utc_time = 0
+        
+        # Injection
+        self.last_injection_time = time.time() - 16 #datetime.utcnow().timestamp() #0 # The last time the things/property names list was sent to Snips.
+        self.minimum_injection_interval = 15  # Minimum amount of seconds between new thing/property name injection attempts.
+        self.force_injection = True # On startup, force an injection of all the names
         
         # Some paths
         self.addon_path = os.path.join(self.user_profile['addonsDir'], self.addon_name)
@@ -345,6 +352,7 @@ class VocoAdapter(Adapter):
         
         #self.response_wav = os.path.join(self.addon_path,"snips","response.wav")
         self.response_wav = os.path.join(os.sep,"tmp","response.wav")
+        self.response2_wav = os.path.join(os.sep,"tmp","response2.wav")
 
         # UI
         #self.show_ui = True
@@ -463,6 +471,7 @@ class VocoAdapter(Adapter):
 
         self.run_mqtt() # this will also start run_snips once a connection is established
         
+        time.sleep(1)
         
         # Get all the things via the API.
         try:
@@ -724,7 +733,7 @@ class VocoAdapter(Adapter):
                         self.missing_microphone = True
                 else:
                     print("--Overriding the selected microphone because that device did not actually exist/was not plugged in.")
-                    config['Microphone'] = self.capture_devices[0]      # If the prefered device in config does not actually exist, but the scan did sho connected hardware, then select the first item from the scan results instead.
+                    config['Microphone'] = self.capture_devices[0]      # If the prefered device in config does not actually exist, but the scan did show connected hardware, then select the first item from the scan results instead.
                     self.microphone = self.capture_devices[0]
                     store_updated_settings = True
                 
@@ -877,6 +886,17 @@ class VocoAdapter(Adapter):
         
 
 
+        # Audio sample rate
+        try:
+            if 'Audio sample rate' in config:
+                if self.DEBUG:
+                    print("-Audio sample rate is present in the config data.")
+                self.sample_rate = int(config['Audio sample rate'])
+        except Exception as ex:
+            print("Error loading voice setting(s) from config: " + str(ex))
+
+
+
 
 
 #
@@ -1019,7 +1039,7 @@ class VocoAdapter(Adapter):
                 #sound_file = os.path.splitext(sound_file)[0] + str(self.persistent_data['speaker_volume']) + '.wav'
                 #sound_command = "aplay " + str(sound_file) + " -D plughw:" + str(self.current_card_id) + "," + str(self.current_device_id)
                 #os.system()
-                sound_command = ["aplay",str(sound_file),"-D","plughw:" + str(self.current_card_id) + "," + str(self.current_device_id), "-r","16000"]
+                sound_command = ["aplay",str(sound_file),"-D","plughw:" + str(self.current_card_id) + "," + str(self.current_device_id)]
                 #subprocess.check_call(sound_command,stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
                 if self.DEBUG:
                     print("play_sound aplay command: " + str(sound_command))
@@ -1129,13 +1149,25 @@ class VocoAdapter(Adapter):
                             #initial_time = int(time.time())
                             #while int(time.time()) == initial_time:
                             #    sleep(0.001)
-                        
+                            
                             #os.system("aplay -D plughw:" + str(self.current_card_id) + "," + str(self.current_device_id) + ' ' + self.response_wav )
-                            speak_command = ["aplay","-D","plughw:" + str(self.current_card_id) + "," + str(self.current_device_id),self.response_wav] #,"2>/dev/null"
+                            #speak_command = ["ffplay", "-nodisp", "-vn", "-infbuf","-autoexit", self.response_wav,"-volume","100"]
+                            
+                            # If a user is not using the default samplerate of 16000, then the wav file will have to be resampled.
+                            if self.sample_rate != 16000:
+                                os.system('ffmpeg -loglevel panic -y -i ' + self.response_wav + ' -vn -af aresample=out_sample_fmt=s16:out_sample_rate=' + str(self.sample_rate) + ' ' + self.response2_wav)
+                                speak_command = ["aplay","-D","plughw:" + str(self.current_card_id) + "," + str(self.current_device_id), self.response2_wav] #,"2>/dev/null"
+                                
+                            else:
+                                speak_command = ["aplay","-D","plughw:" + str(self.current_card_id) + "," + str(self.current_device_id), self.response_wav]
+                            
+                            
                             if self.DEBUG:
                                 print("speak aplay command: " + str(speak_command))
                         
                             subprocess.run(speak_command, capture_output=True, shell=False, check=False, encoding=None, errors=None, text=None, env=None, universal_newlines=None)
+                            
+                            
                             #os.system('rm ' + self.response_wav)
                             #subprocess.check_call(speak_command,stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
                         except Exception as ex:
@@ -1176,6 +1208,10 @@ class VocoAdapter(Adapter):
 
 
     def run_snips(self):
+        
+        if self.persistent_data['is_satellite'] and self.persistent_data['listening'] == False: # On a satellite, don't even start the audio server if it's not supposed to be listening.
+            return
+        
         #self.snips_running = True
         if self.DEBUG:
             print("running Snips (after killing potential running snips instances)")
@@ -1276,11 +1312,14 @@ class VocoAdapter(Adapter):
         except Exception as ex:
             print("Error starting Snips processes: " + str(ex))    
         
-        self.unmute()
+        #self.unmute()
         
         if not self.persistent_data['is_satellite']:
-            self.inject_updated_things_into_snips(True)
-        
+            self.inject_updated_things_into_snips(True) # force snips to learn all the names
+
+        elif self.satellite_should_act_on_intent:
+            self.inject_updated_things_into_snips(True) # force snips to learn all the names
+            
         #if self.DEBUG:
         #    print("run_snips: starting MQTT loop")
         #try:
@@ -1330,30 +1369,14 @@ class VocoAdapter(Adapter):
                 #self.current_utc_time = fresh_time
                 
                 # Inject new thing names into snips if necessary
-                if time.time() - self.minimum_injection_interval > self.last_injection_time: # + self.minimum_injection_interval > datetime.utcnow().timestamp():
+                if time.time() - self.slow_loop_interval > self.last_slow_loop_time: # + self.minimum_injection_interval > datetime.utcnow().timestamp():
                     if self.DEBUG:
-                        print("15 seconds have passed, time to check if thing names should be injected into snips. Time: " + str(int(time.time()) % 60))
+                        print("15 seconds have passed. Time: " + str(int(time.time()) % 60))
                         #print("external processes count: " + str(self.is_snips_running()))
                     
                         #print( str(time.time()) + " - " + str(self.minimum_injection_interval) + " > " + str(self.last_injection_time)  )
-                    self.last_injection_time = time.time()
-                    
-                    for process in self.external_processes:
-                        try:
-                            poll_result = process.poll()
-                            if self.DEBUG:
-                                print("subprocess poll_result: " + str(poll_result) )
-                            if poll_result != None:
-                                print("clock poll_result was not None, so attempting to close subprocess.")
-                                process.terminate()
-                            #else:
-                            #    if self.DEBUG:
-                            #        print("doing process.communicate")
-                            #        process.communicate(timeout=1)
-                                    
-                        except Exception as ex:
-                            if self.DEBUG:
-                                print("subprocess poll error: " + str(ex))
+
+                    self.last_slow_loop_time = time.time()
                     
                     
                     try:
@@ -1371,7 +1394,7 @@ class VocoAdapter(Adapter):
                                 
                                 if self.is_snips_running() == 0 and self.periodic_voco_attempts < 4 and self.currently_scanning_for_missing_mqtt_server == False:
                                     if self.DEBUG:
-                                        print("clock thread is restarting snips, because there is no reason it shouldn't be running")
+                                        print("clock thread is attempting to restart snips")
                                     self.run_snips()
                                 
                                 self.update_network_info()
@@ -1464,6 +1487,7 @@ class VocoAdapter(Adapter):
                     except Exception as ex:
                         print("clock: error in periodic ping to main Voco controller" + str(ex))            
                     
+
                     if not self.persistent_data['is_satellite']:
                         self.inject_updated_things_into_snips()
                     elif self.satellite_should_act_on_intent:
@@ -1679,7 +1703,24 @@ class VocoAdapter(Adapter):
                     if int(self.last_sound_activity) == self.current_utc_time - 10:
                         self.set_sound_detected(False)
 
-
+                # check if running subprocesses are still running ok
+                for process in self.external_processes:
+                    try:
+                        poll_result = process.poll()
+                        #if self.DEBUG:
+                        #    print("subprocess poll_result: " + str(poll_result) )
+                        if poll_result != None:
+                            if self.DEBUG:
+                                print("clock poll_result was not None, so attempting to close subprocess.")
+                            process.terminate()
+                        #else:
+                        #    if self.DEBUG:
+                        #        print("doing process.communicate")
+                        #        process.communicate(timeout=1)
+                                
+                    except Exception as ex:
+                        if self.DEBUG:
+                            print("subprocess poll error: " + str(ex))
 
 
 
@@ -1850,7 +1891,7 @@ class VocoAdapter(Adapter):
         if self.DEBUG:
             print("")
             print("in stop_snips")
-            process_count = self.is_snips_running()
+        process_count = self.is_snips_running()
             
 
             #snips_check_result = subprocess.run(['ps', '-A','|','grep','snips'], stdout=subprocess.PIPE)
@@ -1867,7 +1908,8 @@ class VocoAdapter(Adapter):
                     
                     try:
                         poll_result = process.poll()
-                        print("subprocess poll: " + str(poll_result) )
+                        if self.DEBUG:
+                            print("subprocess poll: " + str(poll_result) )
                         if poll_result == None:
                             if self.DEBUG:
                                 print("- poll_result was None, so subprocess seems to still be running")
@@ -1878,11 +1920,13 @@ class VocoAdapter(Adapter):
                                 
                                 
                     except Exception as ex:
-                        print("subprocess poll error: " + str(ex))
+                        if self.DEBUG:
+                            print("subprocess poll error: " + str(ex))
                     
                     # Get the process id & try to terminate it gracefuly
                     pid = process.pid
-                    print("pid = " + str(pid))
+                    if self.DEBUG:
+                        print("pid = " + str(pid))
                     process.terminate()
                     time.sleep(0.5)
                     process.poll()
@@ -1892,7 +1936,8 @@ class VocoAdapter(Adapter):
                         if self.DEBUG:
                             print("did process.call")
                     except Exception as ex:
-                        print("process.call failed: " + str(ex))
+                        if self.DEBUG:
+                            print("process.call failed: " + str(ex))
                     
 
                     # Check if the process has really terminated & force kill if not.
@@ -1901,14 +1946,16 @@ class VocoAdapter(Adapter):
                         if self.DEBUG:
                             print("did os.kill")
                     except Exception as ex:
-                        print("Error doing os.kill on subprocess PID? Terminated gracefully already?: " + str(ex))
+                        if self.DEBUG:
+                            print("Error doing os.kill on subprocess PID? Terminated gracefully already?: " + str(ex))
                         
                     try:    
                         process.kill()
                         if self.DEBUG:
                             print("did process.kill")
                     except Exception as ex:
-                        print("Stop_snips: error doing process.kill on subprocess? This could be ok. Error message: " + str(ex))
+                        if self.DEBUG:
+                            print("Stop_snips: error doing process.kill on subprocess? This could be ok. Error message: " + str(ex))
                     
                     #process.stdin.close()
                     #print('Waiting for process to exit')
@@ -1941,7 +1988,8 @@ class VocoAdapter(Adapter):
             
             process_count = self.is_snips_running()
         else:
-            print("stop_snips: snips seems to have indeed been stopped")
+            if self.DEBUG:
+                print("stop_snips: snips seems to have indeed been stopped")
             
         self.external_processes = []
 
@@ -2227,6 +2275,11 @@ class VocoAdapter(Adapter):
                 self.mqtt_client.subscribe("hermes/voco/parse")
                 self.mqtt_client.subscribe("hermes/voco/" + self.persistent_data['site_id'] + "/#")
                 
+                
+                if self.DEBUG:
+                    self.mqtt_client.subscribe("hermes/injection/#")
+                
+                
                 if self.sound_detection:
                     self.mqtt_client.subscribe("hermes/voiceActivity/#")
                 
@@ -2307,158 +2360,176 @@ class VocoAdapter(Adapter):
                     
                     
                     
-        
-        
-        # If listening is set to false, ignore everything. Originally the hotword detector was turned off, but that caused reliability issues.
-        if self.persistent_data['listening'] == True:
 
-            try:                    
-                if msg.topic.startswith('hermes/hotword/' + self.persistent_data['site_id']): # actually, the main controller is the only location that receives this. Satellites send it to the main site.
+        try:
+            
+            if msg.topic.startswith('hermes/injection/perform'):
+                self.last_injection_time = time.time() # if a site is injecting, all sites should wait a while before attempting their own injections.
+
+               
+            elif msg.topic.startswith('hermes/hotword/' + self.persistent_data['site_id']):
+                
                     
-                    if msg.topic.endswith('/detected'):
-                        self.intent_received = False
-                        if self.DEBUG:
-                            print("(...) Hotword detected")
-                            
-                        if 'siteId' in payload:
-                            #print("site_id was in hotword detected payload: " + str(payload['siteId']))
-                            if payload['siteId'] == self.persistent_data['site_id'] or payload['siteId'] == 'default' or payload['siteId'] == 'everywhere':
+                if msg.topic.endswith('/detected'):
+                    self.intent_received = False
+                    if self.DEBUG:
+                        print("(...) Hotword detected")
+                    
+                    if 'siteId' in payload:
+                        #print("site_id was in hotword detected payload: " + str(payload['siteId']))
+                        if payload['siteId'] == self.persistent_data['site_id'] or payload['siteId'] == 'default' or payload['siteId'] == 'everywhere':
+                            if self.persistent_data['listening'] == True:
                                 if self.DEBUG:
                                     print("I should play a detected sound")
-                                
+                        
                                 if self.persistent_data['feedback_sounds'] == True:
                                     self.play_sound( str(self.start_of_input_sound) )
-                                
-                            else:
-                                if self.DEBUG:
-                                    print("Not me, but the satelite '" + str(payload['siteId']) + "' should play a detected sound")
-                                self.mqtt_client.publish("hermes/voco/" + str(payload['siteId']) + "/play",json.dumps({"sound_file":"start_of_input"}))
-                                
-
                         
-                elif msg.topic == 'hermes/hotword/toggleOff':
+                        else:
+                            if self.DEBUG:
+                                print("Not me, but the satelite '" + str(payload['siteId']) + "' should play a detected sound")
+                            self.mqtt_client.publish("hermes/voco/" + str(payload['siteId']) + "/play",json.dumps({"sound_file":"start_of_input"}))
+                        
+                if msg.topic.endswith('/loaded'):
+                    if self.DEBUG:
+                        print("Received loaded message")
+                    if self.persistent_data['is_satellite']:
+                        if self.DEBUG:
+                            print("sending normal mqtt ping in response to mqtt loaded message")
+                        time.sleep(.5)
+                        self.inject_updated_things_into_snips(True) # force snips to learn all the names
+                        self.send_mqtt_ping() # send  the list of things this satellite manages to the main voice controller
+                            
+                            
+
                     
+            elif msg.topic == 'hermes/hotword/toggleOff':
+                if self.persistent_data['listening'] == True:
                     if self.DEBUG:
                         print("MQTT message ends with toggleOff")
-                        
+                    
                     if 'siteId' in payload:
-                        #if payload['siteId'] == self.persistent_data['site_id']:
-                        #    self.mute()
-                        #else:
-                        self.mqtt_client.publish("hermes/voco/" + str(payload['siteId']) + "/mute",json.dumps({"mute":True}))
+                        if payload['siteId'] == self.persistent_data['site_id']:
+                            self.mute()
+                        elif not self.persistent_data['is_satellite']:
+                            self.mqtt_client.publish("hermes/voco/" + str(payload['siteId']) + "/mute",json.dumps({"mute":True}))
 
 
+            
+            elif msg.topic == 'hermes/hotword/toggleOn':
                 
-                elif msg.topic == 'hermes/hotword/toggleOn':
-                
-                    # unmute if the audio output was muted.
-                    self.unmute()
-                
+                # unmute if the audio output was muted.
+                self.unmute()
+                if self.persistent_data['listening'] == True:
                     if self.persistent_data['is_satellite']: # and self.satellite_should_act_on_intent == False:
                         if self.DEBUG:
                             print("ignoring hermes/hotword/toggleOn")
                         return
-                
+            
                     elif self.persistent_data['feedback_sounds'] == True and self.intent_received == False:
                         if self.DEBUG:
                             print("No intent received")
-                        
+                    
                         if 'siteId' in payload:
                             if self.DEBUG:
                                 print("siteId was in /toggleOn payload: " + str(payload['siteId']))
                             if payload['siteId'] == self.persistent_data['site_id'] or payload['siteId'] == 'default' or payload['siteId'] == 'everywhere':
                                 if self.DEBUG:
                                     print("I should play an end-of-input sound")
-                                
+                            
                                 if self.persistent_data['feedback_sounds'] == True:
                                     self.play_sound( str(self.end_of_input_sound) )
                             else:
                                 if self.DEBUG:
                                     print("The satelite should play a toggleOn sound. Sending MQTT message to hermes/voco/" + str(payload['siteId']) + "/play")
                                 self.mqtt_client.publish("hermes/voco/" + str(payload['siteId']) + "/play",json.dumps({"sound_file":"end_of_input"}))
-                        
+                    
                         #else:
                         #    print("ToggleOn detected, but no siteId in payload. So playing the sound here.")
                         #    if self.persistent_data['feedback_sounds'] == True:
                         #        self.play_sound( str(self.end_of_input_sound) )
-                    
-                        #self.intent_received = True
-        
-                    self.intent_received = False
                 
+                        #self.intent_received = True
+    
+                    self.intent_received = False
+            
                     # TODO: To support satellites it might be necessary to 'throw the voice' via the Snips audio server:
                     #binaryFile = open(self.listening_sound, mode='rb')
                     #wav = bytearray(binaryFile.read())
                     #publish.single("hermes/audioServer/{}/playBytes/whateverId".format("default"), payload=wav, hostname="localhost", client_id="") 
+            
+            elif msg.topic.startswith('hermes/intent'):
                 
-                elif msg.topic.startswith('hermes/intent'):
+                if self.persistent_data['is_satellite'] and self.satellite_should_act_on_intent == False:
+                    if self.DEBUG:
+                        print("Satellite is skipping intent handling")
+                    return
                     
-                    if self.persistent_data['is_satellite'] and self.satellite_should_act_on_intent == False:
+                self.intent_received = True
+                #if self.DEBUG:
+                    #print("-----------------------------------")
+                    #print(">> Received intent message.")
+                    #print("message received: "  + str(msg.payload.decode("utf-8")))
+                    #print("message topic: " + str(msg.topic))
+                    
+                intent_name = os.path.basename(os.path.normpath(msg.topic))
+            
+                intent_message = json.loads(msg.payload.decode("utf-8"))
+
+
+                # remove the 'hack' that indicated the voice analysis actually started from a text input.
+                if intent_message['siteId'].startswith('text-'):
+                    if self.DEBUG:
+                        print("stripping 'site-' from siteId")
+                    intent_message['siteId'] = intent_message['siteId'][5:]
+                    intent_message['origin'] = 'text'
+                else:
+                    intent_message['origin'] = 'voice'
+
+                # Brute-force end the existing session
+                try:
+                    self.mqtt_client.publish('hermes/dialogueManager/endSession', json.dumps({"text": "", "sessionId": intent_message['sessionId']}))
+                except Exception as ex:
+                    print("error ending session: " + str(ex))
+                
+                
+                
+                # If a voice activation was picked up on this device, but it shouldn't be listening, then stop handling this intent. If it's a textual command or the voice command came from another site, then continue.
+                if intent_message['siteId'] == self.persistent_data['site_id'] and self.persistent_data['listening'] == False and intent_message['origin'] == 'voice':
+                    if self.DEBUG:
+                        print("not handling intent that originated on this device by voice because listening is set to false.")
+                    return
+                        
+                # Deal with the user's command
+                self.master_intent_callback(intent_message)
+                
+                
+            # Voice activity
+            
+            elif msg.topic.startswith('hermes/voiceActivity/' + self.persistent_data['site_id']):
+                #if self.DEBUG:
+                #    print("change in voice activity")
+                if self.sound_detection and self.persistent_data['listening'] == True:
+                    
+                    if msg.topic.endswith('/vadUp'):
                         if self.DEBUG:
-                            print("Satellite is skipping intent handling")
-                        return
-                        
-                    self.intent_received = True
-                    #if self.DEBUG:
-                        #print("-----------------------------------")
-                        #print(">> Received intent message.")
-                        #print("message received: "  + str(msg.payload.decode("utf-8")))
-                        #print("message topic: " + str(msg.topic))
-                        
-                    intent_name = os.path.basename(os.path.normpath(msg.topic))
-                
-                    intent_message = json.loads(msg.payload.decode("utf-8"))
-
-
-                    # remove the 'hack' that indicated the voice analysis actually started from a text input.
-                    if intent_message['siteId'].startswith('text-'):
-                        if self.DEBUG:
-                            print("stripping 'site-' from siteId")
-                        intent_message['siteId'] = intent_message['siteId'][5:]
-                        intent_message['origin'] = 'text'
-                    else:
-                        intent_message['origin'] = 'voice'
-
-                    # Brute-force end the existing session
-                    try:
-                        self.mqtt_client.publish('hermes/dialogueManager/endSession', json.dumps({"text": "", "sessionId": intent_message['sessionId']}))
-                    except Exception as ex:
-                        print("error ending session: " + str(ex))
-                    
-                    
-                    # Deal with the user's command
-                    self.master_intent_callback(intent_message)
-                    
-                    
-                # Voice activity
-                
-                elif msg.topic.startswith('hermes/voiceActivity/' + self.persistent_data['site_id']):
-                    #if self.DEBUG:
-                    #    print("change in voice activity")
-                    if self.sound_detection:
-                        
-                        if msg.topic.endswith('/vadUp'):
+                            print("detected sound")
+                        if time.time() > self.last_sound_activity + 10:
                             if self.DEBUG:
-                                print("detected sound")
-                            if time.time() > self.last_sound_activity + 10:
-                                if self.DEBUG:
-                                    print("detected sound.. and toggling property to on")
-                                self.set_sound_detected(True)
-                            self.last_sound_activity = time.time()
-                    #elif msg.topic.endswith('/vadDown'):
-                    #    self.set_sound_detected(False)
+                                print("detected sound.. and toggling property to on")
+                            self.set_sound_detected(True)
+                        self.last_sound_activity = time.time()
+                #elif msg.topic.endswith('/vadDown'):
+                #    self.set_sound_detected(False)
+            
+                #self.last_sound_activity = time.time()
+                #if self.sound_detection:
+                #    self.mqtt_client.subscribe("hermes/voiceActivity/#")
+            
                 
-                    #self.last_sound_activity = time.time()
-                    #if self.sound_detection:
-                    #    self.mqtt_client.subscribe("hermes/voiceActivity/#")
-                
-                    
-            except Exception as ex:
-                print("Error handling incoming Snips MQTT message: " + str(ex))  
-        
-        else:
-            if self.DEBUG:
-                print("ignoring a MQTT message because listening was set to false")
+        except Exception as ex:
+            print("Error handling incoming Snips MQTT message: " + str(ex))  
+
                  
         # Messages from satelites are always parsed. They manage their own listening settings.
         #if msg.topic.startswith("hermes/voco/"):
@@ -2527,10 +2598,12 @@ class VocoAdapter(Adapter):
                     print("after receiving broadcast ping, self.mqtt_other list is now: " + str(self.mqtt_others))
                 
                 if self.currently_scanning_for_missing_mqtt_server:
-                    print("Looking for main_site_id: " + str(self.persistent_data['main_site_id']))
+                    if self.DEBUG:
+                        print("Looking for main_site_id: " + str(self.persistent_data['main_site_id']))
                     if payload['siteId'] == self.persistent_data['main_site_id']: # Found the main server again.
                         self.currently_scanning_for_missing_mqtt_server = False
-                        print("Found the main voco server again, at IP: " + str(payload['ip']))
+                        if self.DEBUG:
+                            print("Found the main voco server again, at IP: " + str(payload['ip']))
                         self.persistent_data['mqtt_server'] = str(payload['ip'])
                         self.save_persistent_data()
         
@@ -2540,8 +2613,8 @@ class VocoAdapter(Adapter):
                             self.set_status_on_thing("Not listening")
                         
                     else: # The site_id didn't belong to the main server.
-                        
-                        print("The MQTT server that was connected to wasn't the main server")
+                        if self.DEBUG:
+                            print("The MQTT server that was connected to wasn't the main server")
                     
                 #elif self.periodic_voco_attempts > 3: # not really necessary if the mqtt connection never stopped.
                 #    self.run_snips()
@@ -2564,7 +2637,7 @@ class VocoAdapter(Adapter):
                 #    self.voco_connected = True
                 #    
             
-                # If this pong message is coming from the main site
+                # If this pong message is coming from the main site, then voco is happily connected.
                 if payload['siteId'] == self.persistent_data['main_site_id']: # we got a pong message from the main voco server we should be connected to
                     self.periodic_voco_attempts = 0
                     self.voco_connected = True
@@ -2576,11 +2649,12 @@ class VocoAdapter(Adapter):
                         self.save_persistent_data()
                         
                         
-        # If this is a Voco message targetted at this specific device
+        # If this is a Voco message targetted at this specific device...
         if msg.topic.startswith("hermes/voco/" + self.persistent_data['site_id']):
             if self.DEBUG:
                 print(">> received Voco MQTT message targetted to this device")
             try:
+                
                 if msg.topic.endswith('/detected'):
                     if self.persistent_data['feedback_sounds'] == True:
                         if self.DEBUG:
@@ -2599,7 +2673,7 @@ class VocoAdapter(Adapter):
                             
                         self.play_sound(payload['sound_file'])
                     else:
-                        print("Error: no sound file name provided")
+                        print("Error in /play: no sound file name provided")
                 
                 elif msg.topic.endswith('/speak'):
                     if self.DEBUG:
@@ -2679,7 +2753,7 @@ class VocoAdapter(Adapter):
 
                 elif msg.topic.endswith('/mute'):
                     if self.DEBUG:
-                        print("Received mute command")
+                        print("(---) Received mute command")
                     self.mute()
                         
 
@@ -2738,7 +2812,7 @@ class VocoAdapter(Adapter):
         
         try:
             incoming_intent = str(intent_message['intent']['intentName'])
-            sentence = str(intent_message['input']).lower()
+            sentence = str(intent_message['input'])
             
         except:
             print("Error handling intent in master callback")
@@ -2749,8 +2823,8 @@ class VocoAdapter(Adapter):
                 #print("")
                 print(">>")
                 #print(">> intent_message    : " + str(intent_message))
-                print(">> incoming intent   : " + incoming_intent)
-                print(">> intent_message    : " + sentence)
+                print(">> incoming intent   : " + str(incoming_intent))
+                print(">> intent_message    : " + str(sentence))
                 print(">> session ID        : " + str(intent_message['sessionId']))
                 print(">>")
                   
@@ -2762,7 +2836,7 @@ class VocoAdapter(Adapter):
                     word_count += 1
                     
             if word_count < 2:
-                if sentence == 'hello' or sentence == 'allow' or sentence == 'alarm':
+                if sentence.lower() == 'hello' or sentence.lower() == 'allow' or sentence.lower() == 'alarm':
                     #print("hello intent_message: " + str(intent_message))
                     if intent_message['siteId'] == self.persistent_data['site_id']:
                         self.speak("Hello",intent=intent_message)
@@ -2839,8 +2913,6 @@ class VocoAdapter(Adapter):
                         if self.DEBUG:
                             print("using alternative route to set state")
                     
-                    
-                    
             except:
                 print("alternate route 1 failed")
             
@@ -2902,6 +2974,8 @@ class VocoAdapter(Adapter):
                 found_on_satellite = False
                 try:
                     if slots['thing'] != None:
+                        if self.DEBUG:
+                            print("thing title in slots: " + str(slots['thing']))
                         target_thing_title = slots['thing']
                         if 'space' in slots:
                             if self.DEBUG:
@@ -2915,18 +2989,22 @@ class VocoAdapter(Adapter):
                         
                         # loop over the satellite thing data in self.satellite_thing_titles
                         for satellite_id in self.satellite_thing_titles:
-                            if target_thing_title in self.satellite_thing_titles[satellite_id]:
-                                if self.DEBUG:
-                                    print("A satellite has this thing, it should handle it.")
-                                found_on_satellite = True
-                            elif len(found_properties) == 0: # if there isn't a match with a local thing, then allow fuzzy matching with satellite thing titles
-                                for satellite_thing_title in self.satellite_thing_titles[satellite_id]:
+                            #if target_thing_title in self.satellite_thing_titles[satellite_id]:
+                            for satellite_thing_title in self.satellite_thing_titles[satellite_id]:
+                                if satellite_thing_title.lower() == target_thing_title.lower():
+                                    if self.DEBUG:
+                                        print("A satellite has this thing, it should handle it.")
+                                    found_on_satellite = True
+                                elif len(found_properties) == 0: # if there isn't a match with a local thing, then try a little harder, and allow fuzzy matching with satellite thing titles
                                     fuzz_ratio = fuzz.ratio(str(target_thing_title), satellite_thing_title)
-                                    print("fuzz: " + str(fuzz_ratio))
+                                    if self.DEBUG:
+                                        print("fuzz: " + str(fuzz_ratio))
                                     if fuzz_ratio > 85:
                                         if self.DEBUG:
                                             print("possible fuzzy match with satellite thing title")
                                         found_on_satellite = True
+                                    
+                                    
                         
                 except Exception as ex:
                     print("Error testing thing title against satellite titles: " + str(ex))
@@ -2976,6 +3054,19 @@ class VocoAdapter(Adapter):
         #if self.DEBUG:
         #    print("Checking if new things/properties/strings should be injected into Snips")
         try:
+            
+            if force_injection == True:
+                self.force_injection = True
+            
+            if self.last_injection_time + self.minimum_injection_interval > time.time(): # + self.minimum_injection_interval > datetime.utcnow().timestamp():
+                if self.DEBUG:
+                    print("An injection has already recently be performed. Should wait a while...")
+                return
+            
+            if self.DEBUG:
+                print("/\ /\ /\ inject_updated_things_into_snips: starting an attempt")
+            
+            
             # Check if any new things have been created by the user.
             #if datetime.utcnow().timestamp() - self.last_injection_time < self.minimum_injection_interval:
             #    if self.DEBUG:
@@ -2996,9 +3087,12 @@ class VocoAdapter(Adapter):
 
             #self.my_thing_title_list = []
             
+            self.things = self.api_get("/things")
+            
             for thing in self.things:
                 if 'title' in thing:
-                    thing_name = clean_up_string_for_speaking(str(thing['title']).lower()).strip()
+                    #thing_name = clean_up_string_for_speaking(str(thing['title']).lower()).strip()
+                    thing_name = clean_up_string_for_speaking(str(thing['title'])).strip()
                     
                     if len(thing_name) > 1:
                         #if self.DEBUG:
@@ -3010,11 +3104,13 @@ class VocoAdapter(Adapter):
                         if 'type' in thing['properties'][thing_property_key] and 'enum' in thing['properties'][thing_property_key]:
                             if thing['properties'][thing_property_key]['type'] == 'string':
                                 for word in thing['properties'][thing_property_key]['enum']:
-                                    property_string_name = clean_up_string_for_speaking(str(word).lower()).strip()
+                                    #property_string_name = clean_up_string_for_speaking(str(word).lower()).strip()
+                                    property_string_name = clean_up_string_for_speaking(str(word)).strip()
                                     if len(property_string_name) > 1:
                                         fresh_property_strings.add(property_string_name)
                         if 'title' in thing['properties'][thing_property_key]:
-                            property_title = clean_up_string_for_speaking(str(thing['properties'][thing_property_key]['title']).lower()).strip()
+                            #property_title = clean_up_string_for_speaking(str(thing['properties'][thing_property_key]['title']).lower()).strip()
+                            property_title = clean_up_string_for_speaking(str(thing['properties'][thing_property_key]['title'])).strip()
                             if len(property_title) > 1:
                                 fresh_property_titles.add(property_title)
             
@@ -3028,7 +3124,7 @@ class VocoAdapter(Adapter):
             try:
                 thing_titles = set(self.persistent_data['thing_titles'])
             except:
-                print("Couldn't load previous thing titles from persistence. If Snips was just installed this is normal.")
+                print("Couldn't load previous thing titles from persistence. If Voco was just installed this is normal.")
                 thing_titles = set()
                 self.persistent_data['thing_titles'] = set()
                 self.save_persistent_data()
@@ -3036,7 +3132,7 @@ class VocoAdapter(Adapter):
             try:
                 property_titles = set(self.persistent_data['property_titles'])
             except:
-                print("Couldn't load previous property titles from persistence. If Snips was just installed this is normal.")
+                print("Couldn't load previous property titles from persistence. If Voco was just installed this is normal.")
                 property_titles = set()
                 self.persistent_data['property_titles'] = set()
                 self.save_persistent_data()
@@ -3044,14 +3140,17 @@ class VocoAdapter(Adapter):
             try:
                 property_strings = set(self.persistent_data['property_strings'])
             except:
-                print("Couldn't load previous property strings from persistence. If Snips was just installed this is normal.")
+                print("Couldn't load previous property strings from persistence. If Voco was just installed this is normal.")
                 property_strings = set()
                 self.persistent_data['property_strings'] = set()
                 self.save_persistent_data()
 
 
-
-            if len(thing_titles^fresh_thing_titles) > 0 or force_injection == True:                           # comparing sets to detect changes in thing titles
+            #print("stale: " + str(thing_titles))
+            #print("fresh: " + str(fresh_thing_titles))
+                
+                
+            if len(thing_titles^fresh_thing_titles) > 0 or self.force_injection == True:                           # comparing sets to detect changes in thing titles
                 if self.DEBUG:
                     print("Teaching Snips the updated thing titles:")
                     print(str(list(fresh_thing_titles)))
@@ -3061,7 +3160,7 @@ class VocoAdapter(Adapter):
                 operation = ('addFromVanilla',{"Thing" : list(fresh_thing_titles) })
                 operations.append(operation)
                 
-            if len(property_titles^fresh_property_titles) > 0 or force_injection == True:
+            if len(property_titles^fresh_property_titles) > 0 or self.force_injection == True:
                 if self.DEBUG:
                     print("Teaching Snips the updated property titles:")
                     print(str(list(fresh_property_titles)))
@@ -3071,7 +3170,7 @@ class VocoAdapter(Adapter):
                 operation = ('addFromVanilla',{"Property" : list(fresh_property_titles) })
                 operations.append(operation)
 
-            if len(property_strings^fresh_property_strings) > 0 or force_injection == True:
+            if len(property_strings^fresh_property_strings) > 0 or self.force_injection == True:
                 if self.DEBUG:
                     print("Teaching Snips the updated property strings:")
                     print(str(list(fresh_property_strings)))
@@ -3087,10 +3186,11 @@ class VocoAdapter(Adapter):
                     
             # Check if Snips should be updated with fresh data
             if operations != []:
+                
                 update_request = {"operations":operations}
             
                 if self.DEBUG:
-                    print("Updating Snips! update_request json: " + str(json.dumps(update_request)))
+                    print("/\ /\ /\ Injecting names into Snips! update_request json: " + str(json.dumps(update_request)))
                 
                 try:
                     self.persistent_data['thing_titles'] = list(fresh_thing_titles)
@@ -3107,16 +3207,24 @@ class VocoAdapter(Adapter):
                             print("Injection: self.mqtt_client exists, will try to inject")
                             print(str(json.dumps(operations)))
                         self.mqtt_client.publish('hermes/injection/perform', json.dumps(update_request))
+                        self.last_injection_time = time.time()
+                        self.force_injection = False
+
+                    if self.persistent_data['is_satellite']:
+                        self.send_mqtt_ping() # inform main controller of updated things list that this device manages
 
                     #with Hermes("localhost:1883") as herm:
                     #    herm.request_injection(update_request)
                     
-                    self.last_injection_time = time.time() #datetime.utcnow().timestamp()
+                    #self.last_injection_time = time.time() #datetime.utcnow().timestamp()
                 
                 except Exception as ex:
                      print("Error during injection: " + str(ex))
-
-            self.attempting_injection = False
+            
+            else:
+                if self.DEBUG:
+                    print("\/ \/ \/ No need for injection")
+            #self.attempting_injection = False
 
         except Exception as ex:
             print("Error during analysis and injection of your things into Snips: " + str(ex))
@@ -3140,7 +3248,6 @@ class VocoAdapter(Adapter):
         
         # Get all the things data via the API
         try:
-            #if self.persistent_data['is_satellite'] == False:
             self.things = self.api_get("/things")
         except Exception as ex:
             print("Error, couldn't load things: " + str(ex))
@@ -3406,7 +3513,7 @@ class VocoAdapter(Adapter):
                         if found_property['type'] == 'boolean' and actuator == False: # Remote property if it's not the type we're looking for
                             #print("pruning boolean property")
                             del found_property
-                        elif found_property['type'] != 'boolean' and actuator == True: # Temove property if it's not the type we're looking for
+                        elif found_property['type'] != 'boolean' and actuator == True: # Remove property if it's not the type we're looking for
                             #print("pruning non-boolean property")
                             del found_property
 
@@ -3769,6 +3876,7 @@ class VocoAdapter(Adapter):
                         print("--------------------- Found the correct main MQTT server! (Re)starting snips now.")
                     #self.stop_snips()
                     self.run_snips()
+                    self.force_injection = True
 				
                 self.currently_scanning_for_missing_mqtt_server = False # setting this back to false will allow for a new round of searching.
 
