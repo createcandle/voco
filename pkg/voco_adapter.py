@@ -1704,6 +1704,7 @@ class VocoAdapter(Adapter):
                         self.set_sound_detected(False)
 
                 # check if running subprocesses are still running ok
+                subprocess_running_ok = True
                 for process in self.external_processes:
                     try:
                         poll_result = process.poll()
@@ -1713,6 +1714,7 @@ class VocoAdapter(Adapter):
                             if self.DEBUG:
                                 print("clock poll_result was not None, so attempting to close subprocess.")
                             process.terminate()
+                            subprocess_running_ok = False
                         #else:
                         #    if self.DEBUG:
                         #        print("doing process.communicate")
@@ -1721,7 +1723,8 @@ class VocoAdapter(Adapter):
                     except Exception as ex:
                         if self.DEBUG:
                             print("subprocess poll error: " + str(ex))
-
+                if subprocess_running_ok == False:
+                    self.run_snips() # restart snips if any of its processes have ended/crashed
 
 
 
