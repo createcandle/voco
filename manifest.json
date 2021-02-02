@@ -30,15 +30,15 @@
       "Metric": true,
       "Microphone": "Attached device (1,0)",
       "Speaker": "Auto",
-	  "Audio sample rate": "16000",
+	  	"Audio sample rate": "16000",
       "Voice accent": "en-GB",
       "Voice pitch": "1.2",
       "Voice speed": "0.9",
-	  "Hotword sensitivity": "0.5",
-	  "System audio volume": 90,
-	  "Sound detection": false,
-	  "Hey Candle": false,
-	  "Satellite device control":true,
+	  	"Hotword sensitivity": "0.5",
+	  	"System audio volume": 90,
+	  	"Sound detection": false,
+	  	"Hey Candle": false,
+	  	"Satellite device control":true,
       "Debugging": false
     },
     "schema": {
@@ -182,7 +182,7 @@
     }
   },
   "short_name": "Voco",
-  "version": "2.5.3",
+  "version": "2.5.4",
   "web_accessible_resources": [
     "css/*.css",
     "images/*.svg",
