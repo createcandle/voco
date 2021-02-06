@@ -5,6 +5,9 @@ For more details, visit:
 
 https://www.candlesmarthome.com/voco-privacy-friendly-voice-control
 
+![Voco interface](https://github.com/createcandle/voco/blob/master/voco_screenshot.png?raw=true)
+
+
 # Installation
 Visit the add-ons page in your WebThings Gateway, and add the 'Voco' add-on.
 
