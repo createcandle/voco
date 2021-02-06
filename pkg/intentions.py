@@ -676,9 +676,17 @@ def intent_get_value(self, slots, intent_message,found_properties):
                     print("called api for data, it gave:" + str(api_result))
                     
                 try:
+                    if api_result == '{}':
+                        print("api result was a completely empty object")
+                        continue
+                except:
+                    print("get_value: could not compare returned json to {}")
+                    continue
+                    
+                try:
                     key = list(api_result.keys())[0]
                 except:
-                    print("error parsing the returned json")
+                    print("get_value: error parsing the returned json")
                     continue
                     
                 if key == "error":
@@ -738,7 +746,7 @@ def intent_get_value(self, slots, intent_message,found_properties):
             
         
         if voice_message == "":
-            voice_message = "Sorry, I could not find a level"
+            voice_message = "Sorry, I could not find a value"
             
         voice_message = clean_up_string_for_speaking(voice_message)
         if self.DEBUG:
@@ -818,7 +826,7 @@ def intent_set_state(self, slots, intent_message,found_properties, delayed_actio
                     try:
                         key = list(api_result.keys())[0]
                     except:
-                        print("error parsing the returned json")
+                        print("set_state: error parsing the returned json")
                         continue
                         
                     if key == "error":
@@ -1111,7 +1119,7 @@ def intent_set_value(self, slots, intent_message, found_properties, original_val
                             try:
                                 key = list(api_result.keys())[0]
                             except:
-                                print("error parsing the returned json")
+                                print("set_value: error parsing the returned json")
                                 continue
                             
                             if key == "error":
@@ -1233,7 +1241,7 @@ def intent_set_value(self, slots, intent_message, found_properties, original_val
                         try:
                             key = list(api_result.keys())[0]
                         except:
-                            print("error parsing the returned json")
+                            print("still set_value: error parsing the returned json")
                             continue
                             
                         if key == "error":

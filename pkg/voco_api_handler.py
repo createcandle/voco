@@ -302,8 +302,7 @@ class VocoAPIHandler(APIHandler):
                                         self.adapter.persistent_data['mqtt_server'] = str(request.body['mqtt_server'])
                                         self.adapter.run_mqtt()
                                         self.adapter.send_mqtt_ping(True)
-                                        self.adapter.stop_snips()
-                                        self.adapter.run_snips()
+                                        self.adapter.run_snips() # this stops Snips first
                                         update = 'Satellite mode enabled'
                                         if self.DEBUG:
                                             print("- Satellite mode enabled")
@@ -311,8 +310,7 @@ class VocoAPIHandler(APIHandler):
                                         self.adapter.persistent_data['mqtt_server'] = 'localhost'
                                         self.adapter.persistent_data['main_site_id'] = self.adapter.persistent_data['site_id'] #reset to default
                                         self.adapter.run_mqtt()
-                                        self.adapter.stop_snips()
-                                        self.adapter.run_snips()
+                                        self.adapter.run_snips() # this stops Snips first
                                         update = 'Satellite mode disabled'
                                         if self.DEBUG:
                                             print("- Satellite mode disabled")

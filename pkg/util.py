@@ -12,6 +12,7 @@ import requests
 from requests.adapters import HTTPAdapter
 import subprocess
 from time import sleep
+from difflib import SequenceMatcher as SM
 from dateutil import tz
 #from dateutil.tz import *
 from dateutil.parser import *
@@ -646,3 +647,10 @@ def arpa_detect_gateways(quick=True):
         print("Arp -a error: " + str(ex))
         
     return gateway_list
+    
+    
+def simpler_fuzz(s1, s2):
+    #print("Simpler Fuzz is comparing: " + str(s1) + " =?= " + str(s2))
+    ratio = SM(None, s1, s2).ratio() * 100
+    #print(str(ratio))
+    return ratio

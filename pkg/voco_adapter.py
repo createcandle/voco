@@ -42,11 +42,11 @@ try:
 except:
     print("ERROR, paho is not installed. try 'pip3 install paho'")
 
-try:
-    from rapidfuzz import fuzz
-    from rapidfuzz import process
-except:
-    print("ERROR, rapidfuzz is not installed. try 'pip3 install rapidfuzz'")
+#try:
+#    from rapidfuzz import fuzz
+#    from rapidfuzz import process
+#except:
+#    print("ERROR, rapidfuzz is not installed. try 'pip3 install rapidfuzz'")
     #sys.path.append('/home/pi/.webthings/addons/voco/lib')
     #from rapidfuzz import fuzz
     #from rapidfuzz import process
@@ -2015,7 +2015,7 @@ class VocoAdapter(Adapter):
             print("intent in api_get: " + str(intent))
         #print("GET TOKEN = " + str(self.token))
         if self.token == None:
-            print("PLEASE ENTER YOUR AUTHORIZATION CODE IN THE SETTINGS PAGE")
+            print("API GET: PLEASE ENTER YOUR AUTHORIZATION CODE IN THE SETTINGS PAGE")
             self.set_status_on_thing("Authorization code missing, check settings")
             return []
         
@@ -2115,6 +2115,7 @@ class VocoAdapter(Adapter):
 
         except Exception as ex:
             print("Error: could not store data in persistent store: " + str(ex) )
+            print(str(self.persistent_data))
             return False
 
 
@@ -2223,7 +2224,8 @@ class VocoAdapter(Adapter):
             if self.DEBUG:
                 print("In on_disconnect, and MQTT return code was 0 - (disconnect is ok?)")
             if self.persistent_data['is_satellite']:
-                print("- satellite, so local snips audio server will now be shut down")
+                if self.DEBUG:
+                    print("- satellite, so local snips audio server will now be shut down")
                 self.stop_snips() 
             
         elif rc != 0:
@@ -2999,7 +3001,7 @@ class VocoAdapter(Adapter):
                                         print("A satellite has this thing, it should handle it.")
                                     found_on_satellite = True
                                 elif len(found_properties) == 0: # if there isn't a match with a local thing, then try a little harder, and allow fuzzy matching with satellite thing titles
-                                    fuzz_ratio = fuzz.ratio(str(target_thing_title), satellite_thing_title)
+                                    fuzz_ratio = simpler_fuzz(str(target_thing_title), satellite_thing_title)
                                     if self.DEBUG:
                                         print("fuzz: " + str(fuzz_ratio))
                                     if fuzz_ratio > 85:
@@ -3306,10 +3308,16 @@ class VocoAdapter(Adapter):
                             print("Warning: thing had no name either. Skipping it.")
                         continue
 
+
+                #target_thing_title = target_thing_title + 's' # fuzz testing
+                
                 try:
                     #if self.DEBUG:
                         #print("")
                         #print("___" + current_thing_title)
+                        
+                    print(str(current_thing_title) + " =??= " + str(target_thing_title))
+                        
                     probable_thing_title_confidence = 100
                     
                     if target_thing_title == None:  # If no thing title provided, we go over every thing and let the property be leading in finding a match.
@@ -3319,7 +3327,7 @@ class VocoAdapter(Adapter):
                         probable_thing_title = current_thing_title
                         if self.DEBUG:
                             print("FOUND THE CORRECT THING: " + str(current_thing_title))
-                    elif fuzz.ratio(str(target_thing_title), current_thing_title) > 85:  # If the title is a fuzzy match
+                    elif simpler_fuzz(str(target_thing_title), current_thing_title) > 85:  # If the title is a fuzzy match
                         if self.DEBUG:
                             print("This thing title is pretty similar, so it could be what we're looking for: " + str(current_thing_title))
                         probable_thing_title = current_thing_title
@@ -3328,7 +3336,7 @@ class VocoAdapter(Adapter):
                         space_title = str(target_space) + " " + str(target_thing_title)
                         #if self.DEBUG:
                         #   print("space title = " + str(target_space) + " + " + str(target_thing_title))
-                        if fuzz.ratio(space_title, current_thing_title) > 85:
+                        if simpler_fuzz(space_title, current_thing_title) > 85:
                             probable_thing_title = space_title
                         
                     elif current_thing_title.startswith(target_thing_title):
@@ -3470,7 +3478,7 @@ class VocoAdapter(Adapter):
                             continue
                         
                         # We found a good matching property title and already found a good matching thing title. # TODO: shouldn't this be higher up?
-                        elif fuzz.ratio(current_property_title, target_property_title) > 85:
+                        elif simpler_fuzz(current_property_title, target_property_title) > 85:
                             if self.DEBUG:
                                 print("FOUND A PROPERTY WITH THE MATCHING FUZZY NAME")
                             if match_dict['thing'] == None:
