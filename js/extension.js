@@ -375,7 +375,7 @@
 					if( main_view.classList.contains('selected') ){
 						
 				  		// Get list of items
-						if(this.attempts < 2){
+						if(this.attempts < 3){
 							this.attempts++;
 							//console.log(this.attempts);
 							//console.log("calling")

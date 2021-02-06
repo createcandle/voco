@@ -229,66 +229,43 @@
 
 
 .extension-voco-tab-buttons{
-	border-bottom:1px solid white;
 	margin-top: 4rem;
-	cursor:pointer;
+	background-color: rgba(255,255,255,.1);
+	border-radius: .7rem;
+	overflow: hidden;
+	font-size:0;
 }
 
 #extension-voco-view .extension-voco-tab-buttons button{
-	position: relative;
-	top: 1px;
-	border-bottom-left-radius: 0;
-	border-bottom-right-radius: 0;
-	background-color: rgba(0,0,0,.1);
-	color: white;
+	background-color: transparent;
+	border-right: 1px solid rgba(0,0,0,.05);
+	color: #eee;
+	cursor:pointer;
+	font-size:1.8rem;
+}
+#extension-voco-view .extension-voco-tab-buttons button:last-child{
+	float:right;
 }
 
-/*
-#extension-voco-tab-button-satellites{
-	display:none;
+#extension-voco-view .extension-voco-tab-buttons button:hover{
+	background-color: rgba(0,0,0,0.1);
+	color:white;
 }
-.extension-voco-potential-satellite #extension-voco-tab-button-satellites{
-	display:inline-block;
-}
-*/
+
 
 
 #extension-voco-tabs-container > div{
 	display:none;
 }
 
-#extension-voco-content.extension-voco-show-tab-timers #extension-voco-tab-button-timers{
-	color: white;
-    background-color: transparent;
-    border-top: 1px solid white;
-    border-left: 1px solid white;
-    border-right: 1px solid white;
-    border-bottom: 1px solid #5d9bc7;
-}
-#extension-voco-content.extension-voco-show-tab-timers #extension-voco-tab-timers{
-	display:block;
-}
-
-#extension-voco-content.extension-voco-show-tab-satellites #extension-voco-tab-button-satellites{
-	color: white;
-    background-color: transparent;
-    border-top: 1px solid white;
-    border-left: 1px solid white;
-    border-right: 1px solid white;
-    border-bottom: 1px solid #5d9bc7;
-}
-#extension-voco-content.extension-voco-show-tab-satellites #extension-voco-tab-satellites{
-	display:block;
-}
-
+#extension-voco-content.extension-voco-show-tab-timers #extension-voco-tab-button-timers,
+#extension-voco-content.extension-voco-show-tab-satellites #extension-voco-tab-button-satellites,
 #extension-voco-content.extension-voco-show-tab-tutorial #extension-voco-tab-button-tutorial{
 	color: white;
-    background-color: transparent;
-    border-top: 1px solid white;
-    border-left: 1px solid white;
-    border-right: 1px solid white;
-    border-bottom: 1px solid #5d9bc7;
+    background-color: rgba(0,0,0,0.18);
 }
+#extension-voco-content.extension-voco-show-tab-timers #extension-voco-tab-timers,
+#extension-voco-content.extension-voco-show-tab-satellites #extension-voco-tab-satellites,
 #extension-voco-content.extension-voco-show-tab-tutorial #extension-voco-tab-tutorial{
 	display:block;
 }
