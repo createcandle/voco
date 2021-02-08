@@ -1200,15 +1200,17 @@ class VocoAdapter(Adapter):
 
 
     def run_snips(self):
-        
+        print("in_run_snips")
         if self.persistent_data['is_satellite'] and self.persistent_data['listening'] == False: # On a satellite, don't even start the audio server if it's not supposed to be listening.
             return
         
         #self.snips_running = True
         if self.DEBUG:
             print("running Snips (after killing potential running snips instances)")
-            self.stop_snips()
+        
+        self.stop_snips()
             #os.system("pkill -f snips")
+        
         try:
             #time.sleep(1.11)
         
@@ -1677,7 +1679,7 @@ class VocoAdapter(Adapter):
                         self.missing_microphone = False
                         self.speak("The microphone has been reconnected.")
                         #print("self.mqtt_client = " + str(self.mqtt_client))
-                        self.stop_snips()
+                        #self.stop_snips()
                         self.run_snips()
                         #if self.was_listening_when_microphone_disconnected:
                         #    self.set_snips_state(True)
@@ -1715,8 +1717,8 @@ class VocoAdapter(Adapter):
                     except Exception as ex:
                         if self.DEBUG:
                             print("subprocess poll error: " + str(ex))
-                if subprocess_running_ok == False:
-                    self.run_snips() # restart snips if any of its processes have ended/crashed
+                #if subprocess_running_ok == False:
+                #    self.run_snips() # restart snips if any of its processes have ended/crashed
 
 
 
