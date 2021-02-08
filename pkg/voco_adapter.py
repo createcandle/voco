@@ -52,10 +52,6 @@ except:
     #from rapidfuzz import process
     #from lib.rapidfuzz import fuzz
 
-try:
-    import alsaaudio
-except:
-    print("ERROR, alsaaudio is not installed. try 'pip3 install alsaaudio'")
 
 try:
     from pytz import timezone
@@ -376,10 +372,6 @@ class VocoAdapter(Adapter):
 
         if self.DEBUG:
             print("self.audio_output_options = " + str(self.audio_output_options))
-        
-            
-        if self.DEBUG:
-            print("available audio cards: " + str(alsaaudio.cards()))
         
             
         # Pre-scan ALSA
@@ -2081,7 +2073,8 @@ class VocoAdapter(Adapter):
 
         except Exception as ex:
             print("Error doing http request/loading returned json: " + str(ex))
-            self.speak("I could not connect. ", intent=intent)
+            if self.DEBUG:
+                self.speak("I could not connect. ", intent=intent)
             #return {"error": "I could not connect to the web things gateway"}
             #return [] # or should this be {} ? Depends on the call perhaps.
             return {"error": 500}
