@@ -1200,7 +1200,14 @@ class VocoAdapter(Adapter):
 
 
     def run_snips(self):
-        print("in_run_snips")
+        if self.DEBUG:
+            print("in_run_snips")
+        
+        if not self.mqtt_connected:
+            if self.DEBUG:
+                print("Error, run_snips aborted because MQTT didn't seem to be connected (yet)?")
+            return
+        
         if self.persistent_data['is_satellite'] and self.persistent_data['listening'] == False: # On a satellite, don't even start the audio server if it's not supposed to be listening.
             return
         
@@ -1481,11 +1488,11 @@ class VocoAdapter(Adapter):
                     except Exception as ex:
                         print("clock: error in periodic ping to main Voco controller" + str(ex))            
                     
-
-                    if not self.persistent_data['is_satellite']:
-                        self.inject_updated_things_into_snips()
-                    elif self.satellite_should_act_on_intent:
-                        self.inject_updated_things_into_snips()
+                    if self.mqtt_connected:
+                        if not self.persistent_data['is_satellite']:
+                            self.inject_updated_things_into_snips()
+                        elif self.satellite_should_act_on_intent:
+                            self.inject_updated_things_into_snips()
                     
                     
 
@@ -2144,6 +2151,7 @@ class VocoAdapter(Adapter):
         # Create mqtt client
         if self.DEBUG:
             print("in run_mqtt")
+            
         # First, close any existing MQTT client
         try:
             if self.mqtt_client != None:
@@ -2203,10 +2211,11 @@ class VocoAdapter(Adapter):
             if self.persistent_data['is_satellite']:
                 self.set_status_on_thing("Error connecting to main Voco device")
                 self.periodic_voco_attempts += 1
-                if self.currently_scanning_for_missing_mqtt_server == False and self.persistent_data['site_id'] != self.persistent_data['main_site_id']:
-                    # Attempt to find the correct MQTT server
+                if self.currently_scanning_for_missing_mqtt_server == False and self.persistent_data['site_id'] != self.persistent_data['main_site_id'] and self.persistent_data['is_satellite']:
+                    # Satellites may attempt to find the new IP address of the MQTT server
                     if '113' in str(ex): # [Errno 113] No route to host
                         self.look_for_mqtt_server()
+                        
     
         
     def on_disconnect(self, client, userdata, rc):
@@ -3354,6 +3363,8 @@ class VocoAdapter(Adapter):
                 
                 try:
                     for thing_property_key in thing['properties']:
+                        if self.DEBUG:
+                            print("thing_property_key = " + str(thing_property_key))
                         #print("Property details: " + str(thing['properties'][thing_property_key]))
 
                         try:
@@ -3509,19 +3520,20 @@ class VocoAdapter(Adapter):
                     if self.DEBUG:
                         print("Error while looping over property: " + str(ex))
 
-                # If the thing title matches and we found at least one property, then we're done.
-                if probable_thing_title != None and len(result) == 1:
-                    return result
+                if result != None:
+                    # If the thing title matches and we found at least one property, then we're done.
+                    if probable_thing_title != None and len(result) == 1:
+                        return result
                 
-                # If there are multiple results, we finally take the initial preference of the intent into account and prune properties accordingly.
-                elif len(result) > 1:
-                    for found_property in result:
-                        if found_property['type'] == 'boolean' and actuator == False: # Remote property if it's not the type we're looking for
-                            #print("pruning boolean property")
-                            del found_property
-                        elif found_property['type'] != 'boolean' and actuator == True: # Remove property if it's not the type we're looking for
-                            #print("pruning non-boolean property")
-                            del found_property
+                    # If there are multiple results, we finally take the initial preference of the intent into account and prune properties accordingly.
+                    elif len(result) > 1:
+                        for found_property in result:
+                            if found_property['type'] == 'boolean' and actuator == False: # Remote property if it's not the type we're looking for
+                                #print("pruning boolean property")
+                                del found_property
+                            elif found_property['type'] != 'boolean' and actuator == True: # Remove property if it's not the type we're looking for
+                                #print("pruning non-boolean property")
+                                del found_property
 
                 # TODO: better handling of what happens if the thing title was not found. The response could be less vague than 'no match'.
                 
