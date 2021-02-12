@@ -89,7 +89,7 @@
 				'How many timers have been set?',
 				'Tell me about my timers',
 				'Tell me about my alarms',
-				'At lunchtime remind me to go to the supermarket',
+				'At lunch time remind me to go to the super market',
 				'Remove all the timers',
 				'Disable all the alarms',
 				'Set a timer for 9 o clock',
