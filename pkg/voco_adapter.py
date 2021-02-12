@@ -309,7 +309,7 @@ class VocoAdapter(Adapter):
         
         # These will be injected ino Snips for better recognition.
         self.extra_properties = ["state","set point"]
-        self.generic_properties = ["level","value","values","state","states","all values","all levels"]
+        self.generic_properties = ["level","value","values","states","all values","all levels"]
         self.capabilities = ["temperature"]
         self.numeric_property_names = ["first","second","third","fourth","fifth","sixth","seventh"]
          
@@ -1547,7 +1547,7 @@ class VocoAdapter(Adapter):
                                     print("(...) TIMED ACTUATOR SWITCHING")
                                 #delayed_action = True
                                 #slots = self.extract_slots(intent_message)
-                                found_properties = self.check_things(True,item['slots']['thing'],item['slots']['property'],item['slots']['space'])
+                                found_properties = self.check_things(True,item['slots'])
                                 intent_set_state(self, item['slots'],item['intent_message'],found_properties, item['original_value'])
 
                             # Delayed setting of a value
@@ -1556,7 +1556,7 @@ class VocoAdapter(Adapter):
                                     print("origval:" + str(item['original_value']))
                                     print("(...) TIMED SETTING OF A VALUE")
                                 #slots = self.extract_slots(intent_message)
-                                found_properties = self.check_things(False,item['slots']['thing'],item['slots']['property'],item['slots']['space'])
+                                found_properties = self.check_things(False,item['slots'])
                                 intent_set_value(self, item['slots'],item['intent_message'],found_properties, item['original_value'])
 
                             # Countdown
@@ -2013,7 +2013,7 @@ class VocoAdapter(Adapter):
         """Returns data from the WebThings Gateway API."""
         if self.DEBUG:
             print("GET PATH = " + str(api_path))
-            print("intent in api_get: " + str(intent))
+            #print("intent in api_get: " + str(intent))
         #print("GET TOKEN = " + str(self.token))
         if self.token == None:
             print("API GET: PLEASE ENTER YOUR AUTHORIZATION CODE IN THE SETTINGS PAGE")
@@ -2879,14 +2879,20 @@ class VocoAdapter(Adapter):
         #    return
         
         
-        # Deal with some odd things
-        if slots['start_time'] != None:
-            if slots['start_time'] < time.time():
-                slots['start_time'] = None
-        
-
+        # Some custom heuristics to avoid strange situations
         try:
-            # Alternative routing. Some heuristics, since Snips sometimes chooses the wrong intent.
+            # Deal with some odd things
+            if slots['start_time'] != None:
+                if slots['start_time'] < time.time():
+                    slots['start_time'] = None
+                    
+        except Exception as ex:
+            print("Error massaging data: " + str(ex))
+
+
+        # Alternative routing. Some heuristics, since Snips sometimes chooses the wrong intent.
+        try:
+            
             
             
             # Alternative route to get_boolean.
@@ -2972,7 +2978,7 @@ class VocoAdapter(Adapter):
                 if incoming_intent == 'createcandle:set_state' or incoming_intent == 'createcandle:get_boolean':
                     actuator = True
             
-                found_properties = self.check_things(actuator,slots['thing'],slots['property'],slots['space'])
+                found_properties = self.check_things(actuator,slots)
                 #if self.DEBUG:
                 #    print("Found properties: " + str(found_properties))
                 
@@ -3245,9 +3251,24 @@ class VocoAdapter(Adapter):
 #
 
     # This function looks up things that might be a match to the things names or property names that the user mentioned in their request.
-    def check_things(self, actuator, target_thing_title, target_property_title, target_space ):
+    #def check_things(self, actuator, target_thing_title, target_property_title, target_space ):
+    def check_things(self, actuator, slots ):
         if self.DEBUG:
             print("SCANNING THINGS")
+            
+        print("SCAN SLOTS: " + str(slots))
+            
+        target_thing_title = slots['thing']
+        target_property_title = slots['property']
+        target_space = slots['space']
+        sentence = ""
+        try:
+            if 'sentence' in slots:
+                sentence = slots['sentence']
+        except Exception as ex:
+            if self.DEBUG:
+                print("No sentence available in things scanner. Error: " + str(ex))
+        
 
         if target_thing_title == None and target_property_title == None and target_space == None:
             if self.DEBUG:
@@ -3260,8 +3281,6 @@ class VocoAdapter(Adapter):
             self.things = self.api_get("/things")
         except Exception as ex:
             print("Error, couldn't load things: " + str(ex))
-        
-        
         
         
         result = [] # This will hold all found matches
@@ -3343,6 +3362,12 @@ class VocoAdapter(Adapter):
                         if simpler_fuzz(space_title, current_thing_title) > 85:
                             probable_thing_title = space_title
                         
+                    elif current_thing_title in sentence:
+                        if self.DEBUG:
+                            print("spotted '" + probable_thing_title + "' verbatim in sentence: " + str(sentence))
+                        probable_thing_title = current_thing_title
+                        probable_thing_title_confidence = 80
+  
                     elif current_thing_title.startswith(target_thing_title):
                         if self.DEBUG:
                             print("partial match:" + str(len(current_thing_title) / len(target_thing_title)))

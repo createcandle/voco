@@ -571,12 +571,27 @@ def intent_get_boolean(self, slots, intent_message, found_properties):
     #actuator = True
     #found_properties = self.check_things(actuator,slots['thing'],slots['property'],slots['space'])
     if len(found_properties) > 0:
+        
+        perfect_property_match_spotted = False
+        for found_property in found_properties:
+            if slots['property'] == found_property['property'] and found_property['type'] == "boolean":
+                if self.DEBUG:
+                    print("There is a perfectly matching property called: " + str(found_property['property']))
+                perfect_property_match_spotted = True # There is a property that perfectly matches the name of the one we're looking for.
+        
         loop_counter = 0
         for found_property in found_properties:
+            
+            if perfect_property_match_spotted and slots['property'] != found_property['property']: 
+                continue # if there is a perfect match, skip over items unless we're at the perfect match
+            
+            
+            if self.DEBUG:
+                print("found_property " + str(loop_counter) + " = " + str(found_property))
             loop_counter += 1
             
             if found_property['property_url'] == None or found_property['property'] == None or found_property['type'] != "boolean":
-                #print("Skipping: this result item was not a boolean")
+                #print("Skipping property: this result item was not a boolean")
                 continue
                 
             if self.DEBUG:
@@ -599,21 +614,23 @@ def intent_get_boolean(self, slots, intent_message, found_properties):
                     if len(found_properties) == 1 or (loop_counter == len(found_properties) and voice_message == ""):
                         voice_message = "Sorry, " + str(found_property['thing']) + " seems to be disconnected. "
                         break
-                    else:
-                        continue
+                    #else:
+                    #    continue
             
             if api_result[key] == None:
                 if len(found_properties) == 1 or (loop_counter == len(found_properties) and voice_message == ""):
                     voice_message = "Sorry, " + str(found_property['property']) + " had no value. "
                     break
-                else:
-                    continue
+                #else:
+                #    continue
                     
             
-            if len(found_properties) == 1:
+            #if len(found_properties) == 1 or perfect_property_match_spotted == True:
+            if perfect_property_match_spotted == True:
                 voice_message = "it"
             
-            elif len(found_properties) > 1:
+            #elif len(found_properties) > 1:
+            else:    
                 voice_message = str(found_property['property'])
                 if found_property['thing'] != None:
                     voice_message += " of " + str(found_property['thing'])
