@@ -3306,6 +3306,7 @@ class VocoAdapter(Adapter):
             if self.DEBUG:
                 print("-> target space is: " + str(target_space))
         
+        probable_thing_title_confidence = 0
         
         try:
             if self.things == None or self.things == []:
@@ -3341,40 +3342,49 @@ class VocoAdapter(Adapter):
                         
                     print(str(current_thing_title) + " =??= " + str(target_thing_title))
                         
-                    probable_thing_title_confidence = 100
+                    probable_thing_title_confidence = 0
                     
                     if target_thing_title == None:  # If no thing title provided, we go over every thing and let the property be leading in finding a match.
                         pass
                     
                     elif target_thing_title == current_thing_title:   # If the thing title is a perfect match
                         probable_thing_title = current_thing_title
+                        probable_thing_title_confidence = 100
+                        result = []
                         if self.DEBUG:
                             print("FOUND THE CORRECT THING: " + str(current_thing_title))
+                            
                     elif simpler_fuzz(str(target_thing_title), current_thing_title) > 85:  # If the title is a fuzzy match
                         if self.DEBUG:
                             print("This thing title is pretty similar, so it could be what we're looking for: " + str(current_thing_title))
                         probable_thing_title = current_thing_title
-                        probable_thing_title_confidence = 85
+                        probable_thing_title_confidence = 90
+                        result = []
+                        
                     elif target_space != None:
                         space_title = str(target_space) + " " + str(target_thing_title)
                         #if self.DEBUG:
                         #   print("space title = " + str(target_space) + " + " + str(target_thing_title))
-                        if simpler_fuzz(space_title, current_thing_title) > 85:
+                        if simpler_fuzz(space_title, current_thing_title) > 85: # Perhaps there is a title match if the room name is taken into consideration. E.g. Kitchen + radio = kitchen radio
                             probable_thing_title = space_title
+                            probable_thing_title_confidence = 90
+                            result = []
                         
-                    elif current_thing_title in sentence:
+                    elif str(current_thing_title) in sentence:
                         if self.DEBUG:
-                            print("spotted '" + probable_thing_title + "' verbatim in sentence: " + str(sentence))
+                            print("spotted '" + str(current_thing_title) + "' verbatim in sentence: " + str(sentence)) # sometimes words like 'light' or 'sensor' aren't passed along in the thing title properly. So if the property we're checking is literally in the sentence, it might just be what we're looking for.
                         probable_thing_title = current_thing_title
                         probable_thing_title_confidence = 80
   
                     elif current_thing_title.startswith(target_thing_title):
                         if self.DEBUG:
-                            print("partial match:" + str(len(current_thing_title) / len(target_thing_title)))
+                            print("partial starts-with match:" + str(len(current_thing_title) / len(target_thing_title)))
                         if len(current_thing_title) / len(target_thing_title) < 2:
                             # The strings mostly start the same, so this might be a match.
                             probable_thing_title = current_thing_title
                             probable_thing_title_confidence = 25
+                        else:
+                            continue
                     else:
                         # A title was provided, but we were not able to match it to the current things. Perhaps we can get a property-based match.
                         continue
@@ -3388,12 +3398,15 @@ class VocoAdapter(Adapter):
                 
                 try:
                     for thing_property_key in thing['properties']:
-                        if self.DEBUG:
-                            print("thing_property_key = " + str(thing_property_key))
+                        # if self.DEBUG:
+                        #    print("thing_property_key = " + str(thing_property_key))
                         #print("Property details: " + str(thing['properties'][thing_property_key]))
 
                         try:
                             current_property_title = str(thing['properties'][thing_property_key]['title']).lower()
+                            if self.DEBUG:
+                                print("_____"  + str(thing['properties'][thing_property_key]['title']) + "_____" )
+                            #    print(str(thing['properties'][thing_property_key]))
                         except:
                             if self.DEBUG:
                                 print("could not extract title from WebThings property data. try Name instead.")
@@ -3443,8 +3456,6 @@ class VocoAdapter(Adapter):
                         try:
                             if '@type' in thing['properties'][thing_property_key]:
                                 match_dict['@type'] = thing['properties'][thing_property_key]['@type'] # Looking for things like "OnOffProperty"
-                            #else:
-                            #    match_dict['@type'] = None
                         except Exception as ex:
                             print("Error looking up capability @type: "  + str(ex))
                             pass
@@ -3463,111 +3474,217 @@ class VocoAdapter(Adapter):
 
 
                         # Start looking for a matching property
+                        property_keys_count = str(len(thing['properties'].keys()))
                         
-                        # No target property title set
-                        if match_dict['thing'] != None and (target_property_title in self.generic_properties or target_property_title == None):
+                        
+                        try:
+                            # No target property title set
+                            if match_dict['thing'] != None and (target_property_title in self.generic_properties or target_property_title == None):
                             
-                            if self.DEBUG:
-                                print("Property title was not or abstractly supplied, so adding " + str(match_dict['property']) + " to the list")
-                            result.append(match_dict.copy())
-                            continue
-                        
-                        # If we found the thing and it only has one property, then use that.
-                        elif match_dict['thing'] != None and target_property_title != None and len(thing['properties']) == 1:
-                            result.append(match_dict.copy())
-                            continue
-                        
-                        # Looking for a state inside a matched thing.
-                        elif target_property_title == 'state' and match_dict['thing'] != None:
-                            if self.DEBUG:
-                                print("looking for a 'state' (a.k.a. boolean type)")
-                            #print("type:" + str(thing['properties'][thing_property_key]['type']))
-                            if thing['properties'][thing_property_key]['type'] == 'boolean':
-                                # While looking for state, found a boolean
+                                if self.DEBUG:
+                                    print("Property title was not or abstractly supplied, so adding " + str(match_dict['property']) + " to the list")
                                 result.append(match_dict.copy())
                                 continue
                         
-                        # Looking for a level inside a matched thing.
-                        elif target_property_title == 'level' and match_dict['thing'] != None:
-                            if self.DEBUG:
-                                print("looking for a 'level'")
-                            #print("type:" + str(thing['properties'][thing_property_key]['type']))
-                            if thing['properties'][thing_property_key]['type'] != 'boolean':
-                                # While looking for level, found a non-boolean
+                            # If we found the thing and it only has one property, then use that.
+                            elif match_dict['thing'] != None and target_property_title != None and property_keys_count == 1:
+                                if self.DEBUG:
+                                    print("Correct thing found, and it only has one property, so adding that")
                                 result.append(match_dict.copy())
                                 continue
+                        
+                            # Looking for a state inside a matched thing. Matches all booleans if 'state' is the property we're looking for
+                            elif target_property_title == 'state' and match_dict['thing'] != None: # TODO maybe first check if 'state' is a literal property of this thing, and if so, skip adding all booleans.
+                                if self.DEBUG:
+                                    print("looking for a 'state' (a.k.a. boolean type)")
+                                #print("type:" + str(thing['properties'][thing_property_key]['type']))
+                                if thing['properties'][thing_property_key]['type'] == 'boolean':
+                                    # While looking for state, found a boolean
+                                    result.append(match_dict.copy())
+                                    continue
+                        
+                            # Looking for a level inside a matched thing.
+                            elif target_property_title == 'level' and match_dict['thing'] != None:
+                                if self.DEBUG:
+                                    print("looking for a 'level'")
+                                #print("type:" + str(thing['properties'][thing_property_key]['type']))
+                                if thing['properties'][thing_property_key]['type'] != 'boolean':
+                                    # While looking for level, found a non-boolean
+                                    result.append(match_dict.copy())
+                                    continue
 
-                        # Looking for a value
-                        elif target_property_title == 'value' and match_dict['thing'] != None:
-                            result.append(match_dict.copy())
-                            continue
-                            
-                        # Looking for 'all' properties
-                        elif target_property_title == 'all' and match_dict['thing'] != None:
-                            #If all properties are desired, add all properties
-                            result.append(match_dict.copy())
-                            continue
-                        
-                        # We found a good matching property title and already found a good matching thing title. # TODO: shouldn't this be higher up?
-                        elif simpler_fuzz(current_property_title, target_property_title) > 85:
-                            if self.DEBUG:
-                                print("FOUND A PROPERTY WITH THE MATCHING FUZZY NAME")
-                            if match_dict['thing'] == None:
-                                match_dict['thing'] = current_thing_title
+                            # Looking for a value
+                            elif target_property_title == 'value' and match_dict['thing'] != None:
                                 result.append(match_dict.copy())
+                                continue
+                            
+                            # Looking for 'all' properties
+                            elif target_property_title == 'all' and match_dict['thing'] != None:
+                                #If all properties are desired, add all properties
+                                result.append(match_dict.copy())
+                                continue
+                        
+                            # We found a good matching property title and already found a good matching thing title. # TODO: shouldn't this be higher up?
+                            elif target_property_title != None and simpler_fuzz(current_property_title, target_property_title) > 85:
+                                if self.DEBUG:
+                                    print("FOUND A PROPERTY WITH THE MATCHING FUZZY NAME")
+                                if match_dict['thing'] == None:
+                                    if self.DEBUG:
+                                        print("property matched. Setting match_dict['thing'] to: " + str(current_thing_title))
+                                    match_dict['thing'] = current_thing_title
+                                    result.append(match_dict.copy())
+                                else:
+                                    if self.DEBUG:
+                                        print("found a very likely property match, and the thing name also seemingly provided: " + str(current_thing_title))
+                                    result = [] # Since this is a really good match, we remove any older properties we may have found.
+                                    result.append(match_dict.copy())
+                                    return result
+
+                            # if the property name we're checking is in the sentence, it might be a match
+                            elif str(current_property_title) in sentence:
+                                if self.DEBUG:
+                                    print("spotted property '" + str(current_property_title) + "' verbatim in sentence: " + str(sentence)) # sometimes words like 'light' or 'sensor' aren't passed along in the thing title properly. So if the property we're checking is literally in the sentence, it might just be what we're looking for.
+                                result.append(match_dict.copy())
+  
+                            # if the property name we're checking has a substring match
+                            elif current_property_title.startswith(target_property_title) or current_property_title.endswith(target_property_title):
+                                if self.DEBUG:
+                                    print("partial property starts-with or ends-with match:" + str(len(current_thing_title) / len(target_thing_title)))
+                                if len(current_thing_title) / len(target_thing_title) < 2:
+                                    # The strings mostly start or end the same, so this might be a match.
+                                    result.append(match_dict.copy())
+
+                            
+                            # We're looking for a numbered property (e.g. moisture 5), and this property has that number in it. Here we favour sensors. # TODO: add ordinal support?
+                            elif str(numerical_index) in current_property_title and target_thing_title != None:
+                                result.append(match_dict.copy())
+                            
+                                if thing['properties'][thing_property_key]['type'] == 'boolean' and probability_of_correct_property == 0:
+                                    probability_of_correct_property = 1
+                                    match_dict['property'] = current_property_title
+                                    #match_dict['type'] = thing['properties'][thing_property_key]['type']
+                                    match_dict['property_url'] = get_api_url(thing['properties'][thing_property_key]['links'])
+
+                                if thing['properties'][thing_property_key]['type'] != 'boolean' and probability_of_correct_property < 2:
+                                    probability_of_correct_property = 1
+                                    match_dict['property'] = current_property_title
+                                    #match_dict['type'] = thing['properties'][thing_property_key]['type']
+                                    match_dict['property_url'] = get_api_url(thing['properties'][thing_property_key]['links'])
+                                    #if match_dict['property_url'] != None: # If we found anything, then append it.
+                                    #    result.append(match_dict.copy())
+                                    
                             else:
-                                result = [] # Since this is a really good match, we remove any older properties we may have found.
-                                result.append(match_dict.copy())
-                                return result
-
-                            
-                        # We're looking for a numbered property (e.g. moisture 5), and this property has that number in it. Here we favour sensors. # TODO: add ordinal support?
-                        elif str(numerical_index) in current_property_title and target_thing_title != None:
-                            result.append(match_dict.copy())
-                            
-                            if thing['properties'][thing_property_key]['type'] == 'boolean' and probability_of_correct_property == 0:
-                                probability_of_correct_property = 1
-                                match_dict['property'] = current_property_title
-                                #match_dict['type'] = thing['properties'][thing_property_key]['type']
-                                match_dict['property_url'] = get_api_url(thing['properties'][thing_property_key]['links'])
-
-                            if thing['properties'][thing_property_key]['type'] != 'boolean' and probability_of_correct_property < 2:
-                                probability_of_correct_property = 1
-                                match_dict['property'] = current_property_title
-                                #match_dict['type'] = thing['properties'][thing_property_key]['type']
-                                match_dict['property_url'] = get_api_url(thing['properties'][thing_property_key]['links'])
-                                #if match_dict['property_url'] != None: # If we found anything, then append it.
-                                #    result.append(match_dict.copy())
-
-                
+                                if self.DEBUG:
+                                    print("no useful property match")
+                                    
+                        except Exception as ex:
+                            if self.DEBUG:
+                                print("Error while elif-ing over property: " + str(ex))
                 
                 except Exception as ex:
                     if self.DEBUG:
                         print("Error while looping over property: " + str(ex))
 
+
+                if probable_thing_title_confidence >= 90: # If the thing has very likely been spotted, there is no need to loop over the other things.
+                    break
+
+            #
+            # After looping over all the likely things and/or properties, a list of dictionaries is returned. 
+            # Each item is a potential match for the query, and consists of at least a thing and property name.
+            # If there is more than one candidate, its time to prune the results.
+
+            try:
                 if result != None:
+                    if self.DEBUG:
+                        print("result: " + str(json.dumps(result)))
                     # If the thing title matches and we found at least one property, then we're done.
-                    if probable_thing_title != None and len(result) == 1:
+                    #if probable_thing_title != None and probable_thing_title_confidence > 80 and len(result.keys()) == 1:
+                    if len(result) == 1:
+                        if self.DEBUG:
+                            print("Only found one possible match, so returning result immediately")
                         return result
-                
+            
                     # If there are multiple results, we finally take the initial preference of the intent into account and prune properties accordingly.
                     elif len(result) > 1:
+                        if self.DEBUG:
+                            print("Found " + str(len(result)) + " potential thing-property matches" )
+                        boolean_count = 0 # doing an inventory off the available boolean properties, used for additional pruning later.
+                        boolean_at_type_count = 0
+                        boolean_non_at_type_count = 0
+                        highest_match_percentage = 0
+                        things_spotted = []
+                        highest_thing_match = 0
+                        best_matched_thing = None
+                        index = 0
                         for found_property in result:
+                                
+                            if int(found_property['confidence']) > highest_thing_match:
+                                highest_thing_match = int(found_property['confidence'])
+                                best_matched_thing = found_property['thing']
+                            
+                            if found_property['thing'] not in things_spotted:
+                                things_spotted.append(found_property['thing'])
+                            
                             if found_property['type'] == 'boolean' and actuator == False: # Remote property if it's not the type we're looking for
-                                #print("pruning boolean property")
-                                del found_property
+                                del result[index]
                             elif found_property['type'] != 'boolean' and actuator == True: # Remove property if it's not the type we're looking for
-                                #print("pruning non-boolean property")
-                                del found_property
+                                del result[index]
+                            elif found_property['type'] == 'boolean' and actuator == True:
+                                boolean_count += 1
+                                if found_property['@type'] != None:
+                                    boolean_at_type_count += 1
+                                else:
+                                    boolean_non_at_type_count += 1
+                            
+                            index += 1
+                            
+                        # If two things were spotted, choose the one with the best match percentage
+                        if len(things_spotted) > 1:
+                            #if self.DEBUG:
+                            #    print("more than one thing's properties have been spotted.")
+                            index = 0
+                            for found_property in result:
+                                if found_property['thing'] != best_matched_thing:
+                                    del result[index]
+                                index += 1
+                            
+                                
+                            
+                        if self.DEBUG:
+                            print("boolean_at_type_count: " + str(boolean_at_type_count))
+                            print("boolean_non_at_type_count: " + str(boolean_non_at_type_count))
+                            
+                            
+                    # If after that first pruning there is still more than one result, do some additional pruning.
+                
+                    # Prefer properties with a defined @type if there are properties with and without them.
+                    
+                    if len(result) > 1:
+                        if self.DEBUG:
+                            print("Amount of candidates remaining after initial pruning is still more than one: " + str(len(result)))
+                        if boolean_at_type_count > 0 and boolean_non_at_type_count > 0:
+                            print('both boolean types exists')
+                            index = 0
+                            for found_property in result:
+                                if found_property['type'] == 'boolean' and actuator == True and found_property['@type'] == None: # Remove boolean property if it's not an @type
+                                    if self.DEBUG:
+                                        print("pruning boolean property without @type")
+                                    del result[index]
+                                index += 1
 
-                # TODO: better handling of what happens if the thing title was not found. The response could be less vague than 'no match'.
+            except Exception as ex:
+                print("Error while pruning: " + str(ex))
+
+            # TODO: better handling of what happens if the thing title was not found. The response could be less vague than 'no match'.
                 
         except Exception as ex:
             print("Error while looking for match in things: " + str(ex))
             
         if self.DEBUG:
             print("")
-            print("found properties: " + str(result))
+            #print("found properties: " + str(result))
+            print("found properties: " + str(json.dumps(result)))
             
         return result
 
@@ -3618,14 +3735,6 @@ class VocoAdapter(Adapter):
                         print("handling instantTime")
                         
                     try:
-                        #d = datetime.utcnow()
-                        #epoch = datetime(1970,1,1)
-                        #t = (d - epoch).total_seconds()
-                        #print("t = " + str(int(t)))
-                    
-                        #print("self.current_utc_time: " + str(self.current_utc_time))
-                    
-                        #print("datetime.now() = " + str(datetime.now()))
                         slots['time_string'] = item['rawValue'] # The time as it was spoken
                         #print("InstantTime slots['time_string'] = " + slots['time_string'])
                         #print("instant time object: " + str(item['value']['value']))
@@ -3633,14 +3742,12 @@ class VocoAdapter(Adapter):
                         if slots['time_string'].startswith("in"):
                             ignore_timezone = False
                         utc_timestamp = self.string_to_utc_timestamp(item['value']['value'],ignore_timezone)
-                        #print("current time as stamp: " + str(self.current_utc_time))
-                        #print("target time: " + str(utc_timestamp))
+                        
                         if utc_timestamp > self.current_utc_time: # Only allow moments in the future
                             slots['end_time'] = utc_timestamp
                         else:
                             slots['end_time'] = utc_timestamp + 43200 # add 12 hours
-                            #self.speak("The time you stated seems to be in the past.") # If after all that the moment is still in the past
-                            #return []
+                            
                     except Exception as ex:
                         print("instantTime extraction error: " + str(ex))
                     
@@ -3701,15 +3808,10 @@ class VocoAdapter(Adapter):
 
 
 
-    #def local_time_string_to_epoch_stamp(self,date_string):
-    #    aware_datetime = parse(date_string)
-    #    naive_utc_datetime = aware_datetime.astimezone(timezone('utc')).replace(tzinfo=None)
-    #    epoch_stamp = naive_utc_datetime.timestamp()
-
-
     def parse_text(self):
         if self.mqtt_connected:
             self.mqtt_client.publish("hermes/dialogueManager/startSession",json.dumps({"init":{"type":"action","canBeEnqueued": True},"siteId":"text-" + str(self.persistent_data['site_id']) }))
+
 
 
     def string_to_utc_timestamp(self,date_string,ignore_timezone=True):
@@ -3756,6 +3858,7 @@ class VocoAdapter(Adapter):
         except Exception as ex:
             print("Error in string to UTC timestamp: " + str(ex))
             return 0
+
 
 
     def human_readable_time(self,utc_timestamp,add_part_of_day=False):
@@ -3826,6 +3929,7 @@ class VocoAdapter(Adapter):
         except Exception as ex:
             print("Error making human readable time: " + str(ex))
             return ""
+
 
 
     def update_network_info(self):

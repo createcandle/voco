@@ -651,6 +651,10 @@ def arpa_detect_gateways(quick=True):
     
 def simpler_fuzz(s1, s2):
     #print("Simpler Fuzz is comparing: " + str(s1) + " =?= " + str(s2))
-    ratio = SM(None, s1, s2).ratio() * 100
+    ratio = 0
+    try:
+        ratio = SM(None, s1, s2).ratio() * 100
+    except Exception as ex:
+        print("Error doing simpler_fuzz: " + str(ex))
     #print(str(ratio))
     return ratio

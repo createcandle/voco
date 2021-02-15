@@ -583,6 +583,8 @@ def intent_get_boolean(self, slots, intent_message, found_properties):
         for found_property in found_properties:
             
             if perfect_property_match_spotted and slots['property'] != found_property['property']: 
+                if self.DEBUG:
+                    print("Found a perfect match for the property name, so will skip properties that are not it")
                 continue # if there is a perfect match, skip over items unless we're at the perfect match
             
             
@@ -631,7 +633,7 @@ def intent_get_boolean(self, slots, intent_message, found_properties):
             
             #elif len(found_properties) > 1:
             else:    
-                voice_message = str(found_property['property'])
+                voice_message += str(found_property['property'])
                 if found_property['thing'] != None:
                     voice_message += " of " + str(found_property['thing'])
                     
@@ -680,6 +682,7 @@ def intent_get_value(self, slots, intent_message,found_properties):
         #found_properties = self.check_things(actuator,slots['thing'],slots['property'],slots['space'])
         
         if len(found_properties) > 0:
+            disconnect_count = 0
             for found_property in found_properties:
                     
                 if found_property['type'] == 'boolean' and len(found_properties) > 1:  # Skip booleans if we can.
@@ -716,6 +719,15 @@ def intent_get_value(self, slots, intent_message,found_properties):
                 
                 api_value = api_result[key]
                 
+                if self.DEBUG:
+                    print("api_result[key] = " + str(api_result[key]))
+                
+                if api_value == None:
+                    if self.DEBUG:
+                        print("API returned a None value. Perhaps device is disconnected?")
+                        disconnect_count += 1
+                    continue
+                
                 if len(found_properties) == 1:
                     if found_property['confidence'] > 50:
                         voice_message += "it is "
@@ -724,6 +736,8 @@ def intent_get_value(self, slots, intent_message,found_properties):
                         
                 else:
                     voice_message += str(found_property['property']) + " of " + str(found_property['thing']) + " is " 
+                    
+                
                     
                 if found_property['type'] == 'boolean':
                     # Boolean should not really be handled here, but it's the only matching property we found. # TODO create boolean to human readable boolean function which can be reused?
@@ -755,6 +769,11 @@ def intent_get_value(self, slots, intent_message,found_properties):
                     voice_message += str(get_int_or_float(api_value))
                 
                 voice_message += " . "
+                
+                
+            if disconnect_count == len(found_properties) and slots['thing'] != None: # It seems every attempt to get a property value resulted in a 'None' value being returned
+                voice_message = "Sorry, " + str(found_properties[0]['thing']) + " seems to be disconnected."
+                
                 
         else:
             if self.DEBUG:
