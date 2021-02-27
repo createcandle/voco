@@ -42,15 +42,6 @@ try:
 except:
     print("ERROR, paho is not installed. try 'pip3 install paho'")
 
-#try:
-#    from rapidfuzz import fuzz
-#    from rapidfuzz import process
-#except:
-#    print("ERROR, rapidfuzz is not installed. try 'pip3 install rapidfuzz'")
-    #sys.path.append('/home/pi/.webthings/addons/voco/lib')
-    #from rapidfuzz import fuzz
-    #from rapidfuzz import process
-    #from lib.rapidfuzz import fuzz
 
 
 try:
