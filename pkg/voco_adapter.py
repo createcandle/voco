@@ -106,6 +106,7 @@ class VocoAdapter(Adapter):
         print("audio controls: " + str(self.audio_controls))
 
         
+        
         # Get persistent data
         try:
             self.persistence_file_path = os.path.join(self.user_profile['dataDir'], self.addon_name, 'persistence.json')
@@ -142,6 +143,8 @@ class VocoAdapter(Adapter):
         # On a reboot, listening is currently always set to true.
         if self.DEBUG:
             self.persistent_data['listening'] = True
+        
+
         
         #self.persistent_data['action_times'] = self.persistent_data['action_times']
         
@@ -184,7 +187,7 @@ class VocoAdapter(Adapter):
         try:
             if 'mqtt_server' not in self.persistent_data:
                 print("action_times was not in persistent data, adding it now.")
-                self.persistent_data['mqtt_server'] = '127.0.0.1'
+                self.persistent_data['mqtt_server'] = 'localhost'
         except:
             print("Error fixing audio_output in persistent data")
         
@@ -283,6 +286,8 @@ class VocoAdapter(Adapter):
         self.hostname = "gateway"
         self.ip_address = None
         
+        time.sleep(2);
+        
         self.update_network_info() # updates to the latest info
         
         
@@ -291,6 +296,7 @@ class VocoAdapter(Adapter):
         self.periodic_mqtt_attempts = 0
         self.periodic_voco_attempts = 0
         #self.orphaned = False # if the MQTT does a clean disconnect while the device is a satellite, then it's immediately an orpah, and talking to snips will reflect this.
+        self.should_restart_snips = False
         
         # Voice settings
         self.voice_accent = "en-GB"
@@ -324,7 +330,7 @@ class VocoAdapter(Adapter):
         self.snips_path = os.path.join(self.addon_path,"snips")
         self.arm_libs_path = os.path.join(self.snips_path,"arm-linux-gnueabihf")
         self.assistant_path = os.path.join(self.snips_path,"assistant")
-        self.work_path = os.path.join(self.snips_path,"work")
+        self.work_path = os.path.join(self.user_profile['dataDir'],'work')
         self.toml_path = os.path.join(self.snips_path,"snips.toml")
         self.hotword_path = os.path.join(self.snips_path,"snips-hotword")
         self.mosquitto_path = os.path.join(self.snips_path,"mosquitto")
@@ -1243,7 +1249,7 @@ class VocoAdapter(Adapter):
                     if self.persistent_data['is_satellite']:
                         mqtt_ip = str(self.persistent_data['mqtt_server']) + ":" + str(self.mqtt_port)
                     else:
-                        mqtt_ip = "127.0.0.1:" + str(self.mqtt_port)
+                        mqtt_ip = "localhost:" + str(self.mqtt_port)
                         
                     command = command + ["--bind",mqtt_bind,"--mqtt",mqtt_ip,"--alsa_capture","plughw:" + str(self.capture_card_id) + "," + str(self.capture_device_id),"--disable-playback"]
                     # "--alsa_playback","default:CARD=ALSA",
@@ -1271,10 +1277,10 @@ class VocoAdapter(Adapter):
                 if self.DEBUG:
                     print("--generated command = " + str(command))
                 try:
-                    if self.DEBUG:
-                        self.external_processes.append( Popen(command, env=my_env, stdout=sys.stdout, stderr=subprocess.STDOUT) )
-                    else:
-                        self.external_processes.append( Popen(command, env=my_env, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT) )
+                    #if self.DEBUG:
+                    #    self.external_processes.append( Popen(command, env=my_env, stdout=sys.stdout, stderr=subprocess.STDOUT) )
+                    #else:
+                    self.external_processes.append( Popen(command, env=my_env, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT) )
                 except Exception as ex:
                     print("Error starting a snips process: " + str(ex))
                 #time.sleep(.1)
@@ -1331,6 +1337,9 @@ class VocoAdapter(Adapter):
         #    if quick_counter == 15:
         #        break
         
+        
+        self.should_restart_snips = False
+        
         return
 
 
@@ -1349,7 +1358,7 @@ class VocoAdapter(Adapter):
 
             voice_message = ""
             
-            sleep(.05)
+            sleep(.1)
             
             if time.time() > self.current_utc_time + 1:
                 self.current_utc_time = int(time.time())
@@ -1370,6 +1379,9 @@ class VocoAdapter(Adapter):
 
                     self.last_slow_loop_time = time.time()
                     
+                    
+                    if self.should_restart_snips:
+                        self.run_snips()
                     
                     try:
                         if self.mqtt_client != None:
@@ -1696,7 +1708,8 @@ class VocoAdapter(Adapter):
                         self.set_sound_detected(False)
 
                 # check if running subprocesses are still running ok
-                subprocess_running_ok = True
+                #subprocess_running_ok = True
+                poll_error_count = 0
                 for process in self.external_processes:
                     try:
                         poll_result = process.poll()
@@ -1704,9 +1717,10 @@ class VocoAdapter(Adapter):
                         #    print("subprocess poll_result: " + str(poll_result) )
                         if poll_result != None:
                             if self.DEBUG:
-                                print("clock poll_result was not None, so attempting to close subprocess.")
-                            process.terminate()
-                            subprocess_running_ok = False
+                                print("clock poll_result was not None. A subprocess stopped?")
+                            poll_error_count += 1
+                #            process.terminate()
+                #            subprocess_running_ok = False
                         #else:
                         #    if self.DEBUG:
                         #        print("doing process.communicate")
@@ -1718,6 +1732,8 @@ class VocoAdapter(Adapter):
                 #if subprocess_running_ok == False:
                 #    self.run_snips() # restart snips if any of its processes have ended/crashed
 
+                if poll_error_count > 1:
+                    self.should_restart_snips = True
 
 
 
@@ -2187,8 +2203,8 @@ class VocoAdapter(Adapter):
                 self.mqtt_client.connect(str(self.persistent_data['mqtt_server']), int(self.mqtt_port), keepalive=60)
             else:
                 if self.DEBUG:
-                    print("This device is NOT a satellite, so MQTT client is connecting to 127.0.0.1:" + str(self.mqtt_port))
-                self.mqtt_client.connect("127.0.0.1", int(self.mqtt_port), keepalive=60)
+                    print("This device is NOT a satellite, so MQTT client is connecting to localhost:" + str(self.mqtt_port))
+                self.mqtt_client.connect("localhost", int(self.mqtt_port), keepalive=60)
                 
             #self.mqtt_client.loop_forever()
             self.mqtt_client.loop_start()
