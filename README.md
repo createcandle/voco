@@ -1,5 +1,5 @@
 # Voco
-Privacy friendly voice control for WebThings Gateway.
+Privacy friendly voice control for the WebThings Gateway smart home control software.
 
 For more details, visit:
 
