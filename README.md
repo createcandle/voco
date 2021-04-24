@@ -12,7 +12,7 @@ https://www.candlesmarthome.com/voco-privacy-friendly-voice-control
 Visit the add-ons page in your WebThings Gateway, and add the 'Voco' add-on.
 
 # Abilities
-These are all examples. You don't have to say things exactly like this. Any command should always be preceded by saying "Hey Snips".
+These are all examples. You don't have to phrase things exactly like this, the AI will understand different variations. Any command should always be preceded by saying "Hey Snips" or "Hey Candle".
 
 
 ### Turn things on and off
