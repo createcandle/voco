@@ -253,7 +253,7 @@ class VocoAdapter(Adapter):
 
         # Snips settings
         self.external_processes = [] # Will hold all the spawned processes        
-        self.snips_parts = ['snips-hotword','snips-asr','snips-tts','snips-audio-server','snips-nlu','snips-injection','snips-dialogue']
+        self.snips_parts = ['snips-hotword','snips-audio-server','snips-tts','snips-nlu','snips-injection','snips-dialogue','snips-asr']
         #self.snips_main_site_id = None
         self.custom_assistant_url = None
         self.larger_vocabulary_url = "https://raspbian.snips.ai/stretch/pool/s/sn/snips-asr-model-en-500MB_0.6.0-alpha.4_armhf.deb"
@@ -325,12 +325,14 @@ class VocoAdapter(Adapter):
         self.minimum_injection_interval = 15  # Minimum amount of seconds between new thing/property name injection attempts.
         self.force_injection = True # On startup, force an injection of all the names
         
+        print("self.user_profile = " + str(self.user_profile))
+        
         # Some paths
         self.addon_path = os.path.join(self.user_profile['addonsDir'], self.addon_name)
         self.snips_path = os.path.join(self.addon_path,"snips")
         self.arm_libs_path = os.path.join(self.snips_path,"arm-linux-gnueabihf")
         self.assistant_path = os.path.join(self.snips_path,"assistant")
-        self.work_path = os.path.join(self.user_profile['dataDir'],'work')
+        self.work_path = os.path.join(self.user_profile['dataDir'],'voco','work')
         self.toml_path = os.path.join(self.snips_path,"snips.toml")
         self.hotword_path = os.path.join(self.snips_path,"snips-hotword")
         self.mosquitto_path = os.path.join(self.snips_path,"mosquitto")
@@ -354,6 +356,7 @@ class VocoAdapter(Adapter):
 
         # Make sure the work directory exists
         try:
+            print("checking if work path exists: " + str(self.work_path))
             if not os.path.isdir(self.work_path):
                 os.mkdir( self.work_path )
                 print("Work directory did not exist, created it now")
@@ -1236,6 +1239,8 @@ class VocoAdapter(Adapter):
             my_env = os.environ.copy()
             my_env["LD_LIBRARY_PATH"] = '{}:{}'.format(self.snips_path,self.arm_libs_path)
 
+            print("LD_LIBRARY_PATH= " + str(my_env["LD_LIBRARY_PATH"]))
+
             #print("--my_env = " + str(my_env))
         
             # Start the snips parts
@@ -1253,11 +1258,12 @@ class VocoAdapter(Adapter):
                         
                     command = command + ["--bind",mqtt_bind,"--mqtt",mqtt_ip,"--alsa_capture","plughw:" + str(self.capture_card_id) + "," + str(self.capture_device_id),"--disable-playback"]
                     # "--alsa_playback","default:CARD=ALSA",
+                    
                 if unique_command == 'snips-injection':
                     command = command + ["-g",self.g2p_models_path]
+                    
                 if unique_command == 'snips-hotword' or unique_command == 'snips-satellite':
                     #if self.hey_candle:
-                    
                     command = command + ["-t",str(self.hotword_sensitivity),"--hotword-id",self.persistent_data['site_id']] #,"--model",self.hey_candle_path + "=.5" ]
                     #,"--no_vad_inhibitor"  see https://docs.snips.ai/articles/platform/voice-activity-detection
                     #else:
@@ -1339,6 +1345,7 @@ class VocoAdapter(Adapter):
         
         
         self.should_restart_snips = False
+        self.set_status_on_thing("started")
         
         return
 
@@ -1381,6 +1388,9 @@ class VocoAdapter(Adapter):
                     
                     
                     if self.should_restart_snips:
+                        print("Snips needs to be restarted, part of it may have crashed")
+                        self.set_status_on_thing("restarting")
+                        self.should_restart_snips = False
                         self.run_snips()
                     
                     try:
@@ -1717,7 +1727,7 @@ class VocoAdapter(Adapter):
                         #    print("subprocess poll_result: " + str(poll_result) )
                         if poll_result != None:
                             if self.DEBUG:
-                                print("clock poll_result was not None. A subprocess stopped?")
+                                print("clock poll_result was not None. A subprocess stopped? It was: " + str(poll_result))
                             poll_error_count += 1
                 #            process.terminate()
                 #            subprocess_running_ok = False
@@ -1732,7 +1742,7 @@ class VocoAdapter(Adapter):
                 #if subprocess_running_ok == False:
                 #    self.run_snips() # restart snips if any of its processes have ended/crashed
 
-                if poll_error_count > 1:
+                if poll_error_count > 0:
                     self.should_restart_snips = True
 
 
@@ -2556,6 +2566,13 @@ class VocoAdapter(Adapter):
         #
         #  Handling VOCO messages that are also sent over MQTT
         #
+        
+        
+        if msg.topic.startswith("hermes/voco/gettime"):
+            if not self.persistent_data['is_satellite']:
+                if self.DEBUG:
+                    print("returning time to AtomEcho")
+                self.mqtt_client.publish("hermes/voco/time", int(round(time.time() * 1000)))    
         
         # Handle broadcast ping and pong messages
         if msg.topic.startswith("hermes/voco/ping"):
