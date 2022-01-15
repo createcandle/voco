@@ -163,6 +163,13 @@
 					//console.log("Init API result:");
 					//console.log(body);
 					
+                    if(typeof body.debug != 'undefined'){
+                        if(body.debug){
+                            this.debug = body.debug;
+                            document.getElementById('extension-voco-debug-warning').style.display = 'block';
+                        }
+                    }
+                    
 					
 					if('has_token' in body){
 						if(body['has_token'] == false){
