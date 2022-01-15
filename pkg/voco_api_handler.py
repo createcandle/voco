@@ -141,7 +141,7 @@ class VocoAPIHandler(APIHandler):
                             return APIResponse(
                                 status=200,
                                 content_type='application/json',
-                                content=json.dumps({'state': True, 'satellite_targets': satellite_targets, 'hostname': self.adapter.hostname, 'has_token':has_token, 'is_satellite':is_sat, 'mqtt_server':self.adapter.persistent_data['mqtt_server']}),
+                                content=json.dumps({'state': True, 'satellite_targets': satellite_targets, 'hostname': self.adapter.hostname, 'has_token':has_token, 'is_satellite':is_sat, 'mqtt_server':self.adapter.persistent_data['mqtt_server'],'debug':self.adapter.DEBUG}),
                             )
                         except Exception as ex:
                             print("Error getting init data: " + str(ex))

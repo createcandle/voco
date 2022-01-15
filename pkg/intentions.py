@@ -625,6 +625,8 @@ def intent_get_boolean(self, slots, intent_message, found_properties):
             if bool(api_result[key]) == True:
                 if found_property['@type'] == 'OpenProperty': # In the future a smart lock capability should be added here.
                     voice_message += 'open'
+                elif found_property['@type'] == 'LockedProperty':
+                    voice_message += 'locked'
                 elif found_property['@type'] == 'OnOffProperty':
                     voice_message += 'on'
                 else:
@@ -632,6 +634,8 @@ def intent_get_boolean(self, slots, intent_message, found_properties):
             elif bool(api_result[key]) == False:
                 if found_property['@type'] == 'OpenProperty':
                     voice_message += 'closed'
+                elif found_property['@type'] == 'LockedProperty':
+                    voice_message += 'unlocked'
                 elif found_property['@type'] == 'OnOffProperty':
                     voice_message += 'off'
                 else:

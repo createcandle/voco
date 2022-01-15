@@ -519,11 +519,7 @@ def get_audio_controls():
                             break
                             
                 else:
-                    print("getting audio volume in complex way failed") 
-                            
-                            
-                
-            
+                    print("getting audio volume in complex way failed")
                 
             if control_name is 'mic':
                 control_name = None
