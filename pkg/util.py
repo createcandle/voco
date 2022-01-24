@@ -216,6 +216,21 @@ def get_int_or_float(v):
 
 
 
+def make_comparable(value):
+    try:
+        if is_a_number(value):
+            value = get_int_or_float(value)
+        value = str(value)
+        value = value.lower()
+        value = value.replace('-', ' ')
+        value = value.replace('_', ' ')
+    except Exception as ex:
+        print("Error in make_comparable: " + str(ex))
+    return value
+
+
+
+
 def get_api_url(link_list):
     for link in link_list:
         #print("link item = " + str(link))
@@ -563,6 +578,7 @@ def valid_ip(ip):
         all(0 <= int(num) < 256 for num in ip.rstrip().split('.')) and \
         len(ip) < 16 and \
         all(num.isdigit() for num in ip.rstrip().split('.'))
+        
         
         
 def generate_random_string(length):

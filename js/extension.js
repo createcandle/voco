@@ -18,7 +18,7 @@
 	        .then((res) => res.text())
 	        .then((text) => {
 	         	this.content = text;
-	  		 	if( document.location.href.endsWith("voco") ){
+	  		 	if( document.location.href.endsWith("extensions/voco") ){
 					//console.log(document.location.href);
 	  		  		this.show();
 	  		  	}
@@ -505,7 +505,7 @@
 					const type = items[item][ 'type' ];
 					const sentence = items[item][ 'slots' ]['sentence'];
 					
-					if( type == 'value' || type == 'actuator' ){
+					if( type == 'value' || type == 'boolean_related' ){
 						try{
 							if( 'thing' in items[item][ 'slots' ] && 'original_value' in items[item]){
 								const thing = items[item][ 'slots' ]['thing'];

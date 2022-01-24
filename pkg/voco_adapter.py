@@ -135,7 +135,7 @@ class VocoAdapter(Adapter):
             print("Could not load persistent data (if you just installed the add-on then this is normal)")
             try:
                 random_site_id = generate_random_string(8)
-                self.persistent_data = {'site_id':random_site_id, 'action_times':[], 'mqtt_server':'localhost', 'is_satellite':False, 'listening':True, 'feedback_sounds':True, 'speaker_volume':100}
+                self.persistent_data = {'site_id':random_site_id, 'action_times':[], 'mqtt_server':'localhost', 'is_satellite':False, 'listening':True, 'feedback_sounds':True, 'speaker_volume':70}
             except Exception as ex:
                 print("Error creating initial persistence variable: " + str(ex))
  
@@ -235,6 +235,9 @@ class VocoAdapter(Adapter):
         self.timer_counts = {'timer':0,'alarm':0,'reminder':0}
         self.temperature_unit = 'degrees celsius'
 
+
+        #self.boolean_related_at_types = []
+
         #self.persistent_data['action_times'] = [] # will hold all the timers
         self.countdown = int(time.time()) # There can only be one timer at a time. It's set the target unix time.
         
@@ -256,7 +259,7 @@ class VocoAdapter(Adapter):
 
         # Snips settings
         self.busy_starting_snips = False # only true while run_snips is active
-        self.first_snips_start = True # will be set to false on the first completed run_snips. Used to only say "hello I am listening" once.
+        self.still_busy_booting = True # will be set to false on the first completed run_snips. Used to only say "hello I am listening" once.
         self.external_processes = [] # Will hold all the spawned processes        
         self.snips_parts = ['snips-hotword','snips-audio-server','snips-tts','snips-nlu','snips-injection','snips-dialogue','snips-asr']
         #self.snips_main_site_id = None
@@ -290,15 +293,19 @@ class VocoAdapter(Adapter):
         self.previous_hostname = "gateway"
         self.hostname = "gateway"
         self.ip_address = None
+        self.should_restart_mqtt = True
+        self.mqtt_busy_connecting = False
         
         
+        # Things
         self.got_good_things_list = False # will be true after the first sucesful call to the API
+        self.see_switches_as_lights = True
         
         self.periodic_mqtt_attempts = 0
         self.periodic_voco_attempts = 0
-        #self.orphaned = False # if the MQTT does a clean disconnect while the device is a satellite, then it's immediately an orpah, and talking to snips will reflect this.
+        #self.orphaned = False # if the MQTT does a clean disconnect while the device is a satellite, then it's immediately an orpah, and talking to snips will reflect this
         self.should_restart_snips = False
-    
+        self.last_things_update_time = 0 # The try_updating_things method is limited to run at most once a minute
         
         # Voice settings
         self.voice_accent = "en-GB"
@@ -317,6 +324,7 @@ class VocoAdapter(Adapter):
         self.time_zone = str(time.tzname[0])
         self.seconds_offset_from_utc = 7200 # Used for quick calculations when dealing with timezones.
         self.last_slow_loop_time = time.time()
+        self.addon_start_time = time.time()
         
         self.slow_loop_interval = 15
         #self.attempting_injection = False
@@ -326,6 +334,7 @@ class VocoAdapter(Adapter):
         self.last_injection_time = time.time() - 16 #datetime.utcnow().timestamp() #0 # The last time the things/property names list was sent to Snips.
         self.minimum_injection_interval = 15  # Minimum amount of seconds between new thing/property name injection attempts.
         self.force_injection = True # On startup, force an injection of all the names
+        self.initial_injection_attempted = False # Snips can't really understand the device and their properties until this is complete.
         
         print("self.user_profile = " + str(self.user_profile))
         
@@ -447,8 +456,8 @@ class VocoAdapter(Adapter):
         except Exception as e:
             print("Failed to start API handler (this only works on gateway version 0.10 or higher). Error: " + str(e))
         
-        
-        time.sleep(10);
+        if not self.DEBUG:
+            time.sleep(10);
         
         # Get network info
         try:
@@ -682,7 +691,8 @@ class VocoAdapter(Adapter):
         try:
             database = Database('voco')
             if not database.open():
-                print("Could not open settings database")
+                print("Error, Voco could not open settings database")
+                self.close_proxy()
                 return
             
             config = database.load_config()
@@ -690,9 +700,7 @@ class VocoAdapter(Adapter):
             
         except:
             print("Error! Failed to open settings database. Will close adapter in 5 seconds, after which the system should re-create it for a new attempt.")
-            time.sleep(5)
             self.close_proxy()
-            time.sleep(1)
             return
         
         if not config:
@@ -1055,7 +1063,7 @@ class VocoAdapter(Adapter):
             self.last_sound_activity = time.time() - 1
             if self.DEBUG:
                 print("[...] speak: " + str(voice_message))
-                print("[...] intent: " + str(intent))
+                #print("[...] intent: " + str(json.dumps(intent, indent=4)))
                 
                 
             if not 'origin' in intent:
@@ -1081,7 +1089,7 @@ class VocoAdapter(Adapter):
                 if intent['origin'] == 'text':
                     if self.DEBUG:
                         print("setting self.last_text_response to: " + str(voice_message))
-                    self.last_text_response = voice_message # this will cause the message to be displayed in the UI.
+                    self.last_text_response = voice_message # this will cause the message to be sent back to the UI.
                     return
                 
                 #if self.orphaned and self.persistent_data['is_satellite']:
@@ -1095,6 +1103,10 @@ class VocoAdapter(Adapter):
             
                 # unmute if the audio output was muted.
                 self.unmute()
+    
+                # filter out characters that cause weird pronounciation.
+                voice_message = voice_message.replace('[', '')
+                voice_message = voice_message.replace(']', '')
     
                 for option in self.audio_controls:
                     if str(option['human_device_name']) == str(self.persistent_data['audio_output']):
@@ -1240,8 +1252,8 @@ class VocoAdapter(Adapter):
                     'snips-dialogue',
                     'snips-asr',
                     'snips-nlu',
-                    'snips-hotword',
-                    'snips-injection'
+                    'snips-injection',
+                    'snips-hotword'
                 ]
         
             my_env = os.environ.copy()
@@ -1295,9 +1307,10 @@ class VocoAdapter(Adapter):
                     #    self.external_processes.append( Popen(command, env=my_env, stdout=sys.stdout, stderr=subprocess.STDOUT) )
                     #else:
                     self.external_processes.append( Popen(command, env=my_env, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT) )
+                    
                 except Exception as ex:
                     print("Error starting a snips process: " + str(ex))
-                #time.sleep(.1)
+                time.sleep(.1)
                 if self.DEBUG:
                     print("-- waiting a bit in Snips startup loop")
             
@@ -1359,8 +1372,8 @@ class VocoAdapter(Adapter):
         self.busy_starting_snips = False
         self.set_status_on_thing("started")
         
-        
-        if self.first_snips_start:
+        """
+        if self.still_busy_booting:
             
             try:
                 if self.persistent_data['is_satellite']:
@@ -1384,10 +1397,41 @@ class VocoAdapter(Adapter):
             except Exception as ex:
                 print("Error saying hello: " + str(ex))
         
-            self.first_snips_start = False
-        
+            self.still_busy_booting = False
+            self.last_time_snips_started = int(time.time())
+        """
         return
 
+
+
+
+    def speak_welcome_message(self):
+        if self.still_busy_booting:
+            
+            try:
+                if self.persistent_data['is_satellite']:
+                    self.speak("Hello, I am a satellite. ",intent={'siteId':self.persistent_data['site_id']})
+                else:
+                    if self.persistent_data['listening']:
+                        self.speak("Hello. I am listening. ",intent={'siteId':self.persistent_data['site_id']})
+                    else:
+                        self.speak("Hello. Listening is disabled. ",intent={'siteId':self.persistent_data['site_id']})
+    
+                if self.persistent_data['is_satellite'] == False and self.token == None:
+                    time.sleep(1)
+                    print("PLEASE ENTER YOUR AUTHORIZATION CODE IN THE SETTINGS PAGE")
+                    self.set_status_on_thing("Authorization code missing")
+                    self.speak("I cannot connect to your devices because the authorization token is missing. Please create an authorization token.",intent={'siteId':self.persistent_data['site_id']})
+            
+                if self.first_run:
+                    time.sleep(1)
+                    self.speak("If you would like to ask me something, say something like. Hey Snips. ",intent={'siteId':self.persistent_data['site_id']})
+        
+            except Exception as ex:
+                print("Error saying hello: " + str(ex))
+        
+            self.still_busy_booting = False
+    
 
 
 
@@ -1432,132 +1476,138 @@ class VocoAdapter(Adapter):
 
                     self.last_slow_loop_time = time.time()
                     
-                    
-
-                    
                     try:
-                        if self.mqtt_client != None:
-                            #print("periodic check: self.mqtt_connected = " + str(self.mqtt_connected))
+                        if self.should_restart_mqtt:
+                            if self.DEBUG:
+                                print("Periodic check: self.should_restart_mqtt was true - will try to run_mqtt")
+                            self.run_mqtt() # try connecting again. If Mosquitto is up, then it will create the MQTT client and try to connect.
                             
-                            if self.mqtt_connected == False:
-                                if self.DEBUG:
-                                    print("Periodic check: self.mqtt_connected = false - will try to run_mqtt")
-                                self.run_mqtt() # try connecting again
+                            
+                            
+                        elif self.mqtt_client != None:
+                            # The MQTT client exists, so Mosquitto was available at least once.
                                 
-                            else:
+                            if time.time() - self.addon_start_time > 60:
+                                self.still_busy_booting = False
+                                
+                            if self.still_busy_booting == False:
+                                
+                                #if time.time() - self.last_time_snips_started < 15:
+                                #    if self.DEBUG:
+                                #        print("clock: snips was (re)started less than 15 seconds ago, so leave it alone for now.")
+                                
+                                
+                                # There may have been a reason to restart snips, such as plugging in a new microphone
+                                if self.should_restart_snips:
+                                    if self.DEBUG:
+                                        print("clock: should_restart_snips was true, so will try to restart snips")
+                                    #print("Snips needs to be restarted, part of it may have crashed")
+                                    self.set_status_on_thing("restarting")
+                                    self.should_restart_snips = False
+                                    self.run_snips()
+                            
+                            
+                                # If (part of) Snips has crashed, and there is no valid reason for snips to be down, try and restart it.
+                                # - if the microphone is disconnected, then there is no need to restart snips straight away
+                                # - if we're a satellite, Voco will already be restarted at voco attempt 5
+                                # - if we're a satellite, and we lost connection to the main server, there is no need to enable snips, as it won't be able to connect to the main MQTT server
+                                elif self.is_snips_running() < 7 and self.missing_microphone == False and self.periodic_voco_attempts < 4 and self.currently_scanning_for_missing_mqtt_server == False:
+                                    if self.DEBUG:
+                                        print("clock thread is attempting to restart snips")
+                                    self.set_status_on_thing("restarting")
+                                    self.run_snips()
+                            
+                                else:
+                                    print("snips did not need to be restarted")
+                                    # Check if hostname has changed. This is extremely rare, but it could happen.
+                                    self.update_network_info()
+                                    if self.hostname != self.previous_hostname: # If the hostname was changed by the user
+                                
+                                        if self.DEBUG:
+                                            print("hostname was changed.")
+                                        if not self.persistent_data['is_satellite']:
+                                            self.send_mqtt_ping(broadcast=True) #broadcast ping
+                                
+                                    
+                                        #try:
+                                        #    self.mqtt_client.unsubscribe("hermes/voco/" + str(self.previous_hostname) + "/#")
+                                        #    self.mqtt_client.subscribe("hermes/voco/" + str(self.hostname) + "/#")
+                                        #except Exception as ex:
+                                        #    print("Error re-subscribing to new MQTT topic after hostname change: " + str(ex))
+                                        #self.previous_hostname = self.hostname
+                                        #self.stop_snips()
+                                        #self.run_snips()
+                            
+                                    if self.persistent_data['is_satellite']:
+                            
+                                        if self.voco_connected == False:
+                                            if self.DEBUG:
+                                                print("MQTT seems to be up, but main voco server is not responding")
+                            
+                            
+                                        # TODO: is this extra broadcast ping really necessary?
+                                        #if bool(self.mqtt_others) == False:
+                                        #    if self.DEBUG:
+                                        #        print("self.mqtt_others was still empty")
+                                        #    self.send_mqtt_ping(broadcast=True) # broadcast ping
+                                    
+                                        
+                                        
+                                        if self.persistent_data['main_site_id'] != self.persistent_data['site_id']: #TODO why this check ?
+                                            if self.DEBUG:
+                                                print('satellite, so sending ping to stay in touch')
+                                            self.send_mqtt_ping()
+                                            self.periodic_mqtt_attempts += 1
+                                            self.periodic_voco_attempts += 1
+                                        else:
+                                            if self.DEBUG:
+                                                print('satellite, but main_site_id was site_id')
+                                            self.send_mqtt_ping(broadcast=True) # broadcast ping
+                                    
+                                
+                                    if not self.persistent_data['is_satellite']:
+                                        self.inject_updated_things_into_snips()
+                                    elif self.satellite_should_act_on_intent:
+                                        self.inject_updated_things_into_snips()
+                                
+                                
+                                
+                                    #elif self.persistent_data['mqtt_server'] in self.mqtt_others:
+                                    #    if self.DEBUG:
+                                    #        print("controller IP was in self.mqtt_others")
+                                    #    self.persistent_data['main_site_id'] = self.mqtt_others[controller_ip]
+                                    #    if target_site_id != None:
+                                    #        self.update_network_info()
+
+                                                #print("///")
+                                                #self.mqtt_client.publish("hermes/voco/thuis/ping",json.dumps({'ip':self.ip_address,'site_id':self.hostname}))
+                                    #else:
+                                    #    print("I did not yet know what the site_id is for IP: " + str(controller_ip))
+                                
+                                    if self.DEBUG:
+                                        print("self.periodic_voco_attempts = " + str(self.periodic_voco_attempts))
+                                    if self.periodic_voco_attempts > 5:
+                                        if self.DEBUG:
+                                            print("main Voco controller has not responded. It may be down permanently.")
+                                        self.voco_connected = False
+                                
+                                    if self.periodic_voco_attempts%5 == 4:
+                                        if self.DEBUG:
+                                            print("Should attempt to find correct MQTT server IP address")
+                                        self.look_for_mqtt_server()
+                                
+                                    if self.DEBUG:
+                                        print("self.periodic_mqtt_attempts = " + str(self.periodic_mqtt_attempts))
+                                    if self.periodic_mqtt_attempts > 5:
+                                        if self.DEBUG:
+                                            print("MQTT broker has not responded. It may be down permanently.")
+                                        self.mqtt_connected = False
+                                
+                    
+                            
                                 #if self.DEBUG:
                                 #    print("Periodic check. MQTT is connected.")
-                                if self.first_snips_start == False:
-                                    
-                                    
-                                    # There may have been a reason to restart snips, such as plugging in a new microphone
-                                    if self.should_restart_snips:
-                                        if self.DEBUG:
-                                            print("clock: should_restart_snips was true, so will try to restart snips")
-                                        #print("Snips needs to be restarted, part of it may have crashed")
-                                        self.set_status_on_thing("restarting")
-                                        self.should_restart_snips = False
-                                        self.run_snips()
                                 
-                                
-                                    # If (part of) Snips has crashed, and there is no valid reason for snips to be down, try and restart it.
-                                    # - if the microphone is disconnected, then there is no need to restart snips straight away
-                                    # - if we're a satellite, Voco will already be restarted at voco attempt 5
-                                    # - if we're a satellite, and we lost connection to the main server, there is no need to enable snips, as it won't be able to connect to the main MQTT server
-                                    elif self.is_snips_running() < 7 and self.missing_microphone == False and self.periodic_voco_attempts < 4 and self.currently_scanning_for_missing_mqtt_server == False:
-                                        if self.DEBUG:
-                                            print("clock thread is attempting to restart snips")
-                                        self.set_status_on_thing("restarting")
-                                        self.run_snips()
-                                
-                                    else:
-                                        
-                                        # Check if hostname has changed. This is extremely rare, but it could happen.
-                                        self.update_network_info()
-                                        if self.hostname != self.previous_hostname: # If the hostname was changed by the user
-                                    
-                                            if self.DEBUG:
-                                                print("hostname was changed.")
-                                            if not self.persistent_data['is_satellite']:
-                                                self.send_mqtt_ping(broadcast=True) #broadcast ping
-                                    
-                                        
-                                            #try:
-                                            #    self.mqtt_client.unsubscribe("hermes/voco/" + str(self.previous_hostname) + "/#")
-                                            #    self.mqtt_client.subscribe("hermes/voco/" + str(self.hostname) + "/#")
-                                            #except Exception as ex:
-                                            #    print("Error re-subscribing to new MQTT topic after hostname change: " + str(ex))
-                                            #self.previous_hostname = self.hostname
-                                            #self.stop_snips()
-                                            #self.run_snips()
-                                
-                                        if self.persistent_data['is_satellite']:
-                                
-                                            if self.voco_connected == False:
-                                                if self.DEBUG:
-                                                    print("MQTT seems to be up, but main voco server is not responding")
-                                
-                                
-                                            # TODO: is this extra broadcast ping really necessary?
-                                            #if bool(self.mqtt_others) == False:
-                                            #    if self.DEBUG:
-                                            #        print("self.mqtt_others was still empty")
-                                            #    self.send_mqtt_ping(broadcast=True) # broadcast ping
-                                        
-                                            
-                                            
-                                            if self.persistent_data['main_site_id'] != self.persistent_data['site_id']: #TODO why this check ?
-                                                if self.DEBUG:
-                                                    print('satellite, so sending ping to stay in touch')
-                                                self.send_mqtt_ping()
-                                                self.periodic_mqtt_attempts += 1
-                                                self.periodic_voco_attempts += 1
-                                            else:
-                                                if self.DEBUG:
-                                                    print('satellite, but main_site_id was site_id')
-                                                self.send_mqtt_ping(broadcast=True) # broadcast ping
-                                        
-                                    
-                                        if not self.persistent_data['is_satellite']:
-                                            self.inject_updated_things_into_snips()
-                                        elif self.satellite_should_act_on_intent:
-                                            self.inject_updated_things_into_snips()
-                                    
-                                    
-                                    
-                                        #elif self.persistent_data['mqtt_server'] in self.mqtt_others:
-                                        #    if self.DEBUG:
-                                        #        print("controller IP was in self.mqtt_others")
-                                        #    self.persistent_data['main_site_id'] = self.mqtt_others[controller_ip]
-                                        #    if target_site_id != None:
-                                        #        self.update_network_info()
-
-                                                    #print("///")
-                                                    #self.mqtt_client.publish("hermes/voco/thuis/ping",json.dumps({'ip':self.ip_address,'site_id':self.hostname}))
-                                        #else:
-                                        #    print("I did not yet know what the site_id is for IP: " + str(controller_ip))
-                                    
-                                        if self.DEBUG:
-                                            print("self.periodic_voco_attempts = " + str(self.periodic_voco_attempts))
-                                        if self.periodic_voco_attempts > 5:
-                                            if self.DEBUG:
-                                                print("main Voco controller has not responded. It may be down permanently.")
-                                            self.voco_connected = False
-                                    
-                                        if self.periodic_voco_attempts%5 == 4:
-                                            if self.DEBUG:
-                                                print("Should attempt to find correct MQTT server IP address")
-                                            self.look_for_mqtt_server()
-                                    
-                                        if self.DEBUG:
-                                            print("self.periodic_mqtt_attempts = " + str(self.periodic_mqtt_attempts))
-                                        if self.periodic_mqtt_attempts > 5:
-                                            if self.DEBUG:
-                                                print("MQTT broker has not responded. It may be down permanently.")
-                                            self.mqtt_connected = False
-                                    
-                        
-                        
 
                         
                                 #for key,value in self.mqtt_others.items():
@@ -1619,13 +1669,13 @@ class VocoAdapter(Adapter):
                                 self.speak(voice_message,intent=intent_message)
 
                             # Delayed setting of a boolean state
-                            elif item['type'] == 'actuator' and self.current_utc_time >= int(item['moment']) and self.current_utc_time < int(item['moment']) + 60:
+                            elif item['type'] == 'boolean_related' and self.current_utc_time >= int(item['moment']) and self.current_utc_time < int(item['moment']) + 60:
                                 if self.DEBUG:
                                     print("origval:" + str(item['original_value']))
-                                    print("(...) TIMED ACTUATOR SWITCHING")
+                                    print("(...) TIMED boolean_related SWITCHING")
                                 #delayed_action = True
                                 #slots = self.extract_slots(intent_message)
-                                found_properties = self.check_things(True,item['slots'])
+                                found_properties = self.check_things('set_state',item['slots'])
                                 intent_set_state(self, item['slots'],item['intent_message'],found_properties, item['original_value'])
 
                             # Delayed setting of a value
@@ -1634,7 +1684,7 @@ class VocoAdapter(Adapter):
                                     print("origval:" + str(item['original_value']))
                                     print("(...) TIMED SETTING OF A VALUE")
                                 #slots = self.extract_slots(intent_message)
-                                found_properties = self.check_things(False,item['slots'])
+                                found_properties = self.check_things('set_value',item['slots'])
                                 intent_set_value(self, item['slots'],item['intent_message'],found_properties, item['original_value'])
 
                             # Countdown
@@ -1758,27 +1808,27 @@ class VocoAdapter(Adapter):
                 except Exception as ex:
                     print("Error updating timer counts from clock: " + str(ex))
 
-
-                # Check if the microphone has been plugged in or unplugged.
-                if self.microphone in self.scan_alsa('capture'): # A mic is currenty plugged in
-                    if self.missing_microphone:
-                        self.missing_microphone = False
-                        if self.mqtt_connected == True:
-                            self.speak("The microphone has been reconnected.")
-                            #print("self.mqtt_client = " + str(self.mqtt_client))
-                            #self.stop_snips()
-                            #self.run_snips()
-                            self.should_restart_snips = True
-                            #if self.was_listening_when_microphone_disconnected:
-                            #    self.set_snips_state(True)
+                if self.still_busy_booting == False:
+                    # Check if the microphone has been plugged in or unplugged.
+                    if self.microphone in self.scan_alsa('capture'): # A mic is currenty plugged in
+                        if self.missing_microphone:
+                            self.missing_microphone = False
+                            if self.mqtt_connected == True:
+                                self.speak("The microphone has been reconnected.")
+                                #print("self.mqtt_client = " + str(self.mqtt_client))
+                                #self.stop_snips()
+                                #self.run_snips()
+                                self.should_restart_snips = True
+                                #if self.was_listening_when_microphone_disconnected:
+                                #    self.set_snips_state(True)
                     
-                else: # A mic is currently not plugged in
-                    if self.missing_microphone == False:
-                        self.missing_microphone = True
-                        self.speak("The microphone has been disconnected")
-                        #self.was_listening_when_microphone_disconnected = self.persistent_data['listening']
-                        #self.set_snips_state(False)
-                
+                    else: # A mic is currently not plugged in
+                        if self.missing_microphone == False:
+                            self.missing_microphone = True
+                            self.speak("The microphone has been disconnected")
+                            #self.was_listening_when_microphone_disconnected = self.persistent_data['listening']
+                            #self.set_snips_state(False)
+                    
                 
                 # Switch 'sound detected' back to off after a while (if the feature is enabled)
                 #print(str(self.current_utc_time - self.last_sound_activity))
@@ -1786,38 +1836,39 @@ class VocoAdapter(Adapter):
                     if int(self.last_sound_activity) == self.current_utc_time - 10:
                         self.set_sound_detected(False)
 
-                # check if running subprocesses are still running ok
-                #subprocess_running_ok = True
-                poll_error_count = 0
-                for process in self.external_processes:
-                    try:
-                        poll_result = process.poll()
-                        #if self.DEBUG:
-                        #    print("subprocess poll_result: " + str(poll_result) )
-                        if poll_result != None:
-                            if self.DEBUG:
-                                print("clock poll_result was not None. A subprocess stopped? It was: " + str(poll_result))
-                            poll_error_count += 1
-                #            process.terminate()
-                #            subprocess_running_ok = False
-                        #else:
-                        #    if self.DEBUG:
-                        #        print("doing process.communicate")
-                        #        process.communicate(timeout=1)
+                if not self.should_restart_snips:
+                    # check if running subprocesses are still running ok
+                    #subprocess_running_ok = True
+                    poll_error_count = 0
+                    for process in self.external_processes:
+                        try:
+                            poll_result = process.poll()
+                            #if self.DEBUG:
+                            #    print("subprocess poll_result: " + str(poll_result) )
+                            if poll_result != None:
+                                if self.DEBUG:
+                                    print("clock poll_result was not None. A subprocess stopped? It was: " + str(poll_result))
+                                poll_error_count += 1
+                    #            process.terminate()
+                    #            subprocess_running_ok = False
+                            #else:
+                            #    if self.DEBUG:
+                            #        print("doing process.communicate")
+                            #        process.communicate(timeout=1)
                                 
-                    except Exception as ex:
-                        if self.DEBUG:
-                            print("subprocess poll error: " + str(ex))
-                #if subprocess_running_ok == False:
-                #    self.run_snips() # restart snips if any of its processes have ended/crashed
+                        except Exception as ex:
+                            if self.DEBUG:
+                                print("subprocess poll error: " + str(ex))
+                    #if subprocess_running_ok == False:
+                    #    self.run_snips() # restart snips if any of its processes have ended/crashed
 
-                if poll_error_count > 0:
-                    if self.DEBUG:
-                        print("clock: poll error count was: " + str(poll_error_count))
-                        alternative_process_counter = self.is_snips_running()
-                        print("clock: second opinion on Snips being down: self.is_snips_running() count: " + str(alternative_process_counter))
-                        if alternative_process_counter < 7:
-                            self.should_restart_snips = True
+                    if poll_error_count > 0:
+                        if self.DEBUG:
+                            print("clock: poll error count was: " + str(poll_error_count))
+                            alternative_process_counter = self.is_snips_running()
+                            print("clock: second opinion on Snips being down: self.is_snips_running() count: " + str(alternative_process_counter))
+                            if alternative_process_counter < 7:
+                                self.should_restart_snips = True
 
 
 
@@ -1850,7 +1901,7 @@ class VocoAdapter(Adapter):
                     countdown_active = True
                 if current_type == "wake":
                     current_type = "alarm"
-                if current_type == "actuator" or current_type == "value":
+                if current_type == "boolean_related" or current_type == "value":
                     current_type = "timer"
                 if current_type in self.timer_counts:
                     self.timer_counts[current_type] += 1
@@ -1911,7 +1962,6 @@ class VocoAdapter(Adapter):
             print("Error updating sound detection property: " + str(ex))
   
  
- 
     def remove_thing(self, device_id):
         try:
             obj = self.get_device(device_id)        
@@ -1950,7 +2000,8 @@ class VocoAdapter(Adapter):
         self.pairing = False
         if self.DEBUG:
             print("End of pairing process. Checking if a new injection is required.")
-            
+        
+        self.last_things_update_time = 0
         # Get all the things via the API.
         self.try_updating_things()
 
@@ -2192,35 +2243,39 @@ class VocoAdapter(Adapter):
             print("in try_updating_things")
         #print("fresh things: " + str(fresh_things)) # outputs HUGE amount of data
         
-        try:
-            fresh_things = self.api_get("/things")
+        if self.last_things_update_time + 60 < time.time() or self.still_busy_booting == True:
+            self.last_things_update_time = time.time()
             
-            if hasattr(fresh_things, 'error'):
-                if self.DEBUG:
-                    print("try_update_things: get_api returned an error.")
-                
-                if fresh_things['error'] == '403':
+            try:
+                fresh_things = self.api_get("/things")
+            
+                if hasattr(fresh_things, 'error'):
                     if self.DEBUG:
-                        print("Spotted 403 error, will try to switch to https API calls")
-                    self.api_server = 'https://127.0.0.1:4443'
-                    #fresh_things = self.api_get("/things")
-                    #if self.DEBUG:
-                        #print("Tried the API call again, this time at port 4443. Result: " + str(fresh_things))
+                        print("try_update_things: get_api returned an error.")
                 
-            else:
-                if fresh_things != None:
-                    if self.DEBUG:
-                        print("updating things was succesful")
-                    self.things = fresh_things
-                    self.got_good_things_list = True
-                    return True
+                    if fresh_things['error'] == '403':
+                        if self.DEBUG:
+                            print("Spotted 403 error, will try to switch to https API calls")
+                        self.api_server = 'https://127.0.0.1:4443'
+                        #fresh_things = self.api_get("/things")
+                        #if self.DEBUG:
+                            #print("Tried the API call again, this time at port 4443. Result: " + str(fresh_things))
+                
+                else:
+                    if fresh_things != None:
+                        if self.DEBUG:
+                            print("updating things was succesful")
+                        self.things = fresh_things
+                        self.got_good_things_list = True
+                        return True
                     
-        except Exception as ex:
-            if self.DEBUG:
-                print("Error in try_updating_things: " + str(ex))
+            except Exception as ex:
+                if self.DEBUG:
+                    print("Error in try_updating_things: " + str(ex))
 
 
         return False
+        
 
 #
 #  PERSISTENCE
@@ -2242,7 +2297,7 @@ class VocoAdapter(Adapter):
             with open(self.persistence_file_path) as f:
                 #if self.DEBUG:
                 #    print("saving persistent data: " + str(self.persistent_data))
-                json.dump( self.persistent_data, open( self.persistence_file_path, 'w+' ) )
+                json.dump( self.persistent_data, open( self.persistence_file_path, 'w+' ), indent=4 )
                 if self.DEBUG:
                     print("Data stored")
                 return True
@@ -2283,18 +2338,37 @@ class VocoAdapter(Adapter):
         # Create mqtt client
         if self.DEBUG:
             print("in run_mqtt")
+        
+        if self.mqtt_connected == True:
+            print("WEIRD: in run_mqtt but self.mqtt_connected was already true")
+            
+        
+        if not self.is_mosquitto_up():
+            print("mosquitto didn't seem to be up yet. Cancelling run_mqtt")
+            self.should_restart_mqtt = True
+            return
+            
             
         # First, close any existing MQTT client
         try:
             if self.mqtt_client != None:
-                try:
-                    #if self.mqtt_connected:
-                    if self.DEBUG:
-                        print("disconnecting mqtt first")
-                    self.mqtt_client.disconnect() # disconnect
-                    self.mqtt_client.loop_stop()
-                except Exception as ex:
-                    print("Error closing existing MQTT client: " + str(ex))
+                print("MQTT Client already existed. Not stopping and restarting it, it will keep trying by itself.")
+                
+                if self.should_restart_mqtt:
+                    try:
+                        #if self.mqtt_connected:
+                        if self.DEBUG:
+                            print("disconnecting mqtt first")
+                        self.mqtt_client.disconnect() # disconnect
+                        self.mqtt_client.loop_stop()
+                    except Exception as ex:
+                        print("Error closing existing MQTT client: " + str(ex))
+               
+                else:
+                    print("run_mqtt was called, but the client already existed, and should_restart_mqtt was false. Stopping.")
+                    return # TODO Experimental change
+                
+                
             else:
                 try:
                     client_name = "voco_" + self.persistent_data['site_id']
@@ -2302,19 +2376,19 @@ class VocoAdapter(Adapter):
                 except Exception as ex:
                     print("Error creating MQTT client: " + str(ex))
 
-            #HOST = "localhost"
-            #PORT = 1883
+                #HOST = "localhost"
+                #PORT = 1883
             
-                    
-            self.mqtt_client.on_connect = self.on_connect
-            self.mqtt_client.on_disconnect = self.on_disconnect
-            self.mqtt_client.on_message = self.on_message
-            self.mqtt_client.on_publish = self.on_publish
-            if self.DEBUG:
-                print("self.persistent_data['mqtt_server'] = " + str(self.persistent_data['mqtt_server']))
+            
+                self.mqtt_client.on_connect = self.on_connect
+                self.mqtt_client.on_disconnect = self.on_disconnect
+                self.mqtt_client.on_message = self.on_message
+                self.mqtt_client.on_publish = self.on_publish
+                if self.DEBUG:
+                    print("self.persistent_data['mqtt_server'] = " + str(self.persistent_data['mqtt_server']))
+            
             
             if self.persistent_data['is_satellite']:
-                
                 if str(self.persistent_data['mqtt_server']) == self.ip_address:
                     if self.DEBUG:
                         print("the MQTT server IP address was the device's own IP address. Because this is a satellite, this shouldn't be the case. Requesting a network scan for the correct server.")
@@ -2323,28 +2397,44 @@ class VocoAdapter(Adapter):
                             print("requesting scan for missing MQTT server.")
                         self.look_for_mqtt_server()
                         
-                if self.DEBUG:
-                    print("This device is a satellite, so MQTT client is connecting to: " + str(self.persistent_data['mqtt_server']))
-                self.mqtt_client.connect(str(self.persistent_data['mqtt_server']), int(self.mqtt_port), keepalive=60)
+
+                #if self.should_restart_mqtt:
+                if self.mqtt_connected == False and self.mqtt_busy_connecting == False:
+                    if self.DEBUG:
+                        print("This device is a satellite, so MQTT client is connecting to: " + str(self.persistent_data['mqtt_server']))
+                    self.mqtt_busy_connecting = True
+                    self.mqtt_client.connect(str(self.persistent_data['mqtt_server']), int(self.mqtt_port), keepalive=60)
+                else:
+                    print("MQTT is already connected or busy connecting.")
+            
             else:
-                if self.DEBUG:
-                    print("This device is NOT a satellite, so MQTT client is connecting to localhost:" + str(self.mqtt_port))
-                self.mqtt_client.connect("localhost", int(self.mqtt_port), keepalive=60)
-                
+                if self.mqtt_connected == False and self.mqtt_busy_connecting == False:
+                #if self.should_restart_mqtt:
+                    self.mqtt_busy_connecting = True
+                    if self.DEBUG:
+                        print("This device is NOT a satellite, so MQTT client is connecting to localhost:" + str(self.mqtt_port))
+                    self.mqtt_client.connect("localhost", int(self.mqtt_port), keepalive=60)
+                else:
+                    print("MQTT is already connected or busy connecting.")
+            
+            
             #self.mqtt_client.loop_forever()
-            self.mqtt_client.loop_start()
-            if self.DEBUG:
-                print("Voco MQTT client started.")  
+            if self.should_restart_mqtt:
+                self.mqtt_client.loop_start()
+                self.should_restart_mqtt = False
+                print("MQTT loop (re)started")
+            
+                if self.DEBUG:
+                    print("MQTT client loop started. self.should_restart_mqtt is now false.")  
             
         except Exception as ex:
             print("Error creating MQTT client connection: " + str(ex))
             self.mqtt_connected = False
-            
-            
+            self.mqtt_busy_connecting = False
                     
             if '111' in str(ex): # [Errno 111] Connection refused
                 print("- MQTT connection was refused. The clock thread should restart the connection process automatically.")
-
+                time.sleep(5)
             
             elif '113' in str(ex):
                 if self.persistent_data['is_satellite']:
@@ -2354,6 +2444,9 @@ class VocoAdapter(Adapter):
                         # Satellites may attempt to find the new IP address of the MQTT server
                         self.look_for_mqtt_server()
                         
+            self.should_restart_mqtt = True
+    
+            
     
         
     def on_disconnect(self, client, userdata, rc):
@@ -2361,10 +2454,12 @@ class VocoAdapter(Adapter):
             print("MQTT on_disconnect")
         #self.mqtt_connected = False
         #self.voco_connected = False
+        self.mqtt_connected = False
+        self.mqtt_busy_connecting = False
         
         if rc == 0:
             if self.DEBUG:
-                print("In on_disconnect, and MQTT return code was 0 - (disconnect is ok?)")
+                print("In on_disconnect, and MQTT return code was 0 - (disconnected cleanly)")
             if self.persistent_data['is_satellite']:
                 if self.DEBUG:
                     print("- satellite, so local snips audio server will now be shut down")
@@ -2373,7 +2468,7 @@ class VocoAdapter(Adapter):
         elif rc != 0:
             if self.DEBUG:
                 print("In on_disconnect, and MQTT return code was NOT 0 - (disconnect error!)")
-            
+            #self.mqtt_connected = False
             
         
         #if self.persistent_data['is_satellite']: # Run snips on the local server while the main server is disconnected.
@@ -2385,6 +2480,7 @@ class VocoAdapter(Adapter):
         
     # Subscribe to the important messages
     def on_connect(self, client, userdata, flags, rc):
+        self.mqtt_busy_connecting = False
         if rc == 0:
             if self.DEBUG:
                 print("In on_connect, and MQTT connect return code was 0 - (everything is ok)")
@@ -2396,9 +2492,10 @@ class VocoAdapter(Adapter):
             self.mqtt_connected = True
                 
             # if this is a satellite, then connecting to MQTT could just be a test of going over multiple controllers in an attempt to find the main one
-            if self.is_snips_running() < 7 and self.currently_scanning_for_missing_mqtt_server == False and self.persistent_data['is_satellite'] == False:
+            snips_processes_count = self.is_snips_running()
+            if snips_processes_count < 7 and self.currently_scanning_for_missing_mqtt_server == False and self.persistent_data['is_satellite'] == False:
                 if self.DEBUG:
-                    print("not a satellite, so (re)starting snips in on_connect form MQTT")
+                    print("not a satellite, so (re)starting snips in on_connect from MQTT")
                 #self.stop_snips()
                 self.run_snips()
                 
@@ -2412,6 +2509,8 @@ class VocoAdapter(Adapter):
                     if self.DEBUG:
                         print("-on_connect: ** I am not a satellite")
                     
+                if self.DEBUG:
+                    print("-on_connect: subscribing to topics")
                 self.mqtt_client.subscribe("hermes/hotword/#")
                 self.mqtt_client.subscribe("hermes/intent/#")
                 
@@ -2424,8 +2523,8 @@ class VocoAdapter(Adapter):
                 self.mqtt_client.subscribe("hermes/voco/" + self.persistent_data['site_id'] + "/#")
                 
                 
-                if self.DEBUG:
-                    self.mqtt_client.subscribe("hermes/injection/#")
+                #if self.DEBUG:
+                self.mqtt_client.subscribe("hermes/injection/#")
                 
                 
                 if self.sound_detection:
@@ -2516,10 +2615,14 @@ class VocoAdapter(Adapter):
             if msg.topic.startswith('hermes/injection/perform'):
                 self.last_injection_time = time.time() # if a site is injecting, all sites should wait a while before attempting their own injections.
 
+            elif msg.topic.startswith('hermes/injection/complete'):
+                # Voco is now really ready
+                if self.initial_injection_attempted == False:
+                    self.initial_injection_attempted = True
+                    self.speak_welcome_message()
                
             elif msg.topic.startswith('hermes/hotword/' + self.persistent_data['site_id']):
                 
-                    
                 if msg.topic.endswith('/detected'):
                     self.intent_received = False
                     if self.DEBUG:
@@ -2616,11 +2719,11 @@ class VocoAdapter(Adapter):
                     return
                     
                 self.intent_received = True
-                #if self.DEBUG:
-                    #print("-----------------------------------")
-                    #print(">> Received intent message.")
-                    #print("message received: "  + str(msg.payload.decode("utf-8")))
-                    #print("message topic: " + str(msg.topic))
+                if self.DEBUG:
+                    print("-----------------------------------")
+                    print(">> Received intent message.")
+                    print("message received: "  + str(msg.payload.decode("utf-8")))
+                    print("message topic: " + str(msg.topic))
                     
                 intent_name = os.path.basename(os.path.normpath(msg.topic))
             
@@ -2966,21 +3069,15 @@ class VocoAdapter(Adapter):
 
     def master_intent_callback(self, intent_message):    # Triggered everytime Snips succesfully recognizes a voice intent
         
-        
         try:
-            incoming_intent = str(intent_message['intent']['intentName'])
             sentence = str(intent_message['input'])
             
-        except:
-            print("Error handling intent in master callback")
-            
-        try:
             if self.DEBUG:
                 print("")
                 #print("")
                 print(">>")
-                #print(">> intent_message    : " + str(intent_message))
-                print(">> incoming intent   : " + str(incoming_intent))
+                print(">> intent_message    : " + str(intent_message))
+                #print(">> incoming intent   : " + str(incoming_intent))
                 print(">> intent_message    : " + str(sentence))
                 print(">> session ID        : " + str(intent_message['sessionId']))
                 print(">>")
@@ -2997,13 +3094,19 @@ class VocoAdapter(Adapter):
                     #print("hello intent_message: " + str(intent_message))
                     if intent_message['siteId'] == self.persistent_data['site_id']:
                         self.speak("Hello",intent=intent_message)
+                        
+                if sentence.lower() == 'goodbye' or sentence.lower() == 'the by':
+                    #print("hello intent_message: " + str(intent_message))
+                    if intent_message['siteId'] == self.persistent_data['site_id']:
+                        self.speak("Goodbye",intent=intent_message)
+                
                 else: 
                     if self.DEBUG:
                         print("Heard just one word, but not 'hello'.")
                     #pass   
                     #self.speak("I didn't get that",intent=intent_message)
-
                 return
+                
             elif 'unknownword' in sentence:
                 #if self.persistent_data['is_satellite'] == False:
                 if intent_message['siteId'] == self.persistent_data['site_id']:
@@ -3013,7 +3116,29 @@ class VocoAdapter(Adapter):
 
         except Exception as ex:
             print("Error at beginning of master intent callback: " + str(ex))
+            
+            
+            
+            
+            
+            
+        """
+        intents_to_check = [ {'intentName':str(intent_message['intent']['intentName']), 'confidenceScore': intent_message['intent']['confidenceScore'] } ]
         
+        if intent_message['intent']['confidenceScore'] != 1:
+            
+            intents_to_check.append( {'intentName':str(intent_message['alternatives'][0]['intent']['intentName']),'confidenceScore': intent_message['alternatives'][0]['intent']['confidenceScore'] } )
+        
+        
+        for intent_option in intents_to_check:
+        """
+            
+        try:
+            incoming_intent = str(intent_message['intent']['intentName']).replace('createcandle:','')   #intent_option.intentName
+            
+        except:
+            print("Error handling intent in master callback")
+            
         try:
             slots = self.extract_slots(intent_message)
             if self.DEBUG:
@@ -3034,6 +3159,32 @@ class VocoAdapter(Adapter):
                 if slots['start_time'] < time.time():
                     slots['start_time'] = None
                     
+                    
+                    
+            if (incoming_intent == 'get_value' or incoming_intent == 'set_value' or incoming_intent == 'set_state' or incoming_intent == 'get_boolean') and slots['thing'] == None and slots['property'] == None and slots['boolean'] == None and slots['number'] == None and slots['percentage'] == None and slots['string'] == None:
+                print("pretty much everything was missing.")
+            
+            # if intent is thing related, but no thing or property name is provided, or no value, then the intent must be wrong.
+            elif (incoming_intent == 'get_value' or incoming_intent == 'set_value' or incoming_intent == 'set_state' or incoming_intent == 'get_boolean'):
+                
+                # no thing details
+                if slots['thing'] == None and slots['property'] == None:
+                    # This can't happen. TODO: should switch to alternative.
+                    if not self.persistent_data['is_satellite']:
+                        self.speak("I did not understand what things you wanted to change.",intent=intent_message)
+                        print("did not understand the change based on these slots: " + str(slots))
+                        # TODO: should switch to alternative intent if possible.
+                        return
+                        
+                # no desired value
+                if (incoming_intent == 'set_value' or incoming_intent == 'set_state') and slots['boolean'] == None and slots['number'] == None and slots['percentage'] == None and slots['string'] == None:
+                    # This can't happen. TODO: should switch to alternative.
+                    if not self.persistent_data['is_satellite']:
+                        self.speak("I did not understand the change you wanted.",intent=intent_message)
+                        return
+                
+
+                    
         except Exception as ex:
             print("Error massaging data: " + str(ex))
 
@@ -3041,11 +3192,9 @@ class VocoAdapter(Adapter):
         # Alternative routing. Some heuristics, since Snips sometimes chooses the wrong intent.
         try:
             
-            
-            
             # Alternative route to get_boolean.
             try:
-                if incoming_intent == 'createcandle:get_value' and str(slots['property']) == "state":          
+                if incoming_intent == 'get_value' and str(slots['property']) == "state":          
                     if self.DEBUG:
                         print("using alternative route to get_boolean")
                     incoming_intent = 'createcandle:get_boolean'
@@ -3053,7 +3202,7 @@ class VocoAdapter(Adapter):
                 print("alternate route 1 failed")
             
             try:
-                if incoming_intent == 'createcandle:set_state' and str(slots['boolean']) == "state":          
+                if incoming_intent == 'set_state' and str(slots['boolean']) == "state":          
                     if self.DEBUG:
                         print("using alternative route to get_boolean")
                     incoming_intent = 'createcandle:get_boolean'
@@ -3063,7 +3212,7 @@ class VocoAdapter(Adapter):
             
             # Alternative route to set state
             try:
-                if incoming_intent == 'createcandle:set_timer' and sentence.startswith("turn"):          
+                if incoming_intent == 'set_timer' and sentence.startswith("turn"):          
                     
                     if sentence.startswith("turn on"):
                         incoming_intent = 'createcandle:set_state'
@@ -3080,12 +3229,33 @@ class VocoAdapter(Adapter):
                 print("alternate route 1 failed")
             
                 
+            """
+            # Alternative route to get_value. "what is the song on the radio" can lead to "intent_get_boolean".
+            try:
+                if incoming_intent == 'get_state' and sentence.startswith("what is") and not 'state' in sentence:          
+                    
+                    if sentence.startswith("turn on"):
+                        incoming_intent = 'createcandle:set_state'
+                        slots['boolean'] = True
+                        if self.DEBUG:
+                            print("using alternative route to set state")
+                    elif sentence.startswith("turn off"):
+                        incoming_intent = 'createcandle:set_state'
+                        slots['boolean'] = False
+                        if self.DEBUG:
+                            print("using alternative route to set state")
+                    
+            except:
+                print("alternate route 2 failed")
+            """
+            
+                
             # Avoid setting a value if no value is present
             try:
-                if incoming_intent == 'createcandle:set_value' and slots['color'] is None and slots['number'] is None and slots['percentage'] is None and slots['string'] is None:
+                if incoming_intent == 'set_value' and slots['color'] is None and slots['number'] is None and slots['percentage'] is None and slots['string'] is None:
                     if slots['boolean'] != None:
                         #print("Routing set_value to set_state instead")
-                        incoming_intent == 'createcandle:set_state' # Switch to another intent type which has a better shot.
+                        incoming_intent == 'set_state' # Switch to another intent type which has a better shot.
                     else:
                         if self.DEBUG:
                             print("request did not contain a valid value to set to")
@@ -3100,15 +3270,15 @@ class VocoAdapter(Adapter):
 
             # Normal timer routing. Satellites delegate this to the central server. TODO: it might make sense to let things like wake-up alarms be handled on the satellite. Then it still works if the connection is down.
             if self.persistent_data['is_satellite'] == False:
-                if incoming_intent == 'createcandle:get_time':
+                if incoming_intent == 'get_time':
                     intent_get_time(self, slots, intent_message)
-                elif incoming_intent == 'createcandle:set_timer':
+                elif incoming_intent == 'set_timer':
                     intent_set_timer(self, slots, intent_message)
-                elif incoming_intent == 'createcandle:get_timer_count':
+                elif incoming_intent == 'get_timer_count':
                     intent_get_timer_count(self, slots, intent_message)
-                elif incoming_intent == 'createcandle:list_timers':
+                elif incoming_intent == 'list_timers':
                     intent_list_timers(self, slots, intent_message)
-                elif incoming_intent == 'createcandle:stop_timer':
+                elif incoming_intent == 'stop_timer':
                     intent_stop_timer(self, slots, intent_message)
                 elif self.token == "":
                     self.speak("You need to provide an authentification token before devices can be controlled.")
@@ -3116,19 +3286,19 @@ class VocoAdapter(Adapter):
                     
                     
             # Normal things control routing. Only four of the intents require searching for properties
-            if incoming_intent == 'createcandle:get_value' or incoming_intent == 'createcandle:set_value' or incoming_intent == 'createcandle:set_state' or incoming_intent == 'createcandle:get_boolean':
-            
+            if incoming_intent == 'get_value' or incoming_intent == 'set_value' or incoming_intent == 'set_state' or incoming_intent == 'get_boolean':
+                
+                #if slots['thing'] == None and slots['property'] == None
+                
+                # If this is a satellite, stop processing the incoming thing-related message.
                 if self.persistent_data['is_satellite']:
                     if self.satellite_should_act_on_intent == False:
                         return
             
-                actuator = False
-                if incoming_intent == 'createcandle:set_state' or incoming_intent == 'createcandle:get_boolean':
-                    actuator = True
-            
-                found_properties = self.check_things(actuator,slots)
-                #if self.DEBUG:
-                #    print("Found properties: " + str(found_properties))
+                # get a list of potential matching properties
+                found_properties = self.check_things(incoming_intent,slots)
+                if self.DEBUG:
+                    print("Found properties: " + str(found_properties))
                 
                 # Check if the satellite should handle this thing.
                 if self.DEBUG:
@@ -3185,13 +3355,13 @@ class VocoAdapter(Adapter):
                         self.speak("Sorry, I couldn't find a match. ",intent=intent_message)
                 
                 elif self.token != "":
-                    if incoming_intent == 'createcandle:get_value':
+                    if incoming_intent == 'get_value':
                         intent_get_value(self, slots, intent_message,found_properties)
-                    elif incoming_intent == 'createcandle:set_state':
+                    elif incoming_intent == 'set_state':
                         intent_set_state(self, slots, intent_message,found_properties)
-                    elif incoming_intent == 'createcandle:set_value':
+                    elif incoming_intent == 'set_value':
                         intent_set_value(self, slots, intent_message,found_properties)
-                    elif incoming_intent == 'createcandle:get_boolean':
+                    elif incoming_intent == 'get_boolean':
                         intent_get_boolean(self, slots, intent_message,found_properties)
 
 
@@ -3251,7 +3421,7 @@ class VocoAdapter(Adapter):
             
             fresh_thing_titles = set()
             fresh_property_titles = set()
-            fresh_property_strings = set()
+            fresh_property_strings = set() #'hello','goodbye'
 
             #self.my_thing_title_list = []
             
@@ -3281,6 +3451,7 @@ class VocoAdapter(Adapter):
                                 property_title = clean_up_string_for_speaking(str(thing['properties'][thing_property_key]['title'])).strip()
                                 if len(property_title) > 1:
                                     fresh_property_titles.add(property_title)
+            
             
                 operations = []
             
@@ -3325,6 +3496,8 @@ class VocoAdapter(Adapter):
                     #operations.append(
                     #    AddFromVanillaInjectionRequest({"Thing" : list(fresh_thing_titles) })
                     #)
+                    # small hack to make mass-switching of lights easier.
+                    fresh_thing_titles.add('lights')
                     operation = ('addFromVanilla',{"Thing" : list(fresh_thing_titles) })
                     operations.append(operation)
                 
@@ -3335,6 +3508,7 @@ class VocoAdapter(Adapter):
                     #operations.append(
                     #    AddFromVanillaInjectionRequest({"Property" : list(fresh_property_titles) + self.extra_properties + self.capabilities + self.generic_properties + self.numeric_property_names})
                     #)
+                    fresh_property_titles.add('all')
                     operation = ('addFromVanilla',{"Property" : list(fresh_property_titles) })
                     operations.append(operation)
 
@@ -3369,7 +3543,6 @@ class VocoAdapter(Adapter):
                          print("Error saving thing details to persistence: " + str(ex))
                 
                     try:
-                    
                         if self.mqtt_client != None:
                             if self.DEBUG:
                                 print("Injection: self.mqtt_client exists, will try to inject")
@@ -3403,16 +3576,103 @@ class VocoAdapter(Adapter):
 
 
 
+
+
+
+#
+# Create comparison lists to help check validity of intents
+#
+
+    def create_intent_comparison_lists(self):
+        print("[ >  >  > ] creating intent comparison lists")
+        print("[ >  >  > ] things: \n" + str(json.dumps(self.things, indent=4)))
+        
+        try:
+            for thing in self.things:
+                if 'title' in thing:
+                    #thing_name = clean_up_string_for_speaking(str(thing['title']).lower()).strip()
+                    thing_name = clean_up_string_for_speaking(str(thing['title'])).strip()
+        
+                    if len(thing_name) > 1:
+                        if self.DEBUG:
+                            print("thing title:" + thing_name + ".")
+                        fresh_thing_titles.add(thing_name)
+                        #self.my_thing_title_list.append(thing_name)
+            
+                    for thing_property_key in thing['properties']:
+                        if 'type' in thing['properties'][thing_property_key] and 'enum' in thing['properties'][thing_property_key]:
+                            if thing['properties'][thing_property_key]['type'] == 'string':
+                                for word in thing['properties'][thing_property_key]['enum']:
+                                    #property_string_name = clean_up_string_for_speaking(str(word).lower()).strip()
+                                    property_string_name = clean_up_string_for_speaking(str(word)).strip()
+                                    if len(property_string_name) > 1:
+                                        fresh_property_strings.add(property_string_name)
+                        if 'title' in thing['properties'][thing_property_key]:
+                            #property_title = clean_up_string_for_speaking(str(thing['properties'][thing_property_key]['title']).lower()).strip()
+                            property_title = clean_up_string_for_speaking(str(thing['properties'][thing_property_key]['title'])).strip()
+                            if len(property_title) > 1:
+                                fresh_property_titles.add(property_title)
+
+        
+        except Exception as ex:
+            print("error in create_intent_comparison_lists: " + str(ex))
+
+
+
+
 #
 # THING SCANNER
 #
 
     # This function looks up things that might be a match to the things names or property names that the user mentioned in their request.
-    #def check_things(self, actuator, target_thing_title, target_property_title, target_space ):
-    def check_things(self, actuator, slots ):
+    #def check_things(self, boolean_related, target_thing_title, target_property_title, target_space ):
+    def check_things(self, intent, slots):
         if self.DEBUG:
+            print("[?]")
+            print("intent: " + str(intent))
             print("Searching for matching thing. Scan slots: " + str(slots))
+        
+        
+
+        boolean_related = False
+        if intent == 'set_state' or intent == 'get_boolean':
+            boolean_related = True
+
+        set_related = False
+        if intent == 'set_state' or intent == 'set_value':
+            set_related = True
+        
+        
+        """
+        if isinstance(intent, bool):
+            # this happens when a timer calls the sequence, and 'intent' is a boolean indicating boolean_related instead of a string.
+            boolean_related = intent
+            set_related = True
             
+        else:
+            # if it's a string, it can be one of four types of intent
+            # get_value
+            # set_value
+            # get_boolean
+            # set_state
+         """    
+
+            
+        # Check if the property name is even possible. It not, set it to None.
+        dubious_property_title = False
+        if slots['property'] != None:
+            if slots['property'] == 'all': # and slots['thing'] != None:
+                # user wants to target multiple devices
+                print("user wants to target multiple devices")
+            elif not slots['property'] in self.persistent_data['property_titles']:
+                print("setting invalid property name to None: " + str(slots['property']))
+                slots['property'] = None
+                dubious_property_title = True
+            
+            # remember that we set the property to None. Now the outcome of the scanner is only valid if there is one result, and this no ambiguity. No risk of toggling the wrong property.
+
+            
+        
         target_thing_title = slots['thing']
         target_property_title = slots['property']
         target_space = slots['space']
@@ -3443,12 +3703,27 @@ class VocoAdapter(Adapter):
 
         if target_thing_title is None:
             if self.DEBUG:
-                print("No thing title supplied. Will try to matching properties in all devices.")
+                print("No thing title supplied. Will try to find matching properties in all devices.")
         else:
             target_thing_title = str(target_thing_title).lower()
             if self.DEBUG:
                 print("-> target thing title is: " + str(target_thing_title))
         
+        
+        thing_must_have_capability = None
+        property_must_have_capability = None
+        # Experimental: switch multiple devices at once
+        if intent == 'set_state' and (slots['thing'] == 'lights' or slots['thing'] == 'the lights') and slots['space'] == None and slots['boolean'] != None:
+            if slots['property'] == 'all' or (slots['property'] == None and ' the lights' in sentence):
+                if self.DEBUG:
+                    print("user requested a mass-switching of lights")
+                target_thing_title = None
+                slots['property'] = 'all'
+                target_property_title = 'state'
+                thing_must_have_capability = 'Light'
+                property_must_have_capability = 'OnOffProperty'
+                dubious_property_title = False
+            
         
         if target_property_title is None:
             if self.DEBUG:
@@ -3475,8 +3750,22 @@ class VocoAdapter(Adapter):
 
                 # TITLE
                 
+                 #and slots['boolean'] != None
+                    # search based on capability instead.
+                
+                
                 try:
                     current_thing_title = str(thing['title']).lower()
+                    
+                    if self.see_switches_as_lights:
+                        if thing_must_have_capability == 'Light':
+                            if len(current_thing_title) > 9 and (current_thing_title.endswith(' light') or current_thing_title.endswith(' lamp')):
+                                if '@type' in thing:
+                                    if 'OnOffSwitch' in thing['@type'] and not 'Light' in thing['@type']:
+                                        thing['@type'].append('Light')
+                                
+                            
+                    
                     probable_thing_title = None    # Used later, by the back-up way of finding the correct thing.
                 except:
                     if self.DEBUG:
@@ -3501,7 +3790,18 @@ class VocoAdapter(Adapter):
                     probable_thing_title_confidence = 0
                     
                     if target_thing_title == None:  # If no thing title provided, we go over every thing and let the property be leading in finding a match.
-                        pass
+                        if thing_must_have_capability != None:
+                            if '@type' in thing:
+                                if not thing_must_have_capability in thing['@type']:
+                                    #print("skipping thing without desired capability: " + str(current_thing_title))
+                                    continue # skip things without the desired capability.
+                                else:
+                                    if self.DEBUG:
+                                        print("allowing thing with capacility: " + str(current_thing_title) )
+                            else:
+                                continue
+                        else:
+                            pass
                     
                     elif target_thing_title == current_thing_title:   # If the thing title is a perfect match
                         probable_thing_title = current_thing_title
@@ -3553,11 +3853,61 @@ class VocoAdapter(Adapter):
                 # PROPERTIES
                 
                 try:
+                    
+                    # Pre-check if there is an exact property title match. If there is, then only get that.
+                    exact_property_title_match = False
+                    if target_property_title != None:
+                        for pre_thing_property_key in thing['properties']:
+                            #print("pre-check. " + target_property_title + " =?= " + str(thing['properties'][pre_thing_property_key]['title'].lower()))
+                            if thing['properties'][pre_thing_property_key]['title'].lower() == target_property_title:
+                                if self.DEBUG:
+                                    print("Exact property title match spotted")
+                                exact_property_title_match = True
+                    
+                        if exact_property_title_match == False:
+                            print("NO exact property title match spotted. Skipping thing.")
+                            continue
+                    #if slots['property'] != None and exact_property_title_match == False:
+                    #    print("NO exact property title match spotted. Skipping thing.")
+                    #    continue # skip thing with no exact property title match
+                        # TODO: why not also fuzzy title matching for properties?
+                    
                     for thing_property_key in thing['properties']:
-                        # if self.DEBUG:
-                        #    print("thing_property_key = " + str(thing_property_key))
-                        #print("Property details: " + str(thing['properties'][thing_property_key]))
+                        
+                        if exact_property_title_match and thing['properties'][thing_property_key]['title'].lower() != target_property_title:
+                            #if self.DEBUG:
+                            #    print("Exact property title match found, and this isn't it: " + str(thing['properties'][thing_property_key]['title'].lower()))
+                            continue
+                        else:
+                            if self.DEBUG:
+                                print(" ")
+                                print(" exact property title match")
+                            
+                        if self.DEBUG:
+                            print("thing_property_key = " + str(thing_property_key))
+                        print("check_things__loop__ Property details: " + str(thing['properties'][thing_property_key]))
 
+                        print("_")
+                        if slots['number'] != None:
+                            print("make_comparable number: " + make_comparable(slots['number']))
+                        if slots['percentage'] != None:
+                            print("make_comparable percentage: " + make_comparable(slots['percentage']))
+                        if slots['string'] != None:
+                            print("make_comparable string: " + make_comparable(slots['string']))
+                        if slots['color'] != None:
+                            print("make_comparable color: " + make_comparable(slots['color']))
+
+
+                        
+                        print("boolean_related: " + str(boolean_related))
+                        print("prop type: " + str(thing['properties'][thing_property_key]['type']))
+                        # If we're looking for a boolean, and it's not, skip it. # TODO: does this impact enum properties with on and off values??
+                        if boolean_related and thing['properties'][thing_property_key]['type'] != 'boolean':
+                            if self.DEBUG:
+                                print("boolean_related, and this is not a boolean property. Skipping: " + str(thing_property_key))
+                            continue
+
+                        # deprecated? since by now every thing should use the Title attribute (instead of 'label') for the human-readable name
                         try:
                             current_property_title = str(thing['properties'][thing_property_key]['title']).lower()
                             if self.DEBUG:
@@ -3574,6 +3924,8 @@ class VocoAdapter(Adapter):
                                     print("Couldn't find a property name either. Title has now been set to key: " + str(current_property_title))
 
                         
+                        
+                        
                         # Get basic info
 
                         # This dictionary holds properties of the potential match. There can be multiple matches, for example if the user wants to hear the temperature level of all things.
@@ -3584,9 +3936,13 @@ class VocoAdapter(Adapter):
                                 "type": None,
                                 "readOnly": None,
                                 "@type": None,
+                                "enum": None,
+                                'unit':None,
+                                "options": None, #thing['properties'][thing_property_key],
                                 "property_url": get_api_url(thing['properties'][thing_property_key]['links'])
                                 }
 
+                        # get type
                         try:
                             if 'type' in thing['properties'][thing_property_key]:
                                 match_dict['type'] = thing['properties'][thing_property_key]['type']
@@ -3597,21 +3953,131 @@ class VocoAdapter(Adapter):
                                 print("Error while checking property type: "  + str(ex))
                             match_dict['type'] = None
 
-                            
-                        try:
-                            # Check if it's a read-only property
-                            if 'readOnly' in thing['properties'][thing_property_key]:
-                                match_dict['readOnly'] = bool(thing['properties'][thing_property_key]['readOnly'])
-                            #else: 
-                            #    match_dict['readOnly'] = None
-                        except Exception as ex:
-                            if self.DEBUG:
-                                print("Error looking up readOnly value: "  + str(ex))
-                            #match_dict['readOnly'] = None # TODO in theory this should not be necessary. In practise, weirdly, it is.
-
+                        # get capability
                         try:
                             if '@type' in thing['properties'][thing_property_key]:
                                 match_dict['@type'] = thing['properties'][thing_property_key]['@type'] # Looking for things like "OnOffProperty"
+                        except Exception as ex:
+                            print("Error looking up capability @type: "  + str(ex))
+                            pass
+                        
+                        
+                        try:
+                            if 'unit' in thing['properties'][thing_property_key]:
+                                print("has unit: " + str(thing['properties'][thing_property_key]['unit']))
+                                
+                                if str(thing['properties'][thing_property_key]['unit']).startswith('percent') or str(thing['properties'][thing_property_key]['unit']) == "%":
+                                    print("--spotted percent unit")
+                                    match_dict['unit'] = "percent"
+                                
+                                if slots['percentage'] != None:
+                                    if thing['properties'][thing_property_key]['unit'].startswith('percent') or thing['properties'][thing_property_key]['unit'] == '%':
+                                        if self.DEBUG:
+                                            print("spotted a percentage property. very high likelyhood of a match")
+                                    else:
+                                        if self.DEBUG:
+                                            print("looking for a percentage, and this property has a unit, but it's not percentage.")
+                                        # looking for a percentage, but the property has a unit, and it's not percentage -> skip.
+                                        continue
+                                
+                        except Exception as ex:
+                            print("Error looking for percentage unit property: "  + str(ex))
+                            pass
+                        
+                        #  Figure out if the property is likely read-only.
+                        likely_readOnly = False
+                        try:
+                            
+                            # if it's defined, it's easy
+                            if 'readOnly' in thing['properties'][thing_property_key]:
+                                if thing['properties'][thing_property_key]['readOnly'] == True:
+                                    likely_readOnly = True
+                                match_dict['readOnly'] = likely_readOnly
+                                
+                            # an @type can provide a strong hint
+                            elif '@type' in thing['properties'][thing_property_key]:
+                                never_read_only = ['ColorTemperatureProperty','BrightnessProperty','OnOffProperty']
+                                if match_dict['@type'] in never_read_only:
+                                    pass
+                                # TODO: 'LevelProperty' could also be checked, but needs additional checking of the thing capability list, which should then not have 'MultiLevelSensor'
+                                # some of the above are not always read-only, so we may have to switch some back:
+                                elif '@type' in thing:
+                                    if match_dict['@type'] == 'ColorProperty' and 'ColorSensor' in thing['@type']  and not 'ColorControl' in thing['@type']:
+                                        likely_readOnly = True
+                                    if match_dict['@type'] == 'LevelProperty' and 'MultiLevelSensor' in thing['@type']  and not 'MultiLevelSwitch' in thing['@type']:
+                                        likely_readOnly = True
+                                
+                            print("likely_readOnly?: " + str(likely_readOnly))
+                            if set_related and likely_readOnly:
+                                print("- set_related. so skipping readOnly prop")
+                                continue
+                                #    match_dict['readOnly'] = None
+                        except Exception as ex:
+                            if self.DEBUG:
+                                print("Error conjuring likely_readOnly value: "  + str(ex))
+                            #match_dict['readOnly'] = None # TODO in theory this should not be necessary. In practise, weirdly, it is.
+
+                        
+                        if slots['property'] == None:
+                            if thing_property_key == 'data_collection' or thing_property_key == 'data_transmission':
+                                # If the data collection property isn't called explicitly, ignore it. It's never the primary property people want to change.
+                                continue
+                        
+                        
+                        try:
+                            if 'enum' in thing['properties'][thing_property_key]:
+                                match_dict['enum'] = thing['properties'][thing_property_key]['enum']
+                                
+                                if slots['number'] != None:
+                                    if make_comparable(slots['number']) not in thing['properties'][thing_property_key]['enum']:
+                                        print("string version of the number was not spotted in the enum list: " + make_comparable(slots['number']))
+                                        continue
+                                
+                            #else:
+                            #    match_dict['type'] = None # This is a little too precautious, since the type should theoretically always be defined?
+                        except Exception as ex:
+                            if self.DEBUG:
+                                print("Error while checking property type: "  + str(ex))
+                            #match_dict['type'] = None
+                            
+                            
+                        # if a target number is set, skip boolean properties
+                        try:
+                            if slots['number'] != None and thing['properties'][thing_property_key]['type'] == 'boolean':
+                                continue
+                        except Exception as ex:
+                            if self.DEBUG:
+                                print("Error while checking property if boolean should be set to number "  + str(ex))
+                            
+                        # if a target string is set, skip number properties
+                        try:
+                            if slots['string'] != None and thing['properties'][thing_property_key]['type'] == 'integer':
+                                continue
+                        except Exception as ex:
+                            if self.DEBUG:
+                                print("Error while checking property if boolean should be set to number "  + str(ex))
+
+                        # if @type is present
+                        try:
+                            if '@type' in thing['properties'][thing_property_key]:
+                                match_dict['@type'] = thing['properties'][thing_property_key]['@type'] # Looking for things like "OnOffProperty"
+                                
+                            if property_must_have_capability != None:
+                                print("property should have capability: " + str(property_must_have_capability))
+                                if not '@type' in thing['properties'][thing_property_key]:
+                                    print("this property has no @type, but should. skipping.")
+                                    continue
+                                    
+                                elif match_dict['@type'] != property_must_have_capability:
+                                    if self.DEBUG:
+                                        print("Skipping property without correct capability: ")
+                                    continue
+                                else:
+                                    if self.DEBUG:
+                                        print("allowing property with correct capability: " + str(thing_property_key))
+                                    result.append(match_dict.copy())
+                                    continue
+                                    
                         except Exception as ex:
                             print("Error looking up capability @type: "  + str(ex))
                             pass
@@ -3628,15 +4094,15 @@ class VocoAdapter(Adapter):
                         if match_dict['@type'] == "VideoProperty" or match_dict['@type'] == "ImageProperty":
                             continue
 
-
+                        
                         # Start looking for a matching property
                         property_keys_count = str(len(thing['properties'].keys()))
                         
                         
                         try:
+                            
                             # No target property title set
                             if match_dict['thing'] != None and (target_property_title in self.generic_properties or target_property_title == None):
-                            
                                 if self.DEBUG:
                                     print("Property title was not or abstractly supplied, so adding " + str(match_dict['property']) + " to the list")
                                 result.append(match_dict.copy())
@@ -3694,7 +4160,8 @@ class VocoAdapter(Adapter):
                                         print("found a very likely property match, and the thing name also seemingly provided: " + str(current_thing_title))
                                     result = [] # Since this is a really good match, we remove any older properties we may have found.
                                     result.append(match_dict.copy())
-                                    return result
+                                    ##return result
+                                    break
 
                             # if the property name we're checking is in the sentence, it might be a match
                             elif str(current_property_title) in sentence:
@@ -3703,7 +4170,7 @@ class VocoAdapter(Adapter):
                                 result.append(match_dict.copy())
   
                             # if the property name we're checking has a substring match
-                            elif current_property_title.startswith(target_property_title) or current_property_title.endswith(target_property_title):
+                            elif target_property_title != None and current_property_title.startswith(target_property_title) or current_property_title.endswith(target_property_title):
                                 if self.DEBUG:
                                     print("partial property starts-with or ends-with match:" + str(len(current_thing_title) / len(target_thing_title)))
                                 if len(current_thing_title) / len(target_thing_title) < 2:
@@ -3745,6 +4212,10 @@ class VocoAdapter(Adapter):
                 if probable_thing_title_confidence >= 90: # If the thing has very likely been spotted, there is no need to loop over the other things.
                     break
 
+
+
+            #
+            # PRUNING
             #
             # After looping over all the likely things and/or properties, a list of dictionaries is returned. 
             # Each item is a potential match for the query, and consists of at least a thing and property name.
@@ -3752,17 +4223,34 @@ class VocoAdapter(Adapter):
 
             try:
                 if result != None:
-                    if self.DEBUG:
-                        print("result: " + str(json.dumps(result)))
+                    #if self.DEBUG:
+                    #    print("full thing scan result: " + str(json.dumps(result, indent=4)))
                     # If the thing title matches and we found at least one property, then we're done.
                     #if probable_thing_title != None and probable_thing_title_confidence > 80 and len(result.keys()) == 1:
+                    
+                    """
+                    if result != None:
+                    
                     if len(result) == 1:
                         if self.DEBUG:
                             print("Only found one possible match, so returning result immediately")
-                        return result
+                            
+                            
+                        print("boolean_related: " + str(boolean_related))
+                        print("comparis: " + str(and result[0]['type']))
+                            
+                        if boolean_related == True and result[0]['type'] != "boolean":
+                            return []
+                        elif boolean_related == False and result[0]['type'] == "boolean":
+                            return []
+                        else:
+                            return result
             
                     # If there are multiple results, we finally take the initial preference of the intent into account and prune properties accordingly.
                     elif len(result) > 1:
+                    """
+                    if thing_must_have_capability == None and property_must_have_capability == None:
+                    #if result != None: # Just a quick hack
                         if self.DEBUG:
                             print("Found " + str(len(result)) + " potential thing-property matches" )
                         boolean_count = 0 # doing an inventory off the available boolean properties, used for additional pruning later.
@@ -3782,26 +4270,40 @@ class VocoAdapter(Adapter):
                             if found_property['thing'] not in things_spotted:
                                 things_spotted.append(found_property['thing'])
                             
-                            if found_property['type'] == 'boolean' and actuator == False: # Remote property if it's not the type we're looking for
+                            if found_property['type'] == 'boolean' and boolean_related == False: # Remove property if it's not the type we're looking for
+                                print("not boolean_related, so deleting boolean: " + str(found_property['property']) )
                                 del result[index]
-                            elif found_property['type'] != 'boolean' and actuator == True: # Remove property if it's not the type we're looking for
+                                
+                            elif found_property['type'] != 'boolean' and boolean_related == True: # Remove property if it's not the type we're looking for
+                                print("boolean_related, so deleting non-boolean property: " + str(found_property['property']) )
                                 del result[index]
-                            elif found_property['type'] == 'boolean' and actuator == True:
+                            
+                            if found_property['type'] == 'boolean' and boolean_related == True:
+                                print("this bool can stay: " + str(found_property['property']) )
                                 boolean_count += 1
                                 if found_property['@type'] != None:
-                                    boolean_at_type_count += 1
+                                    if boolean_related and found_property['@type']: # in self.boolean_related_at_types:
+                                        boolean_at_type_count += 1
                                 else:
                                     boolean_non_at_type_count += 1
+                                    
+                            elif found_property['enum'] != None:
+                                if "on" in found_property['enum'] or "off" in found_property['enum']:
+                                    print("this enum can stay: " + str(found_property['enum']) )
+                            
+                            print("is deleting destroying the result? " + str(result))
                             
                             index += 1
                             
                         # If two things were spotted, choose the one with the best match percentage
                         if len(things_spotted) > 1:
-                            #if self.DEBUG:
-                            #    print("more than one thing's properties have been spotted.")
+                            if self.DEBUG:
+                                print("after pruning, more than one thing's properties have been spotted.")
                             index = 0
                             for found_property in result:
                                 if found_property['thing'] != best_matched_thing:
+                                    if self.DEBUG:
+                                        print("deleting an property that was not the best match: " + str(found_property))
                                     del result[index]
                                 index += 1
                             
@@ -3812,22 +4314,24 @@ class VocoAdapter(Adapter):
                             print("boolean_non_at_type_count: " + str(boolean_non_at_type_count))
                             
                             
-                    # If after that first pruning there is still more than one result, do some additional pruning.
+                        # If after that first pruning there is still more than one result, do some additional pruning.
                 
-                    # Prefer properties with a defined @type if there are properties with and without them.
+                        # Prefer properties with a defined @type if there are properties with and without them.
                     
-                    if len(result) > 1:
-                        if self.DEBUG:
-                            print("Amount of candidates remaining after initial pruning is still more than one: " + str(len(result)))
-                        if boolean_at_type_count > 0 and boolean_non_at_type_count > 0:
-                            print('both boolean types exists')
-                            index = 0
-                            for found_property in result:
-                                if found_property['type'] == 'boolean' and actuator == True and found_property['@type'] == None: # Remove boolean property if it's not an @type
-                                    if self.DEBUG:
-                                        print("pruning boolean property without @type")
-                                    del result[index]
-                                index += 1
+                        if len(result) > 1:
+                            if self.DEBUG:
+                                print("Amount of candidates remaining after initial pruning is still more than one: " + str(len(result)))
+                            if boolean_at_type_count > 0 and boolean_non_at_type_count > 0:
+                                print('both boolean types exists')
+                                index = 0
+                                for found_property in result:
+                                    if found_property['type'] == 'boolean' and boolean_related == True and found_property['@type'] == None: # Remove boolean property if it's not an @type
+                                        if self.DEBUG:
+                                            print("pruning boolean property without @type")
+                                        del result[index]
+                                    index += 1
+
+                        
 
             except Exception as ex:
                 print("Error while pruning: " + str(ex))
@@ -3837,12 +4341,21 @@ class VocoAdapter(Adapter):
         except Exception as ex:
             print("Error while looking for match in things: " + str(ex))
             
-        if self.DEBUG:
-            print("")
-            #print("found properties: " + str(result))
-            print("found properties: " + str(json.dumps(result)))
-            
-        return result
+        #if self.DEBUG:
+        #    print("")
+        #    print("final found properties: " + str(json.dumps(result, indent=4)))
+              
+        # if the originally provided property title did not exist, we may only return an outcome is the search still only resulted in a single likely property.
+        if len(result) > 1 and dubious_property_title: # one specific property was intended, so only one result is allowed.
+            if self.DEBUG:
+                print("dubious_property_title was spotted (exists on no thing), so only one result is allowed. Yet there were multiple results.")
+            return []
+        elif len(result) > 1 and set_related and slots['property'] == None and thing_must_have_capability == None and property_must_have_capability == None:
+            # property is only allowed to be vague AND have multiple results if the goal is to toggle multiple devices.
+            print("more than one result, and no (valid) property name provided. Since intent is to set something, that's too dubious.")
+            return []
+        else:
+            return result
 
 
 
@@ -3885,7 +4398,16 @@ class VocoAdapter(Adapter):
             print("Could not extract full sentence into a slot: " + str(ex))
 
         for item in intent_message['slots']:
-            try:                
+            print(" ")
+            print("EXtract slots ITEM: " + str(item))
+            try:
+                if self.DEBUG:
+                    print("extract slots: " + str(item['value']['kind']))
+                    if 'value' in item['value']:
+                        print( " with value: " + str(item['value']['value']) )
+                        
+                    print(" - item['slotName']: " + str(item['slotName']))
+                    
                 if item['value']['kind'] == 'InstantTime':
                     if self.DEBUG:
                         print("handling instantTime")
@@ -3908,6 +4430,8 @@ class VocoAdapter(Adapter):
                         print("instantTime extraction error: " + str(ex))
                     
                 elif item['value']['kind'] == 'TimeInterval':
+                    if self.DEBUG:
+                        print('handling time interval')
                     try:
                         slots['time_string'] = item['rawValue'] # The time as it was spoken
                         #print("TimeInterval slots['time_string'] = " + slots['time_string'])
@@ -3933,8 +4457,12 @@ class VocoAdapter(Adapter):
                         print("timeInterval extraction error: " + str(ex))
 
                 elif item['value']['kind'] == 'Duration':
+                    if self.DEBUG:
+                        print("handling duration")
+                        print("extract_slots: trying to manipulate duration. rawValue: " + str(item['rawValue']))
                     slots['time_string'] = item['rawValue'] # The time as it was spoken
-                    target_time_delta = item['value']['seconds'] + item['value']['minutes'] * 60 + item['value']['hours'] * 3600 + item['value']['days'] * 86400 + item['value']['weeks'] * 604800 # TODO: Could also support years, in theory..
+                    print("creating timedelta next")
+                    target_time_delta = int(item['value']['seconds']) + (int(item['value']['minutes']) * 60) + (int(item['value']['hours']) * 3600) + (int(item['value']['days']) * 86400) + (int(item['value']['weeks']) * 604800) # TODO: Could also support years, in theory..
                     # Turns the duration into the absolute time when the duration ends
                     if target_time_delta != 0:
                         slots['duration'] = self.current_utc_time + int(target_time_delta)
@@ -3946,15 +4474,28 @@ class VocoAdapter(Adapter):
                     # TODO here we could handle things like 'at dawn', 'at sundown' and 'at sunrise', as long as those could be calculated without looking it up online somehow.
                 
                 elif item['slotName'] == 'pleasantries':
+                    print("\n\nslotname pleasantries spotted\n\n")
                     if item['value']['value'].lower() == "please":
                         self.pleasantry_count += 1 # TODO: We count how often the user has said 'please', so that once in a while Snips can be thankful for the good manners.
                     else:
                         slots['pleasantries'] = item['value']['value'] # For example, it the sentence started with "Can you" it could be nice to respond with "I can" or "I cannot".
 
+                # Moved this to the thing scanner.
+                #elif item['slotName'] == 'property':
+                #    print("- found property slot")
+                #    if not str(item['value']['value']) in self.persistent_data['property_titles']:
+                #        print("invalid property name detected, setting to None instead of: " + str(item['value']['value']))
+                #        slots[item['slotName']] = None
+                        
                 else:
+                    print("extract slots: in else. item: " + str(item))
                     if slots[item['slotName']] == None:
+                        print("wait..what? " + str(item['slotName']))
                         slots[item['slotName']] = item['value']['value']
                     else:
+                        if self.DEBUG:
+                            print("+ + +")
+                            print("adding slotname and value together. slotName: " + str(item['slotName'])) # is this the room?
                         slots[item['slotName']] = slots[item['slotName']] + " " + item['value']['value'] # TODO: in the future multiple thing titles should be handled separately. All slots should probably be lists.
 
             except Exception as ex:
@@ -4196,8 +4737,8 @@ class VocoAdapter(Adapter):
 
         snips_actual_processes_count = 0
         for s in (str(p2.communicate())[2:-10]).split('\\n'):
-            if self.DEBUG:
-                print(" -- " + str(s))
+            #if self.DEBUG:
+            #    print(" -- " + str(s))
             if s != "" and 'defunct' not in s:
                 snips_actual_processes_count += 1
         
@@ -4210,3 +4751,15 @@ class VocoAdapter(Adapter):
         #return bool(len(self.external_processes))
         return snips_actual_processes_count
     
+    
+    
+    def is_mosquitto_up(self):
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            result = False
+            try:
+                sock.bind((self.persistent_data['mqtt_server'], self.mqtt_port))
+            except:
+                print("MQTT port is in use")
+                result = True
+            sock.close()
+            return result
