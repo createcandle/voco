@@ -88,7 +88,8 @@
 .extension-voco-item{
 	padding: 0;
 	display: flex;
-	background-color: #46769C;
+	/*background-color: #46769C;*/
+    background-color:rgba(0,0,0,.2);
 	border-radius:.5rem;
 	margin-top:1rem;
 	border-radius: .5rem;
@@ -572,6 +573,7 @@
 }
 
 
+#extension-voco-injection-failure,
 #extension-voco-debug-warning{
     max-width:60rem;
     margin:2rem auto;

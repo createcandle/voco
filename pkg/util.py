@@ -243,6 +243,8 @@ def get_api_url(link_list):
 def clean_up_string_for_speaking(sentence):
     sentence = sentence.replace('/', ' ').replace('\\', ' ').replace('+', ' plus ').replace('#', ' number ').replace('-', ' ').replace('&', ' and ').replace('  ', ' ')
     sentence = sentence.replace('  ', ' ')
+    sentence = sentence.lower()
+    sentence = sentence.strip()
     return sentence
 
 

@@ -321,6 +321,12 @@
 							
 						}
 					}
+                    
+                    if('possible_injection_failure' in body){
+                        if(body.possible_injection_failure){
+                            document.getElementById("extension-voco-injection-failure").style.display = 'block';
+                        }
+                    }
 					
 					// Remove spinner
 					document.getElementById("extension-voco-loading").remove();

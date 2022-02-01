@@ -97,6 +97,9 @@ class VocoAdapter(Adapter):
 
         #print("self.manager_proxy = " + str(self.manager_proxy))
 
+
+        print("self.user_profile: " + str(self.user_profile))
+
         os.environ["LD_LIBRARY_PATH"] = os.path.join(self.user_profile['addonsDir'],self.addon_name,'snips')
 
         try:
@@ -231,6 +234,7 @@ class VocoAdapter(Adapter):
         # self.persistent_data is handled just above
         self.metric = True
         self.things = []
+        self.groups = []
         self.token = None
         self.timer_counts = {'timer':0,'alarm':0,'reminder':0}
         self.temperature_unit = 'degrees celsius'
@@ -299,6 +303,7 @@ class VocoAdapter(Adapter):
         
         # Things
         self.got_good_things_list = False # will be true after the first sucesful call to the API
+        self.got_good_groups_list = False # experimental
         self.see_switches_as_lights = True
         
         self.periodic_mqtt_attempts = 0
@@ -334,9 +339,11 @@ class VocoAdapter(Adapter):
         self.last_injection_time = time.time() - 16 #datetime.utcnow().timestamp() #0 # The last time the things/property names list was sent to Snips.
         self.minimum_injection_interval = 15  # Minimum amount of seconds between new thing/property name injection attempts.
         self.force_injection = True # On startup, force an injection of all the names
-        self.initial_injection_attempted = False # Snips can't really understand the device and their properties until this is complete.
+        self.initial_injection_completed = False # Snips can't really understand the device and their properties until this is complete.
+        self.injection_in_progress = False # becomes true after an MQTT message is received that snips is injecting
+        self.possible_injection_failure = False
         
-        print("self.user_profile = " + str(self.user_profile))
+        #print("self.user_profile = " + str(self.user_profile))
         
         # Some paths
         self.addon_path = os.path.join(self.user_profile['addonsDir'], self.addon_name)
@@ -456,8 +463,8 @@ class VocoAdapter(Adapter):
         except Exception as e:
             print("Failed to start API handler (this only works on gateway version 0.10 or higher). Error: " + str(e))
         
-        if not self.DEBUG:
-            time.sleep(10);
+        #if not self.DEBUG:
+        
         
         # Get network info
         try:
@@ -506,9 +513,9 @@ class VocoAdapter(Adapter):
         if self.DEBUG:
             print("self.api_server is now: " + str(self.api_server))
 
-        self.run_mqtt() # this will also start run_snips once a connection is established
-        
-        time.sleep(2)
+
+        #time.sleep(20)
+
         
         # AUDIO
 
@@ -629,7 +636,7 @@ class VocoAdapter(Adapter):
             #self.set_status_on_thing("Listening")
 
 
-        time.sleep(2)
+        #time.sleep(10)
         
 
         if self.DEBUG:
@@ -1214,9 +1221,9 @@ class VocoAdapter(Adapter):
                 print("Error: run_snips called while snips was already in the process of being started")
             #return
         
-        if not self.mqtt_connected:
+        if not self.mqtt_connected and self.still_busy_booting:
             if self.DEBUG:
-                print("Error, run_snips aborted because MQTT didn't seem to be connected (yet)?")
+                print("Error, run_snips aborted because MQTT didn't seem to be connected (yet), and it's still booting?")
             return
         
         if self.persistent_data['is_satellite'] and self.persistent_data['listening'] == False: # On a satellite, don't even start the audio server if it's not supposed to be listening.
@@ -1227,6 +1234,7 @@ class VocoAdapter(Adapter):
             print("running Snips (after killing potential running snips instances)")
         
         self.busy_starting_snips = True
+        
         
         try:
             snips_processes_count = self.is_snips_running()
@@ -1443,6 +1451,11 @@ class VocoAdapter(Adapter):
     def clock(self, voice_messages_queue):
         """ Runs every second and handles the various timers """
         
+        
+        time.sleep(30);
+        self.run_mqtt() # this will also start run_snips once a connection is established
+        
+        
         self.current_utc_time = int(time.time())
         
         previous_action_times_count = 0
@@ -1468,16 +1481,25 @@ class VocoAdapter(Adapter):
                 
                 # Inject new thing names into snips if necessary
                 if time.time() - self.slow_loop_interval > self.last_slow_loop_time: # + self.minimum_injection_interval > datetime.utcnow().timestamp():
+                    self.last_slow_loop_time = time.time()
+                    
                     if self.DEBUG:
                         print("15 seconds have passed. Time: " + str(int(time.time()) % 60))
                         #print("external processes count: " + str(self.is_snips_running()))
                     
                         #print( str(time.time()) + " - " + str(self.minimum_injection_interval) + " > " + str(self.last_injection_time)  )
 
-                    self.last_slow_loop_time = time.time()
+                    
                     
                     try:
+                        print("self.mqtt_client: " + str(self.mqtt_client))
+                        if self.mqtt_client != None:
+                            print("MQTT client was not none")
+                        else:
+                            print("MQTT client doesn't exist yet.")
+                        
                         if self.should_restart_mqtt:
+                            self.should_restart_mqtt = False
                             if self.DEBUG:
                                 print("Periodic check: self.should_restart_mqtt was true - will try to run_mqtt")
                             self.run_mqtt() # try connecting again. If Mosquitto is up, then it will create the MQTT client and try to connect.
@@ -1487,8 +1509,13 @@ class VocoAdapter(Adapter):
                         elif self.mqtt_client != None:
                             # The MQTT client exists, so Mosquitto was available at least once.
                                 
-                            if time.time() - self.addon_start_time > 60:
+                            if time.time() - self.addon_start_time > 120:
+                                self.possible_injection_failure = True
                                 self.still_busy_booting = False
+                                
+                            if time.time() - self.addon_start_time > 240 and self.initial_injection_completed == False:
+                                print("attempting reboot of addon")
+                                self.close_proxy()
                                 
                             if self.still_busy_booting == False:
                                 
@@ -1518,7 +1545,14 @@ class VocoAdapter(Adapter):
                                     self.run_snips()
                             
                                 else:
-                                    print("snips did not need to be restarted")
+                                    
+                                    if self.initial_injection_completed == False and self.injection_in_progress == False:
+                                        if self.DEBUG:
+                                            print("Clock: attempting a forced injection since no injection complete message was received yet")
+                                        self.inject_updated_things_into_snips(True) # Force a new injection until it sticks
+                                    
+                                    
+                                    #print("snips did not need to be restarted")
                                     # Check if hostname has changed. This is extremely rare, but it could happen.
                                     self.update_network_info()
                                     if self.hostname != self.previous_hostname: # If the hostname was changed by the user
@@ -1616,6 +1650,17 @@ class VocoAdapter(Adapter):
                                 #    self.update_network_info()
                                 #    if self.ip_address != None:
                                 #        print("- - - sending ping to " + str(value))
+                             
+                            else:
+                                print("still busy booting??")
+                                if self.injection_in_progress == False:
+                                    if self.DEBUG:
+                                        print("Clock: attempting a forced injection since no injection complete message was received yet")
+                                    self.inject_updated_things_into_snips(True) # Force a new injection until it sticks
+                                 
+                               
+                        else:
+                            print("WARNING: clock: still no mqtt client?")
                     except Exception as ex:
                         print("clock: error in periodic ping to main Voco controller" + str(ex))            
                     
@@ -2173,7 +2218,7 @@ class VocoAdapter(Adapter):
                   'Content-Type': 'application/json',
                   'Accept': 'application/json',
                   'Authorization': 'Bearer ' + str(self.token),
-                }, verify=False, timeout=3)
+                }, verify=False, timeout=5)
             if self.DEBUG:
                 print("API GET: " + str(r.status_code) + ", " + str(r.reason))
 
@@ -2273,6 +2318,33 @@ class VocoAdapter(Adapter):
                 if self.DEBUG:
                     print("Error in try_updating_things: " + str(ex))
 
+            
+            
+            
+            # Experiment: get groups?
+            
+            try:
+                if self.DEBUG:
+                    print("experimental: trying to get groups. This will only work on gateway version 1.1")
+                fresh_groups = self.api_get("/groups")
+            
+                if hasattr(fresh_groups, 'error'):
+                    if self.DEBUG:
+                        print("try_update_things: get_api returned an error for /groups.")
+                
+                else:
+                    if fresh_groups != None:
+                        if self.DEBUG:
+                            print("updating groups was succesful: " + str(fresh_groups))
+                        self.groups = fresh_groups
+                        self.got_good_groups_list = True
+                        return True
+                    
+            except Exception as ex:
+                if self.DEBUG:
+                    print("Error in try_updating_things: " + str(ex))
+
+
 
         return False
         
@@ -2343,10 +2415,11 @@ class VocoAdapter(Adapter):
             print("WEIRD: in run_mqtt but self.mqtt_connected was already true")
             
         
-        if not self.is_mosquitto_up():
-            print("mosquitto didn't seem to be up yet. Cancelling run_mqtt")
-            self.should_restart_mqtt = True
-            return
+        #if not self.is_mosquitto_up():
+        #    print("mosquitto didn't seem to be up yet. Cancelling run_mqtt")
+        #    time.sleep(5)
+        #    self.should_restart_mqtt = True
+        #    return
             
             
         # First, close any existing MQTT client
@@ -2456,6 +2529,7 @@ class VocoAdapter(Adapter):
         #self.voco_connected = False
         self.mqtt_connected = False
         self.mqtt_busy_connecting = False
+        self.should_restart_mqtt = True
         
         if rc == 0:
             if self.DEBUG:
@@ -2614,11 +2688,18 @@ class VocoAdapter(Adapter):
             
             if msg.topic.startswith('hermes/injection/perform'):
                 self.last_injection_time = time.time() # if a site is injecting, all sites should wait a while before attempting their own injections.
-
+                self.injection_in_progress = True
+                if self.DEBUG:
+                    print("INJECTION PERFORM MESSAGE RECEIVED")
+                    
             elif msg.topic.startswith('hermes/injection/complete'):
+                if self.DEBUG:
+                    print("INJECTION COMPLETE MESSAGE RECEIVED")
+                self.possible_injection_failure = False
+                self.injection_in_progress = False
                 # Voco is now really ready
-                if self.initial_injection_attempted == False:
-                    self.initial_injection_attempted = True
+                if self.initial_injection_completed == False:
+                    self.initial_injection_completed = True
                     self.speak_welcome_message()
                
             elif msg.topic.startswith('hermes/hotword/' + self.persistent_data['site_id']):
@@ -2726,7 +2807,8 @@ class VocoAdapter(Adapter):
                     print("message topic: " + str(msg.topic))
                     
                 intent_name = os.path.basename(os.path.normpath(msg.topic))
-            
+                if self.DEBUG:
+                    print("intent_name: " + str(intent_name))
                 intent_message = json.loads(msg.payload.decode("utf-8"))
 
 
@@ -3142,7 +3224,7 @@ class VocoAdapter(Adapter):
         try:
             slots = self.extract_slots(intent_message)
             if self.DEBUG:
-                print("INCOMING SLOTS = " + str(slots))
+                print("\nFINAL INCOMING SLOTS = " + str(slots))
         except Exception as ex:
             print("Error extracting slots at beginning of intent callback: " + str(ex))
         
@@ -3389,7 +3471,7 @@ class VocoAdapter(Adapter):
         try:
             
             if force_injection == True:
-                self.force_injection = True
+                self.force_injection = True # sic (adding to self)
             
             if not self.got_good_things_list:
                 if self.DEBUG:
@@ -3400,6 +3482,11 @@ class VocoAdapter(Adapter):
                 if self.DEBUG:
                     print("An injection has already recently be performed. Should wait a while...")
                 return
+            
+            if time.time() - self.last_injection_time > 86400:
+                if self.DEBUG:
+                    print("Forcing another injection since a day has passed")
+                self.force_injection = True
             
             if self.DEBUG:
                 print("/\ /\ /\ inject_updated_things_into_snips: starting an attempt")
@@ -3430,7 +3517,7 @@ class VocoAdapter(Adapter):
                 for thing in self.things:
                     if 'title' in thing:
                         #thing_name = clean_up_string_for_speaking(str(thing['title']).lower()).strip()
-                        thing_name = clean_up_string_for_speaking(str(thing['title'])).strip()
+                        thing_name = clean_up_string_for_speaking(str(thing['title'])) #.strip()
                     
                         if len(thing_name) > 1:
                             #if self.DEBUG:
@@ -3443,12 +3530,12 @@ class VocoAdapter(Adapter):
                                 if thing['properties'][thing_property_key]['type'] == 'string':
                                     for word in thing['properties'][thing_property_key]['enum']:
                                         #property_string_name = clean_up_string_for_speaking(str(word).lower()).strip()
-                                        property_string_name = clean_up_string_for_speaking(str(word)).strip()
+                                        property_string_name = clean_up_string_for_speaking(str(word)) #.strip()
                                         if len(property_string_name) > 1:
                                             fresh_property_strings.add(property_string_name)
                             if 'title' in thing['properties'][thing_property_key]:
                                 #property_title = clean_up_string_for_speaking(str(thing['properties'][thing_property_key]['title']).lower()).strip()
-                                property_title = clean_up_string_for_speaking(str(thing['properties'][thing_property_key]['title'])).strip()
+                                property_title = clean_up_string_for_speaking(str(thing['properties'][thing_property_key]['title'])) #.strip()
                                 if len(property_title) > 1:
                                     fresh_property_titles.add(property_title)
             
@@ -3488,15 +3575,26 @@ class VocoAdapter(Adapter):
                 #print("stale: " + str(thing_titles))
                 #print("fresh: " + str(fresh_thing_titles))
                 
+                if self.DEBUG:
+                    print("self.force_injection: " + str(self.force_injection))
+                
+                
+                    print("len(thing_titles): " + str(len(thing_titles)))
+                    print("len(fresh_thing_titles): " + str(len(fresh_thing_titles)))
+                    print("diff: " + str(thing_titles^fresh_thing_titles))
                 
                 if len(thing_titles^fresh_thing_titles) > 0 or self.force_injection == True:                           # comparing sets to detect changes in thing titles
                     if self.DEBUG:
+                        if self.force_injection:
+                            print("FORCED:")
                         print("Teaching Snips the updated thing titles:")
                         print(str(list(fresh_thing_titles)))
                     #operations.append(
                     #    AddFromVanillaInjectionRequest({"Thing" : list(fresh_thing_titles) })
                     #)
                     # small hack to make mass-switching of lights easier.
+                    self.persistent_data['thing_titles'] = list(fresh_thing_titles)
+                    
                     fresh_thing_titles.add('lights')
                     operation = ('addFromVanilla',{"Thing" : list(fresh_thing_titles) })
                     operations.append(operation)
@@ -3508,6 +3606,8 @@ class VocoAdapter(Adapter):
                     #operations.append(
                     #    AddFromVanillaInjectionRequest({"Property" : list(fresh_property_titles) + self.extra_properties + self.capabilities + self.generic_properties + self.numeric_property_names})
                     #)
+                    self.persistent_data['property_titles'] = list(fresh_property_titles)
+                    
                     fresh_property_titles.add('all')
                     operation = ('addFromVanilla',{"Property" : list(fresh_property_titles) })
                     operations.append(operation)
@@ -3519,25 +3619,27 @@ class VocoAdapter(Adapter):
                     #operations.append(
                     #    AddFromVanillaInjectionRequest({"string" : list(fresh_property_strings) })
                     #)
+                    self.persistent_data['property_strings'] = list(fresh_property_strings)
+                    
                     operation = ('addFromVanilla',{"string" : list(fresh_property_strings) })
                     operations.append(operation)
                 
                 #if self.DEBUG:
                 #    print("operations: " + str(operations))
                     
+                
+                    
+                print("operations length: " + str(len(operations)))
                     
                 # Check if Snips should be updated with fresh data
-                if operations != []:
-                
+                if len(operations) > 0 or self.force_injection:
+                    self.force_injection = False
                     update_request = {"operations":operations}
             
                     if self.DEBUG:
                         print("/\ /\ /\ Injecting names into Snips! update_request json: " + str(json.dumps(update_request)))
                 
                     try:
-                        self.persistent_data['thing_titles'] = list(fresh_thing_titles)
-                        self.persistent_data['property_titles'] = list(fresh_property_titles)
-                        self.persistent_data['property_strings'] = list(fresh_property_strings)
                         self.save_persistent_data()
                     except Exception as ex:
                          print("Error saving thing details to persistence: " + str(ex))
@@ -3565,7 +3667,7 @@ class VocoAdapter(Adapter):
                 else:
                     if self.DEBUG:
                         print("\/ \/ \/ No need for injection")
-
+                
             
             
             
@@ -3628,7 +3730,7 @@ class VocoAdapter(Adapter):
     #def check_things(self, boolean_related, target_thing_title, target_property_title, target_space ):
     def check_things(self, intent, slots):
         if self.DEBUG:
-            print("[?]")
+            print("\n[?] in thing scanner [?]")
             print("intent: " + str(intent))
             print("Searching for matching thing. Scan slots: " + str(slots))
         
@@ -3656,6 +3758,68 @@ class VocoAdapter(Adapter):
             # get_boolean
             # set_state
          """    
+
+
+        #
+        #  PRE CHECKING AND FIXING
+        #
+        
+        # do a pre-check that may split up long thing titles into a thing and property, but only if there is a perfect match, and only works for one-word titles and properties. #TODO could be improved by actually looking inside things to see if the property is present.
+        #separationHints = [ "in" ]
+        #two_parts = re.split('|'.join(r'(?:\b\w*'+re.escape(w)+r'\w*\b)' for w in meetingStrings), text, 1)[-1] # looks for parts of separator words.
+        if slots['property'] == None and not slots['thing'] in self.persistent_data['thing_titles']:
+            print(" *  *  *   *")
+            print("property was none, and thing title was not directly found in things titles list")
+            print("self.persistent_data['thing_titles'] = " + str(self.persistent_data['thing_titles']))
+            print("self.persistent_data['property_titles'] = " + str(self.persistent_data['property_titles']))
+            print(" *  *  *  *")
+            
+            old_title_parts = slots['thing'].split(' ') #.partition(" ") #partition splits into two parts. Also useful, but not here.
+            thing_title_detected = ""
+            property_title_detected = ""
+            print("len(property_title_detected): " + str(len(property_title_detected)))
+            
+            print("old_title_parts: " + str(old_title_parts))
+            for word in old_title_parts:
+                
+                if len(word) > 3:
+                    print("word: " + str(word))
+                    
+                    for thing in self.things:
+                        if word == clean_up_string_for_speaking(thing['title']):
+                            print("THING TITLE MATCH: " + str(word))
+                            print("thing['properties']: " + json.dumps(thing['properties'], indent=4))
+                            for word2 in old_title_parts:
+                                if word2 != word and len(word2) > 3: # the current word is already taken by the thing now
+                                    print(" -word2: " + str(word2))
+                                    for thing_property_key in thing['properties']:
+                                        print(" - > ? : " + str( clean_up_string_for_speaking( thing['properties'][thing_property_key]['title'] ) ))
+                                        if word2 == clean_up_string_for_speaking( thing['properties'][thing_property_key]['title'] ):
+                                            
+                                            slots['thing'] = word
+                                            slots['property'] = word2
+                                            print("---> managed to split a thing string into thing and property strings * * *")
+                                            break
+                    
+            """        
+                    if len(property_title_detected) == 0 and word in self.persistent_data['property_titles']:
+                        property_title_detected = word
+                    elif len(thing_title_detected) == 0 and word in self.persistent_data['thing_titles']:
+                        thing_title_detected = word
+                else:
+                    print("skipping short word: " + str(word))
+                    
+
+            
+                    
+            print("after: thing_title_detected: " + str(thing_title_detected))
+            print("after: thing_property_detected: " + str(thing_property_detected))
+                    
+            if thing_title_detected != "" and property_title_detected != "":
+                slots['thing'] = thing_title_detected
+                slots['property'] = property_title_detected
+                print("managed to split a thing string into thing and property strings")
+        """
 
             
         # Check if the property name is even possible. It not, set it to None.
@@ -3708,6 +3872,7 @@ class VocoAdapter(Adapter):
             target_thing_title = str(target_thing_title).lower()
             if self.DEBUG:
                 print("-> target thing title is: " + str(target_thing_title))
+        
         
         
         thing_must_have_capability = None
@@ -3865,7 +4030,8 @@ class VocoAdapter(Adapter):
                                 exact_property_title_match = True
                     
                         if exact_property_title_match == False:
-                            print("NO exact property title match spotted. Skipping thing.")
+                            #if self.DEBUG:
+                            #    print("NO exact property title match spotted. Skipping thing.")
                             continue
                     #if slots['property'] != None and exact_property_title_match == False:
                     #    print("NO exact property title match spotted. Skipping thing.")
@@ -3879,15 +4045,16 @@ class VocoAdapter(Adapter):
                             #    print("Exact property title match found, and this isn't it: " + str(thing['properties'][thing_property_key]['title'].lower()))
                             continue
                         else:
-                            if self.DEBUG:
-                                print(" ")
-                                print(" exact property title match")
+                            pass
+                            #if self.DEBUG:
+                            #    print(" ")
+                            #    print(" exact property title match")
                             
-                        if self.DEBUG:
-                            print("thing_property_key = " + str(thing_property_key))
-                        print("check_things__loop__ Property details: " + str(thing['properties'][thing_property_key]))
+                        #if self.DEBUG:
+                        #    print("thing_property_key = " + str(thing_property_key))
+                        #print("check_things__loop__ Property details: " + str(thing['properties'][thing_property_key]))
 
-                        print("_")
+                        #print("_")
                         if slots['number'] != None:
                             print("make_comparable number: " + make_comparable(slots['number']))
                         if slots['percentage'] != None:
@@ -3899,8 +4066,8 @@ class VocoAdapter(Adapter):
 
 
                         
-                        print("boolean_related: " + str(boolean_related))
-                        print("prop type: " + str(thing['properties'][thing_property_key]['type']))
+                        #print("boolean_related: " + str(boolean_related))
+                        #print("prop type: " + str(thing['properties'][thing_property_key]['type']))
                         # If we're looking for a boolean, and it's not, skip it. # TODO: does this impact enum properties with on and off values??
                         if boolean_related and thing['properties'][thing_property_key]['type'] != 'boolean':
                             if self.DEBUG:
@@ -3965,6 +4132,7 @@ class VocoAdapter(Adapter):
                         try:
                             if 'unit' in thing['properties'][thing_property_key]:
                                 print("has unit: " + str(thing['properties'][thing_property_key]['unit']))
+                                match_dict['unit'] = str(thing['properties'][thing_property_key]['unit'])
                                 
                                 if str(thing['properties'][thing_property_key]['unit']).startswith('percent') or str(thing['properties'][thing_property_key]['unit']) == "%":
                                     print("--spotted percent unit")
@@ -4291,7 +4459,7 @@ class VocoAdapter(Adapter):
                                 if "on" in found_property['enum'] or "off" in found_property['enum']:
                                     print("this enum can stay: " + str(found_property['enum']) )
                             
-                            print("is deleting destroying the result? " + str(result))
+                            #print("is deleting destroying the result? " + str(result))
                             
                             index += 1
                             
@@ -4398,15 +4566,14 @@ class VocoAdapter(Adapter):
             print("Could not extract full sentence into a slot: " + str(ex))
 
         for item in intent_message['slots']:
-            print(" ")
-            print("EXtract slots ITEM: " + str(item))
+            #print(" ")
+            #print("EXtract slots ITEM: " + str(item))
             try:
                 if self.DEBUG:
-                    print("extract slots: " + str(item['value']['kind']))
+                    print("extracting slot: " + str(item['value']['kind']) + " -> " + str(item['slotName']))
                     if 'value' in item['value']:
                         print( " with value: " + str(item['value']['value']) )
                         
-                    print(" - item['slotName']: " + str(item['slotName']))
                     
                 if item['value']['kind'] == 'InstantTime':
                     if self.DEBUG:
@@ -4490,7 +4657,7 @@ class VocoAdapter(Adapter):
                 else:
                     print("extract slots: in else. item: " + str(item))
                     if slots[item['slotName']] == None:
-                        print("wait..what? " + str(item['slotName']))
+                        print("wait..what? this slot did not exist yet: " + str(item['slotName']))
                         slots[item['slotName']] = item['value']['value']
                     else:
                         if self.DEBUG:
@@ -4747,6 +4914,12 @@ class VocoAdapter(Adapter):
             print(" -- sub processes count: " + str(len(self.external_processes)))
             print(" -- snips_actual_processes_count = " + str(snips_actual_processes_count))
         
+        if len(self.external_processes) == 14:
+            self.should_restart_snips = True
+            
+        if len(self.external_processes) == 28:
+            print("ERROR. Voco seems to be stuck in a loop where it is unable to start properly. Will try to restart the addon.")
+            self.close_proxy() #restart the addon
             
         #return bool(len(self.external_processes))
         return snips_actual_processes_count
@@ -4758,6 +4931,7 @@ class VocoAdapter(Adapter):
             result = False
             try:
                 sock.bind((self.persistent_data['mqtt_server'], self.mqtt_port))
+                print("manage to bind to the MQTT port.. Uh, that's not good?")
             except:
                 print("MQTT port is in use")
                 result = True
