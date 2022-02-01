@@ -511,7 +511,7 @@
 }
 
 #extension-voco-text-input-field{
-	padding: .7rem 1.3rem;
+	padding: 1rem 1.3rem;
 	font-size: 2rem;
 	min-width:20rem;
 	flex-grow:1;
@@ -519,6 +519,7 @@
 	border-bottom-left-radius: .5rem;
 	border: none;
 	outline: none;
+    margin:0 1rem 0 0;
 }
 
 #extension-voco-text-response-container{
