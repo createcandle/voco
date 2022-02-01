@@ -1510,8 +1510,9 @@ class VocoAdapter(Adapter):
                             # The MQTT client exists, so Mosquitto was available at least once.
                                 
                             if time.time() - self.addon_start_time > 120:
-                                self.possible_injection_failure = True
                                 self.still_busy_booting = False
+                                if self.initial_injection_completed == False:
+                                    self.possible_injection_failure = True
                                 
                             if time.time() - self.addon_start_time > 240 and self.initial_injection_completed == False:
                                 print("attempting reboot of addon")

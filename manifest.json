@@ -37,7 +37,7 @@
       "Hotword sensitivity": "0.5",
       "System audio volume": 90,
       "Sound detection": false,
-      "Hey Candle": false,
+      "Hey Candle": true,
       "Satellite device control":true,
       "Debugging": false
     },
@@ -182,7 +182,7 @@
     }
   },
   "short_name": "Voco",
-  "version": "2.7.0",
+  "version": "2.7.1",
   "web_accessible_resources": [
     "css/*.css",
     "images/*.svg",
