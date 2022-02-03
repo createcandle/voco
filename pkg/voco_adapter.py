@@ -2250,29 +2250,26 @@ class VocoAdapter(Adapter):
             else:
                 to_return = r.text
                 try:
-                    if self.DEBUG:
-                        print("api_get: received: " + str(r))
-                    #for prop_name in r:
-                    #    print(" -> " + str(prop_name))
-                    if not '{' in r.text:
-                        if self.DEBUG:
-                            print("api_get: response was not json (gateway 1.1.0 does that). Turning into json...")
+                    print("api_get: received: " + str(r))
+                    for bla in r:
+                        print(" -> " + str(bla))
+                    if '{' in r.text:
+                        print("found { in response")
+                    else:
+                        print("api_get: response was not json. Turning into json...")
                         
                         if 'things/' in api_path and '/properties/' in api_path:
-                            if self.DEBUG:
-                                print("properties was in api path: " + str(api_path))
+                            print("properties was in api path: " + str(api_path))
                             likely_property_name = api_path.rsplit('/', 1)[-1]
                             to_return = {}
                             to_return[ likely_property_name ] = json.loads(r.text)
-                            if self.DEBUG:
-                                print("returning fixed: " + str(to_return))
+                            print("returning fixed: " + str(to_return))
                             return to_return
                                 
                 except Exception as ex:
                     print("api_get_fix error: " + str(ex))
                         
-                if self.DEBUG:
-                    print("returning without 1.1.0 fix")
+                print("returning without 1.1.0 fix")
                 return json.loads(r.text)
             
         except Exception as ex:
@@ -2302,15 +2299,13 @@ class VocoAdapter(Adapter):
             if self.gateway_version != "1.0.0":
         
                 if 'things/' in api_path and '/properties/' in api_path:
-                    if self.DEBUG:
-                        print("PUT: properties was in api path: " + str(api_path))
+                    print("PUT: properties was in api path: " + str(api_path))
                     for bla in json_dict:
                         property_was = bla
                         simpler_value = json_dict[bla]
                         json_dict = simpler_value
                     #simpler_value = [elem[0] for elem in json_dict.values()]
-                    if self.DEBUG:
-                        print("simpler 1.1.0 value to put: " + str(simpler_value))
+                    print("simpler value to put: " + str(simpler_value))
                     simplified = True
                     #likely_property_name = api_path.rsplit('/', 1)[-1]
                     #to_return = {}
@@ -2334,6 +2329,7 @@ class VocoAdapter(Adapter):
             )
             if self.DEBUG:
                 print("API PUT: " + str(r.status_code) + ", " + str(r.reason))
+
                 print("PUT returned: " + str(r.text))
 
             if r.status_code != 200:
