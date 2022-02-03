@@ -234,9 +234,13 @@ def make_comparable(value):
 def get_api_url(link_list):
     for link in link_list:
         #print("link item = " + str(link))
-        if link['rel'] == 'property':
-            return link['href']
-    return None
+        if 'rel' in link:
+            if link['rel'] == 'property':
+                return link['href']
+                
+    return link_list[0]['href']
+            
+    #return None
 
 
 

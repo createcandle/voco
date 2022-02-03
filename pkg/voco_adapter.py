@@ -2248,6 +2248,31 @@ class VocoAdapter(Adapter):
                 return {"error": str(r.status_code)}
                 
             else:
+                to_return = r.text
+                try:
+                    if self.DEBUG:
+                        print("api_get: received: " + str(r))
+                    #for prop_name in r:
+                    #    print(" -> " + str(prop_name))
+                    if not '{' in r.text:
+                        if self.DEBUG:
+                            print("api_get: response was not json (gateway 1.1.0 does that). Turning into json...")
+                        
+                        if 'things/' in api_path and '/properties/' in api_path:
+                            if self.DEBUG:
+                                print("properties was in api path: " + str(api_path))
+                            likely_property_name = api_path.rsplit('/', 1)[-1]
+                            to_return = {}
+                            to_return[ likely_property_name ] = json.loads(r.text)
+                            if self.DEBUG:
+                                print("returning fixed: " + str(to_return))
+                            return to_return
+                                
+                except Exception as ex:
+                    print("api_get_fix error: " + str(ex))
+                        
+                if self.DEBUG:
+                    print("returning without 1.1.0 fix")
                 return json.loads(r.text)
             
         except Exception as ex:
@@ -2262,14 +2287,40 @@ class VocoAdapter(Adapter):
 
     def api_put(self, api_path, json_dict, intent='default'):
         """Sends data to the WebThings Gateway API."""
-
-        if self.DEBUG:
-            print("PUT > api_path = " + str(api_path))
-            print("PUT > json dict = " + str(json_dict))
-            print("PUT > self.api_server = " + str(self.api_server))
-            print("PUT > intent = " + str(intent))
+        
+        try:
+        
+            if self.DEBUG:
+                print("PUT > api_path = " + str(api_path))
+                print("PUT > json dict = " + str(json_dict))
+                print("PUT > self.api_server = " + str(self.api_server))
+                print("PUT > intent = " + str(intent))
+                print("self.gateway_version: " + str(self.gateway_version))
+        
+            simplified = False
+            property_was = None
+            if self.gateway_version != "1.0.0":
+        
+                if 'things/' in api_path and '/properties/' in api_path:
+                    if self.DEBUG:
+                        print("PUT: properties was in api path: " + str(api_path))
+                    for bla in json_dict:
+                        property_was = bla
+                        simpler_value = json_dict[bla]
+                        json_dict = simpler_value
+                    #simpler_value = [elem[0] for elem in json_dict.values()]
+                    if self.DEBUG:
+                        print("simpler 1.1.0 value to put: " + str(simpler_value))
+                    simplified = True
+                    #likely_property_name = api_path.rsplit('/', 1)[-1]
+                    #to_return = {}
+            
+            
+        except Exception as ex:
+            print("Error preparing PUT: " + str(ex))
 
         headers = {
+            'Content-Type': 'application/json',
             'Accept': 'application/json',
             'Authorization': 'Bearer {}'.format(self.token),
         }
@@ -2283,13 +2334,18 @@ class VocoAdapter(Adapter):
             )
             if self.DEBUG:
                 print("API PUT: " + str(r.status_code) + ", " + str(r.reason))
+                print("PUT returned: " + str(r.text))
 
             if r.status_code != 200:
                 if self.DEBUG:
                     print("Error communicating: " + str(r.status_code))
                 return {"error": str(r.status_code)}
             else:
-                return_value = json.loads(r.text)
+                if simplified:
+                    return_value = {property_was:json.loads(r.text)} # json.loads('{"' + property_was + '":' + r.text + '}')
+                else:
+                    return_value = json.loads(r.text)
+                
                 return_value['succes'] = True
                 return return_value
 

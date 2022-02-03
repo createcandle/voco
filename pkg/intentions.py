@@ -706,8 +706,8 @@ def intent_get_value(self, slots, intent_message,found_properties):
                     
                 try:
                     key = list(api_result.keys())[0]
-                except:
-                    print("get_value: error parsing the returned json")
+                except exception as ex:
+                    print("get_value: error parsing the returned json: " + str(ex))
                     continue
                     
                 if key == "error":
@@ -884,8 +884,8 @@ def intent_set_state(self, slots, intent_message, found_properties, delayed_acti
                     
                     try:
                         key = list(api_result.keys())[0]
-                    except:
-                        print("set_state: error parsing the returned json")
+                    except Exception as ex:
+                        print("set_state: error parsing the returned json: " + str(ex))
                         continue
                         
                     if key == "error":
