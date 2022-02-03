@@ -26,7 +26,7 @@
   "name": "Voco",
   "options": {
     "default": {
-      "Token": "",
+      "Authorization token": "",
       "Metric": true,
       "Microphone": "Attached device (1,0)",
       "Speaker": "Auto",
@@ -38,7 +38,7 @@
       "System audio volume": 90,
       "Sound detection": false,
       "Hey Candle": true,
-      "Satellite device control":true,
+      "Satellite device control": true,
       "Debugging": false
     },
     "schema": {
@@ -176,7 +176,7 @@
       "required": [
         "Microphone",
         "Speaker",
-        "Token"
+        "Authorization token"
       ],
       "type": "object"
     }
