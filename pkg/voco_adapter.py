@@ -4218,8 +4218,13 @@ class VocoAdapter(Adapter):
                                 "enum": None,
                                 'unit':None,
                                 "options": None, #thing['properties'][thing_property_key],
-                                "property_url": get_api_url(thing['properties'][thing_property_key]['links'])
+                                "property_url": None
                                 }
+
+                        if 'links' in thing['properties'][thing_property_key]:
+                            match_dict['property_url'] = get_api_url(thing['properties'][thing_property_key]['links'])
+                        else:
+                            match_dict['property_url'] = get_api_url(thing['properties'][thing_property_key]['forms'])
 
                         # get type
                         try:
@@ -4488,13 +4493,19 @@ class VocoAdapter(Adapter):
                                     probability_of_correct_property = 1
                                     match_dict['property'] = current_property_title
                                     #match_dict['type'] = thing['properties'][thing_property_key]['type']
-                                    match_dict['property_url'] = get_api_url(thing['properties'][thing_property_key]['links'])
-
+                                    if 'links' in thing['properties'][thing_property_key]:
+                                        match_dict['property_url'] = get_api_url(thing['properties'][thing_property_key]['links'])
+                                    else:
+                                        match_dict['property_url'] = get_api_url(thing['properties'][thing_property_key]['forms'])
+                                        
                                 if thing['properties'][thing_property_key]['type'] != 'boolean' and probability_of_correct_property < 2:
                                     probability_of_correct_property = 1
                                     match_dict['property'] = current_property_title
                                     #match_dict['type'] = thing['properties'][thing_property_key]['type']
-                                    match_dict['property_url'] = get_api_url(thing['properties'][thing_property_key]['links'])
+                                    if 'links' in thing['properties'][thing_property_key]:
+                                        match_dict['property_url'] = get_api_url(thing['properties'][thing_property_key]['links'])
+                                    else:
+                                        match_dict['property_url'] = get_api_url(thing['properties'][thing_property_key]['forms'])
                                     #if match_dict['property_url'] != None: # If we found anything, then append it.
                                     #    result.append(match_dict.copy())
                                 
