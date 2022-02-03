@@ -207,8 +207,8 @@ def intent_set_timer(self, slots, intent_message):
                 #pattern = r'(?:remind(?:er)?\s?(?:me|us)?\s?(to)?)([\w\s]*)(\bat|in\b)(?!.*\b\3\b)'
                 pattern = r'(?:remind(?:er)?\s?(?:me|us)?\s?(to)?)([\w\s\']*)'
                 matches = re.search(pattern, sentence)
-                print("reminder regex matches: " + str(matches))
                 if self.DEBUG:
+                    print("reminder regex matches: " + str(matches))
                     print("Reminder text:" + str(matches.group(2)))
                 
                 # a little heuristic to prevent reminders being set for "for".
@@ -217,10 +217,11 @@ def intent_set_timer(self, slots, intent_message):
                     return
                 
                 if matches != None:
-                    print("matches.group(1): " + str(matches.group(1)))
-                    print("matches.group(1) len: " + str(len(matches.group(1))))
-                    print("matches.group(2): " + str(matches.group(2)))
-                    print("matches.group(2) len: " + str(len(matches.group(2))))
+                    if self.DEBUG:
+                        print("set_timer: matches.group(1): " + str(matches.group(1)))
+                        print("set_timer: matches.group(1) len: " + str(len(matches.group(1))))
+                        print("set_timer: matches.group(2): " + str(matches.group(2)))
+                        print("set_timer: matches.group(2) len: " + str(len(matches.group(2))))
                     #my_string.split("world",1)[1]
                     matched_sentence = matches.group(2)
                     if matched_sentence.endswith(" at"):
@@ -815,8 +816,9 @@ def intent_get_value(self, slots, intent_message,found_properties):
 
 # Toggling the state of boolean properties
 def intent_set_state(self, slots, intent_message, found_properties, delayed_action=None):   # If it is called from a timer, the delayed_action will be populated.
-    print("  5 5 5 5 5 5 5  5   5  5  5  5  5  5 5 5  5  5 5 5 5  5  5 5 5  5 5 5 ")
-    print("in intent_set_state")
+    if self.DEBUG:
+        print("  5 5 5 5 5 5 5  5   5  5  5  5  5  5 5 5  5  5 5 5 5  5  5 5 5  5 5 5 ")
+        print("in intent_set_state")
     sentence = slots['sentence']
     double_time = False
 
