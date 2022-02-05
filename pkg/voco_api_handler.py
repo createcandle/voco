@@ -101,8 +101,8 @@ class VocoAPIHandler(APIHandler):
                             try:
                                 
                             
-                                self.adapter.token = str(request.body['jwt'])
-                                self.adapter.persistent_data['token'] = str(request.body['jwt'])
+                                #self.adapter.token = str(request.body['jwt'])
+                                #self.adapter.persistent_data['token'] = str(request.body['jwt'])
                                 
                                 # reset text response in UI
                                 
@@ -112,8 +112,9 @@ class VocoAPIHandler(APIHandler):
                                 self.adapter.update_network_info()
                             
                                 # Ask for latest info from other Voco instances
-                                self.adapter.mqtt_client.publish("hermes/voco/ping",json.dumps({'ip':self.adapter.ip_address,'site_id':self.adapter.persistent_data['site_id']}))
-                                sleep(1)
+                                if self.adapter.mqtt_client != None:
+                                    self.adapter.mqtt_client.publish("hermes/voco/ping",json.dumps({'ip':self.adapter.ip_address,'site_id':self.adapter.persistent_data['site_id']}))
+                                    sleep(1)
                             
                                 # Satellite targets
                                 self.adapter.gateways_ip_list = arpa_detect_gateways()

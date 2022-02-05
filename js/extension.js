@@ -14,6 +14,19 @@
 			this.items_list = [];
 			this.current_time = 0;
 
+            const jwt = localStorage.getItem('jwt');
+
+	        window.API.postJson(
+	          `/extensions/${this.id}/api/update`,
+				{'action':'token','token':jwt}
+
+	        ).then((body) => {
+
+	        }).catch((e) => {
+	  			console.log("Error saving token: ", e);
+	        });
+            
+
 			fetch(`/extensions/${this.id}/views/content.html`)
 	        .then((res) => res.text())
 	        .then((text) => {
@@ -120,7 +133,7 @@
 				}
 				//console.log("Sending text command");
 				
-		  		// Save token
+		  		// Send text query
 		        window.API.postJson(
 		          `/extensions/voco/api/parse`,
 					{'text':text}
@@ -155,12 +168,10 @@
 			try{
 				pre.innerText = "";
 				
-                const jwt = localStorage.getItem('jwt');
                 
 		  		// Init
 		        window.API.postJson(
-		          `/extensions/${this.id}/api/init`,
-                    {'jwt':jwt}
+		          `/extensions/${this.id}/api/init`
 
 		        ).then((body) => {
 					//console.log("Init API result:");
