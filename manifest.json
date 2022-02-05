@@ -182,7 +182,7 @@
     }
   },
   "short_name": "Voco",
-  "version": "2.7.7",
+  "version": "2.7.8",
   "web_accessible_resources": [
     "css/*.css",
     "images/*.svg",

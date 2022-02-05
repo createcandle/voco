@@ -155,9 +155,12 @@
 			try{
 				pre.innerText = "";
 				
+                const jwt = localStorage.getItem('jwt');
+                
 		  		// Init
 		        window.API.postJson(
-		          `/extensions/${this.id}/api/init`
+		          `/extensions/${this.id}/api/init`,
+                    {'jwt':jwt}
 
 		        ).then((body) => {
 					//console.log("Init API result:");

@@ -99,8 +99,13 @@ class VocoAPIHandler(APIHandler):
                                 print("Handling request to /init")
                             
                             try:
+                                
                             
+                                self.adapter.token = str(request.body['jwt'])
+                                self.adapter.persistent_data['token'] = str(request.body['jwt'])
+                                
                                 # reset text response in UI
+                                
                                 self.adapter.last_text_response = ""
                             
                                 # Update IP address and hostname

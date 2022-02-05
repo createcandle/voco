@@ -1433,12 +1433,12 @@ class VocoAdapter(Adapter):
                 if self.persistent_data['is_satellite'] == False and self.token == None:
                     time.sleep(1)
                     print("PLEASE ENTER YOUR AUTHORIZATION CODE IN THE SETTINGS PAGE")
-                    self.set_status_on_thing("Authorization code missing")
-                    self.speak("I cannot connect to your devices because the authorization token is missing. Please create an authorization token.",intent={'siteId':self.persistent_data['site_id']})
+                    self.set_status_on_thing("Please open the Voco page")
+                    #self.speak("I do not have pemission to access your devices yet. You can grant this permission .",intent={'siteId':self.persistent_data['site_id']})
             
                 if self.first_run:
                     time.sleep(1)
-                    self.speak("If you would like to ask me something, say something like. Hey Snips. ",intent={'siteId':self.persistent_data['site_id']})
+                    self.speak("If you would like to ask me something, start by saying. Hey Snips. ",intent={'siteId':self.persistent_data['site_id']})
         
             except Exception as ex:
                 print("Error saying hello: " + str(ex))
