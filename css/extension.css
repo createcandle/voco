@@ -537,6 +537,9 @@
 	line-height:3rem;
 }
 
+#extension-voco-text-response-field:first-letter{
+  text-transform: capitalize;
+}
 
 /*   VOCO  satellites   */
 

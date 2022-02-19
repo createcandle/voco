@@ -39,7 +39,7 @@
 	        .catch((e) => console.error('Failed to fetch content:', e));
 	    }
 
-		/*
+		
 		// Cannot be used currently because of small bug in gateway
 		hide() {
 			console.log("voco hide called");
@@ -51,7 +51,7 @@
 				console.log("no interval to clear? " + e);
 			}
 		}
-		*/
+		
 
 	    show() {
 			//console.log("voco show called");
@@ -372,7 +372,7 @@
 							this.regenerate_items();
 						}
 						else{
-							list.innerHTML = '<div class="extension-voco-centered-page" style="text-align:center"><p>There are currently no active timers, reminders or alarms.</p><p style="font-size:70%">Satellites will show an empty list because all their timers are managed by the main device.</p></div>';
+							//list.innerHTML = '<div class="extension-voco-centered-page" style="text-align:center"><p>There are currently no active timers, reminders or alarms.</p><p style="font-size:70%">Satellites will show an empty list because all their timers are managed by the main device.</p></div>';
 						}
 						//clearInterval(this.interval); // used to debug CSS
 					}
@@ -396,7 +396,7 @@
 			}
 		
 		
-			this.interval = setInterval(function(){
+			this.interval = setInterval( () => {
 				
 				try{
 					if( main_view.classList.contains('selected') ){
@@ -466,7 +466,7 @@
 					}
 				}catch(e){"Voco polling error: " + console.log(e)}
 				
-			}.bind(this), 1000);
+			}, 1000);
 			
 
 			// TABS

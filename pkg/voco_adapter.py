@@ -370,9 +370,17 @@ class VocoAdapter(Adapter):
         self.response_wav = os.path.join(os.sep,"tmp","response.wav")
         self.response2_wav = os.path.join(os.sep,"tmp","response2.wav")
 
-        # UI
-        #self.show_ui = True
         
+        # Check if (netbios) ip to hostname conversion tool is available
+        self.nbtscan_available = None
+        try:
+            nbtscan_test = str(subprocess.check_output(['whereis','nbtscan']))
+            if '/nbtscan' in nbtscan_test:
+                self.nbtscan_available = True
+            else:
+                self.nbtscan_available = False
+        except:
+            self.nbtscan_available = False
 
 
         # Make sure the work directory exists
@@ -1930,7 +1938,11 @@ class VocoAdapter(Adapter):
                             print("clock: poll error count was: " + str(poll_error_count))
                             alternative_process_counter = self.is_snips_running()
                             print("clock: second opinion on Snips being down: self.is_snips_running() count: " + str(alternative_process_counter))
-                            if alternative_process_counter < 7:
+                            
+                            if self.persistent_data['is_satellite']:
+                                if alternative_process_counter == 0:
+                                    self.should_restart_snips = True
+                            elif alternative_process_counter < 7:
                                 self.should_restart_snips = True
 
 

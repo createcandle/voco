@@ -118,9 +118,20 @@ class VocoAPIHandler(APIHandler):
                             
                                 # Satellite targets
                                 self.adapter.gateways_ip_list = arpa_detect_gateways()
+                                        
                                 satellite_targets = {}
                                 for ip_address in self.adapter.gateways_ip_list:
-                                    if ip_address in self.adapter.mqtt_others:
+                                    
+                                    if self.adapter.nbtscan_available:
+                                        nbtscan_output = str(subprocess.check_output(['nbtscan','-q',str(ip_address)]))
+                                        if len(nbtscan_output) > 10:
+                                            shorter = nbtscan_output.split(" ",1)[1]
+                                            shorter = shorter.lstrip()
+                                            parts = shorter.split()
+                                            satellite_targets[ip_address] = parts[0]
+                                        else:
+                                            satellite_targets[ip_address] = ip_address
+                                    elif ip_address in self.adapter.mqtt_others:
                                         satellite_targets[ip_address] = self.adapter.mqtt_others[ip_address] # should give the site_id
                                     else:
                                         satellite_targets[ip_address] = ip_address # if there is no known site_id for this IP addres, just give it the ip address as the name
