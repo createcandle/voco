@@ -1109,6 +1109,7 @@ class VocoAdapter(Adapter):
                 output_device_string = "plughw:" + str(self.current_card_id) + "," + str(self.current_device_id)
                 
                 if self.bluetooth_device_mac != None:
+                    subprocess.run(['pkill','ffplay'], capture_output=True, shell=False, check=False, encoding=None, errors=None, text=None, env=None, universal_newlines=None)
                     output_device_string = "bluealsa:DEV=" + str(self.bluetooth_device_mac)
                 
                 sound_command = ["aplay", str(sound_file),"-D", output_device_string]
@@ -1187,7 +1188,7 @@ class VocoAdapter(Adapter):
                 voice_message = voice_message.replace(']', '')
     
                 for option in self.audio_controls:
-                    if str(option['human_device_name']) == str(self.persistent_data['audio_output']):
+                    if str(option['human_device_name']) == str(self.persistent_data['audio_output']) or str(self.persistent_data['audio_output']) == 'Bluetooth speaker':
                         environment["ALSA_CARD"] = str(option['simple_card_name'])
                         if self.DEBUG:
                             print("Alsa environment variable for speech output set to: " + str(option['simple_card_name']))
@@ -1254,7 +1255,7 @@ class VocoAdapter(Adapter):
                         except Exception as ex:
                             print("Error playing spoken voice response: " + str(ex))
         
-        
+                        break
             else:
                 if self.DEBUG:
                     print("speaking: site_id '" + str(site_id) + "' is not relevant for this site, will publish to MQTT")
