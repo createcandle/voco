@@ -44,7 +44,7 @@
     "schema": {
       "properties": {
         "Authorization token": {
-          "description": "To be allowed to get information on all your devices, you have to create an 'authorization' code. It's basically a very long password. You can generate it yourself under Settings -> Developer -> Create local authorization. Any code you add here will override the code set throug the interface.",
+          "description": "Advanced. To be allowed to get information on all your devices, you have to create an 'authorization' code. It's basically a very long password. You can generate it yourself under Settings -> Developer -> Create local authorization. Any code you add here will override the code set throug the interface.",
           "type": "string"
         },
         "Metric": {
@@ -64,16 +64,17 @@
           "type": "string"
         },
         "Speaker": {
-          "description": "In some cases the Raspberry Pi might be set to a specific audio output. Here you can 'force' it to be a certain output. Default is 'auto', where it tries to auto-detect the last thing you plugged in (HDMI cable or audio jack).",
+          "description": "Advanced. In some cases the Raspberry Pi might be set to a specific audio output. Here you can 'force' it to be a certain output. Default is 'auto', where it tries to auto-detect the last thing you plugged in (HDMI cable or audio jack). The bluetooth option is experimental, and will only work if you have connected a Bluetooth speaker through the Bluetooth Pairing addon.",
           "enum": [
             "Auto",
             "Headphone jack",
-            "HDMI"
+            "HDMI",
+			"Bluetooth"
           ],
           "type": "string"
         },
         "Audio sample rate": {
-          "description": "In rare cases, if you are using a USB speaker you may need to set a specific samplerate before the speaker will play audio, or play it at the correct speed. If you use a Jabra USB speaker you probably have to set this to 48000.",
+          "description": "Advanced. In rare cases, if you are using a USB speaker you may need to set a specific samplerate before the speaker will play audio, or play it at the correct speed. If you use a Jabra USB speaker you probably have to set this to 48000.",
           "enum": [
             "16000",
             "44100",
@@ -153,7 +154,7 @@
           "type": "string"
         },
         "System audio volume": {
-          "description": "When provided, the system volume will be set to this volume percentage level when Voco starts. This is separate from Voco's own volume, which is relative to the system volume. Can be between 0 and 100 percent.",
+          "description": "Advanced. When provided, the system volume will be set to this volume percentage level when Voco starts. This is separate from Voco's own volume, which is relative to the system volume. Can be between 0 and 100 percent. The default is 95.",
           "type": "integer"
         },
         "Sound detection": {
@@ -169,7 +170,7 @@
           "type": "boolean"
         },
         "Debugging": {
-          "description": "Debugging allows you to diagnose any issues with the add-on. If enabled it will result in a lot more debug data in the internal log (which can be found under settings -> developer -> view internal logs).",
+          "description": "Advanced. Debugging allows you to diagnose any issues with the add-on. If enabled it will result in a lot more debug data in the internal log (which can be found under settings -> developer -> view internal logs).",
           "type": "boolean"
         }
       },
@@ -182,7 +183,7 @@
     }
   },
   "short_name": "Voco",
-  "version": "2.8.0",
+  "version": "2.8.2",
   "web_accessible_resources": [
     "css/*.css",
     "images/*.svg",

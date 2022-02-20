@@ -112,6 +112,8 @@ class VocoAdapter(Adapter):
 
         
         
+        self.bluetooth_persistence_file_path = os.path.join(self.user_profile['dataDir'], 'bluetoothpairing', 'persistence.json')
+        
         # Get persistent data
         try:
             self.persistence_file_path = os.path.join(self.user_profile['dataDir'], self.addon_name, 'persistence.json')
@@ -260,6 +262,11 @@ class VocoAdapter(Adapter):
         self.current_card_id = 0
         self.current_device_id = 0
         self.sample_rate = 16000
+        
+        # Bluetooth
+        self.bluealsa = False
+        self.bluetooth_device_mac = None
+        
 
         # Snips settings
         self.busy_starting_snips = False # only true while run_snips is active
@@ -566,6 +573,14 @@ class VocoAdapter(Adapter):
                 if self.DEBUG:
                     print("Setting Pi audio_output to HDMI")
                 run_command("amixer cset numid=3 2")
+            elif self.speaker == "Bluetooth":
+                if self.DEBUG:
+                    print("Setting Pi audio_output to Bluetooth")
+                if self.bluetooth_device_check():
+                    print("Experimental: output forced to bluetooth")
+                else:
+                    # fall back to auto mode
+                    run_command("amixer cset numid=3 0")
 
         except Exception as ex:
             print("error setting initial audio_output settings: " + str(ex))
@@ -686,7 +701,8 @@ class VocoAdapter(Adapter):
         try:
             self.update_timer_counts() # updates counters properties on the thing
         except:
-            print("Error resetting timer counts")
+            if self.DEBUG:
+                print("Error resetting timer counts")
         
         #time.sleep(5.4) # Snips needs some time to start
         
@@ -696,6 +712,44 @@ class VocoAdapter(Adapter):
 
 
 
+
+
+    def bluetooth_device_check(self):
+        if self.DEBUG:
+            print("checking is bluetooth speaker is connected")
+        
+        try:
+            
+            aplay_pcm_check = run_command('aplay -L')
+            if self.DEBUG:
+                print("aplay_pcm_check: " + str(aplay_pcm_check))
+                
+            if 'bluealsa' in aplay_pcm_check:
+                self.bluealsa = True
+                
+                with open(self.bluetooth_persistence_file_path) as f:
+                    self.bluetooth_persistent_data = json.load(f)
+                    if self.DEBUG:
+                        print("Bluetooth persistence data was loaded succesfully: " + str(self.bluetooth_persistent_data))
+                        
+                    if 'connected' in self.bluetooth_persistent_data:
+                        if len(self.bluetooth_persistent_data['connected']) > 0:
+                            for bluetooth_device in self.bluetooth_persistent_data['connected']:
+                                if self.DEBUG:
+                                    print("checking connected device: " + str(bluetooth_device))
+                                if "audio-card" in bluetooth_device:
+                                    if self.DEBUG:
+                                        print("bluetooth device is audio card")
+                                    self.bluetooth_device_mac = bluetooth_device['mac']
+                                    
+            else:
+                if self.DEBUG:
+                    print('bluealsa is not installed, bluetooth audio output is not possible')
+                                
+                        
+        except Exception as ex:
+            print("Bluetooth pairing addon check error: " + str(ex))
+            
 
 
 
@@ -1051,7 +1105,13 @@ class VocoAdapter(Adapter):
                 #sound_file = os.path.splitext(sound_file)[0] + str(self.persistent_data['speaker_volume']) + '.wav'
                 #sound_command = "aplay " + str(sound_file) + " -D plughw:" + str(self.current_card_id) + "," + str(self.current_device_id)
                 #os.system()
-                sound_command = ["aplay",str(sound_file),"-D","plughw:" + str(self.current_card_id) + "," + str(self.current_device_id)]
+                
+                output_device_string = "plughw:" + str(self.current_card_id) + "," + str(self.current_device_id)
+                
+                if self.bluetooth_device_mac != None:
+                    output_device_string = "bluealsa:DEV=" + str(self.bluetooth_device_mac)
+                
+                sound_command = ["aplay", str(sound_file),"-D", output_device_string]
                 #subprocess.check_call(sound_command,stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
                 if self.DEBUG:
                     print("play_sound aplay command: " + str(sound_command))
@@ -1169,13 +1229,18 @@ class VocoAdapter(Adapter):
                             #os.system("aplay -D plughw:" + str(self.current_card_id) + "," + str(self.current_device_id) + ' ' + self.response_wav )
                             #speak_command = ["ffplay", "-nodisp", "-vn", "-infbuf","-autoexit", self.response_wav,"-volume","100"]
                             
+                            output_device_string = "plughw:" + str(self.current_card_id) + "," + str(self.current_device_id)
+                
+                            if self.bluetooth_device_mac != None:
+                                output_device_string = "bluealsa:DEV=" + str(self.bluetooth_device_mac)
+                            
                             # If a user is not using the default samplerate of 16000, then the wav file will have to be resampled.
                             if self.sample_rate != 16000:
                                 os.system('ffmpeg -loglevel panic -y -i ' + self.response_wav + ' -vn -af aresample=out_sample_fmt=s16:out_sample_rate=' + str(self.sample_rate) + ' ' + self.response2_wav)
-                                speak_command = ["aplay","-D","plughw:" + str(self.current_card_id) + "," + str(self.current_device_id), self.response2_wav] #,"2>/dev/null"
+                                speak_command = ["aplay", "-D", output_device_string, self.response2_wav] #,"2>/dev/null"
                                 
                             else:
-                                speak_command = ["aplay","-D","plughw:" + str(self.current_card_id) + "," + str(self.current_device_id), self.response_wav]
+                                speak_command = ["aplay","-D",output_device_string, self.response_wav]
                             
                             
                             if self.DEBUG:

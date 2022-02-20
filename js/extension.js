@@ -45,10 +45,10 @@
 			console.log("voco hide called");
 			try{
 				clearInterval(this.interval);
-				console.log("interval cleared");
+				//console.log("interval cleared");
 			}
 			catch(e){
-				console.log("no interval to clear? " + e);
+				//console.log("no interval to clear? " + e);
 			}
 		}
 		
@@ -61,7 +61,7 @@
 				clearInterval(this.interval);
 			}
 			catch(e){
-				console.log("no interval to clear?: " + e);
+				//console.log("no interval to clear?: " + e);
 			}
 			
 			const main_view = document.getElementById('extension-voco-view');
