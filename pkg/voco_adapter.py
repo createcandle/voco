@@ -177,41 +177,35 @@ class VocoAdapter(Adapter):
             print("Error fixing audio_output in persistent data. Falling back to headphone jack.")
             self.persistent_data['audio_output'] = 'Built-in headphone jack'
         
+        
         try:
             if 'action_times' not in self.persistent_data:
                 print("action_times was not in persistent data, adding it now.")
                 self.persistent_data['action_times'] = []
-        except:
-            print("Error fixing audio_output in persistent data")
-            
-        try:
+
             if 'is_satellite' not in self.persistent_data:
                 print("action_times was not in persistent data, adding it now.")
                 self.persistent_data['is_satellite'] = False
-        except:
-            print("Error fixing audio_output in persistent data")
-        
-        try:
+                
+            if 'bluetooth_device_mac' not in self.persistent_data:
+                self.persistent_data['bluetooth_device_mac'] = None
+                
             if 'mqtt_server' not in self.persistent_data:
                 print("action_times was not in persistent data, adding it now.")
                 self.persistent_data['mqtt_server'] = 'localhost'
-        except:
-            print("Error fixing audio_output in persistent data")
-        
-        try:
+
             if 'site_id' not in self.persistent_data:
                 print("site_id was not in persistent data, generating a random one now.")
                 self.persistent_data['site_id'] = generate_random_string(8)
-        except:
-            print("Error fixing audio_output in persistent data")
-        
-        try:
+
             if 'main_site_id' not in self.persistent_data: # to remember what the main voco server is, for satellites.
                 print("main_site_id was not in persistent data, adding it now.")
                 self.persistent_data['main_site_id'] = self.persistent_data['site_id']
-        except:
-            print("Error fixing main_site_id in persistent data")
-    
+        except Exception as ex:
+            print("Error adding variables to persistent data: " + str(ex))
+            
+        
+            
     
         self.opposites = {
                 "on":"off",
@@ -265,7 +259,6 @@ class VocoAdapter(Adapter):
         
         # Bluetooth
         self.bluealsa = False
-        self.persistent_data['bluetooth_device_mac'] = None
         
 
         # Snips settings
@@ -542,23 +535,23 @@ class VocoAdapter(Adapter):
         try:
             # Force the audio input.
             if self.microphone == "Built-in microphone (0,0)":
-                print("Setting audio input to built-in")
+                print("Setting audio input to built-in (0,0)")
                 self.capture_card_id = 0
                 self.capture_device_id = 0
             elif self.microphone == "Attached device (1,0)":
-                print("Setting audio input to attached device")
+                print("Setting audio input to attached device (1,0)")
                 self.capture_card_id = 1
                 self.capture_device_id = 0
             elif self.microphone == "Attached device, channel 2 (1,1)":
-                print("Setting audio input to attached device, channel 2")
+                print("Setting audio input to attached device, channel 2 (1,1)")
                 self.capture_card_id = 1
                 self.capture_device_id = 1
             elif self.microphone == "Second attached device (2,0)":
-                print("Setting audio input to second attached device")
+                print("Setting audio input to second attached device (2,0)")
                 self.capture_card_id = 2
                 self.capture_device_id = 0
             elif self.microphone == "Second attached device, channel 2 (2,1)":
-                print("Setting audio input to second attached device, channel 2")
+                print("Setting audio input to second attached device, channel 2 (2,1)")
                 self.capture_card_id = 2
                 self.capture_device_id = 1
 
