@@ -739,11 +739,14 @@ class VocoAdapter(Adapter):
                             for bluetooth_device in self.bluetooth_persistent_data['connected']:
                                 if self.DEBUG:
                                     print("checking connected device: " + str(bluetooth_device))
-                                if "audio-card" in bluetooth_device:
-                                    if self.DEBUG:
-                                        print("bluetooth device is audio card")
-                                    self.bluetooth_device_mac = bluetooth_device['mac']
-                                    
+                                if "type" in bluetooth_device:
+                                    if bluetooth_device['type'] == 'audio-card':
+                                        if self.DEBUG:
+                                            print("bluetooth device is audio card")
+                                        self.bluetooth_device_mac = bluetooth_device['mac']
+                        else:
+                            if self.DEBUG:
+                                print("no connected devices found in BluetoothPairing persistent data")
             else:
                 if self.DEBUG:
                     print('bluealsa is not installed, bluetooth audio output is not possible')
