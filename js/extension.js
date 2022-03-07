@@ -99,6 +99,7 @@
 				'Set a timer for 30 seconds',
 				'Wake me up at 8 in the morning',
 				'How many timers do I have?',
+                'At two o clock turn off the lights',
 				'How many timers have been set?',
 				'Tell me about my timers',
 				'Tell me about my alarms',
@@ -144,8 +145,8 @@
 					text_input_field.value = "";
 
 		        }).catch((e) => {
-		  			console.log("Error sending text to be parsed: " + e.toString());
-					document.getElementById('extension-voco-response-data').innerText = "Error sending text command: " + e.toString();
+		  			console.log("Error sending text to be parsed: " , e);
+					//document.getElementById('extension-voco-response-data').innerText = "Error sending text command: " , e;
 		        });
 			}
 
@@ -226,8 +227,8 @@
 									
 				
 						        }).catch((e) => {
-						  			console.log("Error getting init data: " + e.toString());
-									document.getElementById('extension-voco-add-token-message').innerText = "Error saving token: " + e.toString();
+						  			console.log("Error getting init data: " , e);
+									//document.getElementById('extension-voco-add-token-message').innerText = "Error saving token: " , e;
 						        });
 								
 							});
@@ -286,9 +287,11 @@
 													if(is_sat){
 														try{
 															document.getElementById('extension-voco-content-container').classList.remove('extension-voco-add-token');
+                                                            document.getElementById('extension-voco-content-container').classList.add('extension-voco-is-satellite');
 														}
-														catch(err) {}
-														document.getElementById('extension-voco-content-container').classList.add('extension-voco-is-satellite');
+														catch(e) {
+                                                            console.log("Error changing satellite classes: ", e);
+                                                        }
 													}
 													else{
 														document.getElementById('extension-voco-content-container').classList.remove('extension-voco-is-satellite');
@@ -296,16 +299,16 @@
 													}
 												}
 												else{
-													//console.log("Server reported error while changing satellite state");
-													pre.innerText = body['update'];
+													console.log("Server reported error while changing satellite state: ", body);
+													//pre.innerText = body['update'];
 												}
 		
 
 									        }).catch((e) => {
 									          	//pre.innerText = e.toString();
 									  			//console.log("voco: error in calling init via API handler");
-									  			console.log("Error getting timer items: " + e.toString());
-												pre.innerText = "Loading items failed - connection error";
+									  			console.log("Error changing satellite state: ", e);
+												//pre.innerText = "Loading items failed - connection error";
 									        });	
 								
 										}
@@ -336,8 +339,11 @@
 						}
 					}
                     
-                    if('possible_injection_failure' in body){
-                        if(body.possible_injection_failure){
+                    if('possible_injection_failure' in body && 'mqtt_connected' in body){
+                        if(body.mqtt_connected == false){
+                            document.getElementById("extension-voco-mqtt-error").style.display = 'block';
+                        }
+                        else if(body.possible_injection_failure){
                             document.getElementById("extension-voco-injection-failure").style.display = 'block';
                         }
                     }
@@ -347,8 +353,8 @@
 					
 				
 		        }).catch((e) => {
-		  			console.log("Error getting Voco init data: " + e.toString());
-					pre.innerText = "Error getting initial Voco data: " + e.toString();
+		  			console.log("Error getting Voco init data: " , e);
+					//pre.innerText = "Error getting initial Voco data: " , e;
 		        });	
 				
 			//}.bind(this), 10000);
@@ -385,14 +391,14 @@
 		        }).catch((e) => {
 		          	//pre.innerText = e.toString();
 		  			//console.log("voco: error in calling init via API handler");
-		  			console.log("Error getting Voco timer items: " + e.toString());
-					pre.innerText = "Loading items failed - connection error";
+		  			console.log("Error getting Voco timer items: " , e);
+					//pre.innerText = "Loading items failed - connection error";
 		        });	
 				
 				
 			}
 			catch(e){
-				console.log("no interval to clear? " + e);
+				console.log("Init error: ", e);
 			}
 		
 		
@@ -454,17 +460,19 @@
 								}
 
 					        }).catch((e) => {
-					  			//console.log("Error getting timer items: " + e.toString());
-								console.log(e);
-								pre.innerText = "Loading items failed - connection error";
+					  			//console.log("Error getting timer items: " , e);
+								console.log("Loading items failed - connection error?: ", e);
+								//pre.innerText = "Loading items failed - connection error";
 								this.attempts = 0;
 					        });	
 						}
 						else{
-							pre.innerText = "Lost connection.";
+							//pre.innerText = "Lost connection.";
 						}
 					}
-				}catch(e){"Voco polling error: " + console.log(e)}
+				}catch(e){
+                    console.log("Voco polling error: ", e);
+                }
 				
 			}, 1000);
 			
@@ -576,12 +584,13 @@
 							//console.log("update item reaction: ");
 							//console.log(body); 
 							if( body['state'] != true ){
-								pre.innerText = body['update'];
+                                console.log('Server responded with error: ', body);
+								//pre.innerText = body['update'];
 							}
 
 						}).catch((e) => {
-							console.log("voco: error in save items handler");
-							pre.innerText = e.toString();
+							console.log("voco: error in save items handler: ", e);
+							//pre.innerText = e.toString();
 						});
 					
 					
@@ -639,7 +648,7 @@
 			}
 			catch (e) {
 				// statements to handle any exceptions
-				console.log(e); // pass exception object to error handler
+				console.log("Error in regenerate items: ", e); // pass exception object to error handler
 			}
 		}
 	}

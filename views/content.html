@@ -17,14 +17,20 @@
 			<p class="extension-voco-select-satellites extension-voco-italic">If you want to use this device as a satellite that doesn't manage any things, you can ignore this step.</p>-->
 		</div>
 		
+        
+		<div id="extension-voco-mqtt-error" style="display:none">
+			<p>Voco seems to have trouble connecting to the MQTT server. If this device is a satellite, then the main controller may be down. If it's the main (or only) Voco controller, then this may indicate a configuration error.</p>
+		</div>
+        
 		<div id="extension-voco-injection-failure" style="display:none">
 			<p>Voco seems to have trouble learning the names of your devices. Please make sure all the names of your things can be spoken. Avoid using any characters outside of the Latin alphabet. For example, do not use  # ! ? % & ( ) / ; + = .</p>
 		</div>
+
         
 		<div id="extension-voco-text-commands-container">
 			<div id="extension-voco-text-input-container">
 				<input id="extension-voco-text-input-field" placeholder="What time is it?"/>
-				<button id="extension-voco-text-input-send-button" class="text-button">send</button>
+				<button id="extension-voco-text-input-send-button" class="text-button">Send</button>
 			</div>
 
 			<div id="extension-voco-text-response-container" style="display:none"><span id="extension-voco-text-response-field">response will be here</span></div>

@@ -306,6 +306,7 @@ class VocoAdapter(Adapter):
         self.ip_address = None
         self.should_restart_mqtt = True
         self.mqtt_busy_connecting = False
+        self.mqtt_connected_succesfully_at_least_once = False
         
         
         # Things
@@ -538,7 +539,7 @@ class VocoAdapter(Adapter):
         # AUDIO
 
         try:
-            # Fix the audio input.
+            # Force the audio input.
             if self.microphone == "Built-in microphone (0,0)":
                 print("Setting audio input to built-in")
                 self.capture_card_id = 0
@@ -560,7 +561,7 @@ class VocoAdapter(Adapter):
                 self.capture_card_id = 2
                 self.capture_device_id = 1
 
-            # Fix the audio_output. The default on the WebThings image is HDMI.
+            # Force the audio_output. The default on the WebThings image is HDMI.
             if self.speaker == "Auto":
                 if self.DEBUG:
                     print("Setting Pi audio_output to automatically switch")
@@ -771,7 +772,7 @@ class VocoAdapter(Adapter):
             database.close()
             
         except:
-            print("Error! Failed to open settings database. Will close adapter in 5 seconds, after which the system should re-create it for a new attempt.")
+            print("Error! Failed to open settings database. Closing proxy.")
             self.close_proxy()
             return
         
@@ -810,7 +811,11 @@ class VocoAdapter(Adapter):
         except:
             print("Error loading microphone settings")
         
-               
+        if store_updated_settings:
+            if self.DEBUG:
+                print("Voco wants to store overridden settings in the database")
+        
+        """   
         try:
             # Store the settings that were changed by the add-on.
             if store_updated_settings:
@@ -828,7 +833,7 @@ class VocoAdapter(Adapter):
                         print("Stored overridden preferences into the database")
         except:
             print("Error! Failed to store overridden settings in database.")
-            
+         """
             
         # Voice and Hotword
         try:
@@ -1011,6 +1016,10 @@ class VocoAdapter(Adapter):
                             
         except Exception as e:
             print("Error during ALSA scan: " + str(e))
+            
+        if self.DEBUG:
+            print("scan_alsa (checks aplay -l and arecord -l) result: " + str(result))
+            
         return result
 
 
@@ -1311,6 +1320,7 @@ class VocoAdapter(Adapter):
             print("running Snips (after killing potential running snips instances)")
         
         self.busy_starting_snips = True
+        self.external_processes = []
         
         
         try:
@@ -1329,8 +1339,8 @@ class VocoAdapter(Adapter):
         
             if self.persistent_data['is_satellite']:
                 #commands = ['snips-satellite'] # seems to give a segmentation fault on Armv6?
-                #commands = ['snips-audio-server','snips-hotword']
-                commands = ['snips-audio-server']
+                commands = ['snips-audio-server','snips-hotword']
+                #commands = ['snips-audio-server']
             else:
                 commands = [
                     'snips-tts',
@@ -1349,6 +1359,8 @@ class VocoAdapter(Adapter):
                 print("LD_LIBRARY_PATH= " + str(my_env["LD_LIBRARY_PATH"]))
 
             #print("--my_env = " + str(my_env))
+            
+            
         
             # Start the snips parts
             for unique_command in commands:
@@ -1576,18 +1588,19 @@ class VocoAdapter(Adapter):
                         #print("self.mqtt_client: " + str(self.mqtt_client))
                         if self.mqtt_client != None:
                             if self.DEBUG:
-                                print("MQTT client object was not none")
+                                print("MQTT client object exists. mqtt_connected_succesfully_at_least_once: " + str(self.mqtt_connected_succesfully_at_least_once))
                         else:
                             if self.DEBUG:
                                 print("MQTT client object doesn't exist yet.")
+                        
+                        
                         
                         if self.should_restart_mqtt:
                             self.should_restart_mqtt = False
                             if self.DEBUG:
                                 print("Periodic check: self.should_restart_mqtt was true - will try to run_mqtt")
                             self.run_mqtt() # try connecting again. If Mosquitto is up, then it will create the MQTT client and try to connect.
-                            
-                            
+                                
                             
                         elif self.mqtt_client != None:
                             # The MQTT client exists, so Mosquitto was available at least once.
@@ -1737,8 +1750,8 @@ class VocoAdapter(Adapter):
                              
                             else:
                                 if self.DEBUG:
-                                    print("still busy booting??")
-                                if self.injection_in_progress == False:
+                                    print("still busy booting?? self.mqtt_connected_succesfully_at_least_once: " + str(self.mqtt_connected_succesfully_at_least_once))
+                                if self.injection_in_progress == False and self.mqtt_connected == True:
                                     if self.DEBUG:
                                         print("Clock: attempting a forced injection since no injection complete message was received yet")
                                     self.inject_updated_things_into_snips(True) # Force a new injection until it sticks
@@ -2685,6 +2698,7 @@ class VocoAdapter(Adapter):
         self.mqtt_connected = False
         self.mqtt_busy_connecting = False
         self.should_restart_mqtt = True
+
         
         if rc == 0:
             if self.DEBUG:
@@ -2709,6 +2723,7 @@ class VocoAdapter(Adapter):
         
     # Subscribe to the important messages
     def on_connect(self, client, userdata, flags, rc):
+        self.mqtt_connected_succesfully_at_least_once = True
         self.mqtt_busy_connecting = False
         if rc == 0:
             if self.DEBUG:
@@ -5239,13 +5254,22 @@ class VocoAdapter(Adapter):
     
     
     def is_mosquitto_up(self):
-            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            result = False
-            try:
-                sock.bind((self.persistent_data['mqtt_server'], self.mqtt_port))
-                print("manage to bind to the MQTT port.. Uh, that's not good?")
-            except:
-                print("MQTT port is in use")
-                result = True
-            sock.close()
-            return result
+        result = False
+        mosquitto_output = run_command('ps aux | grep mosquitto')
+        if 'mosquitto' in mosquitto_output:
+            result = True
+            
+        return result
+            
+        """
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        result = False
+        try:
+            sock.bind((self.persistent_data['mqtt_server'], self.mqtt_port))
+            print("manage to bind to the MQTT port.. Uh, that's not good?")
+        except:
+            print("MQTT port is in use")
+            result = True
+        sock.close()
+        return result
+        """
