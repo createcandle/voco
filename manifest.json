@@ -39,6 +39,7 @@
       "Sound detection": false,
       "Hey Candle": true,
       "Satellite device control": true,
+	  "Disable security": false,
       "Debugging": false
     },
     "schema": {
@@ -188,7 +189,7 @@
     }
   },
   "short_name": "Voco",
-  "version": "2.8.8",
+  "version": "2.8.9",
   "web_accessible_resources": [
     "css/*.css",
     "images/*.svg",

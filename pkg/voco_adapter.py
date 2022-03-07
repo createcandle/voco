@@ -265,7 +265,7 @@ class VocoAdapter(Adapter):
         
         # Bluetooth
         self.bluealsa = False
-        self.bluetooth_device_mac = None
+        self.persistent_data['bluetooth_device_mac'] = None
         
 
         # Snips settings
@@ -578,6 +578,7 @@ class VocoAdapter(Adapter):
             elif self.speaker == "Bluetooth":
                 if self.DEBUG:
                     print("Setting Pi audio_output to Bluetooth")
+                time.sleep(10) # give BluetoothPairing some time to reconnect to the speaker
                 if self.bluetooth_device_check():
                     print("Experimental: output forced to bluetooth")
                 else:
@@ -715,7 +716,64 @@ class VocoAdapter(Adapter):
 
 
 
+    def bluetooth_device_check(self):
+        if self.DEBUG:
+            print("checking if bluetooth speaker is connected")
+        
+        try:
+            
+            aplay_pcm_check = run_command('aplay -L')
+            if self.DEBUG:
+                print("aplay_pcm_check: " + str(aplay_pcm_check))
+                
+            if 'bluealsa' in aplay_pcm_check:
+                self.bluealsa = True
+                if self.DEBUG:
+                    print("BlueAlsa was detected as PCM option")
+                    
+                if self.persistent_data['bluetooth_device_mac'] != None:
+                    bluetooth_check = run_command('sudo bluetoothctl info ' + self.persistent_data['bluetooth_device_mac'])
+                    if 'Icon: audio-card' in bluetooth_check and 'Connected: yes' in bluetooth_check:
+                        return True
 
+                # if the current mac wasn't connected, check with the Bluetooth Pairing addon for updated information.
+                with open(self.bluetooth_persistence_file_path) as f:
+                    self.bluetooth_persistent_data = json.load(f)
+                    if self.DEBUG:
+                        print("Bluetooth persistence data was loaded succesfully: " + str(self.bluetooth_persistent_data))
+                    
+                    if 'connected' in self.bluetooth_persistent_data: # grab the first connected speaker we find
+                        if len(self.bluetooth_persistent_data['connected']) > 0:
+                            for bluetooth_device in self.bluetooth_persistent_data['connected']:
+                                if self.DEBUG:
+                                    print("checking connected device: " + str(bluetooth_device))
+                                if "type" in bluetooth_device and "address" in bluetooth_device:
+                                    if bluetooth_device['type'] == 'audio-card':
+                                        if self.DEBUG:
+                                            print("bluetooth device is audio card")
+                                        self.persistent_data['bluetooth_device_mac'] = bluetooth_device['address']
+                                        self.save_persistent_data()
+                                        if not "Bluetooth speaker" in self.audio_output_options:
+                                            self.audio_output_options.append( "Bluetooth speaker" )
+                                        return True
+                        else:
+                            if self.DEBUG:
+                                print("No connected devices found in persistent data from bluetooth pairing addon")
+                
+            else:
+                if self.DEBUG:
+                    print('bluealsa is not installed, bluetooth audio output is not possible')
+                                
+                        
+        except Exception as ex:
+            print("Bluetooth pairing addon check error: " + str(ex))
+            
+        self.persistent_data['bluetooth_device_mac'] = None
+        #self.save_persistent_data()
+        return False
+
+
+    """
     def bluetooth_device_check(self):
         if self.DEBUG:
             print("checking is bluetooth speaker is connected")
@@ -743,7 +801,7 @@ class VocoAdapter(Adapter):
                                     if bluetooth_device['type'] == 'audio-card':
                                         if self.DEBUG:
                                             print("bluetooth device is audio card")
-                                        self.bluetooth_device_mac = bluetooth_device['mac']
+                                        self.persistent_data['bluetooth_device_mac'] = bluetooth_device['mac']
                         else:
                             if self.DEBUG:
                                 print("no connected devices found in BluetoothPairing persistent data")
@@ -755,7 +813,7 @@ class VocoAdapter(Adapter):
         except Exception as ex:
             print("Bluetooth pairing addon check error: " + str(ex))
             
-
+    """
 
 
 #
@@ -1139,9 +1197,9 @@ class VocoAdapter(Adapter):
                 
                 output_device_string = "plughw:" + str(self.current_card_id) + "," + str(self.current_device_id)
                 
-                if self.bluetooth_device_mac != None:
+                if self.persistent_data['bluetooth_device_mac'] != None:
                     subprocess.run(['pkill','ffplay'], capture_output=True, shell=False, check=False, encoding=None, errors=None, text=None, env=None, universal_newlines=None)
-                    output_device_string = "bluealsa:DEV=" + str(self.bluetooth_device_mac)
+                    output_device_string = "bluealsa:DEV=" + str(self.persistent_data['bluetooth_device_mac'])
                 
                 sound_command = ["aplay", str(sound_file),"-D", output_device_string]
                 #subprocess.check_call(sound_command,stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
@@ -1263,8 +1321,8 @@ class VocoAdapter(Adapter):
                             
                             output_device_string = "plughw:" + str(self.current_card_id) + "," + str(self.current_device_id)
                 
-                            if self.bluetooth_device_mac != None:
-                                output_device_string = "bluealsa:DEV=" + str(self.bluetooth_device_mac)
+                            if self.persistent_data['bluetooth_device_mac'] != None:
+                                output_device_string = "bluealsa:DEV=" + str(self.persistent_data['bluetooth_device_mac'])
                             
                             # If a user is not using the default samplerate of 16000, then the wav file will have to be resampled.
                             if self.sample_rate != 16000:
