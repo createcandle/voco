@@ -1,4 +1,4 @@
-"""Voco adapter and notifier for Mozilla WebThings Gateway."""
+"""Voco adapter and notifier for Candle controller."""
 
 from os import path
 import functools
