@@ -297,7 +297,7 @@ class VocoAdapter(Adapter):
         
         # MQTT client
         self.mqtt_client = None
-        self.mqtt_port = 1883
+        self.mqtt_port = 1884
         self.mqtt_connected = False
         self.voco_connected = True
         self.mqtt_others = {}
@@ -307,6 +307,7 @@ class VocoAdapter(Adapter):
         self.should_restart_mqtt = True
         self.mqtt_busy_connecting = False
         self.mqtt_connected_succesfully_at_least_once = False
+        self.disable_security = False
         
         
         # Things
@@ -788,6 +789,20 @@ class VocoAdapter(Adapter):
             if self.DEBUG:
                 print("Debugging enabled")
 
+        
+        # Disable security
+        try:
+            if 'Disable security' in config:
+                self.disable_security = bool(config['Disable security'])
+                if self.disable_security:
+                    self.mqtt_port = 1883 # might still be overridden by the user, but 1883 is now the default.
+                    print("WARNING, VOCO SECURITY HAS BEEN DISABLED")
+                    
+                    
+        except Exception as ex:
+            print("Error loading disable security setting(s) from config: " + str(ex))
+
+
         try:
             store_updated_settings = False
             if 'Microphone' in config:
@@ -965,6 +980,10 @@ class VocoAdapter(Adapter):
                 self.sample_rate = int(config['Audio sample rate'])
         except Exception as ex:
             print("Error loading voice setting(s) from config: " + str(ex))
+
+            
+        
+        
 
 
 
@@ -2625,6 +2644,8 @@ class VocoAdapter(Adapter):
                 self.mqtt_client.on_disconnect = self.on_disconnect
                 self.mqtt_client.on_message = self.on_message
                 self.mqtt_client.on_publish = self.on_publish
+                if self.disable_security == False:
+                    self.mqtt_client.username_pw_set(username="candle", password="smarthome")
                 if self.DEBUG:
                     print("self.persistent_data['mqtt_server'] = " + str(self.persistent_data['mqtt_server']))
             
