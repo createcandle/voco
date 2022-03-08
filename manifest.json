@@ -28,7 +28,7 @@
     "default": {
       "Authorization token": "",
       "Metric": true,
-      "Microphone": "Attached device (1,0)",
+      "Microphone": "Auto",
       "Speaker": "Auto",
       "Audio sample rate": "16000",
       "Voice accent": "en-GB",
@@ -38,6 +38,7 @@
       "System audio volume": 90,
       "Sound detection": false,
       "Hey Candle": true,
+	  "Mute the radio": false,
       "Satellite device control": true,
 	  "Disable security": false,
       "Debugging": false
@@ -167,6 +168,10 @@
           "description": "When enabled, you can also say 'Hey Candle' to start a command.",
           "type": "boolean"
         },
+        "Mute the radio": {
+          "description": "If you're using a bluetooth speaker, enabling this will briefly stop the radio whenever Voco needs to say something.",
+          "type": "boolean"
+        },
         "Satellite device control": {
           "description": "If this is a satellite, enabling this will allow you to control things on this satellite using your voice. It's recommended to give things on satellites unique names. For example, call 'radio' something like 'kitchen radio' instead. If a thing with the same name exists on the main controller and on a satellite, a voice command will always favour controlling the satellite's thing.",
           "type": "boolean"
@@ -189,7 +194,7 @@
     }
   },
   "short_name": "Voco",
-  "version": "2.8.11",
+  "version": "2.8.12",
   "web_accessible_resources": [
     "css/*.css",
     "images/*.svg",

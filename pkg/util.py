@@ -490,7 +490,7 @@ def get_audio_controls():
                         #print("maxier controls line = " + line)
                         control_name = re.findall(r"'([^']+)'", line)[0]
                         #print("control name = " + control_name)
-                        if control_name is not 'mic':
+                        if control_name != 'mic':
                             break
                         else:
                             continue # in case the first control is 'mic', ignore it.
@@ -542,7 +542,7 @@ def get_audio_controls():
                 else:
                     print("getting audio volume in complex way failed")
                 
-            if control_name is 'mic':
+            if control_name == 'mic':
                 control_name = None
             
             audio_controls.append({'card_id':card_id, 

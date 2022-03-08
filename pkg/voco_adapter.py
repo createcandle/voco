@@ -259,6 +259,7 @@ class VocoAdapter(Adapter):
         
         # Bluetooth
         self.bluealsa = False
+        self.kill_ffplay_before_speaking = False
         
 
         # Snips settings
@@ -301,6 +302,8 @@ class VocoAdapter(Adapter):
         self.mqtt_busy_connecting = False
         self.mqtt_connected_succesfully_at_least_once = False
         self.disable_security = False
+        self.mqtt_username = 'candle'
+        self.mqtt_password = 'smarthome'
         
         
         # Things
@@ -419,9 +422,7 @@ class VocoAdapter(Adapter):
         if 'token' in self.persistent_data:
             self.token = self.persistent_data['token']
         
-        
-        
-        # LOAD CONFIG
+        # load config
         try:
             self.add_from_config()
         except Exception as ex:
@@ -771,47 +772,7 @@ class VocoAdapter(Adapter):
         return False
 
 
-    """
-    def bluetooth_device_check(self):
-        if self.DEBUG:
-            print("checking is bluetooth speaker is connected")
-        
-        try:
-            
-            aplay_pcm_check = run_command('aplay -L')
-            if self.DEBUG:
-                print("aplay_pcm_check: " + str(aplay_pcm_check))
-                
-            if 'bluealsa' in aplay_pcm_check:
-                self.bluealsa = True
-                
-                with open(self.bluetooth_persistence_file_path) as f:
-                    self.bluetooth_persistent_data = json.load(f)
-                    if self.DEBUG:
-                        print("Bluetooth persistence data was loaded succesfully: " + str(self.bluetooth_persistent_data))
-                        
-                    if 'connected' in self.bluetooth_persistent_data:
-                        if len(self.bluetooth_persistent_data['connected']) > 0:
-                            for bluetooth_device in self.bluetooth_persistent_data['connected']:
-                                if self.DEBUG:
-                                    print("checking connected device: " + str(bluetooth_device))
-                                if "type" in bluetooth_device:
-                                    if bluetooth_device['type'] == 'audio-card':
-                                        if self.DEBUG:
-                                            print("bluetooth device is audio card")
-                                        self.persistent_data['bluetooth_device_mac'] = bluetooth_device['mac']
-                        else:
-                            if self.DEBUG:
-                                print("no connected devices found in BluetoothPairing persistent data")
-            else:
-                if self.DEBUG:
-                    print('bluealsa is not installed, bluetooth audio output is not possible')
-                                
-                        
-        except Exception as ex:
-            print("Bluetooth pairing addon check error: " + str(ex))
-            
-    """
+
 
 
 #
@@ -1015,8 +976,14 @@ class VocoAdapter(Adapter):
                     self.toml_path = os.path.join(self.snips_path,"candle.toml")
                     if self.DEBUG:
                         print("-Hey Candle is enabled")
+                        
+                        
+            if 'Mute the radio' in config:
+                self.kill_ffplay_before_speaking = bool(config['Mute the radio'])
+                
+                        
         except Exception as ex:
-            print("Error loading voice detection preference from settings: " + str(ex))
+            print("Error loading voice detection or radio mute preference from settings: " + str(ex))
       
       
         # System audio volume
@@ -1245,7 +1212,8 @@ class VocoAdapter(Adapter):
                 output_device_string = "plughw:" + str(self.current_card_id) + "," + str(self.current_device_id)
                 
                 if self.persistent_data['bluetooth_device_mac'] != None:
-                    subprocess.run(['pkill','ffplay'], capture_output=True, shell=False, check=False, encoding=None, errors=None, text=None, env=None, universal_newlines=None)
+                    if self.kill_ffplay_before_speaking:
+                        subprocess.run(['pkill','ffplay'], capture_output=True, shell=False, check=False, encoding=None, errors=None, text=None, env=None, universal_newlines=None)
                     output_device_string = "bluealsa:DEV=" + str(self.persistent_data['bluetooth_device_mac'])
                 
                 sound_command = ["aplay", str(sound_file),"-D", output_device_string]
@@ -1268,7 +1236,6 @@ class VocoAdapter(Adapter):
 
     def speak(self, voice_message="",intent='default'):
         try:
-
             if intent == 'default':
                 intent = {'siteId':self.persistent_data['site_id']}
 
@@ -1513,6 +1480,11 @@ class VocoAdapter(Adapter):
                 
                 bin_path = os.path.join(self.snips_path,unique_command)
                 command = [bin_path,"-u",self.work_path,"-a",self.assistant_path,"-c",self.toml_path]
+                
+                if self.disable_security == False:
+                    security_commands = ['--mqtt-username',self.mqtt_username,'--mqtt-password',self.mqtt_password]
+                    command = command + security_commands
+                
                 if unique_command == 'snips-audio-server' or unique_command == 'snips-satellite':
                     mqtt_bind = self.persistent_data['site_id'] + "@mqtt"
                     
@@ -2774,7 +2746,7 @@ class VocoAdapter(Adapter):
                 self.mqtt_client.on_message = self.on_message
                 self.mqtt_client.on_publish = self.on_publish
                 if self.disable_security == False:
-                    self.mqtt_client.username_pw_set(username="candle", password="smarthome")
+                    self.mqtt_client.username_pw_set(username=self.mqtt_username, password=self.mqtt_password)
                 if self.DEBUG:
                     print("self.persistent_data['mqtt_server'] = " + str(self.persistent_data['mqtt_server']))
             
