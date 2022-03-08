@@ -534,7 +534,11 @@ class VocoAdapter(Adapter):
 
         try:
             # Force the audio input.
-            if self.microphone == "Built-in microphone (0,0)":
+            if self.microphone == "Auto" or self.microphone == None:
+                # If a microphonr was plugged in, then a valid initial capture card ID capture and capture device ID have already been set by alsa_scan
+                pass
+                
+            elif self.microphone == "Built-in microphone (0,0)":
                 print("Setting audio input to built-in (0,0)")
                 self.capture_card_id = 0
                 self.capture_device_id = 0
@@ -554,6 +558,7 @@ class VocoAdapter(Adapter):
                 print("Setting audio input to second attached device, channel 2 (2,1)")
                 self.capture_card_id = 2
                 self.capture_device_id = 1
+
 
             # Force the audio_output. The default on the WebThings image is HDMI.
             if self.speaker == "Auto":
@@ -860,18 +865,38 @@ class VocoAdapter(Adapter):
         try:
             store_updated_settings = False
             if 'Microphone' in config:
-                print("-Microphone is present in the config data: " + str(config['Microphone']))
+                #print("-Microphone is present in the config data: " + str(config['Microphone']))
+                print("--Using microphone from config: " + str(config['Microphone']))
+                self.microphone = str(config['Microphone'])
                 
+                if len(self.capture_devices) == 0:
+                    if self.DEBUG:
+                        print("Missing microphone (no attached microphones spotted)")
+                    self.missing_microphone = True
+                
+                else:
+                    if self.microphone == 'Auto':
+                        self.microphone = self.capture_devices[ len(self.capture_devices) - 1 ] # select the last microphone from the list, which will match the initial record card ID and record device ID that scan_alsa has extracted earlier.
+                        if self.DEBUG:
+                            print("Microphone was auto-detected. Set to: " + str(self.microphone))
+                
+                """
                 if len(self.capture_devices) == 0 or str(config['Microphone']) in self.capture_devices:
-                    print("--Using microphone from config")
+                    #if str(config['Microphone']) != 'Auto':
+                    print("--Using microphone from config: " + str(config['Microphone']))
                     self.microphone = str(config['Microphone'])         # If the prefered device in config also exists in hardware, then select it.
+                    
                     if len(self.capture_devices) == 0:
                         self.missing_microphone = True
+                    #elif self.microphone == 'Auto':
+                    #    self.scan_alsa('capture') # since the microphone is now set to Auto it will grab a card and device number.
+                        
                 else:
-                    print("--Overriding the selected microphone because that device did not actually exist/was not plugged in.")
+                    print("--Overriding the selected microphone because that device did not actually exist/was not plugged in, but a microphone is available.")
                     config['Microphone'] = self.capture_devices[0]      # If the prefered device in config does not actually exist, but the scan did show connected hardware, then select the first item from the scan results instead.
                     self.microphone = self.capture_devices[0]
-                    store_updated_settings = True
+                    #store_updated_settings = True
+                """
                 
             if 'Speaker' in config:
                 print("-Speaker is present in the config data: " + str(config['Speaker']))
@@ -880,9 +905,9 @@ class VocoAdapter(Adapter):
         except:
             print("Error loading microphone settings")
         
-        if store_updated_settings:
-            if self.DEBUG:
-                print("Voco wants to store overridden settings in the database")
+        #if store_updated_settings:
+        #    if self.DEBUG:
+        #        print("Voco wants to store overridden settings in the database")
         
         """   
         try:
@@ -1066,26 +1091,55 @@ class VocoAdapter(Adapter):
                             result.append('Built-in headphone jack (0,0)')
                         if device_type == 'capture':
                             result.append('Built-in microphone (0,0)')
+                            if self.microphone == None:
+                                self.capture_card_id = 0
+                                self.capture_device_id = 0
+                            
                     elif 'device 1' in line:
                         if device_type == 'playback':
                             result.append('Built-in HDMI (0,1)')
                         if device_type == 'capture':
                             result.append('Built-in microphone, channel 2 (0,1)')
                             
+                            
                 if line.startswith('card 1'):
                     if 'device 0' in line:
                         result.append('Attached device (1,0)')
+                    
+                        if device_type == 'capture':
+                            if self.microphone == None:
+                                self.capture_card_id = 1
+                                self.capture_device_id = 0
+                        
+                    elif 'device 1' in line:
+                        result.append('Attached device (1,1)')
+                        if device_type == 'capture':
+                            if self.microphone == None:
+                                self.capture_card_id = 1
+                                self.capture_device_id = 1
+                                
                     #elif 'device 1' in line:
                     #    if device_type == 'playback':
                     #        result.append('Plugged-in (USB) device, channel 2 (1,1)')
                     #    if device_type == 'capture':
                     #        result.append('Plugged-in (USB) microphone, channel 2 (1,1)')
                             
+                            
+                            
                 if line.startswith('card 2'):
                     if 'device 0' in line:
                         result.append('Second attached device (2,0)')
+                        if device_type == 'capture':
+                            if self.microphone == None:
+                                self.capture_card_id = 2
+                                self.capture_device_id = 0
+                        
                     elif 'device 1' in line:
                         result.append('Second attached device, channel 2 (2,1)')
+                        if device_type == 'capture':
+                            if self.microphone == None:
+                                self.capture_card_id = 2
+                                self.capture_device_id = 1
                             
         except Exception as e:
             print("Error during ALSA scan: " + str(e))
@@ -1392,6 +1446,23 @@ class VocoAdapter(Adapter):
         if self.DEBUG:
             print("running Snips (after killing potential running snips instances)")
         
+        
+        if self.persistent_data['is_satellite']:
+            #commands = ['snips-satellite'] # seems to give a segmentation fault on Armv6?
+            commands = ['snips-audio-server','snips-hotword']
+            #commands = ['snips-audio-server']
+        else:
+            commands = [
+                'snips-tts',
+                'snips-audio-server',
+                'snips-dialogue',
+                'snips-asr',
+                'snips-nlu',
+                'snips-injection',
+                'snips-hotword'
+            ]
+        
+        
         self.busy_starting_snips = True
         self.external_processes = []
         
@@ -1400,8 +1471,18 @@ class VocoAdapter(Adapter):
             snips_processes_count = self.is_snips_running()
             if self.DEBUG:
                 print("run_snips: initial snips_processes_count: " + str(snips_processes_count))
-            if snips_processes_count > 0:
+            
+            if snips_processes_count < len(commands) - 1: # If there is only one crashed part of snips, but the other part(s) are still running, then a repair will be attempted. If multiple parts are down, then fully restart snips.
                 self.stop_snips()
+                
+            elif snips_processes_count > len(commands): # occurs when switching from normal to satellite mode. This also requires a complete restart of snips.
+                self.stop_snips()
+            else:
+                if self.DEBUG:
+                    print("attempting to fix partially crashed snips")
+                
+            #if snips_processes_count > 0:
+            #    self.stop_snips()
             #os.system("pkill -f snips")
         except Exception as ex:
             print("error stopping snips in run_snips: " + str(ex))
@@ -1410,20 +1491,7 @@ class VocoAdapter(Adapter):
         try:
             #time.sleep(1.11)
         
-            if self.persistent_data['is_satellite']:
-                #commands = ['snips-satellite'] # seems to give a segmentation fault on Armv6?
-                commands = ['snips-audio-server','snips-hotword']
-                #commands = ['snips-audio-server']
-            else:
-                commands = [
-                    'snips-tts',
-                    'snips-audio-server',
-                    'snips-dialogue',
-                    'snips-asr',
-                    'snips-nlu',
-                    'snips-injection',
-                    'snips-hotword'
-                ]
+            
         
             my_env = os.environ.copy()
             my_env["LD_LIBRARY_PATH"] = '{}:{}'.format(self.snips_path,self.arm_libs_path)
@@ -1433,10 +1501,15 @@ class VocoAdapter(Adapter):
 
             #print("--my_env = " + str(my_env))
             
-            
+            snips_check_output = run_command('ps aux | grep snips')
         
             # Start the snips parts
             for unique_command in commands:
+                
+                if unique_command in snips_check_output:
+                    if self.DEBUG:
+                        print("This part of snips will not be (re)started since it seems to still be running ok: " + str(unique_command))
+                    continue
                 
                 bin_path = os.path.join(self.snips_path,unique_command)
                 command = [bin_path,"-u",self.work_path,"-a",self.assistant_path,"-c",self.toml_path]
@@ -1474,6 +1547,8 @@ class VocoAdapter(Adapter):
             
                 if self.DEBUG:
                     print("--generated command = " + str(command))
+                    print("-- aka " + str( ' '.join(command) ))
+                    
                 try:
                     #if self.DEBUG:
                     #    self.external_processes.append( Popen(command, env=my_env, stdout=sys.stdout, stderr=subprocess.STDOUT) )
