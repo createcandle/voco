@@ -1212,14 +1212,20 @@ class VocoAdapter(Adapter):
                 output_device_string = "plughw:" + str(self.current_card_id) + "," + str(self.current_device_id)
                 
                 if self.persistent_data['bluetooth_device_mac'] != None:
-                    if self.kill_ffplay_before_speaking:
-                        subprocess.run(['pkill','ffplay'], capture_output=True, shell=False, check=False, encoding=None, errors=None, text=None, env=None, universal_newlines=None)
-                    output_device_string = "bluealsa:DEV=" + str(self.persistent_data['bluetooth_device_mac'])
+                    bluetooth_amixer_test = run_command('amixer -D bluealsa scontents')
+                    if self.DEBUG:
+                        print("bluetooth_amixer_test: " + str(bluetooth_amixer_test))
+                        
+                    if len(bluetooth_amixer_test) > 10:
+                        if self.kill_ffplay_before_speaking:
+                            subprocess.run(['pkill','ffplay'], capture_output=True, shell=False, check=False, encoding=None, errors=None, text=None, env=None, universal_newlines=None)
+                        output_device_string = "bluealsa:DEV=" + str(self.persistent_data['bluetooth_device_mac'])
                 
                 sound_command = ["aplay", str(sound_file),"-D", output_device_string]
                 #subprocess.check_call(sound_command,stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
                 if self.DEBUG:
                     print("play_sound aplay command: " + str(sound_command))
+                    print("-- aka " + str( ' '.join(sound_command) ))
                 
                 # unmute if the audio output was muted.
                 #self.unmute()
@@ -1336,7 +1342,12 @@ class VocoAdapter(Adapter):
                             output_device_string = "plughw:" + str(self.current_card_id) + "," + str(self.current_device_id)
                 
                             if self.persistent_data['bluetooth_device_mac'] != None:
-                                output_device_string = "bluealsa:DEV=" + str(self.persistent_data['bluetooth_device_mac'])
+                                bluetooth_amixer_test = run_command('amixer -D bluealsa scontents')
+                                if self.DEBUG:
+                                    print("speak: bluetooth_amixer_test: " + str(bluetooth_amixer_test))
+                        
+                                if len(bluetooth_amixer_test) > 10:
+                                    output_device_string = "bluealsa:DEV=" + str(self.persistent_data['bluetooth_device_mac'])
                             
                             # If a user is not using the default samplerate of 16000, then the wav file will have to be resampled.
                             if self.sample_rate != 16000:
@@ -1349,6 +1360,7 @@ class VocoAdapter(Adapter):
                             
                             if self.DEBUG:
                                 print("speak aplay command: " + str(speak_command))
+                                print("-- aka " + str( ' '.join(speak_command) ))
                         
                             subprocess.run(speak_command, capture_output=True, shell=False, check=False, encoding=None, errors=None, text=None, env=None, universal_newlines=None)
                             
