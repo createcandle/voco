@@ -72,7 +72,7 @@
             "Auto",
             "Headphone jack",
             "HDMI",
-			"Bluetooth"
+			"Bluetooth speaker"
           ],
           "type": "string"
         },
@@ -185,16 +185,12 @@
           "type": "boolean"
         }
       },
-      "required": [
-        "Microphone",
-        "Speaker",
-        "Authorization token"
-      ],
+      "required": [],
       "type": "object"
     }
   },
   "short_name": "Voco",
-  "version": "2.8.15",
+  "version": "2.8.17",
   "web_accessible_resources": [
     "css/*.css",
     "images/*.svg",

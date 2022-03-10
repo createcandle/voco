@@ -192,11 +192,11 @@
 							
 							if('is_satellite' in body){
 								if(body['is_satellite'] == false){
-									document.getElementById('extension-voco-content-container').classList.add('extension-voco-add-token');
+									//document.getElementById('extension-voco-content-container').classList.add('extension-voco-add-token');
 								}
 							}
 							else{
-								document.getElementById('extension-voco-content-container').classList.add('extension-voco-add-token');
+								//document.getElementById('extension-voco-content-container').classList.add('extension-voco-add-token');
 							}
 							
 							
@@ -341,7 +341,7 @@
                     
                     if('possible_injection_failure' in body && 'mqtt_connected' in body){
                         if(body.mqtt_connected == false){
-                            document.getElementById("extension-voco-mqtt-error").style.display = 'block';
+                            //document.getElementById("extension-voco-mqtt-error").style.display = 'block';
                         }
                         else if(body.possible_injection_failure){
                             document.getElementById("extension-voco-injection-failure").style.display = 'block';

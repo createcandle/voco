@@ -577,6 +577,7 @@
 }
 
 
+#extension-voco-mqtt-error,
 #extension-voco-injection-failure,
 #extension-voco-debug-warning{
     max-width:60rem;

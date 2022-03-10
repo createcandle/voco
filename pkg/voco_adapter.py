@@ -258,7 +258,7 @@ class VocoAdapter(Adapter):
         self.sample_rate = 16000
         
         # Bluetooth
-        self.bluealsa = False
+        self.bluealsa_available = False
         self.kill_ffplay_before_speaking = False
         
 
@@ -434,6 +434,9 @@ class VocoAdapter(Adapter):
             print(str(self.persistent_data))
 
 
+        # If Bluealsa is detected, then this will add bluetooth as an option to the output dropdown of the thing
+        self.bluetooth_device_check()
+        
 
         # Create Voco device
         try:
@@ -574,7 +577,7 @@ class VocoAdapter(Adapter):
                 if self.DEBUG:
                     print("Setting Pi audio_output to HDMI")
                 run_command("amixer cset numid=3 2")
-            elif self.speaker == "Bluetooth":
+            elif self.speaker == "Bluetooth speaker":
                 if self.DEBUG:
                     print("Setting Pi audio_output to Bluetooth")
                 time.sleep(10) # give BluetoothPairing some time to reconnect to the speaker
@@ -726,7 +729,7 @@ class VocoAdapter(Adapter):
                 print("aplay_pcm_check: " + str(aplay_pcm_check))
                 
             if 'bluealsa' in aplay_pcm_check:
-                self.bluealsa = True
+                self.bluealsa_available = True
                 if self.DEBUG:
                     print("BlueAlsa was detected as PCM option")
                     
@@ -1140,37 +1143,47 @@ class VocoAdapter(Adapter):
         if self.DEBUG:
             print("Setting audio_output selection to: " + str(selection))
             
-        # Get the latest audio controls
-        self.audio_controls = get_audio_controls()
-        if self.DEBUG:
-            print(self.audio_controls)
-        
-        try:        
-            for option in self.audio_controls:
-                if str(option['human_device_name']) == str(selection):
-                    
-                    self.current_simple_card_name = option['simple_card_name']
-                    self.current_card_id = option['card_id']
-                    self.current_device_id = option['device_id']
-                    
-                    # Set selection in persistence data
-                    self.persistent_data['audio_output'] = str(selection)
-                    self.save_persistent_data()
-                    
-                    if self.DEBUG:
-                        print("new output selection on thing: " + str(selection))
-                    try:
-                        if self.DEBUG:
-                            print("self.devices = " + str(self.devices))
-                        if self.devices['voco'] != None:
-                            self.devices['voco'].properties['audio_output'].update( str(selection) )
-                    except Exception as ex:
-                        print("Error setting new audio_output selection:" + str(ex))
-        
-                    break
+        if selection == 'Bluetooth speaker':
             
-        except Exception as ex:
-            print("Error in set_audio_output: " + str(ex))
+            self.bluetooth_device_check()
+            
+            self.persistent_data['audio_output'] = str(selection)
+            self.save_persistent_data()
+            
+            self.devices['voco'].properties['audio_output'].update( str(selection) )
+            
+        else:
+            # Get the latest audio controls
+            self.audio_controls = get_audio_controls()
+            if self.DEBUG:
+                print(self.audio_controls)
+        
+            try:        
+                for option in self.audio_controls:
+                    if str(option['human_device_name']) == str(selection):
+                    
+                        self.current_simple_card_name = option['simple_card_name']
+                        self.current_card_id = option['card_id']
+                        self.current_device_id = option['device_id']
+                    
+                        # Set selection in persistence data
+                        self.persistent_data['audio_output'] = str(selection)
+                        self.save_persistent_data()
+                    
+                        if self.DEBUG:
+                            print("new output selection on thing: " + str(selection))
+                        try:
+                            if self.DEBUG:
+                                print("self.devices = " + str(self.devices))
+                            if self.devices['voco'] != None:
+                                self.devices['voco'].properties['audio_output'].update( str(selection) )
+                        except Exception as ex:
+                            print("Error setting new audio_output selection:" + str(ex))
+        
+                        break
+            
+            except Exception as ex:
+                print("Error in set_audio_output: " + str(ex))
 
 
 
