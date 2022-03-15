@@ -216,7 +216,7 @@ class VocoAPIHandler(APIHandler):
                                 return APIResponse(
                                     status=200,
                                     content_type='application/json',
-                                    content=json.dumps({'state' : state, 'update': '', 'items' : self.adapter.persistent_data['action_times'],'current_time':self.adapter.current_utc_time,'text_response':self.adapter.last_text_response}),
+                                    content=json.dumps({'state' : state, 'update': '', 'items' : self.adapter.persistent_data['action_times'],'current_time':self.adapter.current_utc_time,'text_response':self.adapter.last_text_response, 'initial_injection_completed':self.adapter.initial_injection_completed}),
                                 )
                             except Exception as ex:
                                 print("Error getting init data: " + str(ex))

@@ -6,6 +6,8 @@
       		
 			this.addMenuEntry('Voco');
 			
+            this.debug = false;
+            
 			this.attempts = 0;
 
 	      	this.content = '';
@@ -13,6 +15,7 @@
 			this.all_things;
 			this.items_list = [];
 			this.current_time = 0;
+            
 
             const jwt = localStorage.getItem('jwt');
 
@@ -366,8 +369,11 @@
 		          `/extensions/${this.id}/api/poll`
 
 		        ).then((body) => {
-					//console.log("Python API result:");
-					//console.log(body);
+                    if(this.debug){
+                        console.log("Python API poll result: ", body);
+                    }
+					
+					console.log(body);
 					//console.log(body['items']);
 					if(body['state'] == true){
 						//console.log("got first extra poll data")
@@ -416,14 +422,23 @@
 					          `/extensions/${this.id}/api/poll`
 
 					        ).then((body) => {
+                                if(this.debug){
+                                    console.log("Interval: Python API poll result: ", body);
+                                }
 								//console.log("Python API poll result:");
-								//console.log(body);
+								console.log(body);
 								this.attempts = 0;
 								//console.log(body['items']);
 								if(body['state'] == true){
 									this.items_list = body['items'];
 									this.current_time = body['current_time'];
 									
+                                    if(body['initial_injection_completed']){
+                                        document.getElementById('extension-voco-injection-busy').style.display = 'none';
+                                        document.getElementById('extension-voco-text-commands-container').style.display = 'block';
+                                    }
+                                    
+                                    
 									if(body['text_response'].length != 0){
 										var nicer_text = body['text_response'];
 										nicer_text = nicer_text.replace(/ \./g, '\.'); //.replace(" .", ".");
@@ -455,8 +470,8 @@
 					
 								}
 								else{
-									//console.log("not ok response while getting items list");
-									pre.innerText = body['update'];
+									console.log("Voco: not ok response while getting items list: ", body);
+									//pre.innerText = body['update'];
 								}
 
 					        }).catch((e) => {

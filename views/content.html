@@ -22,12 +22,19 @@
 			<p>Voco seems to have trouble connecting to the MQTT server. If this device is a satellite, then the main controller may be down. If it's the main (or only) Voco controller, then this may indicate a configuration error.</p>
 		</div>
         
+        <div id="extension-voco-injection-busy">
+            <div class="extension-voco-spinner">
+                <div></div><div></div><div></div><div></div>
+            </div>
+            <p>Voco is still starting. This includes learning the names of all your devices. This should normally take no more than about 30 seconds, depending on how many things you have.</p>
+        </div>
+        
 		<div id="extension-voco-injection-failure" style="display:none">
 			<p>Voco seems to have trouble learning the names of your devices. Please make sure all the names of your things can be spoken. Avoid using any characters outside of the Latin alphabet. For example, do not use  # ! ? % & ( ) / ; + = .</p>
 		</div>
 
         
-		<div id="extension-voco-text-commands-container">
+		<div id="extension-voco-text-commands-container" style="display:none">
 			<div id="extension-voco-text-input-container">
 				<input id="extension-voco-text-input-field" placeholder="What time is it?"/>
 				<button id="extension-voco-text-input-send-button" class="text-button">Send</button>
