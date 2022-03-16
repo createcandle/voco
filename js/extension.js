@@ -437,6 +437,10 @@
                                         document.getElementById('extension-voco-injection-busy').style.display = 'none';
                                         document.getElementById('extension-voco-text-commands-container').style.display = 'block';
                                     }
+                                    else{
+                                        document.getElementById('extension-voco-injection-busy').style.display = 'block';
+                                        document.getElementById('extension-voco-text-commands-container').style.display = 'none';
+                                    }
                                     
                                     
 									if(body['text_response'].length != 0){
