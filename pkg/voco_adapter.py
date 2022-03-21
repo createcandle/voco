@@ -291,7 +291,7 @@ class VocoAdapter(Adapter):
         
         # MQTT client
         self.mqtt_client = None
-        self.mqtt_port = 1884
+        self.mqtt_port = 1885
         self.mqtt_connected = False
         self.voco_connected = True
         self.mqtt_others = {}
@@ -811,7 +811,7 @@ class VocoAdapter(Adapter):
             self.DEBUG = bool(config['Debugging'])
             if self.DEBUG:
                 print("Debugging enabled")
-
+                print("config: " + str(config))
         
         # Disable security
         try:
@@ -1030,6 +1030,20 @@ class VocoAdapter(Adapter):
         except Exception as ex:
             print("Error loading voice setting(s) from config: " + str(ex))
 
+            
+        # MQTT port
+        try:
+            if 'MQTT port' in config:
+                mqtt_port = config['MQTT port']
+                if mqtt_port != None:
+                    self.mqtt_port = int(mqtt_port)
+                    
+                    if self.DEBUG:
+                        print("-MQTT port was present in the config data: " + str(self.mqtt_port))
+                    
+                
+        except Exception as ex:
+            print("Error loading mqtt port from config: " + str(ex))
             
         
         

@@ -41,6 +41,7 @@
 	  "Mute the radio": false,
       "Satellite device control": true,
 	  "Disable security": false,
+	  "MQTT port": 1885,
       "Debugging": false
     },
     "schema": {
@@ -180,6 +181,10 @@
           "description": "Advanced. Disabling security might make Voco play nice with older/other versions of Candle or the Webthings Gateway.",
           "type": "boolean"
         },
+        "MQTT port": {
+          "description": "Advanced. By default Candle uses port 1885, but you can override that here by entering a different port number.",
+          "type": "integer"
+        },
         "Debugging": {
           "description": "Advanced. Debugging allows you to diagnose any issues with the add-on. If enabled it will result in a lot more debug data in the internal log (which can be found under settings -> developer -> view internal logs).",
           "type": "boolean"
@@ -190,7 +195,7 @@
     }
   },
   "short_name": "Voco",
-  "version": "2.8.20",
+  "version": "2.8.22",
   "web_accessible_resources": [
     "css/*.css",
     "images/*.svg",
