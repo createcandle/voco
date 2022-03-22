@@ -1665,24 +1665,38 @@ class VocoAdapter(Adapter):
     def speak_welcome_message(self):
         if self.still_busy_booting:
             
+            first_message = ""
+            
             try:
                 if self.persistent_data['is_satellite']:
-                    self.speak("Hello, I am a satellite. ",intent={'siteId':self.persistent_data['site_id']})
+                    first_message = "Hello, I am a satellite. "
+                    if self.missing_microphone:
+                        first_message += " The microphone seems to be disconnected. "
+                        
                 else:
                     if self.persistent_data['listening']:
-                        self.speak("Hello. I am listening. ",intent={'siteId':self.persistent_data['site_id']})
+                        if self.missing_microphone:
+                            first_message = "Hello. The microphone seems to be disconnected. "
+                        else:
+                            first_message = "Hello. I am listening. "
                     else:
-                        self.speak("Hello. Listening is disabled. ",intent={'siteId':self.persistent_data['site_id']})
+                        first_message =  "Hello. Listening is disabled. "
     
-                if self.persistent_data['is_satellite'] == False and self.token == None:
-                    time.sleep(1)
-                    print("PLEASE ENTER YOUR AUTHORIZATION CODE IN THE SETTINGS PAGE")
-                    self.set_status_on_thing("Please open the Voco page")
-                    #self.speak("I do not have pemission to access your devices yet. You can grant this permission .",intent={'siteId':self.persistent_data['site_id']})
+                #if self.persistent_data['is_satellite'] == False and self.token == None:
+                    #time.sleep(1)
+                    #print("PLEASE ENTER YOUR AUTHORIZATION CODE IN THE SETTINGS PAGE")
+                    #self.set_status_on_thing("Please open the Voco page")
+                    #self.speak("I do not have permission to access your devices yet. You can grant this permission .",intent={'siteId':self.persistent_data['site_id']})
             
                 if self.first_run:
-                    time.sleep(1)
-                    self.speak("If you would like to ask me something, start by saying. Hey Snips. ",intent={'siteId':self.persistent_data['site_id']})
+                    #time.sleep(1)
+                    if self.missing_microphone:
+                        first_message += " Once you connect a microphone you can ask me something by saying. Hey Snips. "
+                    else:
+                        first_message += " If you would like to ask me something, start by saying. Hey Snips. "
+        
+                
+                self.speak(first_message,intent={'siteId':self.persistent_data['site_id']})
         
             except Exception as ex:
                 print("Error saying hello: " + str(ex))
