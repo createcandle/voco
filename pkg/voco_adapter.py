@@ -2149,7 +2149,7 @@ class VocoAdapter(Adapter):
                     self.capture_devices = self.scan_alsa('capture')
                     
                     if self.DEBUG:
-                        print("microphone_scan_result: " + str(self.capture_devices))
+                        print("self.capture_devices: " + str(self.capture_devices))
                     
                     if len(self.capture_devices) == 0:
                         if self.DEBUG:
@@ -2168,7 +2168,7 @@ class VocoAdapter(Adapter):
                             if self.still_busy_booting == False:
                                 self.speak("A microphone has been connected.")
                                 
-                        elif self.microphone in microphone_scan_result: # A mic is currenty plugged in
+                        elif self.microphone in self.capture_devices: # A mic is currenty plugged in
                             if self.missing_microphone:
                                 self.missing_microphone = False
                                 if self.mqtt_connected == True:
