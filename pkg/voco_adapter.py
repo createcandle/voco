@@ -244,13 +244,13 @@ class VocoAdapter(Adapter):
         self.api_server = 'http://127.0.0.1:8080' # Where can the Gateway API be found? this will be replaced with https://127.0.0.1:4443 later on, if a test call to the api fails.
 
         # Microphone
-        self.microphone = None
+        self.microphone = 'Auto'
         self.capture_card_id = 1 # 0 is internal, 1 is usb.
         self.capture_device_id = 0 # Which channel
         self.capture_devices = []
         
         # Speaker
-        self.speaker = None
+        self.speaker = 'Auto'
         self.current_simple_card_name = "ALSA"
         self.current_control_name = ""
         self.current_card_id = 0
@@ -535,6 +535,18 @@ class VocoAdapter(Adapter):
 
         
         # AUDIO
+
+        # first, the microphone
+        if len(self.capture_devices) == 0:
+            if self.DEBUG:
+                print("Missing microphone (no attached microphones spotted)")
+            self.missing_microphone = True
+        
+        else:
+            if self.microphone == 'Auto':
+                self.microphone = self.capture_devices[ len(self.capture_devices) - 1 ] # select the last microphone from the list, which will match the initial record card ID and record device ID that scan_alsa has extracted earlier.
+                if self.DEBUG:
+                    print("Microphone was auto-detected. Set to: " + str(self.microphone))
 
         try:
             # Force the audio input.
@@ -826,22 +838,12 @@ class VocoAdapter(Adapter):
 
 
         try:
-            store_updated_settings = False
+            #store_updated_settings = False
             if 'Microphone' in config:
                 #print("-Microphone is present in the config data: " + str(config['Microphone']))
                 print("--Using microphone from config: " + str(config['Microphone']))
                 self.microphone = str(config['Microphone'])
                 
-                if len(self.capture_devices) == 0:
-                    if self.DEBUG:
-                        print("Missing microphone (no attached microphones spotted)")
-                    self.missing_microphone = True
-                
-                else:
-                    if self.microphone == 'Auto':
-                        self.microphone = self.capture_devices[ len(self.capture_devices) - 1 ] # select the last microphone from the list, which will match the initial record card ID and record device ID that scan_alsa has extracted earlier.
-                        if self.DEBUG:
-                            print("Microphone was auto-detected. Set to: " + str(self.microphone))
                 
                 """
                 if len(self.capture_devices) == 0 or str(config['Microphone']) in self.capture_devices:
@@ -863,7 +865,8 @@ class VocoAdapter(Adapter):
                 
             if 'Speaker' in config:
                 print("-Speaker is present in the config data: " + str(config['Speaker']))
-                self.speaker = str(config['Speaker'])               # If the prefered device in config also exists in hardware, then select it.
+                if str(config['Speaker']) != '':
+                    self.speaker = str(config['Speaker'])               # If the prefered device in config also exists in hardware, then select it.
 
         except:
             print("Error loading microphone settings")
@@ -978,7 +981,6 @@ class VocoAdapter(Adapter):
                     self.toml_path = os.path.join(self.snips_path,"candle.toml")
                     if self.DEBUG:
                         print("-Hey Candle is enabled")
-                        
                         
             if 'Mute the radio' in config:
                 self.kill_ffplay_before_speaking = bool(config['Mute the radio'])
