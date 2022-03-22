@@ -2146,15 +2146,21 @@ class VocoAdapter(Adapter):
                 
                 
                 try:
-                    microphone_scan_result = self.scan_alsa('capture')
+                    self.capture_devices = self.scan_alsa('capture')
                     
-                    if len(microphone_scan_result) == 0:
+                    if self.DEBUG:
+                        print("microphone_scan_result: " + str(self.capture_devices))
+                    
+                    if len(self.capture_devices) == 0:
+                        if self.DEBUG:
+                            print("microphone list was empty")
                         if self.missing_microphone == False:
                             self.missing_microphone = True
                             if self.still_busy_booting == False:
                                 self.speak("The microphone has been reconnected.")
                     else:
-                        
+                        if self.DEBUG:
+                            print("microphone list was not empty")
                         if self.microphone == 'Auto':
                             self.microphone = self.capture_devices[ len(self.capture_devices) - 1 ] # select the last microphone from the list, which will match the initial record card ID and record device ID that scan_alsa has extracted earlier.
                             if self.DEBUG:
