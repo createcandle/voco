@@ -539,7 +539,7 @@ class VocoAdapter(Adapter):
         try:
             # Force the audio input.
             if self.microphone == "Auto" or self.microphone == None:
-                # If a microphonr was plugged in, then a valid initial capture card ID capture and capture device ID have already been set by alsa_scan
+                # If a microphone was plugged in, then a valid initial capture card ID capture and capture device ID have already been set by alsa_scan
                 pass
                 
             elif self.microphone == "Built-in microphone (0,0)":
@@ -2130,27 +2130,51 @@ class VocoAdapter(Adapter):
                 except Exception as ex:
                     print("Error updating timer counts from clock: " + str(ex))
 
-                if self.still_busy_booting == False:
-                    # Check if the microphone has been plugged in or unplugged.
-                    if self.microphone in self.scan_alsa('capture'): # A mic is currenty plugged in
-                        if self.missing_microphone:
-                            self.missing_microphone = False
-                            if self.mqtt_connected == True:
-                                self.speak("The microphone has been reconnected.")
-                                #print("self.mqtt_client = " + str(self.mqtt_client))
-                                #self.stop_snips()
-                                #self.run_snips()
-                                self.should_restart_snips = True
-                                #if self.was_listening_when_microphone_disconnected:
-                                #    self.set_snips_state(True)
+                
+                # Check if the microphone has been plugged in or unplugged.
+                
+                
+                try:
+                    microphone_scan_result = self.scan_alsa('capture')
                     
-                    else: # A mic is currently not plugged in
+                    if len(microphone_scan_result) == 0:
                         if self.missing_microphone == False:
                             self.missing_microphone = True
-                            self.speak("The microphone has been disconnected")
-                            #self.was_listening_when_microphone_disconnected = self.persistent_data['listening']
-                            #self.set_snips_state(False)
-                    
+                            if self.still_busy_booting == False:
+                                self.speak("The microphone has been reconnected.")
+                    else:
+                        
+                        if self.microphone == 'Auto':
+                            self.microphone = self.capture_devices[ len(self.capture_devices) - 1 ] # select the last microphone from the list, which will match the initial record card ID and record device ID that scan_alsa has extracted earlier.
+                            if self.DEBUG:
+                                print("Microphone was auto-detected. Set to: " + str(self.microphone))
+                            if self.still_busy_booting == False:
+                                self.speak("A microphone has been connected.")
+                                
+                        elif self.microphone in microphone_scan_result: # A mic is currenty plugged in
+                            if self.missing_microphone:
+                                self.missing_microphone = False
+                                if self.mqtt_connected == True:
+                                    if self.still_busy_booting == False:
+                                        self.speak("The microphone has been reconnected.")
+                                    #print("self.mqtt_client = " + str(self.mqtt_client))
+                                    #self.stop_snips()
+                                    #self.run_snips()
+                                    self.should_restart_snips = True
+                                    #if self.was_listening_when_microphone_disconnected:
+                                    #    self.set_snips_state(True)
+                            
+                        else: # Previously selected mic is not in list of microphones
+                            if self.missing_microphone == False:
+                                self.missing_microphone = True
+                                if self.still_busy_booting == False:
+                                    self.speak("The microphone has been disconnected")
+                                #self.was_listening_when_microphone_disconnected = self.persistent_data['listening']
+                                #self.set_snips_state(False)
+                                
+                except Exception as ex:
+                    print("Error checking if microphone has been re- or disconnected: " + str(ex))
+                
                 
                 # Switch 'sound detected' back to off after a while (if the feature is enabled)
                 #print(str(self.current_utc_time - self.last_sound_activity))
@@ -3179,6 +3203,7 @@ class VocoAdapter(Adapter):
                     return
                         
                 # Deal with the user's command
+                self.alternatives_counter = -1
                 self.master_intent_callback(intent_message)
                 
                 
@@ -3690,7 +3715,8 @@ class VocoAdapter(Adapter):
                         if not self.persistent_data['is_satellite']:
                             self.speak("I did not understand the change you wanted.",intent=intent_message)
                         return
-                
+                    else:
+                        self.master_intent_callback(intent_message, True) # let's try an alternative intent, if there is one.
 
                     
         except Exception as ex:
