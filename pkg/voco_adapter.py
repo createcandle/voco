@@ -535,7 +535,9 @@ class VocoAdapter(Adapter):
 
         
         # AUDIO
-
+        
+        print("detected microphones: \n" + str(self.capture_devices))
+        
         # first, the microphone
         if len(self.capture_devices) == 0:
             if self.DEBUG:
@@ -547,6 +549,12 @@ class VocoAdapter(Adapter):
                 self.microphone = self.capture_devices[ len(self.capture_devices) - 1 ] # select the last microphone from the list, which will match the initial record card ID and record device ID that scan_alsa has extracted earlier.
                 if self.DEBUG:
                     print("Microphone was auto-detected. Set to: " + str(self.microphone))
+
+
+        if not self.microphone in self.capture_devices:
+            if self.DEBUG:
+                print("Warning, the selected microphone doesn't seem to be available in the list of detected microphones. Setting missing microphone to true.")
+            self.missing_microphone = True
 
         try:
             # Force the audio input.
@@ -1037,10 +1045,11 @@ class VocoAdapter(Adapter):
             if 'MQTT port' in config:
                 mqtt_port = config['MQTT port']
                 if mqtt_port != None and mqtt_port != '':
-                    self.mqtt_port = int(mqtt_port)
-                    
-                    if self.DEBUG:
-                        print("-MQTT port was present in the config data: " + str(self.mqtt_port))
+                    port = int(mqtt_port)
+                    if port > 0:
+                        self.mqtt_port = port
+                        if self.DEBUG:
+                            print("-MQTT port was present in the config data: " + str(self.mqtt_port))
                     
                 
         except Exception as ex:
