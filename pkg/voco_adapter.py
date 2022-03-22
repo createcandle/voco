@@ -32,7 +32,7 @@ from dateutil.parser import *
 
 try:
     from .intentions import *
-    print("succesfully imported intentions.py file")
+    #print("succesfully imported intentions.py file")
 except Exception as ex:
     print("ERROR loading intentions.py: " + str(ex))
     
@@ -84,7 +84,7 @@ class VocoAdapter(Adapter):
         
         verbose -- whether or not to enable verbose logging
         """
-        print("Starting Voco addon")
+        #print("Starting Voco addon")
         #print(str( os.path.join(os.path.dirname(os.path.abspath(__file__)), 'lib') ))
         self.pairing = False
         self.DEBUG = False
@@ -98,7 +98,7 @@ class VocoAdapter(Adapter):
         #print("self.manager_proxy = " + str(self.manager_proxy))
 
 
-        print("self.user_profile: " + str(self.user_profile))
+        #print("self.user_profile: " + str(self.user_profile))
 
         os.environ["LD_LIBRARY_PATH"] = os.path.join(self.user_profile['addonsDir'],self.addon_name,'snips')
 
@@ -807,7 +807,6 @@ class VocoAdapter(Adapter):
         #print(str(config))
 
         if 'Debugging' in config:
-            print("-Debugging was in config")
             self.DEBUG = bool(config['Debugging'])
             if self.DEBUG:
                 print("Debugging enabled")
@@ -1035,7 +1034,7 @@ class VocoAdapter(Adapter):
         try:
             if 'MQTT port' in config:
                 mqtt_port = config['MQTT port']
-                if mqtt_port != None:
+                if mqtt_port != None and mqtt_port != '':
                     self.mqtt_port = int(mqtt_port)
                     
                     if self.DEBUG:
@@ -2824,10 +2823,9 @@ class VocoAdapter(Adapter):
             if self.should_restart_mqtt:
                 self.mqtt_client.loop_start()
                 self.should_restart_mqtt = False
-                print("MQTT loop (re)started")
             
                 if self.DEBUG:
-                    print("MQTT client loop started. self.should_restart_mqtt is now false.")  
+                    print("MQTT client loop (re)started. self.should_restart_mqtt is now false.")  
             
         except Exception as ex:
             print("Error creating MQTT client connection: " + str(ex))

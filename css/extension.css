@@ -578,7 +578,7 @@
 	padding:1rem;
 }
 
-
+#extension-voco-missing-microphone,
 #extension-voco-injection-busy{
     max-width:60rem;
     margin:2rem auto;
@@ -597,6 +597,14 @@
     background-color:red;
     color:white;
     border-radius:.5rem;
+}
+
+
+#extension-voco-missing-microphone-icon{
+    width:64px;
+    height:64px;
+    margin:2rem auto;
+    display:block;
 }
 
 

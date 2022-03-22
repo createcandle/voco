@@ -442,6 +442,13 @@
                                         document.getElementById('extension-voco-text-commands-container').style.display = 'none';
                                     }
                                     
+                                    if(body['missing_microphone']){
+                                        document.getElementById('extension-voco-missing-microphone').style.display = 'block';
+                                    }
+                                    else{
+                                        document.getElementById('extension-voco-missing-microphone').style.display = 'none';
+                                    }
+                                    
                                     
 									if(body['text_response'].length != 0){
 										var nicer_text = body['text_response'];

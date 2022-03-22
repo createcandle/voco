@@ -136,7 +136,9 @@ class VocoDevice(Device):
                                 
         except Exception as ex:
             print("error adding properties: " + str(ex))
-        print("Voco thing has been created")
+        
+        if self.adapter.DEBUG:
+            print("Voco thing has been created")
         #self.adapter.handle_device_added(self)
 
 
