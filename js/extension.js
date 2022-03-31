@@ -249,7 +249,7 @@
 					}
 					
 					if('hostname' in body){
-						if(body['hostname'] == 'gateway'){
+						if(body['hostname'] == 'gateway' || body['hostname'] == 'candle'){
 							document.getElementById('extension-voco-content-container').classList.add('extension-voco-change-hostname');
 						}
 						else{

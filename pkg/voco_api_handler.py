@@ -5,7 +5,7 @@ import re
 import json
 import time
 from time import sleep
-#import socket
+import socket
 import requests
 import subprocess
 #import threading
@@ -36,6 +36,8 @@ class VocoAPIHandler(APIHandler):
         self.addon_name = 'voco-handler'
         self.DEBUG = self.adapter.DEBUG
 
+        if self.DEBUG:
+            print("initial hostname: " + str(socket.gethostname()))
             
         # Intiate extension addon API handler
         try:
@@ -321,6 +323,24 @@ class VocoAPIHandler(APIHandler):
                                     update = 'Unable to update satellite preference'
                                     if 'is_satellite' in request.body and 'mqtt_server' in request.body:
                                         update = "both in body"
+                                        
+                                        
+                                        # If a device should become a satellite, the user should first change the hostname into something else
+                                        try:
+                                            hostname = socket.gethostname()
+                                            if self.DEBUG:
+                                                print("hostname: " + str(hostname))
+                                            if bool(request.body['is_satellite']) == True and hostname.lower() == 'candle':
+                                                if self.DEBUG:
+                                                    print("error, cannot turn into satellite: hostname is still Candle")
+                                                return APIResponse(
+                                                    status=200,
+                                                    content_type='application/json',
+                                                    content=json.dumps({'state' : False, 'update':"Please change the hostname first"}),
+                                                )
+                                        except Exception as ex:
+                                            print("Error checking if hostname is something else than candle: " + str(ex))
+                                        
                                         self.adapter.persistent_data['is_satellite'] = bool(request.body['is_satellite'])
 
                                         #if bool(request.body['is_satellite']) != self.adapter.persistent_data['is_satellite']:

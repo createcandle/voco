@@ -278,6 +278,7 @@ class VocoAdapter(Adapter):
         self.last_sound_activity = 0
         self.last_text_command = "" # for text input instead of voice input
         self.last_text_response = ""
+        self.stop_snips_on_microphone_unplug = True
         
         # Satellite
         self.satellite_local_intent_parsing = False
@@ -1638,7 +1639,7 @@ class VocoAdapter(Adapter):
         
         self.should_restart_snips = False
         self.busy_starting_snips = False
-        self.set_status_on_thing("started")
+        self.set_status_on_thing("Started")
         
         """
         if self.still_busy_booting:
@@ -2148,23 +2149,30 @@ class VocoAdapter(Adapter):
                 try:
                     self.capture_devices = self.scan_alsa('capture')
                     
-                    if self.DEBUG:
-                        print("self.capture_devices: " + str(self.capture_devices))
+                    #if self.DEBUG:
+                    #    print("self.capture_devices: " + str(self.capture_devices))
                     
                     if len(self.capture_devices) == 0:
-                        if self.DEBUG:
-                            print("microphone list was empty")
+                        #if self.DEBUG:
+                        #    print("microphone list was empty")
                         if self.missing_microphone == False:
+                            if self.DEBUG:
+                                print("microphone was disconnected. List of available microphones is now empty.")
                             self.missing_microphone = True
                             if self.still_busy_booting == False:
                                 self.speak("The microphone has been disconnected.")
+                            if self.stop_snips_on_microphone_unplug:
+                                self.stop_snips()
                     else:
-                        if self.DEBUG:
-                            print("microphone list was not empty")
+                        #if self.DEBUG:
+                        #    print("microphone list was not empty")
                         if self.microphone == 'Auto':
-                            # this only occurs is voco is started without a microphone plugged in.
+                            # this only occurs is voco is started without a microphone plugged in, and it has just been plugged in for the first time.
                             self.microphone = self.capture_devices[ len(self.capture_devices) - 1 ] # select the last microphone from the list, which will match the initial record card ID and record device ID that scan_alsa has extracted earlier.
-                            self.should_restart_snips = True
+                            if self.stop_snips_on_microphone_unplug:
+                                #self.should_restart_snips = True
+                                self.set_status_on_thing("restarting")
+                                self.run_snips()
                             if self.DEBUG:
                                 print("Microphone was auto-detected. Set to: " + str(self.microphone))
                             if self.still_busy_booting == False:
@@ -2172,6 +2180,8 @@ class VocoAdapter(Adapter):
                                 
                         elif self.microphone in self.capture_devices: # A mic is currenty plugged in
                             if self.missing_microphone:
+                                if self.DEBUG:
+                                    print("The microphone has been reconnected: " + str(self.microphone))
                                 self.missing_microphone = False
                                 if self.mqtt_connected == True:
                                     if self.still_busy_booting == False:
@@ -2179,15 +2189,22 @@ class VocoAdapter(Adapter):
                                     #print("self.mqtt_client = " + str(self.mqtt_client))
                                     #self.stop_snips()
                                     #self.run_snips()
-                                    self.should_restart_snips = True
+                                    if self.stop_snips_on_microphone_unplug:
+                                        #self.should_restart_snips = True
+                                        self.set_status_on_thing("restarting")
+                                        self.run_snips()
                                     #if self.was_listening_when_microphone_disconnected:
                                     #    self.set_snips_state(True)
                             
                         else: # Previously selected mic is not in list of microphones
                             if self.missing_microphone == False:
+                                if self.DEBUG:
+                                    print("The microphone has been disconnected: " + str(self.microphone))
                                 self.missing_microphone = True
                                 if self.still_busy_booting == False:
                                     self.speak("The microphone has been disconnected")
+                                if self.stop_snips_on_microphone_unplug:
+                                    self.stop_snips()
                                 #self.was_listening_when_microphone_disconnected = self.persistent_data['listening']
                                 #self.set_snips_state(False)
                                 
@@ -2203,41 +2220,47 @@ class VocoAdapter(Adapter):
 
                 if not self.should_restart_snips:
                     # check if running subprocesses are still running ok
-                    #subprocess_running_ok = True
-                    poll_error_count = 0
-                    for process in self.external_processes:
-                        try:
-                            poll_result = process.poll()
-                            #if self.DEBUG:
-                            #    print("subprocess poll_result: " + str(poll_result) )
-                            if poll_result != None:
-                                if self.DEBUG:
-                                    print("clock poll_result was not None. A subprocess stopped? It was: " + str(poll_result))
-                                poll_error_count += 1
-                    #            process.terminate()
-                    #            subprocess_running_ok = False
-                            #else:
-                            #    if self.DEBUG:
-                            #        print("doing process.communicate")
-                            #        process.communicate(timeout=1)
-                                
-                        except Exception as ex:
-                            if self.DEBUG:
-                                print("subprocess poll error: " + str(ex))
-                    #if subprocess_running_ok == False:
-                    #    self.run_snips() # restart snips if any of its processes have ended/crashed
-
-                    if poll_error_count > 0:
+                    
+                    if self.missing_microphone == True and self.stop_snips_on_microphone_unplug:
                         if self.DEBUG:
-                            print("clock: poll error count was: " + str(poll_error_count))
-                            alternative_process_counter = self.is_snips_running()
-                            print("clock: second opinion on Snips being down: self.is_snips_running() count: " + str(alternative_process_counter))
+                            print("will not restart snips since snips should be disabled while microphone is missing.")
+                    
+                    else:
+                        #subprocess_running_ok = True
+                        poll_error_count = 0
+                        for process in self.external_processes:
+                            try:
+                                poll_result = process.poll()
+                                #if self.DEBUG:
+                                #    print("subprocess poll_result: " + str(poll_result) )
+                                if poll_result != None:
+                                    if self.DEBUG:
+                                        print("clock poll_result was not None. A subprocess stopped? It was: " + str(poll_result))
+                                    poll_error_count += 1
+                        #            process.terminate()
+                        #            subprocess_running_ok = False
+                                #else:
+                                #    if self.DEBUG:
+                                #        print("doing process.communicate")
+                                #        process.communicate(timeout=1)
+                                
+                            except Exception as ex:
+                                if self.DEBUG:
+                                    print("subprocess poll error: " + str(ex))
+                        #if subprocess_running_ok == False:
+                        #    self.run_snips() # restart snips if any of its processes have ended/crashed
+
+                        if poll_error_count > 0:
+                            if self.DEBUG:
+                                print("clock: poll error count was: " + str(poll_error_count))
+                                alternative_process_counter = self.is_snips_running()
+                                print("clock: second opinion on Snips being down: self.is_snips_running() count: " + str(alternative_process_counter))
                             
-                            if self.persistent_data['is_satellite']:
-                                if alternative_process_counter == 0:
+                                if self.persistent_data['is_satellite']:
+                                    if alternative_process_counter == 0:
+                                        self.should_restart_snips = True
+                                elif alternative_process_counter < 7:
                                     self.should_restart_snips = True
-                            elif alternative_process_counter < 7:
-                                self.should_restart_snips = True
 
 
 
