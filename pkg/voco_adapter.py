@@ -2157,12 +2157,14 @@ class VocoAdapter(Adapter):
                         if self.missing_microphone == False:
                             self.missing_microphone = True
                             if self.still_busy_booting == False:
-                                self.speak("The microphone has been reconnected.")
+                                self.speak("The microphone has been disconnected.")
                     else:
                         if self.DEBUG:
                             print("microphone list was not empty")
                         if self.microphone == 'Auto':
+                            # this only occurs is voco is started without a microphone plugged in.
                             self.microphone = self.capture_devices[ len(self.capture_devices) - 1 ] # select the last microphone from the list, which will match the initial record card ID and record device ID that scan_alsa has extracted earlier.
+                            self.should_restart_snips = True
                             if self.DEBUG:
                                 print("Microphone was auto-detected. Set to: " + str(self.microphone))
                             if self.still_busy_booting == False:
