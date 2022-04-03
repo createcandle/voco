@@ -111,8 +111,16 @@ class VocoAdapter(Adapter):
         print("audio controls: " + str(self.audio_controls))
 
         
+        # Make the data dir if it's missing
+        data_dir_path = os.path.join(self.user_profile['dataDir'], self.addon_name)
+        if not os.path.isdir(data_dir_path):
+            os.mkdir(data_dir_path)
+        
         
         self.bluetooth_persistence_file_path = os.path.join(self.user_profile['dataDir'], 'bluetoothpairing', 'persistence.json')
+        
+        
+        
         
         # Get persistent data
         try:
@@ -395,8 +403,8 @@ class VocoAdapter(Adapter):
             if not os.path.isdir(self.work_path):
                 os.mkdir( self.work_path )
                 print("Work directory did not exist, created it now: " + str(self.work_path))
-        except:
-            print("Error: could not make sure work dir exists. Work path: " + str(self.work_path))
+        except Exception as ex:
+            print("Error: could not make sure work dir exists. Work path: " + str(self.work_path) + ". Error: " + str(ex))
             
 
         
@@ -823,6 +831,7 @@ class VocoAdapter(Adapter):
         
         if not config:
             print("Error loading config from database")
+            self.close_proxy()
             return
         
         #print(str(config))
