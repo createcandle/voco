@@ -766,7 +766,7 @@ class VocoAdapter(Adapter):
              self.persistent_data['matrix_candle_username'] = "Candle_" + randomWord(4)
         if 'matrix_candle_password' not in self.persistent_data:
             self.persistent_data['matrix_candle_password'] = randomPassword(16)
-       
+            
         if self.DEBUG:
             print("self.persistent_data['matrix_candle_username']: " + str(self.persistent_data['matrix_candle_username']))
             print("self.persistent_data['matrix_candle_password']: " + str(self.persistent_data['matrix_candle_password']))
@@ -5816,9 +5816,9 @@ class VocoAdapter(Adapter):
            
 
 
-    def create_matrix_account(self, password):
+    def create_matrix_account(self, password, create_account_for_user=True):
         if self.DEBUG:
-            print("registering a Matrix account. Device id: " + str(self.persistent_data['matrix_device_id']))
+            print("registering a Matrix account")
        
         try:
             if 'matrix_server' in self.persistent_data and 'matrix_username' in self.persistent_data:
@@ -5826,7 +5826,7 @@ class VocoAdapter(Adapter):
            
                 loop = self.get_or_create_eventloop()
                
-                loop_response = loop.run_until_complete( self.register_loop(password) )
+                loop_response = loop.run_until_complete( self.register_loop(password, create_account_for_user) )
                 if self.DEBUG:
                     print("register done... Loop response: " + str(loop_response))
                
@@ -5860,7 +5860,7 @@ class VocoAdapter(Adapter):
         return False
    
    
-    async def register_loop(self,password="no_account_needed"):
+    async def register_loop(self,password="no_account_needed", create_account_for_user=True):
        
         if self.DEBUG:
             print("matrix: in registerloop")
@@ -5870,15 +5870,16 @@ class VocoAdapter(Adapter):
        
         try:
             #async_client = AsyncClient(self.persistent_data['matrix_server'], store_path=self.matrix_data_store_path, config=self.matrix_config)
-            #async_client = AsyncClient('https://element.liberta.casa/', store_path='/home/pi/.webthings/data/webinterface/matrix.json', config=matrix_config)
+            #async_client = AsyncClient('https://element.liberta.casa/', store_path='/home/pi/.webthings/data/voco/matrix.json', config=matrix_config)
             server = "https://" + str(self.persistent_data['matrix_server'])
             async_client = AsyncClient(server, store_path=self.matrix_data_store_path, config=self.matrix_config)
             #print("beyond creating matrix registration client. Client: " + str(async_client))
    
    
            
-            register_response = await async_client.register( self.persistent_data['matrix_candle_username'], self.persistent_data['matrix_candle_password'], str(self.persistent_data['matrix_device_id']) )
-   
+            #register_response = await async_client.register( self.persistent_data['matrix_candle_username'], self.persistent_data['matrix_candle_password'], str(self.persistent_data['matrix_device_id']) )
+            register_response = await async_client.register( self.persistent_data['matrix_candle_username'], self.persistent_data['matrix_candle_password'])
+            
             if self.DEBUG:
                 print("- register_response: " + str(register_response))
            
@@ -5892,7 +5893,7 @@ class VocoAdapter(Adapter):
                 self.save_persistent_data()
                
                 # If a password was provided, then also create an account for the user
-                if password != "no_account_needed":
+                if create_account_for_user:
                    
                     time.sleep(4)
                     register_response2 = await async_client.register( str(self.persistent_data['matrix_username']), password )

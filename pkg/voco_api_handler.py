@@ -89,35 +89,67 @@ class VocoAPIHandler(APIHandler):
                     return APIResponse(status=404)
 
             elif request.method == 'POST':
-                if request.path == '/init' or request.path == '/poll' or request.path == '/parse' or request.path == '/update' or request.path == 'ajax':
+                if request.path == '/init' or request.path == '/poll' or request.path == '/parse' or request.path == '/update' or request.path == '/ajax':
 
                     try:
                         #if self.DEBUG:
-                        #    print("API handler is being called")
+                        #    print("API handler is being called: " + str(request.path))
                     
                         
                         
-                        if request.path == 'ajax':
+                        if request.path == '/ajax':
                             
                             action = str(request.body['action'])    
                             if self.DEBUG:
                                 print("ajax action = " + str(action))
                             
+                            
+                            if action == 'matrix_init':
+                                
+                                
+                                matrix_server = "..."
+                                if 'matrix_server' in self.adapter.persistent_data:
+                                    matrix_server = str(self.adapter.persistent_data['matrix_server'])
+                                
+                                matrix_username = "..."
+                                if 'matrix_username' in self.adapter.persistent_data:
+                                    matrix_username = str(self.adapter.persistent_data['matrix_username'])
+                                    
+                                has_matrix_token = False
+                                if 'matrix_token' in self.adapter.persistent_data:
+                                    has_matrix_token = True
+                                
+                                
+                                return APIResponse(
+                                    status=200,
+                                    content_type='application/json',
+                                    content=json.dumps({'state': True,
+                                            'matrix_server': matrix_server,
+                                            'matrix_username': matrix_username,
+                                            'has_matrix_token': has_matrix_token}),
+                                )
+                                
+                                
+                            
                             elif action == 'create_matrix_account':
                                 state = False
                                 if self.DEBUG:
                                     print('ajax handling create_matrix_account')
+                                
                                 try:
                                     if 'matrix_password' in request.body and 'matrix_username' in request.body and 'matrix_server' in request.body:
-                            
-                                        self.persistent_data['matrix_server'] = request.body['matrix_server']
-                                        self.persistent_data['matrix_username'] = request.body['matrix_username']
-                                        self.save_persistent_data()
+                                        
+                                        self.adapter.persistent_data['matrix_server'] = request.body['matrix_server']
+                                        self.adapter.persistent_data['matrix_username'] = request.body['matrix_username']
+                                        self.adapter.save_persistent_data()
                                         if self.DEBUG:
                                             print("api handler: calling create_matrix_account")
-                                        state = self.create_matrix_account(request.body['matrix_password'])
+                                        state = self.adapter.create_matrix_account(request.body['matrix_password'])
                                         print("state from create_matrix_account: " + str(state))
                                         #state = True
+                                    else:
+                                        if self.DEBUG:
+                                            print("not all required parameters for creating an account were provided")
                             
                                 except Exception as ex:
                                     print("Error handling create new Matrix account: " + str(ex))
@@ -127,6 +159,41 @@ class VocoAPIHandler(APIHandler):
                                   content_type='application/json',
                                   content=json.dumps({'state' : state, 'message' : '' }),
                                 )
+                                
+                                
+                            elif action == 'provide_matrix_account':
+                                state = False
+                                if self.DEBUG:
+                                    print('ajax handling provide_matrix_account')
+                                
+                                try:
+                                    if 'matrix_password' in request.body and 'matrix_username' in request.body and 'matrix_server' in request.body:
+                                        
+                                        self.adapter.persistent_data['matrix_server'] = request.body['matrix_server']
+                                        self.adapter.persistent_data['matrix_candle_username'] = request.body['matrix_username']
+                                        self.adapter.persistent_data['matrix_candle_password'] = request.body['matrix_password']
+                                        self.adapter.save_persistent_data()
+                                        if self.DEBUG:
+                                            print("api handler: calling create_matrix_account")
+                                        state = self.adapter.create_matrix_account(request.body['matrix_password'], False) # False, as in don't also create an account for the user. The password here isn't needed, since the value from persistent data will be used.
+                                        print("state from create_matrix_account: " + str(state))
+                                        #state = True
+                                    else:
+                                        if self.DEBUG:
+                                            print("not all required parameters for creating an account were provided")
+                            
+                                except Exception as ex:
+                                    print("Error handling create new Matrix account: " + str(ex))
+                        
+                                return APIResponse(
+                                  status=200,
+                                  content_type='application/json',
+                                  content=json.dumps({'state' : state, 'message' : '' }),
+                                )
+                                
+                        
+                            else:
+                                return APIResponse(status=404)    
                         
                         
                         
@@ -135,8 +202,6 @@ class VocoAPIHandler(APIHandler):
                                 print("Handling request to /init")
                             
                             try:
-                                
-                            
                                 #self.adapter.token = str(request.body['jwt'])
                                 #self.adapter.persistent_data['token'] = str(request.body['jwt'])
                                 
@@ -179,6 +244,7 @@ class VocoAPIHandler(APIHandler):
                                 else:
                                     has_token = True
                             
+                                    
                             
                                 # Is satellite
                                 is_sat = False
@@ -190,7 +256,7 @@ class VocoAPIHandler(APIHandler):
                             
                                 if self.adapter.persistent_data['mqtt_server'] not in self.adapter.gateways_ip_list:
                                     if self.DEBUG:
-                                        print("Warning, the current persistent_data['mqtt_server'] IP was not actually spotted in the network by the ARP scan!")
+                                        print("Warning, the current persistent_data['mqtt_server'] IP was not actually spotted in the network by the ARP scan: " + str(self.adapter.persistent_data['mqtt_server']) )
                             
                             
                                 if self.DEBUG:
@@ -199,8 +265,10 @@ class VocoAPIHandler(APIHandler):
                                     print("- is_satellite: " + str(is_sat))
                                     print("- hostname: " + str(self.adapter.hostname))
                                     print("- mqtt_server: " + str(self.adapter.persistent_data['mqtt_server']))
+                                
                             
-                            
+                                # Matrix
+                                
                                 matrix_server = "..."
                                 if 'matrix_server' in self.adapter.persistent_data:
                                     matrix_server = str(self.adapter.persistent_data['matrix_server'])
@@ -208,8 +276,11 @@ class VocoAPIHandler(APIHandler):
                                 matrix_username = "..."
                                 if 'matrix_username' in self.adapter.persistent_data:
                                     matrix_username = str(self.adapter.persistent_data['matrix_username'])
-                            
-                            
+                                    
+                                has_matrix_token = False
+                                if 'matrix_token' in self.adapter.persistent_data:
+                                    has_matrix_token = True
+                                    
                             
                                 return APIResponse(
                                     status=200,
@@ -224,6 +295,7 @@ class VocoAPIHandler(APIHandler):
                                             'possible_injection_failure':self.adapter.possible_injection_failure, 
                                             'matrix_server': matrix_server,
                                             'matrix_username': matrix_username,
+                                            'has_matrix_token': has_matrix_token,
                                             'debug':self.adapter.DEBUG}),
                                 )
                             except Exception as ex:
