@@ -676,3 +676,22 @@ def simpler_fuzz(s1, s2):
         print("Error doing simpler_fuzz: " + str(ex))
     #print(str(ratio))
     return ratio
+    
+    
+def randomWord(length=8):
+    consonants = "bcdfghjklmnpqrstvwxyz"
+    vowels = "aeiou"
+    return "".join(random.choice((consonants, vowels)[i%2]) for i in range(length))
+    
+    
+def randomPassword(length=12):
+    symbols = string.punctuation
+    lower = string.ascii_lowercase
+    upper = string.ascii_uppercase
+    numbers = string.digits
+    
+    characters = symbols + lower + upper + numbers
+    characters_array = random.sample(characters,length)
+    return "".join(characters_array)
+
+    
