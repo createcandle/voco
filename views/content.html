@@ -50,6 +50,7 @@
 		
 		<div class="extension-voco-tab-buttons">
             <button id="extension-voco-tab-button-timers" class="extension-voco-main-tab-button">Timers</button>
+            <button id="extension-voco-tab-button-chat" class="extension-voco-main-tab-button">Chat</button>
 			<button id="extension-voco-tab-button-satellites" class="extension-voco-main-tab-button">Satellites</button>
             <button id="extension-voco-tab-button-tutorial" class="extension-voco-main-tab-button">?</button>
         </div>
@@ -86,7 +87,7 @@
 			</div>
 
 			
-			<div id="extension-voco-tab-satellites" class="extension-voco-tab">
+			<div id="extension-voco-tab-satellites" class="extension-voco-tab extension-voco-hidden">
 				<div id="extension-voco-satellites" class="extension-voco-centered-page">
 					<img src="/extensions/voco/images/satellites.png" alt="Satellites example"/>
 					<p>One microphone might not be enough to cover your entire home. That's why it's possible to create 'satellites'.</p> 
@@ -123,7 +124,96 @@
 			</div>
 
 
-			<div id="extension-voco-tab-tutorial" class="extension-voco-tab">
+
+            <div id="extension-voco-tab-chat" class="extension-voco-tab extension-voco-hidden">
+                
+                <div id="extension-voco-matrix-create-account-step1">
+                    <div class="extension-voco-two-column">
+                        <div>
+                            <p>You can receive notifications on your mobile devices through an encrypted chat network called Matrix. This is very similar to Whatsapp or Signal. To use it you'll have to intall a Matrix app on your phone, and create a Matrix account. <span id="extension-voco-matrix-learn-more-button">Learn more</span>.</p>
+                            <p id="extension-voco-matrix-learn-more" class="extension-voco-hidden">Matrix is a "federated" network. This means no single organisation owns the chat network. Anyone can create a server, and then these servers route the messages between them so they get to the intented destination. You could even run your own server if you wanted, which would give you very high levels of control over your data.</p>
+                            <p style="text-align:center">To use notifications you will need a Matrix account.<br/><br/></p>
+                            
+                            <button id="extension-voco-matrix-show-new-account-simple" class="text-button">Simple account creation</button>
+                            <div><p>If you already have a Matrix account, or would like to choose a different server, then <span id="extension-voco-matrix-show-new-account-advanced">click here</span>.</p></div>
+                            <!--
+                            <button id="extension-voco-matrix-show-new-account-advanced" class="text-button">Advanced account creation</button>
+                            <button id="extension-voco-matrix-show-new-account-exists" class="text-button">I already have a Matrix account</button>
+                            -->
+                        </div>
+                        <div id="extension-voco-matrix-create-new-account-tabs">
+                            <div id="extension-voco-matrix-create-new-account">
+                                <p>Creating your Matrix account</p>
+                                <h3>Choose a server</h3>
+                                <p>Here is a list of popular and/or privacy protecting servers. Select which server you'd like to create an account on.</p>
+                                <select id="extension-voco-matrix-server-select">
+                                    <option value="chatwave.org" selected>chatwave.org (Germany)</option>
+                                    <option value="duesen.chat">duesen.chat (Germany)</option>
+                                    <option value="erfurt.chat">erfurt.chat (Germany)</option>
+                                    <option value="yatrix.org">yatrix.org (Germany)</option>
+                                    <option value="techsaviours.org">techsaviours.org (Germany)</option>
+                                </select>
+                        
+                                <h3>Username</h3>
+                                <p>Choose a unique username.</p>
+                                <input id="extension-voco-matrix-username"/><br/>
+                        
+                                <h3>Password</h3>
+                                <p>Your password is NOT stored on your controller. If you forget your password you'll have to create a new account.</p>
+                                <input id="extension-voco-matrix-password1" type="password" placeholder="Password"/><br/>
+                                
+                                <p style="font-size:70%; margin-bottom:.1rem">Repeat your password:</p>
+                                <input id="extension-voco-matrix-password2" type="password" placeholder="Password"/>
+                                <br/>
+                                <button id="extension-voco-matrix-create-account-button" type="button" class="text-button">Create account</button>
+                            </div>
+                            
+                             
+                            <div id="extension-voco-matrix-provide-account" class="extension-voco-hidden">
+                                <p>Advanced</p>
+                                <h3>Manual configuration</h3>
+                                <p>Here you can set any Matrix server you want. Tip: have a look at joinmatrix.org</p>
+                                <p>In this case will not only need a manually created account for yourself, but you will also have to create one for Voco (on the same server). Voco will then log-in with that account.</p>
+                        
+                                <h3>Matrix home server</h3>
+                                <input id="extension-voco-matrix-provide-server"/><br/>
+                        
+                                <h3>Voco username</h3>
+                                <input id="extension-voco-matrix-provide-username"/><br/>
+                        
+                                <h3>Voco password</h3>
+                                <p>The password is stored on your controller, and is never transmitted to the outside world.</p>
+                                <input id="extension-voco-matrix-provide-password" type="password" placeholder="Password"/><br/>
+                    
+                                <button id="extension-voco-matrix-create-account-button" type="button" class="text-button">Save Voco account</button>
+                            </div>
+                            
+                        </div>
+                        
+                    </div>
+                </div>
+                
+                <div id="extension-voco-matrix-create-account-step2">
+                    <p>STEP 2</p>
+                    <h2>Download an app that supports Matrix chat</h2>
+                    <p>Candle is able to connect to the Matrix server.</p>
+                    <p>Just like there are many Matrix chat servers, there are many (open source) apps you can use to "chat" with your smart home. Popular choices are:</p>
+                    <p>
+                        <ul>
+                            <li>FluffyChat (www.fluffychat.im)</li>
+                            <li>Element</li>
+                        </ul>
+                    </p>
+                    <p>Install one of these apps on your phone. Then you can login using this information:</p>
+                    <p>Home server: <span class="extension-voco-matrix-server">...</span></p>
+                    <p>Username: <span class="extension-voco-matrix-username">...</span></p>
+                    <p>Password: Candle does not store your password.</p>
+                    
+                </div>
+            </div>
+
+
+			<div id="extension-voco-tab-tutorial" class="extension-voco-tab extension-voco-hidden">
 				<div id="extension-voco-tutorial" class="extension-voco-centered-page">
 					<h2>How to use Voco</h2>
 					<p>Voice control is really fun and useful, especially when you know your data stays in your own home. Here are some example commands. Voco is very flexible, you can say the commands in many different ways.</p>

@@ -228,6 +228,25 @@
 
 /*  TABS  */
 
+.extension-voco-hidden{
+    display:none;
+}
+
+.extension-voco-tab-selected{
+    color: white;
+    background-color: rgba(0,0,0,0.18);
+}
+
+/*
+.extension-voco-tab{
+    display:none;
+}
+
+.extension-voco-tab-selected{
+    display:block;
+}
+*/
+
 
 .extension-voco-tab-buttons{
 	margin-top: 4rem;
@@ -254,7 +273,7 @@
 }
 
 
-
+/*
 #extension-voco-tabs-container > div{
 	display:none;
 }
@@ -270,7 +289,7 @@
 #extension-voco-content.extension-voco-show-tab-tutorial #extension-voco-tab-tutorial{
 	display:block;
 }
-
+*/
 
 
 
