@@ -2,3 +2,5 @@ python-dateutil
 pytz
 paho-mqtt
 requests
+python-olm
+matrix-nio[e2e]
