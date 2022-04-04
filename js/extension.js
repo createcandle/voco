@@ -97,15 +97,14 @@
         
             for(var i=0; i< all_tab_buttons.length;i++){
                 all_tab_buttons[i].addEventListener('click', (event) => {
-        			console.log("button clicked", event);
+        			//console.log("tab button clicked", event);
                     var desired_tab = event.target.innerText.toLowerCase();
                     
                     if(desired_tab == '?'){desired_tab = 'help';}
 
-                    console.log("desired tab: " + desired_tab);
+                    //console.log("desired tab: " + desired_tab);
                     
                     for(var j=0; j<all_tabs.length;j++){
-                        console.log(j);
                         all_tabs[j].classList.add('extension-voco-hidden');
                         all_tab_buttons[j].classList.remove('extension-voco-tab-selected');
                     }
@@ -198,16 +197,50 @@
 				
 			
 			try{
-				pre.innerText = "";
+				//pre.innerText = "";
 				
+                
+                // Matrix init
+		        window.API.postJson(
+		          `/extensions/${this.id}/api/ajax`,
+                    {'action':'matrix_init'}
+		        ).then((body) => {
+                    
+                    if(typeof body.matrix_server != 'undefined' && typeof body.has_matrix_token != 'undefined'){
+                        
+                        console.log("body.matrix_server: ", body.matrix_server);
+                        if( body.matrix_server != '...' && body.has_matrix_token == true){
+                            console.log("body.matrix_server has a value");
+                            document.getElementById('extension-voco-matrix-create-account-step2').classList.remove('extension-voco-hidden');
+                            
+                            document.querySelector('.extension-voco-matrix-server').innerText = 'https://' + body.matrix_server;
+                            document.querySelector('.extension-voco-matrix-username').innerText = body.matrix_username;
+                            //document.querySelector('.extension-voco-matrix-room').innerText = body.persistent_data.matrix_room_id;
+                        }
+                        else{
+                            console.log("body.matrix_server did not have a value, or token was not set succesfully. Showing chat step 1");
+                            document.getElementById('extension-voco-matrix-create-account-step1').classList.remove('extension-voco-hidden');
+                            document.getElementById('extension-voco-matrix-create-new-account').classList.remove('extension-voco-hidden');
+                        }
+                    }
+                    
+                    // Remove chat loading spinner
+                    document.getElementById('extension-voco-chat-loading').classList.add('extension-voco-hidden');
+                    
+		        }).catch((e) => {
+		  			console.log("Error getting Voco Matrix init data: " , e);
+		        });	
+                    
+                
+                
                 
 		  		// Init
 		        window.API.postJson(
 		          `/extensions/${this.id}/api/init`
 
 		        ).then((body) => {
-					//console.log("Init API result:");
-					//console.log(body);
+					console.log("Voco Init API result:");
+					console.log(body);
 					
                     if(typeof body.debug != 'undefined'){
                         if(body.debug){
@@ -215,7 +248,6 @@
                             document.getElementById('extension-voco-debug-warning').style.display = 'block';
                         }
                     }
-                    
 					
 					if('has_token' in body){
 						if(body['has_token'] == false){
@@ -230,7 +262,6 @@
 								//document.getElementById('extension-voco-content-container').classList.add('extension-voco-add-token');
 							}
 							
-							
 							document.getElementById('extension-voco-token-save-button').addEventListener('click', (event) => {
 								//console.log("should save token");
 								const token = document.getElementById("extension-voco-token-input").value;
@@ -240,9 +271,7 @@
 									{'action':'token','token':token}
 
 						        ).then((body) => {
-									//console.log("save token result:");
-									//console.log(body);
-									
+                                    
 									if('state' in body){
 										if(body['state'] == true){
 											//console.log("succesfully stored token");
@@ -251,11 +280,9 @@
 											setTimeout(function(){
 												document.getElementById('extension-voco-content-container').classList.remove('extension-voco-add-token');
 											}, 3000);
-											
 										}
 									}
 									document.getElementById('extension-voco-add-token-message').innerText = body['update'];
-									
 				
 						        }).catch((e) => {
 						  			console.log("Error getting init data: " , e);
@@ -366,9 +393,9 @@
 									//console.log("satellites length was 0 - no other potential satellites spotted");
 								}
 							}
-							
 						}
 					}
+                    
                     
                     if('possible_injection_failure' in body && 'mqtt_connected' in body){
                         if(body.mqtt_connected == false){
@@ -378,26 +405,6 @@
                             document.getElementById("extension-voco-injection-failure").style.display = 'block';
                         }
                     }
-					
-                    
-                    
-                    if(typeof body.matrix_server != 'undefined'){
-                        if( body.matrix_server != '...'){
-                            document.getElementById('extension-voco-matrix-create-account-step2').classList.remove('extension-voco-hidden');
-                        
-                            document.querySelector('.extension-voco-matrix-server').innerText = body.matrix_server;
-                            document.querySelector('.extension-voco-matrix-username').innerText = body.matrix_username;
-                            //document.querySelector('.extension-voco-matrix-room').innerText = body.persistent_data.matrix_room_id;
-                        
-                        }
-                        else{
-                            document.getElementById('extension-voco-matrix-create-account-step1').classList.remove('extension-voco-hidden');
-                        }
-                    }
-                    
-                    
-                    
-                    
                     
                     
 					// Remove spinner
@@ -409,7 +416,6 @@
 					//pre.innerText = "Error getting initial Voco data: " , e;
 		        });	
 				
-			//}.bind(this), 10000);
 
 			
 		
@@ -471,11 +477,10 @@
 					          `/extensions/${this.id}/api/poll`
 
 					        ).then((body) => {
-                                if(this.debug){
-                                    console.log("Interval: Python API poll result: ", body);
-                                }
+                                //if(this.debug){
+                                //    console.log("Interval: Python API poll result: ", body);
+                                //}
 								//console.log("Python API poll result:");
-								console.log(body);
 								this.attempts = 0;
 								//console.log(body['items']);
 								if(body['state'] == true){
@@ -602,9 +607,9 @@
                     return
                 }
             
-                console.log("server: ", server);
-                console.log("username: ", username);
-                console.log("password: ", password1);
+                console.log("matrix_server: ", server);
+                console.log("matrix_username: ", username);
+                console.log("matrix_password: ", password1);
             
                 window.API.postJson(
                   `/extensions/${this.id}/api/ajax`,
@@ -635,7 +640,64 @@
             
             });
         
-        
+            
+            // Matrix: user will provide account details for Candle.
+            
+            document.getElementById('extension-voco-matrix-provide-account-button').addEventListener('click', (event) => {
+                console.log("create matrix save manual account button clicked");
+            
+                const server = document.getElementById('extension-voco-matrix-provide-server').value;
+                const username = document.getElementById('extension-voco-matrix-provide-username').value;
+                const password1 = document.getElementById('extension-voco-matrix-provide-password').value;
+            
+            
+                if(password1.startsWith('12345')){
+                    alert("Warning, that password is not very secure...");
+                }
+            
+                if(password1.length < 8){
+                    alert("Warning, the password is very short...");
+                }
+            
+                console.log("matrix_server: ", server);
+                console.log("matrix_username: ", username);
+                console.log("matrix_password: ", password1);
+            
+                window.API.postJson(
+                  `/extensions/${this.id}/api/ajax`,
+                    {'action':'provide_matrix_account', 
+                    'matrix_server':server,
+                    'matrix_username':username,
+                    'matrix_password':password1}
+
+                ).then((body) => {
+        			console.log("Python API prrovide matrix account result: ", body);
+                
+        			if(body['state'] == true){
+                        alert("The account data was saved succesfully");
+        			}
+        			else{
+        				//console.log("not ok response while getting data");
+        				alert("Error creating saving Matrix account, sorry.");
+        			}
+
+                }).catch((e) => {
+                  	//pre.innerText = e.toString();
+          			//console.log("voco: error in calling save via API handler");
+          			//console.log(e.toString());
+                    console.log('error connecting while trying to save provided Matrix account: ', e);
+                    alert("Saving Matrix account failed - connection error");
+        			//pre.innerText = "creating Matrix account failed - connection error";
+                });	
+            
+            });
+            
+            
+            
+            
+            
+            
+            
         
             console.log("adding click listeners to Matrix buttons");
             
@@ -652,8 +714,19 @@
 			document.getElementById('extension-voco-matrix-show-new-account-advanced').addEventListener('click', (event) => {
                 console.log(event);
                 document.getElementById('extension-voco-matrix-create-new-account').classList.add('extension-voco-hidden');
+                document.getElementById('extension-voco-matrix-advanced-tip').classList.add('extension-voco-hidden');
 				document.getElementById('extension-voco-matrix-provide-account').classList.remove('extension-voco-hidden');
+                
 			});
+            
+            /*
+            // Show Matrix advanced account options
+			document.getElementById('extension-voco-matrix-show-new-account-simple').addEventListener('click', (event) => {
+                console.log(event);
+                document.getElementById('extension-voco-matrix-create-new-account').classList.remove('extension-voco-hidden');
+				document.getElementById('extension-voco-matrix-provide-account').classList.add('extension-voco-hidden');
+			});
+            */
             
             
             

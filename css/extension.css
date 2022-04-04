@@ -232,9 +232,9 @@
     display:none;
 }
 
-.extension-voco-tab-selected{
+body #extension-voco-view .extension-voco-tab-selected{
     color: white;
-    background-color: rgba(0,0,0,0.18);
+    background-color: rgba(0,0,0,0.18)!important;
 }
 
 /*
@@ -624,6 +624,37 @@
     height:64px;
     margin:2rem auto;
     display:block;
+}
+
+
+
+/*  CHAT  */
+
+.extension-voco-bold{
+    font-weight:bold;
+}
+
+.extension-voco-vlak{
+    padding:2rem;
+    border-radius:.5rem;
+    margin:2rem auto;
+    background-color:rgba(0,0,0,.1);
+}
+
+#extension-voco-matrix-show-new-account-advanced,
+#extension-voco-matrix-learn-more-button{
+    text-decoration:underline;
+    cursor:pointer;
+}
+
+.extension-voco-matrix-input-description{
+    margin-top:0;
+    opacity:.6;
+}
+
+#extension-voco-tab-chat button{
+    display:block;
+    margin-left:auto;
 }
 
 
