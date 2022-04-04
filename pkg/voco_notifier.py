@@ -21,7 +21,6 @@ class VocoNotifier(Notifier):
 
         self.adapter = adapter
         
-
         try:
             self.voice_messages_queue = voice_messages_queue
             #print("notifier: self.voice_messages_queue = " + str(self.voice_messages_queue))
@@ -36,8 +35,12 @@ class VocoNotifier(Notifier):
         self.description = 'Speak commands out loud using Snips'
 
         #self.outlets['speak'] = VocoOutlet(self,'speak')
-        speak = VocoOutlet(self,'speak')
+        speak = VocoOutlet(self,'speak','Speak')
         self.handle_outlet_added(speak)
+        
+        matrix = VocoOutlet(self,'matrix','Matrix')
+        self.handle_outlet_added(matrix)
+        
         #print("notifier init complete")
 
 
@@ -48,12 +51,12 @@ class VocoNotifier(Notifier):
 class VocoOutlet(Outlet):
     """Candle device type."""
 
-    def __init__(self, notifier,_id):
+    def __init__(self, notifier,_id,name):
         #print("Initialising outlet")
         Outlet.__init__(self, notifier, _id)
         self.id = str(_id)
-        self.name = 'Speech'
-        self.title = 'Speech'
+        self.name = name
+        self.title = name
         self.notifier = notifier
 
         
@@ -67,3 +70,5 @@ class VocoOutlet(Outlet):
             #print("added message to queue")
         except Exception as ex:
             print("adding message to queue failed: " + str(ex))
+
+

@@ -89,14 +89,48 @@ class VocoAPIHandler(APIHandler):
                     return APIResponse(status=404)
 
             elif request.method == 'POST':
-                if request.path == '/init' or request.path == '/poll' or request.path == '/parse' or request.path == '/update':
+                if request.path == '/init' or request.path == '/poll' or request.path == '/parse' or request.path == '/update' or request.path == 'ajax':
 
                     try:
                         #if self.DEBUG:
                         #    print("API handler is being called")
                     
-                    
-                        if request.path == '/init':
+                        
+                        
+                        if request.path == 'ajax':
+                            
+                            action = str(request.body['action'])    
+                            if self.DEBUG:
+                                print("ajax action = " + str(action))
+                            
+                            elif action == 'create_matrix_account':
+                                state = False
+                                if self.DEBUG:
+                                    print('ajax handling create_matrix_account')
+                                try:
+                                    if 'matrix_password' in request.body and 'matrix_username' in request.body and 'matrix_server' in request.body:
+                            
+                                        self.persistent_data['matrix_server'] = request.body['matrix_server']
+                                        self.persistent_data['matrix_username'] = request.body['matrix_username']
+                                        self.save_persistent_data()
+                                        if self.DEBUG:
+                                            print("api handler: calling create_matrix_account")
+                                        state = self.create_matrix_account(request.body['matrix_password'])
+                                        print("state from create_matrix_account: " + str(state))
+                                        #state = True
+                            
+                                except Exception as ex:
+                                    print("Error handling create new Matrix account: " + str(ex))
+                        
+                                return APIResponse(
+                                  status=200,
+                                  content_type='application/json',
+                                  content=json.dumps({'state' : state, 'message' : '' }),
+                                )
+                        
+                        
+                        
+                        elif request.path == '/init':
                             if self.DEBUG:
                                 print("Handling request to /init")
                             
@@ -166,10 +200,31 @@ class VocoAPIHandler(APIHandler):
                                     print("- hostname: " + str(self.adapter.hostname))
                                     print("- mqtt_server: " + str(self.adapter.persistent_data['mqtt_server']))
                             
+                            
+                                matrix_server = "..."
+                                if 'matrix_server' in self.adapter.persistent_data:
+                                    matrix_server = str(self.adapter.persistent_data['matrix_server'])
+                                
+                                matrix_username = "..."
+                                if 'matrix_username' in self.adapter.persistent_data:
+                                    matrix_username = str(self.adapter.persistent_data['matrix_username'])
+                            
+                            
+                            
                                 return APIResponse(
                                     status=200,
                                     content_type='application/json',
-                                    content=json.dumps({'state': True, 'satellite_targets': satellite_targets, 'hostname': self.adapter.hostname, 'has_token':has_token, 'is_satellite':is_sat, 'mqtt_server':self.adapter.persistent_data['mqtt_server'], 'mqtt_connected':self.adapter.mqtt_connected, 'mqtt_connected_succesfully_at_least_once':self.adapter.mqtt_connected_succesfully_at_least_once, 'possible_injection_failure':self.adapter.possible_injection_failure, 'debug':self.adapter.DEBUG}),
+                                    content=json.dumps({'state': True, 
+                                            'satellite_targets': satellite_targets, 
+                                            'hostname': self.adapter.hostname, 
+                                            'has_token':has_token, 'is_satellite':is_sat, 
+                                            'mqtt_server':self.adapter.persistent_data['mqtt_server'], 
+                                            'mqtt_connected':self.adapter.mqtt_connected, 
+                                            'mqtt_connected_succesfully_at_least_once':self.adapter.mqtt_connected_succesfully_at_least_once, 
+                                            'possible_injection_failure':self.adapter.possible_injection_failure, 
+                                            'matrix_server': matrix_server,
+                                            'matrix_username': matrix_username,
+                                            'debug':self.adapter.DEBUG}),
                                 )
                             except Exception as ex:
                                 print("Error getting init data: " + str(ex))
