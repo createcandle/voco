@@ -34,6 +34,9 @@ mkdir -p lib package
 # Pull down Python dependencies
 pip3 install -r requirements.txt -t lib --no-binary :all: --prefix ""
 
+# Remove local cffi so that the globally installed version doesn't clash
+rm -rf ./lib/cffi*
+
 # Put package together
 cp -r lib pkg LICENSE manifest.json *.py README.md snips sounds css js images views package/
 find package -type f -name '*.pyc' -delete
