@@ -685,7 +685,7 @@ def randomWord(length=8):
     
     
 def randomPassword(length=12):
-    symbols = string.punctuation
+    symbols = "!@#$%ˆ&*()" # string.punctuation
     lower = string.ascii_lowercase
     upper = string.ascii_uppercase
     numbers = string.digits

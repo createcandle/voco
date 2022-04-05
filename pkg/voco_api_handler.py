@@ -146,6 +146,11 @@ class VocoAPIHandler(APIHandler):
                                             print("api handler: calling create_matrix_account")
                                         state = self.adapter.create_matrix_account(request.body['matrix_password'])
                                         print("state from create_matrix_account: " + str(state))
+                                        if state:
+                                            self.adapter.should_start_matrix = True
+                                            if self.adapter.matrix_started == False:
+                                                print("starting matrix from api_handler after succesfull account creation")
+                                                self.adapter.start_matrix()
                                         #state = True
                                     else:
                                         if self.DEBUG:
