@@ -583,6 +583,8 @@
             //
             //  MATRIX
             //
+            
+            // Create matrix account for Voco and for user
             document.getElementById('extension-voco-matrix-create-account-button').addEventListener('click', (event) => {
                 console.log("create matrix account button clicked");
             
@@ -607,6 +609,9 @@
                     return
                 }
             
+                document.getElementById('extension-voco-chat-loading').classList.remove('extension-voco-hidden');
+                document.getElementById('extension-voco-matrix-create-account-step1').classList.add('extension-voco-hidden');
+            
                 console.log("matrix_server: ", server);
                 console.log("matrix_username: ", username);
                 console.log("matrix_password: ", password1);
@@ -620,29 +625,93 @@
 
                 ).then((body) => {
         			console.log("Python API create matrix account result: ", body);
-                
+                    document.getElementById('extension-voco-chat-loading').classList.add('extension-voco-hidden');
+                    
         			if(body['state'] == true){
-                        alert("The account was created succesfully");
+                        document.getElementById('extension-voco-matrix-create-account-step1').classList.add('extension-voco-hidden');
+                        document.getElementById('extension-voco-matrix-create-account-step2').classList.remove('extension-voco-hidden');
         			}
         			else{
         				//console.log("not ok response while getting data");
-        				alert("Error creating new Matrix account. You could try another server, changing your username a bit, or changing your password to be more secure.");
+        				alert("Error while creating new Matrix account");
+                        document.getElementById('extension-voco-matrix-create-account-step1').classList.remove('extension-voco-hidden');
         			}
 
                 }).catch((e) => {
+                    document.getElementById('extension-voco-chat-loading').classList.add('extension-voco-hidden');
                   	//pre.innerText = e.toString();
           			//console.log("voco: error in calling save via API handler");
           			//console.log(e.toString());
-                    console.log('error connecting while trying to create Matrix account: ', e);
-                    alert("creating Matrix account failed - connection error");
+                    //console.log('error connecting while trying to create Matrix account: ', e);
+                    //alert("creating Matrix account failed - connection error");
+                    //document.getElementById('extension-voco-matrix-create-account-step1').classList.add('extension-voco-hidden');
+                    //document.getElementById('extension-voco-matrix-create-account-step2').classList.remove('extension-voco-hidden');
         			//pre.innerText = "creating Matrix account failed - connection error";
                 });	
             
             });
         
             
-            // Matrix: user will provide account details for Candle.
             
+            // Skip user account creation. Voco will still create an account and room for itself.
+            document.getElementById('extension-voco-matrix-show-new-account-skip').addEventListener('click', (event) => {
+                console.log("skip create matrix account button clicked");
+                document.getElementById('extension-voco-matrix-invite-main-user').classList.remove('extension-voco-hidden');
+                document.getElementById('extension-voco-matrix-create-new-account').classList.add('extension-voco-hidden');
+                document.getElementById('extension-voco-matrix-advanced-tip').classList.add('extension-voco-hidden');
+                document.getElementById('extension-voco-matrix-download-app-tip').classList.add('extension-voco-hidden');
+            });
+            
+            // Join (invite main user) button
+            document.getElementById('extension-voco-matrix-invite-main-username-button').addEventListener('click', (event) => {
+                console.log("clicked on button to invite main user");
+                
+                const server = document.getElementById('extension-voco-matrix-server-select').value;
+                const invite_username = document.getElementById('extension-voco-matrix-invite-main-username-input').value;
+                console.log("matrix_server: ", server);
+                console.log("invite_username: ", invite_username);
+                
+                if(invite_username.startsWith('@') && invite_username.indexOf(':') > -1){
+                    window.API.postJson(
+                      `/extensions/${this.id}/api/ajax`,
+                        {'action':'create_matrix_account', 
+                        'matrix_server':server,
+                        'invite_username':invite_username}
+
+                    ).then((body) => {
+            			console.log("Python API: create candle account and invite main user result: ", body);
+                
+            			if(body['state'] == true){
+
+                            document.getElementById('extension-voco-matrix-create-account-step1').classList.add('extension-voco-hidden');
+                            document.getElementById('extension-voco-matrix-create-account-step2').classList.remove('extension-voco-hidden');
+                            //document.getElementById('extension-voco-matrix-invite-main-user').classList.add('extension-voco-hidden');
+                            document.getElementById('extension-voco-matrix-invite-check-phone-tip').classList.remove('extension-voco-hidden');
+                            
+            			}
+            			else{
+            				//console.log("not ok response while getting data");
+            				alert("There was an error while creating an account for Voco, creating the room, or inviting you, sorry.");
+            			}
+
+                    }).catch((e) => {
+                      	//pre.innerText = e.toString();
+              			console.log("voco: (timeout/connection) error in calling create matrix account with invited main user");
+              			//console.log(e.toString());
+            			//pre.innerText = "creating Matrix account failed - connection error";
+                    });	
+                }
+                else{
+                    console.log("Invalid username");
+                    alert("Invalid username");
+                }
+                
+            });
+            
+            
+            
+            
+            // Matrix: Advanved - user will provide account details for Candle.
             document.getElementById('extension-voco-matrix-provide-account-button').addEventListener('click', (event) => {
                 console.log("create matrix save manual account button clicked");
             
@@ -693,6 +762,37 @@
             });
             
             
+            // Invite new users
+            document.getElementById('extension-voco-matrix-invite-username-button').addEventListener('click', (event) => {
+                console.log("clicked on button to invite another user");
+                const username = document.getElementById('extension-voco-matrix-invite-username-input').value;
+                
+                window.API.postJson(
+                  `/extensions/${this.id}/api/ajax`,
+                    {'action':'invite', 
+                    'username':username}
+
+                ).then((body) => {
+        			console.log("Python API prrovide matrix account result: ", body);
+                
+        			if(body['state'] == true){
+                        alert("The user was invited succesfully");
+        			}
+        			else{
+        				//console.log("not ok response while getting data");
+        				alert("Error while inviting user, sorry");
+        			}
+
+                }).catch((e) => {
+                  	//pre.innerText = e.toString();
+          			//console.log("voco: error in calling save via API handler");
+          			//console.log(e.toString());
+                    console.log('error connecting while trying to invite new user: ', e);
+                    alert("Inviting user failed - connection error");
+        			//pre.innerText = "creating Matrix account failed - connection error";
+                });	
+            });
+            
             
             
             
@@ -711,6 +811,7 @@
             
             
             // Show Matrix advanced account options
+            /*
 			document.getElementById('extension-voco-matrix-show-new-account-advanced').addEventListener('click', (event) => {
                 console.log(event);
                 document.getElementById('extension-voco-matrix-create-new-account').classList.add('extension-voco-hidden');
@@ -718,9 +819,10 @@
 				document.getElementById('extension-voco-matrix-provide-account').classList.remove('extension-voco-hidden');
                 
 			});
+            */
             
             /*
-            // Show Matrix advanced account options
+            // Hide Matrix advanced account options
 			document.getElementById('extension-voco-matrix-show-new-account-simple').addEventListener('click', (event) => {
                 console.log(event);
                 document.getElementById('extension-voco-matrix-create-new-account').classList.remove('extension-voco-hidden');

@@ -139,13 +139,25 @@ class VocoAPIHandler(APIHandler):
                                 try:
                                     if 'matrix_password' in request.body and 'matrix_username' in request.body and 'matrix_server' in request.body:
                                         
+                                        create_account_for_user = False
+                                        invite_username = ""
+                                        
                                         self.adapter.persistent_data['matrix_server'] = request.body['matrix_server']
-                                        self.adapter.persistent_data['matrix_username'] = request.body['matrix_username']
-                                        self.adapter.save_persistent_data()
+                                        if 'matrix_username' in request.body and 'matrix_password' in request.body:
+                                            create_account_for_user = True
+                                            self.adapter.persistent_data['matrix_username'] = request.body['matrix_username'] # this is only the first, local part of the ID (between @ and :)
+                                            self.adapter.save_persistent_data()
+                                        
+                                        elif 'invite_username' in request.body:
+                                            if request.body['invite_username'].startswith("@") and ":" in request.body['invite_username']:
+                                                self.adapter.persistent_data['matrix_invite_username'] = request.body['invite_username'] # this is the full username on a (likely different) server. E.g. @user:example.org
+                                                self.adapter.save_persistent_data()
+                                            
                                         if self.DEBUG:
                                             print("api handler: calling create_matrix_account")
-                                        state = self.adapter.create_matrix_account(request.body['matrix_password'])
-                                        print("api handler: state from create_matrix_account: " + str(state))
+                                        state = self.adapter.create_matrix_account(request.body['matrix_password'],create_account_for_user)
+                                        if self.DEBUG:
+                                            print("api handler: state from create_matrix_account: " + str(state))
                                         if state:
                                             self.adapter.should_start_matrix = True
                                             
@@ -187,6 +199,36 @@ class VocoAPIHandler(APIHandler):
                             
                                 except Exception as ex:
                                     print("Error handling create new Matrix account: " + str(ex))
+                        
+                                return APIResponse(
+                                  status=200,
+                                  content_type='application/json',
+                                  content=json.dumps({'state' : state, 'message' : '' }),
+                                )
+                                
+                            elif action == 'invite':
+                                state = False
+                                if self.DEBUG:
+                                    print('ajax handling matrix user invite')
+                                
+                                try:
+                                    if 'username' in request.body:
+                                        username = str(request.body['username'])
+                                        if username.startswith('@') and ":" in username:
+                                            if self.DEBUG:
+                                                print("adding invited user into invite queue: " + str(username))
+                                            self.adapter.matrix_invite_queue.put(username)
+                                            state = True
+                                        else:
+                                            if self.DEBUG:
+                                                print("not a valid matrix username")
+                                        
+                                    else:
+                                        if self.DEBUG:
+                                            print("not all required parameters for inviting a user were provided")
+                            
+                                except Exception as ex:
+                                    print("Error handling invite matrix user: " + str(ex))
                         
                                 return APIResponse(
                                   status=200,
@@ -257,7 +299,7 @@ class VocoAPIHandler(APIHandler):
                                     print("Error getting is_satellite from persistent data")
                             
                             
-                                if self.adapter.persistent_data['mqtt_server'] not in self.adapter.gateways_ip_list:
+                                if self.adapter.persistent_data['mqtt_server'] not in self.adapter.gateways_ip_list and self.adapter.persistent_data['mqtt_server'] != 'localhost':
                                     if self.DEBUG:
                                         print("Warning, the current persistent_data['mqtt_server'] IP was not actually spotted in the network by the ARP scan: " + str(self.adapter.persistent_data['mqtt_server']) )
                             

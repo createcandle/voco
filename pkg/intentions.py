@@ -259,15 +259,18 @@ def intent_get_timer_count(self, slots, intent_message):
         if self.DEBUG:
             print("Getting the count for: " + str(slots['timer_type']))
         
+        voice_message = ""
+        
         if slots['timer_type'] == None:
             if self.DEBUG:
                 print("No timer type set, cancelling")
-            self.play_sound(self.error_sound,intent=intent_message)
-            return
+            voice_message = "Sorry, I did not understand what type of timer you wanted me to count. "
+            #self.play_sound(self.error_sound,intent=intent_message)
+            #return
         
-        voice_message = ""
         
-        if str(slots['timer_type']) == 'countdown':
+        
+        elif str(slots['timer_type']) == 'countdown':
             if self.DEBUG:
                 print("user asked about countdown")
             countdown_active = False
@@ -306,21 +309,26 @@ def intent_list_timers(self, slots, intent_message):
     
     try:
 
-        if slots['timer_type'] == None:
-            if self.DEBUG:
-                print("No timer type set, cancelling")
-            #self.speak("I didn't quite understand",intent=intent_message)
-            self.play_sound(self.error_sound,intent=intent_message)
-            return
-        
         if self.DEBUG:
             print("Listing all timers for timer type: " + str(slots['timer_type']))
         
-        
         voice_message = ""
         
+        if slots['timer_type'] == None:
+            if self.DEBUG:
+                print("No timer type set, cancelling")
+            voice_message = "Sorry, I did not understand what type of timers you wanted me to list. "
+            #self.speak("I didn't quite understand",intent=intent_message)
+            #self.play_sound(self.error_sound,intent=intent_message)
+            #return
+        
+        
+        
+        
+        
+        
         # If the user asked about a countdown, say how much time is left.
-        if str(slots['timer_type']) == "countdown":
+        elif str(slots['timer_type']) == "countdown":
             
             countdown_active = False
             for index, item in enumerate(self.persistent_data['action_times']):
@@ -412,21 +420,25 @@ def intent_stop_timer(self, slots, intent_message):
     """Remove all, the last, or a specific number of timers"""
     
     try:
-        if slots['timer_type'] == None:
-            if self.DEBUG:
-                print("No timer type set")
-            self.play_sound(self.error_sound,intent=intent_message)
-            return
-        
-        voice_message = ""
         
         if slots['number'] == 0: # If the user mentions 'zero' in the command, it most likely means he/she wants to remove all timers
             slots['timer_last'] = "all"
-            
+        
         removed_timer_count = 0
         
+        voice_message = ""
+        
+        if slots['timer_type'] == None:
+            if self.DEBUG:
+                print("No timer type set")
+            #self.play_sound(self.error_sound,intent=intent_message)
+            #return
+            voice_message = "Sorry, I did not understand which timer you wanted to stop"
+        
+        
+        
         # The countdown is a separate case
-        if str(slots['timer_type']) == "countdown":
+        elif str(slots['timer_type']) == "countdown":
             if self.DEBUG:
                 print("Cancelling countdown")
             #self.countdown = 0

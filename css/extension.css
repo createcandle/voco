@@ -641,6 +641,26 @@ body #extension-voco-view .extension-voco-tab-selected{
     background-color:rgba(0,0,0,.1);
 }
 
+#extension-voco-matrix-advanced-tip{
+    padding:.5rem 2rem;
+}
+
+#extension-voco-matrix-advanced-tip > p{
+    display:flex;
+    justify-content:space-between;
+}
+
+#extension-voco-matrix-show-new-account-skip{
+    display: inline-block;
+    padding: 1rem;
+    background-color: rgba(0,0,0,.2);
+    border-radius: 0.5rem;
+    cursor:pointer;
+}
+#extension-voco-matrix-show-new-account-skip:hover{
+    background-color: rgba(0,0,0,.4);
+}
+
 #extension-voco-matrix-show-new-account-advanced,
 #extension-voco-matrix-learn-more-button{
     text-decoration:underline;

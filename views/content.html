@@ -137,14 +137,15 @@
                 <div id="extension-voco-matrix-create-account-step1" class="extension-voco-hidden">
                     <div class="extension-voco-two-column">
                         <div>
+                            <img src="/extensions/voco/images/candle_voco_chat.png"/>
                             <h2>Chat with your home</h2>
-                            <p>You can receive notifications on your mobile devices through an encrypted chat network called Matrix. This is very similar to Whatsapp or Signal. To use it you'll have to intall a Matrix app on your phone, and create a Matrix account. <br/><span id="extension-voco-matrix-learn-more-button">Learn more</span></p>
+                            <p>You can chat with Voco an encrypted messaging network called Matrix. This is very similar to Whatsapp or Signal. To use it you'll have to intall a Matrix app on your phone, tablet of computer, and create a Matrix account. <br/><span id="extension-voco-matrix-learn-more-button">Learn more</span></p>
                             <div id="extension-voco-matrix-learn-more" class="extension-voco-hidden">
                                 <p>Matrix is like a cross between email and Whatsapp/Signal. Where Apps like Whatsapp have a central server that controls the entire chat network, with Matrix it's more like email, where lots of different servers exchange the messages. And as with email you can choose what provider you trust your messages with.</p>
                                 <p>This design means no single organisation owns the chat network. Anyone can create a server, and then these servers route the messages between them so they get to the intented destination. You could even run your own server if you wanted, which would give you very high levels of control over your data.</p>
-                                <p>This is made possible by the Matrix software that all these servers run. Matrix is open source, which means a worldwide community of people and organisations develop is together. This means the programming code can be viewed by anyone, including you. For many people this level of transparency allows for greater levels of trust.</p>
+                                <p>This is made possible by the Matrix software that all these servers run. Matrix is open source, managed by the Matrix.org foundation, and supported by a worldwide community of people and organisations. The open source nature means the programming code can be viewed by anyone, including you. You can even help improve it. For many people this level of transparency allows for greater levels of trust.</p>
                                 <p>The Matrix software can encrypt the messages, and Voco enables this for all the messages it sends.</p>
-                                <p>You can learn even more at matrix.org.</p>
+                                <p>You can learn much more at matrix.org.</p>
                             </div>
                             
                             <!--<button id="extension-voco-matrix-show-new-account-simple" class="text-button">Simple account creation</button>-->
@@ -156,21 +157,21 @@
                         </div>
                         <div id="extension-voco-matrix-create-new-account-tabs">
                             <div id="extension-voco-matrix-create-new-account" class="extension-voco-hidden extension-voco-vlak">
-                                <h3>Creating your Matrix account</h3>
-                                
-                                
-                                <p><strong>Choose a server</strong><br/>
-                                    Here is a list of popular and/or privacy protecting servers. Select which server you'd like to create an account on.
-                                </p>
-                                <select id="extension-voco-matrix-server-select">
-                                    <option value="matrix.chatwave.org" selected>matrix.chatwave.org (Germany)</option>
-                                    <option value="matrix.duesen.chat">matrix.duesen.chat (Germany)</option>
-                                    <option value="matrix.erfurt.chat">matrix.erfurt.chat (Germany)</option>
-                                    <option value="matrix.yatrix.org">matrix.yatrix.org (Germany)</option>
-                                    <option value="matrix.techsaviours.org">matrix.techsaviours.org (Germany)</option>
-                                    <option value="matrix.domainepublic.net">matrix.domainepublic.net (France)</option>
-                                </select>
-                        
+                                <h3>Creating a Matrix account</h3>
+                                <p>Candle can create a Matrix account for you, on a French Matrix server called domainepublic.net. This means your messages will be stored in France. Candle has no relation with this foundation, and has no control over what happens on their server. But we do trust it.</p>
+                                <div style="display:none">
+                                    <p><strong>Choose a server</strong><br/>
+                                        Here is a list of popular and/or privacy protecting servers. Select which server you'd like to create an account on.
+                                    </p>
+                                    <select id="extension-voco-matrix-server-select">
+                                        <option value="matrix.chatwave.org">matrix.chatwave.org (Germany)</option>
+                                        <option value="matrix.duesen.chat">matrix.duesen.chat (Germany)</option>
+                                        <option value="matrix.erfurt.chat">matrix.erfurt.chat (Germany)</option>
+                                        <option value="matrix.yatrix.org">matrix.yatrix.org (Germany)</option>
+                                        <option value="matrix.techsaviours.org">matrix.techsaviours.org (Germany)</option>
+                                        <option value="matrix.domainepublic.net" selected>matrix.domainepublic.net (France)</option>
+                                    </select>
+                                </div>
                                 
                                 <br/><br/><strong>Username</strong><br/>
                                 <input id="extension-voco-matrix-username"/>
@@ -184,8 +185,20 @@
                                 <button id="extension-voco-matrix-create-account-button" type="button" class="text-button">Create account</button>
                             </div>
                             
-                            <div id="extension-voco-matrix-advanced-tip" class="extension-voco-vlak"><p>If you already have a Matrix account, or would like to choose a different server, then <span id="extension-voco-matrix-show-new-account-advanced">click here</span>.</p></div>
+                            <div id="extension-voco-matrix-advanced-tip" class="extension-voco-vlak">
+                                <p><span>Already have a Matrix account?</span>  <span id="extension-voco-matrix-show-new-account-skip">skip account creation</span></p>
+                                <!--<p>If you are an advanced user you can <span id="extension-voco-matrix-show-new-account-advanced">view the advanced settings</span>.</p>-->
+                            </div>
                             
+                            
+                            <div id="extension-voco-matrix-invite-main-user" class="extension-voco-hidden extension-voco-vlak">
+                                <h3>What is your Matrix ID?</h3>
+                                <p>Please provide your existing Matrix account ID. You will then be invited into the chat room.</p>
+                        
+                                <input id="extension-voco-matrix-invite-main-username-input" type="text" placeholder="@username:example.org" style="width:100%;box-sizing:border-box;padding: 2rem 1rem;margin-bottom:2rem"/>
+                                <button id="extension-voco-matrix-invite-main-username-button" class="text-button">Join</button>
+                        
+                            </div>
                              
                             <div id="extension-voco-matrix-provide-account" class="extension-voco-hidden extension-voco-vlak">
                                 <p>Advanced</p>
@@ -212,20 +225,42 @@
                 </div>
                 
                 <div id="extension-voco-matrix-create-account-step2" class="extension-voco-hidden">
-                    <p>STEP 2</p>
-                    <h2>Download an app that supports Matrix chat</h2>
-                    <p>Candle is able to connect to the Matrix server.</p>
-                    <p>Just like there are many Matrix chat servers, there are many (open source) apps you can use to "chat" with your smart home. Popular choices are:</p>
-                    <p>
-                        <ul>
-                            <li>FluffyChat (www.fluffychat.im)</li>
-                            <li>Element</li>
-                        </ul>
-                    </p>
-                    <p>Install one of these apps on your phone. Then you can login using this information:</p>
-                    <p>Home server: <span class="extension-voco-matrix-server extension-voco-bold">...</span></p>
-                    <p>Username: <span class="extension-voco-matrix-username extension-voco-bold">...</span></p>
-                    <p>Password: <span clas="extension-voco-bold">...</span> (You should have remembered this. Candle does not store your password.)</p>
+                    
+                    <p style="text-align:center">Candle is able to connect to the Matrix server</p>
+                    
+                    <div id="extension-voco-matrix-download-app-tip" class="extension-voco-vlak">
+                        <h2>Download an app that supports Matrix</h2>
+                        
+                        <p>Just like there are many Matrix chat servers, there are many (open source) apps you can use to "chat" with your smart home. Popular choices are:</p>
+                        <p>
+                            <ul>
+                                <li>FluffyChat (www.fluffychat.im)</li>
+                                <li>Element (www.element.io)</li>
+                            </ul>
+                        </p>
+                        <p>Install one of these apps on your phone. Then you can login using this information:</p>
+                        <div class="extension-voco-vlak">
+                            <p>Home server: <span class="extension-voco-matrix-server extension-voco-bold">...</span></p>
+                            <p>Username: <span class="extension-voco-matrix-username extension-voco-bold">...</span></p>
+                            <p>Password: <span clas="extension-voco-bold">Voco does not store your password</span></p>
+                        </div>
+                        <p>Once logged in you will see a room called Candle. There you can give commands just as you would with your voice.</p>
+                        <p>Additionaly, rules will now be able to send notifications to your phone.</p>
+                    </div>
+                    
+                    <div id="extension-voco-matrix-invite-check-phone-tip" class="extension-voco-vlak extension-voco-hidden">
+                        <p>You should have received an invite. Please check the app that you currently use with your Matrix account.</p>
+                    </div>
+                    
+                    <div class="extension-voco-vlak">
+                        <h3>Invite people</h3>
+                        <p>You can invite additional people with a Matrix account into the chat room. All these people will be able to control your home and read all messages, so be careful who you invite.</p>
+                        
+                        <input id="extension-voco-matrix-invite-username-input" type="text" placeholder="@username:example.org" style="width:100%;box-sizing:border-box;padding: 2rem 1rem;margin-bottom:2rem"/>
+                        <button id="extension-voco-matrix-invite-username-button" class="text-button">Invite</button>
+                        
+                    </div>
+                    
                 </div>
                  
             </div>
