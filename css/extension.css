@@ -56,6 +56,12 @@
 	font-weight:bold;
 }
 
+#extension-voco-view ul,
+#extension-voco-view p{
+    line-height: 2.7rem;
+}
+
+
 .extension-voco-italic{
 	font-style:italic;
 }
@@ -351,13 +357,14 @@ body #extension-voco-view .extension-voco-tab-selected{
 
 .extension-voco-centered-error,
 .extension-voco-centered-page{
-	padding:2rem;
+	padding:2rem 0;
 	max-width:60rem;
 	margin: 4rem auto;
 }
 
 .extension-voco-centered-error{
 	text-align:center;
+    padding:2rem;
 }
 
 /*
@@ -630,6 +637,7 @@ body #extension-voco-view .extension-voco-tab-selected{
 
 /*  CHAT  */
 
+#extension-voco-matrix-candle-username,
 .extension-voco-bold{
     font-weight:bold;
 }
@@ -637,9 +645,16 @@ body #extension-voco-view .extension-voco-tab-selected{
 .extension-voco-vlak{
     padding:2rem;
     border-radius:.5rem;
-    margin:2rem auto;
+    margin:4rem auto;
     background-color:rgba(0,0,0,.1);
+    overflow-wrap: break-word;
+    word-wrap: break-word;
 }
+
+.extension-voco-vlak .extension-voco-vlak{
+    margin:2rem auto;
+}
+
 
 #extension-voco-matrix-advanced-tip{
     padding:.5rem 2rem;
@@ -648,11 +663,12 @@ body #extension-voco-view .extension-voco-tab-selected{
 #extension-voco-matrix-advanced-tip > p{
     display:flex;
     justify-content:space-between;
+    align-items:center;
 }
 
 #extension-voco-matrix-show-new-account-skip{
     display: inline-block;
-    padding: 1rem;
+    padding: 1rem 2rem;
     background-color: rgba(0,0,0,.2);
     border-radius: 0.5rem;
     cursor:pointer;
@@ -676,6 +692,38 @@ body #extension-voco-view .extension-voco-tab-selected{
     display:block;
     margin-left:auto;
 }
+
+
+.extension-voco-align-items-right{
+    display:flex;
+    justify-content:flex-end;
+    flex-wrap:wrap;
+}
+#extension-voco-tab-chat .extension-voco-align-items-right > button{
+    display:inline-block;
+    margin-left:2rem;
+}
+
+#extension-voco-matrix-members-list li{
+    margin: 1rem 0;
+}
+
+.extension-voco-matrix-members-display-name{
+    font-weight:bold;
+}
+.extension-voco-matrix-members-id{
+    margin-left:2rem;
+    opacity:.7;
+    cursor:pointer;
+    display:inline-block;
+    word-break: break-word;
+}
+
+/*
+.extension-voco-matrix-members-admin .extension-voco-matrix-members-id::after{
+    content:' (Candle)';
+}
+*/
 
 
 /*  spinner  */
@@ -759,6 +807,10 @@ body #extension-voco-view .extension-voco-tab-selected{
 	.extension-voco-time{
 		margin-right:1rem;
 	}
+    
+    .extension-voco-centered-page{
+        padding: 2rem;
+    }
 }
 
 

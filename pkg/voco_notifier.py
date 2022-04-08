@@ -43,7 +43,7 @@ class VocoNotifier(Notifier):
         matrix = VocoOutlet(self,'matrix','Matrix')
         self.handle_outlet_added(matrix)
         
-        print("notifier init complete")
+        #print("notifier init complete")
 
 
 #
@@ -57,19 +57,19 @@ class VocoOutlet(Outlet):
         
         Outlet.__init__(self, notifier, _id)
         
-        print("Initialising outlet: " + str(name))
+        #print("Initialising outlet: " + str(name))
         
         self.id = str(_id)
         self.name = name
         self.title = name
         self.notifier = notifier
         
-        print("notifier outlet init complete: " + str(self.id))
+        #print("notifier outlet init complete: " + str(self.id))
         
 
     def notify(self, title, message, level):
 
-        print("NOTIFIER: OUTLET: NOTIFY. self.id = " + str(self.id))
+        #print("NOTIFIER: OUTLET: NOTIFY. self.id = " + str(self.id))
         # Now let's send it up to the voco adapter to speak it out loud.
         try:
             if self.id == "speak":

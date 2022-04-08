@@ -186,7 +186,7 @@
                             </div>
                             
                             <div id="extension-voco-matrix-advanced-tip" class="extension-voco-vlak">
-                                <p><span>Already have a Matrix account?</span>  <span id="extension-voco-matrix-show-new-account-skip">skip account creation</span></p>
+                                <p><span>Already have a Matrix account?</span>  <span id="extension-voco-matrix-show-new-account-skip">Skip account creation</span></p>
                                 <!--<p>If you are an advanced user you can <span id="extension-voco-matrix-show-new-account-advanced">view the advanced settings</span>.</p>-->
                             </div>
                             
@@ -226,9 +226,12 @@
                 
                 <div id="extension-voco-matrix-create-account-step2" class="extension-voco-hidden">
                     
-                    <p style="text-align:center">Candle is able to connect to the Matrix server</p>
+                    <p id="extension-voco-matrix-candle-username-container" style="text-align:center" class="extension-voco-hidden">Voco is able to connect to the Matrix server.<br/>Voco's username is <span id="extension-voco-matrix-candle-username">...</span></p>
                     
                     <div id="extension-voco-matrix-download-app-tip" class="extension-voco-vlak">
+                        
+                        <p><img src="/extensions/voco/images/chat_app.png" alt="Chat app icon" style="display:block;width:50%;margin:2rem auto"/></p>
+                        
                         <h2>Download an app that supports Matrix</h2>
                         
                         <p>Just like there are many Matrix chat servers, there are many (open source) apps you can use to "chat" with your smart home. Popular choices are:</p>
@@ -245,20 +248,33 @@
                             <p>Password: <span clas="extension-voco-bold">Voco does not store your password</span></p>
                         </div>
                         <p>Once logged in you will see a room called Candle. There you can give commands just as you would with your voice.</p>
-                        <p>Additionaly, rules will now be able to send notifications to your phone.</p>
+                        <p>Additionally, you can now use rules to send notifications to your phone.</p>
                     </div>
                     
                     <div id="extension-voco-matrix-invite-check-phone-tip" class="extension-voco-vlak extension-voco-hidden">
-                        <p>You should have received an invite. Please check the app that you currently use with your Matrix account.</p>
+                        <p>You should have received an invite. Please accept the invite in your Matrix account.</p>
                     </div>
                     
                     <div class="extension-voco-vlak">
-                        <h3>Invite people</h3>
+                        <h3>Participants</h3>
+                        
+                        
+                        <div class="extension-voco-vlak">
+                            <div id="extension-voco-matrix-members-list">
+                                <div class="extension-voco-spinner">
+                                    <div></div><div></div><div></div><div></div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <p></p>
                         <p>You can invite additional people with a Matrix account into the chat room. All these people will be able to control your home and read all messages, so be careful who you invite.</p>
+                        <p>You can also remove people from the room in much the same way.</p>
                         
                         <input id="extension-voco-matrix-invite-username-input" type="text" placeholder="@username:example.org" style="width:100%;box-sizing:border-box;padding: 2rem 1rem;margin-bottom:2rem"/>
-                        <button id="extension-voco-matrix-invite-username-button" class="text-button">Invite</button>
-                        
+                        <div class="extension-voco-align-items-right">
+                            <button id="extension-voco-matrix-invite-username-button" class="text-button">Invite</button> <button id="extension-voco-matrix-kick-username-button" class="text-button">Remove</button>
+                        </div>
                     </div>
                     
                 </div>
@@ -340,6 +356,15 @@
 						<li>What time is it?</li>
 					</ul>
 
+                    <h3>How to use Chat</h3>
+                    <p>Voco does only offers 100% local voice control, but you can also connect it to a messaging network called Matrix.</p>
+                    <p>Matrix is very similar to messaging apps like Whatsapp and Signal (it even uses the same encryption standard), but it's even more privacy friendly. If you enable this feature, then you can literally chat with your home as if you were in a Whatsapp or Signal conversation.</p>
+                    <p><img src="/extensions/voco/images/candle_voco_chat2.png" alt="Chatting using Matrix" style="display:block;width:50%;margin:2rem auto"/></p>
+                    <p>The cool thing about Matrix is that it's a distributed ("federated") messaging network. This means it operates much like email, where there are multiple servers that exchange messages. You're not tied to one company, as you are with apps like Whatsapp. Anyone can run one of these servers and become part of the network.</p>
+                    <p>The small downside is that this means your conversations with Voco will be stored on a third party server. We only use servers we trust. Currently this is a server by the French NGO domainepublic.net. If Candle becomes popular enough then we will setup our own Matrix server.</p>
+                    <p>The Matrix software is open source, and is managed by a non-profit foundation. Learn more at matrix.org.</p>
+                    
+
 				</div>
 			</div>
 		</div>
@@ -354,7 +379,7 @@
         <div id="extension-voco-debug-warning" style="display:none">
             <h2>Debugging is enabled</h2>
             <p>This addon is currently set to save detailed information about its operation in the internal logs. This may impact your privacy, as this also means that insights into your behaviour might be stored in those logs.</p>
-            <p>You can disable debugging mode by going to <span style="font-style:italic">Settings</span>, then <span style="font-style:italic">Addons</span>, and then clicking on the <span style="font-style:italic">Settings</span> button for the <span style="font-style:italic">Voco</span> addon. There you can uncheck the debugging option and click <span style="font-style:italic">Apply</span>.
+            <p>You can disable debugging mode in this addon's settings.</p>
         </div>
 
         <div id="extension-voco-response">

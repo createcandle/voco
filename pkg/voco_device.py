@@ -60,6 +60,16 @@ class VocoDevice(Device):
                                 'type': 'boolean'
                             },
                             bool(self.adapter.persistent_data['listening']) )
+                            
+            if 'matrix_server' in self.adapter.persistent_data:
+                self.properties["chatting"] = VocoProperty(
+                                self,
+                                "chatting",
+                                {
+                                    'title': "Chat",
+                                    'type': 'boolean'
+                                },
+                                bool(self.adapter.persistent_data['chatting']) )
 
             self.properties["feedback-sounds"] = VocoProperty(
                             self,
@@ -166,6 +176,7 @@ class VocoProperty(Property):
         try:
             if self.device.adapter.DEBUG:
                 print("set_value called for: " + str(self.title))
+                print("- with value: " + str(value))
                 
             if self.title == 'volume':
                 self.device.adapter.set_speaker_volume(int(value))
@@ -180,20 +191,30 @@ class VocoProperty(Property):
                 self.device.adapter.set_snips_state(bool(value))
                 #self.update(value)
                 
+            if self.title == 'chatting':
+                self.device.adapter.persistent_data['chatting'] = bool(value)
+                self.device.adapter.save_persistent_data()
+                #self.update(value)
+
             if self.title == 'audio_output':
                 self.device.adapter.set_audio_output(str(value))
-                #self.update(value)
+            
+            self.update(value)
+                
+            
+            
                 
         except Exception as ex:
             print("set_value error: " + str(ex))
 
 
     def update(self, value):         
-        if self.device.adapter.DEBUG:
-            print("property -> update. Value = " + str(value))
+        
         
         if value != self.value:
-            
+            if self.device.adapter.DEBUG:
+                print("property -> updating value: " + str(value))
+                
             self.value = value
             
             #set_cached_value_and_notify

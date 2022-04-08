@@ -50,7 +50,8 @@ try:
 
     from nio import (AsyncClient, AsyncClientConfig, ClientConfig, DevicesError, Event,InviteEvent, LoginResponse,
                  LocalProtocolError, MatrixRoom, MatrixUser, RoomMessageText, RegisterResponse, JoinedRoomsResponse,
-                 crypto, exceptions, RoomSendResponse, SyncResponse, RoomCreateResponse, AccountDataEvent)
+                 crypto, exceptions, RoomSendResponse, SyncResponse, RoomCreateResponse, AccountDataEvent, 
+                 EnableEncryptionBuilder, ChangeHistoryVisibilityBuilder)
 
 except Exception as ex:
     print("ERROR, could not load Matrix library: " + str(ex))
@@ -124,7 +125,11 @@ class VocoAdapter(Adapter):
         self.matrix_sync_interval = 5 # sync Matrix every 5 seconds
         self.last_matrix_sync_time = 0
         self.busy_syncing_matrix = False
+        self.currently_chatting = False
         self.matrix_outbox = []
+        self.matrix_room_members = []
+        self.refresh_matrix_members = True
+        self.last_time_matrix_message_received = 0
         self.matrix_config = AsyncClientConfig(
                 max_limit_exceeded=0,
                 max_timeouts=0,
@@ -451,7 +456,13 @@ class VocoAdapter(Adapter):
         except Exception as ex:
             print("Error: could not make sure work dir exists. Work path: " + str(self.work_path) + ". Error: " + str(ex))
             
-
+        if os.path.isdir(self.work_path):
+            #print("self.work_path: " + str(self.work_path))
+            #os.system('rm -rf ' + str(self.work_path) + )
+            del_injections_path = os.path.join(self.work_path,'*')
+            #print("del_injections_path: " + str(del_injections_path))
+            os.system('rm -rf ' + del_injections_path )
+            
         
         # create list of human readable audio-only output options for thing property
         self.audio_output_options = []
@@ -477,13 +488,17 @@ class VocoAdapter(Adapter):
             self.token = self.persistent_data['token']
         
         
+        if 'chatting' not in self.persistent_data:
+            self.persistent_data['chatting'] = False
+        
+        
         # load config
         try:
             self.add_from_config()
         except Exception as ex:
             print("Error loading config: " + str(ex))
             
-
+        
         if self.DEBUG:
             print("self.persistent_data is now:")
             print(str(self.persistent_data))
@@ -517,13 +532,13 @@ class VocoAdapter(Adapter):
         try:
             self.voice_messages_queue = queue.Queue()
             self.matrix_messages_queue = queue.Queue()
-            self.matrix_messages_queue.put({'title':'Voco is back','message':'ready to chat!','level':'Low'})
+            #self.matrix_messages_queue.put({'title':'Voco is back','message':'ready to chat!','level':'Low'})
             self.notifier = VocoNotifier(self,self.voice_messages_queue,verbose=True) # TODO: It could be nice to move speech completely to a queue system so that voice never overlaps.
         except Exception as ex:
             print("Error creating notifier: " + str(ex))
 
         self.matrix_invite_queue = queue.Queue()
-        
+        self.matrix_kick_queue = queue.Queue()
 
         #
         # Create UI
@@ -756,7 +771,7 @@ class VocoAdapter(Adapter):
             #    if self.DEBUG:
             #        print("loading action times from persistence") 
             #    self.persistent_data['action_times'] = self.persistent_data['action_times']
-        
+
             self.t = threading.Thread(target=self.clock, args=(self.voice_messages_queue,))
             self.t.daemon = True
             self.t.start()
@@ -792,6 +807,8 @@ class VocoAdapter(Adapter):
         #if self.persistent_data['listening'] == True:
 
 
+        
+        
         # START MATRIX
         if 'matrix_candle_username' not in self.persistent_data:
              self.persistent_data['matrix_candle_username'] = "candle_" + randomWord(6)
@@ -804,14 +821,8 @@ class VocoAdapter(Adapter):
             print("self.persistent_data['matrix_candle_username']: " + str(self.persistent_data['matrix_candle_username']))
             print("self.persistent_data['matrix_candle_password']: " + str(self.persistent_data['matrix_candle_password']))
        
-        if 'matrix_token' in self.persistent_data:
-            if self.DEBUG:
-                print("matrix token in persistent_data. Starting main Matrix loop")
-            self.start_matrix()
-        else:
-            if self.DEBUG:
-                print("no matrix token present. Not starting Matrix client in init.")
-        
+       
+        self.start_matrix()
         
 
 
@@ -1410,7 +1421,9 @@ class VocoAdapter(Adapter):
                     if self.DEBUG:
                         print("setting self.last_text_response to: " + str(voice_message))
                     #self.last_text_response = voice_message # this will cause the message to be sent back to the UI.
-                    self.matrix_messages_queue.put({'title':'','message': str(voice_message) ,'level':'Normal'})
+                    
+                    voice_message = voice_message.replace(' .', '.')
+                    self.matrix_messages_queue.put({'title':'','message': str(voice_message.capitalize()) ,'level':'Normal'})
                     return
                 
                 #if self.orphaned and self.persistent_data['is_satellite']:
@@ -1825,10 +1838,10 @@ class VocoAdapter(Adapter):
         
         
         if not self.DEBUG:
-            if self.is_mosquito_up() == False:
-                time.sleep(20);
+            if self.is_mosquitto_up() == False:
+                time.sleep(20)
             else:
-                time.sleep(5);
+                time.sleep(5)
         
         self.run_mqtt() # this will also start run_snips once a connection is established
         
@@ -1845,48 +1858,6 @@ class VocoAdapter(Adapter):
             
             if time.time() > self.current_utc_time + 1:
                 self.current_utc_time = int(time.time())
-                #print(str(self.current_utc_time))
-                
-                #print( "slow-loop-countdown: " + str( time.time() - self.last_slow_loop_time ))
-                
-                #fresh_time = int(time.time())
-            #if fresh_time == self.current_utc_time:
-            #    time.sleep(.1)
-            #else:
-                #print(str(time.time()))
-                #self.current_utc_time = fresh_time
-                
-                bla = False
-                if self.matrix_started == True and bla:
-                    if self.current_utc_time - self.matrix_sync_interval > self.last_matrix_sync_time:
-                        self.last_matrix_sync_time = self.current_utc_time
-                        if self.DEBUG:
-                            print("* syncing Matrix")
-                            
-                            
-                        loop = self.get_or_create_eventloop()
-                        print("* LOOP: " + str(loop))
-                        message_matrix_loop_response = loop.run_until_complete( self.send_message_to_matrix_async("poepje") )
-                        loop.close()
-                        
-                        #loop = self.get_or_create_eventloop()
-                        
-                        
-                        self.async_client.outgoing_to_device_messages.append(
-                                    DummyMessage("m.room.encrypted", device.user_id, device.device_id, olm_dict)
-                                )
-                        
-                        sync_response = asyncio.run( self.sync_loop(False,"online") )
-                        if self.DEBUG:
-                            print("* sync_response: " + str(sync_response))
-                            
-                        #self.sync_matrix()
-                        #self.send_message_to_matrix("poepie")
-                #else:
-                #    if self.DEBUG:
-                #        print("* not syncing Matrix)")
-                        
-                
                 
                 
                 # Inject new thing names into snips if necessary
@@ -1895,11 +1866,6 @@ class VocoAdapter(Adapter):
                     
                     if self.DEBUG:
                         print("15 seconds have passed. Time: " + str(int(time.time()) % 60))
-                        #print("external processes count: " + str(self.is_snips_running()))
-                    
-                        #print( str(time.time()) + " - " + str(self.minimum_injection_interval) + " > " + str(self.last_injection_time)  )
-
-                    
                     
                     try:
                         #print("self.mqtt_client: " + str(self.mqtt_client))
@@ -1909,7 +1875,6 @@ class VocoAdapter(Adapter):
                         else:
                             if self.DEBUG:
                                 print("MQTT client object doesn't exist yet.")
-                        
                         
                         
                         if self.should_restart_mqtt:
@@ -2388,14 +2353,18 @@ class VocoAdapter(Adapter):
                             if self.DEBUG:
                                 print("clock: poll error count was: " + str(poll_error_count))
                                 alternative_process_counter = self.is_snips_running()
-                                print("clock: second opinion on Snips being down: self.is_snips_running() count: " + str(alternative_process_counter))
+                                if self.DEBUG:
+                                    print("clock: second opinion on Snips being down: self.is_snips_running() count: " + str(alternative_process_counter))
                             
                                 if self.persistent_data['is_satellite']:
                                     if alternative_process_counter == 0:
+                                        if self.DEBUG:
+                                            print("conclusion: snips should be restarted")
                                         self.should_restart_snips = True
                                 elif alternative_process_counter < 7:
                                     self.should_restart_snips = True
-
+                                    if self.DEBUG:
+                                        print("conclusion: snips should be restarted")
 
 
 #
@@ -3103,7 +3072,8 @@ class VocoAdapter(Adapter):
             if self.DEBUG:
                 print("In on_disconnect, and MQTT return code was NOT 0 - (disconnect error!). It was: " + str(rc))
             #self.mqtt_connected = False
-            
+            if rc == 7:
+                self.set_status_on_thing("Error, please reboot")
         
         #if self.persistent_data['is_satellite']: # Run snips on the local server while the main server is disconnected.
             #self.orphaned = True
@@ -3923,7 +3893,7 @@ class VocoAdapter(Adapter):
                     # This can't happen. TODO: should switch to alternative.
                     if final_test:
                         if not self.persistent_data['is_satellite']:
-                            self.speak("I did not understand the change you wanted.",intent=intent_message)
+                            self.speak("I was unable to perform the change you wanted.",intent=intent_message)
                         return
                     else:
                         self.master_intent_callback(intent_message, True) # let's try an alternative intent, if there is one.
@@ -5595,7 +5565,7 @@ class VocoAdapter(Adapter):
                         if self.DEBUG:
                             print("------------------ Let's (continue to) try to connect to MQTT server with this IP address")
                         self.persistent_data['mqtt_server'] = ip_address # test all the IP addresses one by one
-                        #self.adapter.persistent_data['main_site_id'] = 
+                        #self.persistent_data['main_site_id'] = 
                         self.run_mqtt()
                         sleep(5) # wait a bit, then send a broadcast ping. Hopefully the missing main server will respond.
                         self.send_mqtt_ping(broadcast=True)
@@ -5669,8 +5639,9 @@ class VocoAdapter(Adapter):
         main_matrix_loop_response = asyncio.run( self.matrix_main() )
         
         if self.DEBUG:
-            print("Matrix was started. Syncing must be done manually. Saving persistent data. main_matrix_loop_response: " + str(main_matrix_loop_response)) 
-        self.save_persistent_data()
+            print("starting matrix main loop result: " + str(main_matrix_loop_response))
+        #    print("Matrix was started. Syncing must be done manually. Saving persistent data. main_matrix_loop_response: " + str(main_matrix_loop_response)) 
+        #self.save_persistent_data()
         
         #if main_matrix_loop_response == True:
         #    self.matrix_started = True
@@ -5683,17 +5654,245 @@ class VocoAdapter(Adapter):
        
 
 
+
+
+    async def start_matrix_client_async(self):
+        if self.DEBUG:
+            print("in start_matrix_client_async")
+        if 'matrix_server' in self.persistent_data:
+            
+            if self.persistent_data['matrix_server'] != "":
+                if self.DEBUG:
+                    print("- matrix server url was present")
+            
+                # try to log in to Matrix server with token
+            
+                candle_user_id = "@" + self.persistent_data['matrix_candle_username'] + ":" + self.persistent_data['matrix_server']
+                server = "https://" + str(self.persistent_data['matrix_server'])
+        
+                print("candle_user_id: " + str(candle_user_id))
+        
+                if self.DEBUG:
+                    print("Async_client did not exist yet. Will log in to Matrix server with token this time")
+        
+                self.async_client = AsyncClient(server, config=self.matrix_config, store_path=self.matrix_data_store_path)
+                
+                self.async_client.add_event_callback(self.matrix_message_callback, RoomMessageText)
+                self.async_client.add_response_callback(self.matrix_sync_callback, SyncResponse)
+                self.async_client.add_global_account_data_callback(self.matrix_account_callback, AccountDataEvent)
+                self.async_client.add_room_account_data_callback(self.matrix_account_callback, AccountDataEvent)
+                self.async_client.add_ephemeral_callback(self.matrix_ephemeral_callback, Event)
+        
+                self.async_client.user_id = candle_user_id
+                
+                if 'matrix_token' in self.persistent_data:
+                    self.async_client.access_token = self.persistent_data['matrix_token']
+                    if self.async_client.logged_in:
+                        try:
+                            
+                            
+                            
+                            
+                            
+                            
+                            
+                            
+                            
+                            
+                            if self.DEBUG:
+                                print("calling initial sync_loop, asking for full state")
+                            
+                            # Do an initial sync. This will populate the rooms attribute of the async_client
+                            #await self.sync_loop(full_state=True, set_presence="online")
+                            #if self.DEBUG:
+                            #    print("did a full state initial sync using sync_loop")
+                            #sync_result = await self.async_client.sync(timeout=30000, full_state=True, set_presence="online") # milliseconds
+                            #if self.DEBUG:
+                            #    print("matrix: quick sync_result: " + str(sync_result))
+                            #await self.async_client.run_response_callbacks(sync_result)
+                        except Exception as ex:
+                            print("Error doing initial matrix sync: " + str(ex))
+                
+                
+                # only get messages we haven't seen yet since the last succesful sync
+                if 'matrix_sync_token' in self.persistent_data:
+                    if self.DEBUG:
+                        print("matrix: restoring sync token to: " + str(self.persistent_data['matrix_sync_token']))
+                    self.async_client.next_batch = self.persistent_data['matrix_sync_token']
+                else:
+                    if self.DEBUG:
+                        print("Warning, no matrix sync token in persistent data")
+    
+    
+                
+                
+                
+    
+                #if 'matrix_device_id' in self.persistent_data:
+                #    self.async_client.device_id = self.persistent_data['matrix_device_id']
+                #else:
+                if self.async_client.logged_in:
+                    if self.DEBUG:
+                        #print("Warning, no device_id found in persistent data")
+                        print("BEFORE self.async_client.device_id: " + str(self.async_client.device_id))
+                    devices_response = await self.async_client.devices()
+                    print("matrix: devices?: " + str(devices_response))
+                    if len(devices_response.devices) > 0:
+                        print("lots of devices")
+                        print("x" + devices_response.devices[0].id)
+                        for device in devices_response.devices:
+                            print("dev: " + str(device))
+                            theoretical_matrix_db_filename = candle_user_id + '_' + str(device.id) + '.db' #candletest1:matrix.domainepublic.net_ULIVXRMDON.db
+                            theoretical_matrix_db_path = os.path.join(self.matrix_data_store_path, theoretical_matrix_db_filename)
+                            if self.DEBUG:
+                                print("load_store: theoretical_matrix_db_path: " + str(theoretical_matrix_db_path))
+                            if os.path.isfile(theoretical_matrix_db_path):
+                                self.theoretical_matrix_db_path = theoretical_matrix_db_path
+                                if self.DEBUG:
+                                    print("BINGO: matrix database file existed. device.id: " + str(device.id))
+                                self.async_client.device_id = device.id
+                                self.persistent_data['matrix_device_id'] = device.id
+                                load_store_response = self.async_client.load_store()
+                                if self.DEBUG:
+                                    print("load_store_response: " + str(load_store_response))
+                                    
+                                    
+                                
+                                try:
+                                    print(" +  +  +  + ")
+                                    print("candle_user_id: " + str(candle_user_id))
+                                    print("self.persistent_data['matrix_room_id']: " + str(self.persistent_data['matrix_room_id']))
+                                    print("\n\nVERIFYING DEVICES\n\n")
+                                    print(".device_store: " + str(self.async_client.device_store))
+                                    for device_olm in self.async_client.device_store:
+                                        print("x")
+                                        print("device_olm: " + str(device_olm))
+                                        print("device_olm.user_id: " + str(device_olm.user_id))
+                                        #if device_olm.user_id != candle_user_id or device_olm.device_id != self.persistent_data['matrix_room_id']:
+                                        #    print("\n M M M M M VERIFYING")
+                                        self.async_client.verify_device(device_olm)
+                                        #print("device owner: " + str(self.async_client.device_store[device_owner]))
+                        
+                                        #if device_owner == candle_user_id:
+                                        #    if 'matrix_device_id' in self.persistent_data:
+                                        #        if device_id == self.persistent_data['matrix_device_id']
+                                        #    continue
+                                    
+                                        #self.async_client.verify_device(device_olm)
+                                
+                                        """
+                                        for device_id, olm_device in self.async_client.device_store[device_owner].items():
+                                    
+                                            if device_owner == candle_user_id and device_id == self.persistent_data['matrix_device_id']:
+                                                print("skipping candle's own device")
+                                                continue
+
+                                            self.async_client.verify_device(olm_device)
+                                            print(f"Trusting {device_id} from user {device_owner}")
+                                        """
+                        
+                                    print("DEVICE VERIFICATION DONE")
+                                    
+                                    print("doing full sync")
+                                    await self.sync_loop(full_state=True, set_presence="online")
+                                    if self.DEBUG:
+                                        print("did a full state initial sync using sync_loop")
+                                    
+                        
+                                except Exception as ex:
+                                    print("Error in verifying devices: " + str(ex))
+                                    
+                                    
+                                    
+                                break
+                    
+                print("\n\nLOGGED IN? " + str(self.async_client.logged_in))
+                
+                
+                try:
+                    
+                    """
+                    if 'matrix_device_id' in self.persistent_data:
+                        theoretical_matrix_db_filename = candle_user_id + '_' + self.persistent_data['matrix_device_id'] + '.db' #candletest1:matrix.domainepublic.net_ULIVXRMDON.db
+                        self.theoretical_matrix_db_path = os.path.join(self.matrix_data_store_path, theoretical_matrix_db_filename)
+                        if self.DEBUG:
+                            print("load_store: self.theoretical_matrix_db_path: " + str(self.theoretical_matrix_db_path))
+                        if os.path.isfile(self.theoretical_matrix_db_path):
+                            if self.DEBUG:
+                                print("matrix database file existed")
+                            load_store_response = self.async_client.load_store()
+                            if self.DEBUG:
+                                print("load_store_response: " + str(load_store_response))
+                        else:
+                            if self.DEBUG:
+                                print("matrix database file did not exist (yet)")
+                    else:
+                        print("missing matrix_device_id")
+                    """
+                    pass
+                        
+                except Exception as ex:
+                    print("Error in matrix load_store: " + str(ex))
+            
+            
+                if self.async_client.logged_in == False:
+                    if self.DEBUG:
+                        print("matrix client was still not logged in")
+                        
+                    #self.async_client.user_id = candle_user_id
+                    if 'matrix_token' in self.persistent_data and 'matrix_device_id' in self.persistent_data:
+                        if self.DEBUG:
+                            print("matrix token was present")
+                        self.async_client.access_token = self.persistent_data['matrix_token']
+                    else:
+                        if self.DEBUG:
+                            print("no matrix token or device_id. Will try login instead")
+                        try:
+                            #await client.login("my-secret-password")
+                            login_response = await self.async_client.login(str(self.persistent_data['matrix_candle_password']) )
+                            #login_response = await self.async_client.login(user=user_id, password=self.persistent_data['matrix_candle_password'], device_name=device_name )
+                            if self.DEBUG:
+                                print("login response: " + str(dir(login_response)))
+                                print("login_response.status_code: " + str(login_response.status_code))
+                                print("login_response.message: " + str(login_response.status_code))
+
+                            if (isinstance(login_response, LoginResponse)):
+                                if self.DEBUG:
+                                    print("login succesful!")
+                                    print('login_response.access_token: ' + str(login_response.access_token))
+                                self.persistent_data['matrix_token'] = str(login_response.access_token)
+                                self.persistent_data['matrix_device_id'] = str(login_response.device_id)
+                                self.save_persistent_data()
+        
+                                if self.DEBUG:
+                                    print("exporting keys")
+                                export_keys_response = await self.async_client.export_keys(self.matrix_keys_store_path, self.persistent_data['matrix_candle_password'])
+                                if self.DEBUG:
+                                    print("export_keys_response: " + str(export_keys_response))
+        
+            
+                                #if self.matrix_started == False:
+                                #    print("api handler: starting matrix after succesfull login")
+                                #    return await self.matrix_main()
+                                #else:
+                                #    return True
+                    
+                        except Exception as ex:
+                            print("Error: login attempt failed: " + str(ex))
+
+
     async def matrix_main(self):
         if self.DEBUG:
             print("in matrix_main")
-        if 'matrix_server' in self.persistent_data and 'matrix_username' in self.persistent_data and 'matrix_token' in self.persistent_data:
+        if 'matrix_server' in self.persistent_data:
+            
             
             if self.DEBUG:
-                print("- server, username and matrix token were present")
+                print("- matrix server url was present")
             
-            # Log in to Matrix server with token
+            # try to log in to Matrix server with token
             
-            user_id = "@" + self.persistent_data['matrix_username'] + ":" + self.persistent_data['matrix_server']
+            candle_user_id = "@" + self.persistent_data['matrix_candle_username'] + ":" + self.persistent_data['matrix_server']
             server = "https://" + str(self.persistent_data['matrix_server'])
             
             if self.DEBUG:
@@ -5701,47 +5900,9 @@ class VocoAdapter(Adapter):
             
             if self.async_client == None:
                 
-                if self.DEBUG:
-                    print("Async_client did not exist yet. Will log in to Matrix server with token this time")
+                await self.start_matrix_client_async()
                 
-                self.async_client = AsyncClient(server, user_id, config=self.matrix_config, store_path=self.matrix_data_store_path)
-           
-                # only get messages we haven't seen yet since the last succesful sync
-                if 'matrix_sync_token' in self.persistent_data:
-                    if self.DEBUG:
-                        print("matrix: restoring sync token to: " + str(self.persistent_data['matrix_sync_token']))
-                    self.async_client.next_batch = self.persistent_data['matrix_sync_token']
-            
-                self.async_client.user_id = user_id
-                self.async_client.access_token = self.persistent_data['matrix_token']
-            
-                if 'matrix_device_id' in self.persistent_data:
-                    self.async_client.device_id = self.persistent_data['matrix_device_id']
-                else:
-                    if self.DEBUG:
-                        print("Warning, no device_id found in persistent data!")
                 
-                try:
-                    theoretical_matrix_db_filename = user_id + '_' + self.persistent_data['matrix_device_id'] + '.db' #candletest1:matrix.domainepublic.net_ULIVXRMDON.db
-                    self.theoretical_matrix_db_path = os.path.join(self.matrix_data_store_path, theoretical_matrix_db_filename)
-                    if self.DEBUG:
-                        print("load_store: self.theoretical_matrix_db_path: " + str(self.theoretical_matrix_db_path))
-                    if os.path.isfile(self.theoretical_matrix_db_path):
-                        if self.DEBUG:
-                            print("matrix database file existed")
-                        load_store_response = self.async_client.load_store()
-                        if self.DEBUG:
-                            print("load_store_response: " + str(load_store_response))
-                    else:
-                        if self.DEBUG:
-                            print("matrix database file did not exist (yet)")
-                except Exception as ex:
-                    print("Error in matrix load_store: " + str(ex))
-                
-                self.async_client.add_event_callback(self.matrix_message_callback, RoomMessageText)
-                self.async_client.add_response_callback(self.matrix_sync_callback, SyncResponse)
-                self.async_client.add_global_account_data_callback(self.matrix_account_callback, AccountDataEvent)
-                self.async_client.add_ephemeral_callback(self.matrix_ephemeral_callback, Event)
            
             else:
                 if self.DEBUG:
@@ -5753,417 +5914,651 @@ class VocoAdapter(Adapter):
                 print("matrix: logged in?: " + str(self.async_client.logged_in))
                 print("matrix encrypted?: " + str(self.async_client.config.encryption_enabled))
             
-            try:
+            if self.async_client.logged_in == False:
                 if self.DEBUG:
-                    print("calling initial sync_loop, asking for full state")
-                # Do an initial sync. This will populate the rooms attribute of the async_client
-                await self.sync_loop(full_state=True, set_presence="online")
-                if self.DEBUG:
-                    print("did a quick extra sync using sync_loop")
-                #sync_result = await self.async_client.sync(timeout=30000, full_state=True, set_presence="online") # milliseconds
-                #if self.DEBUG:
-                #    print("matrix: quick sync_result: " + str(sync_result))
-                #await self.async_client.run_response_callbacks(sync_result)
-            except Exception as ex:
-                print("Error doing initial matrix sync: " + str(ex))
-            
-            
-            try:
+                    print("COULD NOT LOG IN TO THE MATRIX")
                 
-                if self.DEBUG:
-                    print("__should_upload_keys?: " + str(self.async_client.should_upload_keys))
-                if self.async_client.should_upload_keys:
+                
+            else:
+            
+                try:
                     if self.DEBUG:
-                        print("attemting to upload keys")
-                    await self.async_client.keys_upload()
-            
-                if self.DEBUG:
-                    print("__should_claim_keys?: " + str(self.async_client.should_claim_keys))
-                if self.async_client.should_claim_keys:
+                        print("calling initial sync_loop, asking for full state")
+                    # Do an initial sync. This will populate the rooms attribute of the async_client
+                    await self.sync_loop(full_state=True, set_presence="online")
                     if self.DEBUG:
-                        print("attemting to claim keys")
-                    await self.async_client.keys_claim(self.async_client.get_users_for_key_claiming())
+                        print("did a full state extra sync using sync_loop")
+                    #sync_result = await self.async_client.sync(timeout=30000, full_state=True, set_presence="online") # milliseconds
+                    #if self.DEBUG:
+                    #    print("matrix: quick sync_result: " + str(sync_result))
+                    #await self.async_client.run_response_callbacks(sync_result)
+                except Exception as ex:
+                    print("Error doing initial matrix sync: " + str(ex))
             
-                if self.DEBUG:
-                    print("__should_query_keys?: " + str(self.async_client.should_query_keys))
-                if self.async_client.should_query_keys:
+            
+                try:
+                
                     if self.DEBUG:
-                        print("attemting to query keys")
-                    await self.async_client.keys_query()
-                
-                
-                if self.DEBUG:
-                    print("olm_account_shared: " + str(self.async_client.olm_account_shared))
+                        print("__should_upload_keys?: " + str(self.async_client.should_upload_keys))
+                    if self.async_client.should_upload_keys:
+                        if self.DEBUG:
+                            print("attemting to upload keys")
+                        await self.async_client.keys_upload()
             
-                    print("device store:")
-                    print(f"{self.async_client.user_id}'s device store: {self.async_client.device_store[self.async_client.user_id]}")
-            
-                    devices_response = await self.async_client.devices()
-                    print("matrix: devices?: " + str(devices_response.devices))
-            
-            
-                    get_displayname_response = await self.async_client.get_displayname()
-                    print("__get_displayname_response: " + str(get_displayname_response))
-                
-            except Exception as ex:
-                print("Error doing a few queries: " + str(ex))
-            
-            
-            
-            
-            
-            if self.DEBUG:
-                print("client rooms: " + str(self.async_client.rooms))
-            
-            
-            
-            # Check if room exists on Matrix server, and if not, create one
-            
-            
-            #encrypted_room = await self.async_client.load_encrypted_rooms()
-            #if self.DEBUG:
-            #    print("encrypted rooms dir: " + (str(dir(encrypted_room))) )
-            #    print("checking for joined room next")
-                
-            joined_rooms_response = await self.async_client.joined_rooms()
-            
-            if self.DEBUG:
-                print("\njoined_rooms_response: " + str(joined_rooms_response))
-            
-            if (isinstance(joined_rooms_response, JoinedRoomsResponse)):
-           
-                if self.DEBUG:
-                    print("got rooms_list: " + str(joined_rooms_response.rooms))
-                number_of_rooms = len(joined_rooms_response.rooms)
-           
-                if self.DEBUG:
-                    print("number_of_rooms: " + str(number_of_rooms))
-                
-                if number_of_rooms == 0:
                     if self.DEBUG:
-                        print("attempting to create room now")
+                        print("__should_claim_keys?: " + str(self.async_client.should_claim_keys))
+                    if self.async_client.should_claim_keys:
+                        if self.DEBUG:
+                            print("attemting to claim keys")
+                        await self.async_client.keys_claim(self.async_client.get_users_for_key_claiming())
+            
+                    if self.DEBUG:
+                        print("__should_query_keys?: " + str(self.async_client.should_query_keys))
+                    if self.async_client.should_query_keys:
+                        if self.DEBUG:
+                            print("attemting to query keys")
+                        await self.async_client.keys_query()
+                
+                
+                
+                    print("self.async_client.olm: " + str(self.async_client.olm))
+                    print("self.async_client.store: " + str(self.async_client.store))
+                    #print("olm_account_shared: " + str(self.async_client.olm_account_shared))
                     
                     try:
-                        #room_response = await self.async_client.room_create(name="Candle",federate=self.matrix_federate)
-                        #room_response = await async_client.room_create( self.persistent_data['matrix_token'], name="Candle",federate=False) #, initial_state=[enable_room_encryption_event_dict] )
-                        
-                        candle_user_id = "@" + self.persistent_data['matrix_candle_username'] + ":" + self.persistent_data['matrix_server']
-                        
-                        invite_user_id = None
-                        if 'matrix_invite_username' in self.adapter.persistent_data:
-                            invite_user_id = self.adapter.persistent_data['matrix_invite_username']
-                        elif 'matrix_username' in self.adapter.persistent_data:
-                            invite_user_id = "@" + self.persistent_data['matrix_username'] + ":" + self.persistent_data['matrix_server']
-                        
-                        room_response = None
-                        
-                        try:
-                            
-                            # initial_state=[EnableEncryptionBuilder().as_dict()]
-                            
-                            #room_response = await self.async_client.room_create(name="Candle",federate=self.matrix_federate)
-                            
-                            # invite=[invite_user_id]
-                            if self.DEBUG:
-                                print("#\n# CREATING ROOM\n#")
-                                print("admin = self.async_client.user_id: " + str(self.async_client.user_id))
-                                print("candle_user_id: " + str(candle_user_id))
-                                print("invite_user_id: " + str(invite_user_id))
-                                
-                            invitees = []
-                            power_users = {candle_user_id: 100}
-                            
-                            if invite_user_id != None:
-                                invitees.append(invite_user_id)
-                                power_users[invite_user_id] = 100
-                            
-                            
-                            room_response = await self.async_client.room_create( name="Candle", topic="Talk to Voco", federate=self.matrix_federate, invite=invitees, initial_state=[
-                                        
-                            
-                                    ], power_level_override={
-                                        "type": "m.room.power_levels",
-                                                "state_key": "",
-                                                "content": {
-                                                    "ban": 50,
-                                                    "invite": 20,
-                                                    "kick": 50,
-                                                    "redact": 20,
-                                                    "users_default": 50,
-                                                    "users": power_users,
-                                                    "events": {
-                                                        "m.room.message": 20,
-                                                        "m.room.avatar": 50,
-                                                        "m.room.canonical_alias": 50,
-                                                        "m.room.topic": 20,
-                                                        "m.room.history_visibility": 20,
-                                                    },
-                                                }
-                                        })
-                        
-                            if self.DEBUG:
-                                print("\nroom_response: " + str(room_response))
-                                print("room response dir: " + str(dir(room_response)))
-                                print(".")
-                        
-                        except Exception as ex:
-                            print("Error creating room: " + str(dir(ex)))
-                        
-                        
-                        
-                   
-                        if (isinstance(room_response, RoomCreateResponse)):
-                            if self.DEBUG:
-                                print("succesfully created room: " + str(room_response))
-                                print("room dir: " + str(dir(room_response)))
-                       
-                            if self.DEBUG:
-                                print("room_response.room_id: " + str(room_response.room_id))
-                            
-                            
-                            try:
-                                self.persistent_data['matrix_room_id'] = str(room_response.room_id)
-                                
-                                if self.DEBUG:
-                                    print("room ID saved: " + str(self.persistent_data['matrix_room_id']))
-                                
-                                
-                                #await self.async_client.join( self.persistent_data['matrix_room_id'] )
-                            
-                                sync_result = await self.async_client.sync(timeout=30000) # milliseconds
-                                if self.DEBUG:
-                                    print("matrix: quick sync_result: " + str(sync_result))
-                                    print("client.rooms after room creation: " + str(self.async_client.rooms))
-                                
-                                for room in self.async_client.rooms.keys():
-                                    
-                                    try:
-                                        if self.DEBUG:
-                                            print("room: " + str(self.async_client.rooms[room]))
-                                            print("room dir: " + str(dir(self.async_client.rooms[room])))
-                                    except Exception as ex:
-                                        print("Error looping over rooms: " + str(ex))
-                                    
-                                #if hasattr(room_response, 'room_id'):
-                                #    print("room_id was in room response.. so far so good")
-                                
-                                    # Joing the newly created room outselves
-                                    
-                                
-                            except Exception as ex:
-                                print("Error in room_id extraction: " + str(ex))
-                            
-                                
-                        else:
-                            if self.DEBUG:
-                                print("Error: Matrix room create response indicates failure")
-                    
-                    except Exception as ex:
-                        print("Error in room creation: " + str(ex)) 
-               
-                    #print("room_response: " + str(room_response))
-                   
-                    #if room_id != None:
-                    #    self.persistent_data['matrix_room_id'] = room_id
-                    #    print("self.persistent_data['matrix_room_id']: " + str(self.persistent_data['matrix_room_id']))
-                    #else:
-                    #    print("room id was none?")
-                   
-                else:
-                    # we've joined some rooms. 
-                    
-                    # Check the the client rooms list is somehow still empty.
-                    if len(self.async_client.rooms) == 0:
-                        if self.DEBUG:
-                            print("Hmm, apparently we joined rooms... but we didn't? Will try joining it again")
-                        await self.async_client.join( joined_rooms_response.rooms[0] )
-                        
-                        
-                            
-                    # If the room id wasn't set yet, we do so now.
-                    if 'matrix_room_id' not in self.persistent_data:
-                        if self.DEBUG:
-                            print("saving missing room id to persistence file")
-                        self.persistent_data['matrix_room_id'] = joined_rooms_response.rooms[0]
-                        #self.save_persistent_data()
-                        """
-                        try:
-                            await self.async_client.room_send(
-                                # Watch out! If you join an old room you'll see lots of old messages
-                                room_id=self.persistent_data['matrix_room_id'],
-                                message_type="m.room.encryption",
-                                content = { "algorithm": "m.megolm.v1.aes-sha2" }
-                            )
-                        except Exception as ex:
-                            print("error setting room to encrypted: "  + str(ex))
-                       """
-                       
-                    else:
-                        if self.DEBUG:
-                            print("room situation is ok")
-                       
-                       
-                if 'matrix_room_id' in self.persistent_data:
-                    
-                    if self.DEBUG:
-                        print("room id: " + str(self.persistent_data['matrix_room_id']))
-                    
-                    try:
-                        if self.DEBUG:
-                            print("starting a quick Matrix sync")
-                        # Perhaps a sync will make the client really join the room
-                        sync_result = await self.async_client.sync(timeout=30000) # milliseconds
-                        if self.DEBUG:
-                            print("matrix: quick sync_result: " + str(sync_result))
-                            
-                        room_joined_members_response = await self.async_client.joined_members( str(self.persistent_data['matrix_room_id']) )
-                        if self.DEBUG:
-                            print("room_joined_members_response: " + str(room_joined_members_response))
-                     
-                        get_missing_sessions_result = await self.async_client.get_missing_sessions( str(self.persistent_data['matrix_room_id']) )
+                        get_missing_sessions_result = self.async_client.get_missing_sessions( str(self.persistent_data['matrix_room_id']) )
                         if self.DEBUG:
                             print("matrix: get_missing_sessions_result: " + str(get_missing_sessions_result))
+                    
+                        for missing_user, missing_device in get_missing_sessions_result.items():
+                            print(") ) ) ) ", missing_user, missing_device)
+                
                     except Exception as ex:
-                        print("error while syncing and get_missing_sessions_result: " + str(ex))
+                        print("error in get_missing_sessions_result (likely no encryption!): " + str(ex))
+                    
+                    
+                    if self.DEBUG:
+                        
+            
+                        devices_response = await self.async_client.devices()
+                        print("matrix: devices?: " + str(devices_response.devices))
+                        
+                        print("device store:")
+                        print(f"{self.async_client.user_id}'s device store: {self.async_client.device_store[self.async_client.user_id]}")
+            
+                        
+            
+            
+                        get_displayname_response = await self.async_client.get_displayname()
+                        print("__get_displayname_response: " + str(get_displayname_response))
+                
+                except Exception as ex:
+                    print("Error doing a few queries: " + str(ex))
+            
+            
+            
+            
+            
+                if self.DEBUG:
+                    print("client rooms: " + str(self.async_client.rooms))
+                    print("client encrypted rooms: " + str(self.async_client.encrypted_rooms))
+            
+            
+                # Check if room exists on Matrix server, and if not, create one
+            
+            
+                #encrypted_room = await self.async_client.load_encrypted_rooms()
+                #if self.DEBUG:
+                #    print("encrypted rooms dir: " + (str(dir(encrypted_room))) )
+                #    print("checking for joined room next")
+                
+                joined_rooms_response = await self.async_client.joined_rooms()
+            
+                if self.DEBUG:
+                    print("\njoined_rooms_response: " + str(joined_rooms_response))
+            
+                if (isinstance(joined_rooms_response, JoinedRoomsResponse)):
+           
+                    if self.DEBUG:
+                        print("got rooms_list: " + str(joined_rooms_response.rooms))
+                    number_of_rooms = len(joined_rooms_response.rooms)
+           
+                    if self.DEBUG:
+                        print("number_of_rooms: " + str(number_of_rooms))
+                
+                    if number_of_rooms == 0:
+                        if self.DEBUG:
+                            print("attempting to create room now")
+                    
+                        try:
+                            #room_response = await self.async_client.room_create(name="Candle",federate=self.matrix_federate)
+                            #room_response = await async_client.room_create( self.persistent_data['matrix_token'], name="Candle",federate=False) #, initial_state=[enable_room_encryption_event_dict] )
+                        
+                            #candle_user_id = "@" + self.persistent_data['matrix_candle_username'] + ":" + self.persistent_data['matrix_server']
+                        
+                            invite_user_id = None
+                            if 'matrix_invite_username' in self.persistent_data:
+                                invite_user_id = self.persistent_data['matrix_invite_username'] # if the user skipped creating an accoun and provided an existing user_id
+                            elif 'matrix_username' in self.persistent_data:
+                                invite_user_id = "@" + self.persistent_data['matrix_username'] + ":" + self.persistent_data['matrix_server'] # if we generated an account for the user
+                        
+                            room_response = None
+                        
+                            try:
+                            
+                                # initial_state=[EnableEncryptionBuilder().as_dict()]
+                            
+                                #room_response = await self.async_client.room_create(name="Candle",federate=self.matrix_federate)
+                            
+                                # invite=[invite_user_id]
+                                if self.DEBUG:
+                                    print("#\n# CREATING ROOM\n#")
+                                    print("admin = self.async_client.user_id: " + str(self.async_client.user_id))
+                                    print("candle_user_id: " + str(candle_user_id))
+                                    print("invite_user_id: " + str(invite_user_id))
+                                
+                                invitees = []
+                                power_users = {candle_user_id: 100}
+                            
+                                if invite_user_id != None:
+                                    invitees.append(invite_user_id)
+                                    power_users[invite_user_id] = 100
+                            
+                            
+                                room_response = await self.async_client.room_create( name="Candle", topic="Talk to Voco", federate=self.matrix_federate, invite=invitees, initial_state=[{
+                                        "type": "m.room.encryption",
+                                                "state_key": "",
+                                                "content": {
+                                                    "algorithm": "m.megolm.v1.aes-sha2"
+                                                }
+                                            }
+                                        
+                            
+                                        ], power_level_override={
+                                            "type": "m.room.power_levels",
+                                                    "state_key": "",
+                                                    "content": {
+                                                        "ban": 100,
+                                                        "invite": 100,
+                                                        "kick": 100,
+                                                        "redact": 20,
+                                                        "users_default": 50,
+                                                        "users": power_users,
+                                                        "events": {
+                                                            "m.room.message": 20,
+                                                            "m.room.avatar": 50,
+                                                            "m.room.canonical_alias": 50,
+                                                            "m.room.topic": 20,
+                                                            "m.room.history_visibility": 100,
+                                                        },
+                                                    }
+                                            })
+                        
+                                if self.DEBUG:
+                                    print("\nroom_response: " + str(room_response))
+                                    print("room response dir: " + str(dir(room_response)))
+                                    print(".")
+                        
+                            except Exception as ex:
+                                print("Error creating room: " + str(dir(ex)))
+                        
+                        
+                        
+                   
+                            if (isinstance(room_response, RoomCreateResponse)):
+                                if self.DEBUG:
+                                    print("succesfully created room: " + str(room_response))
+                                    print("room dir: " + str(dir(room_response)))
+                       
+                                if self.DEBUG:
+                                    print("room_response.room_id: " + str(room_response.room_id))
+                            
+                            
+                                try:
+                                    self.persistent_data['matrix_room_id'] = str(room_response.room_id)
+                                
+                                    if self.DEBUG:
+                                        print("room ID saved: " + str(self.persistent_data['matrix_room_id']))
+                                
+                                
+                                    #await self.async_client.join( self.persistent_data['matrix_room_id'] )
+                            
+                                    sync_result = await self.async_client.sync(timeout=30000) # milliseconds
+                                    if self.DEBUG:
+                                        print("matrix: quick sync_result: " + str(sync_result))
+                                        print("client.rooms after room creation: " + str(self.async_client.rooms))
+                                
+                                    
+                                    #if hasattr(room_response, 'room_id'):
+                                    #    print("room_id was in room response.. so far so good")
+                                
+                                        # Joing the newly created room outselves
+                                    
+                                
+                                except Exception as ex:
+                                    print("Error in room_id extraction: " + str(ex))
+                            
+                            
+                                # Enable encryption for the room
+                                """
+                                encryption_enable_message = EnableEncryptionBuilder().as_dict()
+                                if self.DEBUG:
+                                    print("encryption_enable_message: " + str(encryption_enable_message))
+                        
+                                room_send_result = await self.async_client.room_send(
+                                            room_id = self.persistent_data['matrix_room_id'],
+                                            content = encryption_enable_message["content"],
+                                            message_type = encryption_enable_message['type']
+                                            #,ignore_unverified_devices=True
+                                        )
+                        
+                                if self.DEBUG:
+                                    print("result from enabling room encryption: " + str(room_send_result))
+                                """
+                                try:
+                                    # set the room to not allow newly added users to see what has been said in the past
+                                    hide_history_event = ChangeHistoryVisibilityBuilder("joined").as_dict()
+                                    if self.DEBUG:
+                                        print("generated hide_history_event: " + str(hide_history_event))
+                                    room_send_result = await self.async_client.room_send(
+                                                room_id = self.persistent_data['matrix_room_id'],
+                                                content = hide_history_event["content"],
+                                                message_type = hide_history_event['type']
+                                                #,ignore_unverified_devices=True
+                                            )
+                                    if self.DEBUG:
+                                        print("result from setting history visibility to joined: " + str(room_send_result))
+                            
+                                
+                                    # Tell the server to automatically delete old messages from its database. This is an experimental Matrix feature, but better to be early.
+                                    # https://matrix-org.github.io/synapse/latest/message_retention_policies.html?highlight=delete%20message#message-retention-policies
+                                    room_send_result = await self.async_client.room_put_state(
+                                                room_id = self.persistent_data['matrix_room_id'],
+                                                content = {"max_lifetime":3600000}, # milliseconds
+                                                message_type = 'm.room.retention'
+                                            )
+                                
+                                except Exception as ex:
+                                    print("Error changing histort setting: " + str(ex))
+                                    
+                            else:
+                                if self.DEBUG:
+                                    print("Error: Matrix room create response indicates failure")
+                    
+                        except Exception as ex:
+                            print("Error in room creation: " + str(ex)) 
+               
+                        #print("room_response: " + str(room_response))
+                   
+                        #if room_id != None:
+                        #    self.persistent_data['matrix_room_id'] = room_id
+                        #    print("self.persistent_data['matrix_room_id']: " + str(self.persistent_data['matrix_room_id']))
+                        #else:
+                        #    print("room id was none?")
+                   
+                    else:
+                        # we've joined some rooms. 
+                    
+                        # Check the the client rooms list is somehow still empty.
+                        if len(self.async_client.rooms) == 0:
+                            if self.DEBUG:
+                                print("Hmm, apparently we joined rooms... but we didn't? Will try joining it again")
+                            await self.async_client.join( joined_rooms_response.rooms[0] )
+                        
+                        
+                            
+                        # If the room id wasn't set yet, we do so now.
+                        if 'matrix_room_id' not in self.persistent_data:
+                            if self.DEBUG:
+                                print("saving missing room id to persistence file")
+                            self.persistent_data['matrix_room_id'] = joined_rooms_response.rooms[0]
+                            #self.save_persistent_data()
+                            """
+                            try:
+                                await self.async_client.room_send(
+                                    # Watch out! If you join an old room you'll see lots of old messages
+                                    room_id=self.persistent_data['matrix_room_id'],
+                                    message_type="m.room.encryption",
+                                    content = { "algorithm": "m.megolm.v1.aes-sha2" }
+                                )
+                            except Exception as ex:
+                                print("error setting room to encrypted: "  + str(ex))
+                           """
+                       
+                        else:
+                            if self.DEBUG:
+                                print("room situation is ok")
+                       
+                       
+                       
+                    # We are logged in and a room exists
+                    if 'matrix_room_id' in self.persistent_data:
+                    
+                        if self.DEBUG:
+                            print("room id: " + str(self.persistent_data['matrix_room_id']))
+                    
+                        try:
+                            if self.DEBUG:
+                                print("starting a quick Matrix sync")
+                            # Perhaps a sync will make the client really join the room
+                            sync_result = await self.async_client.sync(timeout=30000) # milliseconds
+                            if self.DEBUG:
+                                print("matrix: quick sync_result: " + str(sync_result))
+                            
+                            """
+                            room_joined_members_response = await self.async_client.joined_members( str(self.persistent_data['matrix_room_id']) )
+                            if self.DEBUG:
+                                print("room_joined_members_response: " + str(room_joined_members_response))
+                                print("room_joined_members_response.members: " + str(room_joined_members_response.members))
+                            if room_joined_members_response.members:
+                                self.matrix_room_members = []
+                                for member in room_joined_members_response.members:
+                                    #print("+ member: " + str(member))
+                                    #print("+ member dir: " + str(dir(member)))
+                                    #print("+ member.user_id: " + str(member.user_id))
+                                    #print("+ member.display_name: " + str(member.display_name))
+                                    self.matrix_room_members.append({'user_id':member.user_id, 'display_name':member.display_name})
+                        
+                                print("final self.matrix_room_members list: " + str(self.matrix_room_members))
+                            """
+                            
+                        except Exception as ex:
+                            print("error while quickly syncing: " + str(ex))
 						
+                        try:
+                            get_missing_sessions_result = self.async_client.get_missing_sessions( str(self.persistent_data['matrix_room_id']) )
+                            if self.DEBUG:
+                                print("matrix: get_missing_sessions_result: " + str(get_missing_sessions_result))
+                                
+                            for missing_user, missing_device in get_missing_sessions_result.items():
+                                print(") ) ) ) ", missing_user, missing_device)
+                            
+                        except Exception as ex:
+                            print("error in get_missing_sessions_result (likely no encryption!): " + str(ex))
                     
                     
-                    
-                    try:
-                        encryption_enable_message = EnableEncryptionBuilder().as_dict()
                         if self.DEBUG:
-                            print("encryption_enable_message: " + str(encryption_enable_message))
+                            print("\n\n rooms:")
+                        for room in self.async_client.rooms.keys():
+                        
+                            try:
+                                if self.DEBUG:
+                                    print("room: " + str(self.async_client.rooms[room]))
+                                    print("room dir: " + str(dir(self.async_client.rooms[room])))
+                            except Exception as ex:
+                                print("Error looping over rooms: " + str(ex))
+                        
                     
-                        room_send_result = await self.async_client.room_send(encryption_enable_message)
-                        print("result from enabling room encryption: " + str(room_send_result))
                     
-                        # Get room state
-                        room_get_state_response = await self.async_client.room_get_state( str(self.persistent_data['matrix_room_id']) )
-                        if self.DEBUG:
-                            print("room_get_state_response: " + str(room_get_state_response))
-                    
-                        # INVITE (now already handled when room is created)
-                        """
-                        invite_user_id = "@" + self.persistent_data['matrix_username'] + ":" + self.persistent_data['matrix_server']
-                        if self.DEBUG:
-                            print("inviting main user into room: " + str(invite_user_id))
+                        
+                        try:
+                            print(" +  +  +  + ")
+                            print("candle_user_id: " + str(candle_user_id))
+                            print("self.persistent_data['matrix_room_id']: " + str(self.persistent_data['matrix_room_id']))
+                            print("\n\nVERIFYING DEVICES\n\n")
+                            print(".device_store: " + str(self.async_client.device_store))
+                            for device_olm in self.async_client.device_store:
+                                print("x")
+                                print("device_olm: " + str(device_olm))
+                                print("device_olm.user_id: " + str(device_olm.user_id))
+                                if device_olm.user_id != candle_user_id or device_olm.device_id != self.persistent_data['matrix_room_id']:
+                                    print("\n M M M M M VERIFYING")
+                                    self.async_client.verify_device(device_olm)
+                                #print("device owner: " + str(self.async_client.device_store[device_owner]))
+                        
+                                #if device_owner == candle_user_id:
+                                #    if 'matrix_device_id' in self.persistent_data:
+                                #        if device_id == self.persistent_data['matrix_device_id']
+                                #    continue
+                                    
+                                #self.async_client.verify_device(device_olm)
+                                
+                                """
+                                for device_id, olm_device in self.async_client.device_store[device_owner].items():
+                                    
+                                    if device_owner == candle_user_id and device_id == self.persistent_data['matrix_device_id']:
+                                        print("skipping candle's own device")
+                                        continue
 
-                        #invite_response = await self.async_client.room_invite(room_id=self.persistent_data['matrix_room_id'], user_id=invite_user_id)
-                        #invite_response = await self.async_client.room_invite(room_id=self.persistent_data['matrix_room_id'], user_id=invite_user_id)
-                        invite_response = await self.async_client.room_invite(self.persistent_data['matrix_room_id'], invite_user_id)
-                        print("invite response: " + str(invite_response))
-                        """
+                                    self.async_client.verify_device(olm_device)
+                                    print(f"Trusting {device_id} from user {device_owner}")
+                                """
+                        
+                            #print("DEVICE VERIFICATION DONE")
+                        
+                        
+                        except Exception as ex:
+                            print("Error in verifying devices: " + str(ex))
                     
-                        if self.DEBUG:
-                            print("room_id exists. Sending hello world")
+                    
+                        try:
+                        
+                        
+                            # Get room state
+                            room_get_state_response = await self.async_client.room_get_state( str(self.persistent_data['matrix_room_id']) )
+                            if self.DEBUG:
+                                print("room_get_state_response: " + str(room_get_state_response))
+                    
+                            # INVITE (now already handled when room is created)
+                            """
+                            invite_user_id = "@" + self.persistent_data['matrix_username'] + ":" + self.persistent_data['matrix_server']
+                            if self.DEBUG:
+                                print("inviting main user into room: " + str(invite_user_id))
+
+                            #invite_response = await self.async_client.room_invite(room_id=self.persistent_data['matrix_room_id'], user_id=invite_user_id)
+                            #invite_response = await self.async_client.room_invite(room_id=self.persistent_data['matrix_room_id'], user_id=invite_user_id)
+                            invite_response = await self.async_client.room_invite(self.persistent_data['matrix_room_id'], invite_user_id)
+                            print("invite response: " + str(invite_response))
+                            """
+                    
+                            #if self.DEBUG:
+                            #    print("room_id exists. Sending hello world")
                    
                         
                         
-                    except Exception as ex:
-                        print("error while getting room state and sending welcome/loaded message: " + str(ex))
+                        except Exception as ex:
+                            print("error while getting room state and sending welcome/loaded message: " + str(ex))
                 
+                    else:
+                        if self.DEBUG:
+                            print("Error, matrix_room_id was not in persistent_data")
+                   
                 else:
                     if self.DEBUG:
-                        print("Error, matrix_room_id was not in persistent_data")
-                   
-            else:
-                if self.DEBUG:
-                    print("getting joined rooms list failed")
+                        print("getting joined rooms list failed")
                
-            #default
-            # asyncio.run_coroutine_threadsafe(self.send(content), loop=self.loop)
+                #default
+                # asyncio.run_coroutine_threadsafe(self.send(content), loop=self.loop)
            
-            #await self.async_client.sync_forever(timeout=30000) # milliseconds
-            await self.async_client.sync(timeout=30000) # milliseconds
-            if self.DEBUG:
-                print("matrix: final initial sync complete")
-                print("\nFINAL CLIENT STATE:\n " + str(dir(self.async_client)))
-            #testje
-            #sync_forever_task = asyncio.ensure_future(client.sync_forever(30000, full_state=False))
+                #await self.async_client.sync_forever(timeout=30000) # milliseconds
+                await self.async_client.sync(timeout=30000) # milliseconds
+                if self.DEBUG:
+                    print("matrix: final initial sync complete")
+                    print("\nFINAL CLIENT STATE:\n " + str(dir(self.async_client)))
+                #testje
+                #sync_forever_task = asyncio.ensure_future(client.sync_forever(30000, full_state=False))
 
 
-            # new incoming Matrix messages may now be parsed
-            self.matrix_started = True
+                # new incoming Matrix messages may now be parsed
+                self.matrix_started = True
             
             
             
             
+                print("Starting main Matrix while loop")
             
+                #
+                #  KEEP THE FIRE GOING
+                #
             
-            #
-            #  KEEP THE FIRE GOING
-            #
-            
-            sync_counter = 0
-            while self.running:
-                #print("* in while loop of sync_matrix_forever")
-                
-                # if Voco is being unloaded send a quick goodbye message
-                if self.matrix_started == False:
-                    if self.DEBUG:
-                        print("matrix while loop is stopping")
-                    send_message_response = await self.send_message_to_matrix_async( 'Voco has been turned off', 'Goodbye', 'High')
-                    break
-                
-                # send outgoing messages
-                if self.matrix_messages_queue.empty() == False:
-                    if self.DEBUG:
-                        print("matrix outgoing messages queue was not empty.")
-                    outgoing_matrix_message = self.matrix_messages_queue.get(False)
-                    if outgoing_matrix_message != None:
+                sync_counter = 0
+                while self.running:
+                    #print("* in while loop of sync_matrix_forever")
+                    #print("self.currently_chatting: " + str(self.currently_chatting))
+                    #print("self.persistent_data['chatting']: " + str(self.persistent_data['chatting']))
+                    # if the user disables chat access when chatting was enabled, send a goodbye message.
+                    if self.persistent_data['chatting'] == False and self.currently_chatting == True:
+                        self.currently_chatting = False
                         if self.DEBUG:
-                            print("* message to send to Matrix network in queue: " + str(outgoing_matrix_message))
-                        if 'message' in outgoing_matrix_message:
-                            send_message_response = await self.send_message_to_matrix_async( str(outgoing_matrix_message['message']), str(outgoing_matrix_message['title']), str(outgoing_matrix_message['level']) )
-                            print("* sent outgoing matrix message? send_message_response: " + str(send_message_response))
+                            print("Chatting disabled")
+                        send_message_response = await self.send_message_to_matrix_async( 'Voco chat access has been disabled', 'Goodbye', 'High')
                 
-                # Invite new users into room
-                if self.matrix_invite_queue.empty() == False:
-                    if self.DEBUG:
-                        print("User to invite was spotted in invite queue.")
-                    invite_username = self.matrix_invite_queue.get(False)
-                    if invite_username != None:
+                    # if the user enabled chat access when chatting was disabled, send a hello message.
+                    elif self.persistent_data['chatting'] == True and self.currently_chatting == False:
                         if self.DEBUG:
-                            print("inviting user: " + str(invite_username))
-                        invite_response = await self.async_client.room_invite(self.persistent_data['matrix_room_id'], invite_username)
-                        if self.DEBUG:
-                            print("invite response: " + str(invite_response))
-                
-                
-                sync_counter += 1
-            
-                if sync_counter == 40:
-                    sync_counter = 0
-                    if self.DEBUG:
-                        print("* starting sync")
-                    sync_response = await self.sync_loop(False,"online")
-                    if self.DEBUG:
-                        print("* sync_response: " + str(sync_response))
+                            print("Chatting (re-)enabled. Clearning chat messages queue")
+                        #await self.sync_loop(False,"online") # purge any messages that were sent in the meantime
+                        self.currently_chatting = True
                     
-                #print("* zzz")
-                time.sleep(.2)
+                        # Clear all messages that arrived while chatting was disabled
+                        while not self.matrix_messages_queue.empty():
+                            try:
+                                self.matrix_messages_queue.get(False)
+                            except Empty:
+                                continue
+                            self.matrix_messages_queue.task_done()
+                    
+                        send_message_response = await self.send_message_to_matrix_async( 'Voco chat access has been enabled', 'Hello', 'High')
+                
+                
+                    if self.persistent_data['chatting']:
+                    
+                        # if Voco is being unloaded send a quick goodbye message
+                        if self.matrix_started == False:
+                            send_message_response = await self.send_message_to_matrix_async( 'Voco has been turned off', 'Goodbye', 'High')
+                            break
+                
+                        # send outgoing messages
+                        if self.matrix_messages_queue.empty() == False:
+                            if self.DEBUG:
+                                print("matrix outgoing messages queue was not empty.")
+                            outgoing_matrix_message = self.matrix_messages_queue.get(False)
+                            if outgoing_matrix_message != None:
+                                if self.DEBUG:
+                                    print("* message to send to Matrix network in queue: " + str(outgoing_matrix_message))
+                                if 'message' in outgoing_matrix_message:
+                                    send_message_response = await self.send_message_to_matrix_async( str(outgoing_matrix_message['message']), str(outgoing_matrix_message['title']), str(outgoing_matrix_message['level']) )
+                                    if self.DEBUG:
+                                        print("* sent outgoing matrix message? send_message_response: " + str(send_message_response))
+                
+                
+                    # Invite new users into room
+                    if self.matrix_invite_queue.empty() == False:
+                        if self.DEBUG:
+                            print("User to invite was spotted in invite queue.")
+                        invite_username = self.matrix_invite_queue.get(False)
+                        if invite_username != None:
+                            if self.DEBUG:
+                                print("inviting user: " + str(invite_username))
+                            invite_response = await self.async_client.room_invite(self.persistent_data['matrix_room_id'], invite_username)
+                            if self.DEBUG:
+                                print("invite response: " + str(invite_response))
+                            self.refresh_matrix_members = True
+                
+                    # Kick users from the room
+                    if self.matrix_kick_queue.empty() == False:
+                        if self.DEBUG:
+                            print("User to kick was spotted in kick queue.")
+                        kick_username = self.matrix_kick_queue.get(False)
+                        if kick_username != None:
+                            if self.DEBUG:
+                                print("kicking user: " + str(kick_username))
+                            kick_response = await self.async_client.room_kick(self.persistent_data['matrix_room_id'], kick_username)
+                            if self.DEBUG:
+                                print("kick response: " + str(kick_response))
+                            self.refresh_matrix_members = True
+                            
+                    # Refresh list of room members
+                    if self.refresh_matrix_members:
+                        self.refresh_matrix_members = False
+                        if self.DEBUG:
+                            print("refreshing room members list")
+                        try:
+                            room_joined_members_response = await self.async_client.joined_members( str(self.persistent_data['matrix_room_id']) )
+                            if room_joined_members_response.members:
+                                matrix_room_members = []
+                                for member in room_joined_members_response.members:
+                                    if self.DEBUG:
+                                        print("+ member.user_id: " + str(member.user_id))
+                                    matrix_room_members.append({'user_id':member.user_id, 'display_name':member.display_name})
+                    
+                                self.matrix_room_members = matrix_room_members
+                        except Exception as ex:
+                            print("error updating matrix room members list: " + str(ex))
+                
+                            
+                
+                    
+                    sync_counter += 1
+        
+                    sync_delay = 3 # wait a fwe seconds between syncs
+                
+                
+                    # Speed up syncing if the user was recently active, decrease it if it has been a while since a message was received. Let's be nice to the server.
+                    #if self.last_time_matrix_message_received < (time.time() - 300):
+                    #    sync_delay = 50 # wait 10 seconds between syncs
+                    #elif self.last_time_matrix_message_received < (time.time() - 60):
+                    #    sync_delay = 25 # wait 5 seconds between syncs
+                    #else:
+                    #    sync_delay = 10 # wait 2 seconds between syncs
+                
+                    if sync_counter > sync_delay:
+                        sync_counter = 0
+                        if self.DEBUG:
+                            print("* starting sync. sync_delay: " + str(sync_delay))
+                    
+                        if self.persistent_data['chatting']:
+                            sync_response = await self.sync_loop(False,"online")
+                        else:
+                            sync_response = await self.sync_loop(False,"offline")
+                        
+                        if self.DEBUG:
+                            print("* sync_response: " + str(sync_response))
+                    
+                    
+                        try:
+                            get_missing_sessions_result = self.async_client.get_missing_sessions( str(self.persistent_data['matrix_room_id']) )
+                            if self.DEBUG:
+                                print("matrix: get_missing_sessions_result: " + str(get_missing_sessions_result))
+                                
+                            for missing_user, missing_device in get_missing_sessions_result.items():
+                                print(") ) ) ) ", missing_user, missing_device)
+                            
+                        except Exception as ex:
+                            print("error in get_missing_sessions_result (likely no encryption!): " + str(ex))
+                    
+                    print("* zzz")
+                    time.sleep(.2)
             
             
 
-            return True
+                return True
 
         else:
             if self.DEBUG:
-                print("matrix main: missing server or username or token")  
+                print("WARNING: matrix main: missing server. Cannot start matrix main_loop")  
             return False
        
-     
+         
+         
+         
      
     # MATRIX CALLBACKS
 
     async def matrix_message_callback(self, room, event):
+        if self.DEBUG:
+            print("\nINCOMING MESSAGE")
         if room != None and event != None:
             if self.DEBUG:
                 print(
                     f"Message received in room: {room.display_name}\n"
                     f"{room.user_name(event.sender)} | {event.body}"
                     )
-            if self.matrix_started:
+                print("event.decrypted: " + str(event.decrypted))
+            
+            self.last_time_matrix_message_received = time.time()
+                    
+            if self.matrix_started and self.currently_chatting:
                 body_check = event.body.lower()
             
                 if body_check.startswith('speak everywhere:'):
@@ -6190,7 +6585,9 @@ class VocoAdapter(Adapter):
                     else:
                         if self.DEBUG:
                             print("new message is room was sent by Candle, so will be ignored")
-            
+            else:
+                if self.DEBUG:
+                    print("matrix_message_callback: ignoring incoming message")
         else:
             print("message callback error: missing room or event")
 
@@ -6261,11 +6658,14 @@ class VocoAdapter(Adapter):
                     print("async client already exists in self")
        
             else:
+                # This could never occur
                 if self.DEBUG:
                     print("Async client didn't exist yet, creating it now")
-                user_id = "@" + self.persistent_data['matrix_username'] + ":" + self.persistent_data['matrix_server']
+                candle_user_id = "@" + self.persistent_data['matrix_candle_username'] + ":" + self.persistent_data['matrix_server']
                 server = "https://" + str(self.persistent_data['matrix_server'])
-       
+                
+                
+                
                 #client = Client(user_id, config=self.matrix_config, store_path=self.matrix_data_store_path)
                 #client.access_token = self.persistent_data['matrix_token']
        
@@ -6277,22 +6677,23 @@ class VocoAdapter(Adapter):
                     #user_id = "@" + self.persistent_data['matrix_username'] + ":" + self.persistent_data['matrix_server']
                     #server = "https://" + str(self.persistent_data['matrix_server'])
            
-                self.async_client = AsyncClient(server, config=self.matrix_config, store_path=self.matrix_data_store_path)
-                self.async_client.access_token = self.persistent_data['matrix_token']
-                self.async_client.user_id = user_id 
-                
-                if 'matrix_device_id' in self.persistent_data:
-                    if self.DEBUG:
-                        print("device id was present in persistent data, adding it to client")
-                    self.async_client.device_id = self.persistent_data['matrix_device_id']
-           
-                #self.async_client.add_event_callback(self.matrix_message_callback, RoomMessageText)
+                self.async_client = AsyncClient(server, candle_user_id, config=self.matrix_config, store_path=self.matrix_data_store_path)
                 
                 self.async_client.add_event_callback(self.matrix_message_callback, RoomMessageText)
                 self.async_client.add_response_callback(self.matrix_sync_callback, SyncResponse)
                 self.async_client.add_global_account_data_callback(self.matrix_account_callback, AccountDataEvent)
                 self.async_client.add_room_account_data_callback(self.matrix_account_callback, AccountDataEvent)
                 self.async_client.add_ephemeral_callback(self.matrix_ephemeral_callback, Event)
+                
+                if 'matrix_device_id' in self.persistent_data:
+                    if self.DEBUG:
+                        print("device id was present in persistent data, adding it to client")
+                    self.async_client.device_id = self.persistent_data['matrix_device_id']
+                
+                self.async_client.access_token = self.persistent_data['matrix_token']
+                #self.async_client.user_id = user_id 
+                
+                #self.async_client.add_event_callback(self.matrix_message_callback, RoomMessageText)
                 
 
             if self.async_client.logged_in:
@@ -6301,12 +6702,19 @@ class VocoAdapter(Adapter):
        
             #message = message + str(randomWord())
             if title != "":
-                title += ": "
-            
-            color = 'inherit'
+                if level == 'Medium' or level == 'High':
+                    title = '<strong>' + title + ':</strong> '
+                else:
+                    title += ': '
             
             if level == 'High':
-                color = '#f00'
+                #color = '#f00'
+                #title = '<h2>' + title + '</h2>'
+                message = '<strong>' + message + '</strong>'
+                
+            
+            
+                
             
             room_send_result = await self.async_client.room_send(
                         room_id=self.persistent_data['matrix_room_id'],
@@ -6314,7 +6722,7 @@ class VocoAdapter(Adapter):
                             "msgtype": "m.text",
                             "body": f"{title} {message}",
                             "format": "org.matrix.custom.html",
-                            "formatted_body": f'<strong style="color:{color}">{title}</strong><span>{message}</span>',
+                            "formatted_body": f'{title}{message}',
                         },
                         message_type="m.room.message"
                         #,ignore_unverified_devices=True
@@ -6334,7 +6742,7 @@ class VocoAdapter(Adapter):
             print("registering a Matrix account. create_account_for_user: " + str(create_account_for_user))
        
         try:
-            if 'matrix_server' in self.persistent_data and 'matrix_username' in self.persistent_data:
+            if 'matrix_server' in self.persistent_data and ('matrix_username' in self.persistent_data or 'matrix_invite_username' in self.persistent_data):
                 #client.add_event_callback(self.matrix_message_callback, RoomMessageText)
            
                 loop = self.get_or_create_eventloop()
@@ -6388,33 +6796,15 @@ class VocoAdapter(Adapter):
         
         try:
             
-            if self.async_client != None:
-                if self.DEBUG:
-                    print("async client already exists in self")
-        
+            if self.async_client == None:
+                
+                await self.start_matrix_client_async()
+                
+                
+           
             else:
                 if self.DEBUG:
-                    print("creating async client for registration")
-                #async_client = AsyncClient(self.persistent_data['matrix_server'], store_path=self.matrix_data_store_path, config=self.matrix_config)
-                #async_client = AsyncClient('https://element.liberta.casa/', store_path='/home/pi/.webthings/data/voco/matrix.json', config=matrix_config)
-                server = "https://" + str(self.persistent_data['matrix_server'])
-            
-                self.async_client = AsyncClient(server, store_path=self.matrix_data_store_path, config=self.matrix_config)
-                #print("beyond creating matrix registration client. Client: " + str(async_client))
-   
-                #if 'matrix_device_id' not in self.persistent_data:
-                #    self.persistent_data['matrix_device_id'] = "candle_" + randomWord()
-                
-                
-                
-                #self.async_client.add_event_callback(self.matrix_message_callback, RoomMessageText)
-                #self.async_client.add_response_callback(self.matrix_sync_callback, SyncResponse)
-                #self.async_client.add_global_account_data_callback(self.matrix_account_callback, AccountDataEvent)
-                self.async_client.add_event_callback(self.matrix_message_callback, RoomMessageText)
-                self.async_client.add_response_callback(self.matrix_sync_callback, SyncResponse)
-                self.async_client.add_global_account_data_callback(self.matrix_account_callback, AccountDataEvent)
-                self.async_client.add_ephemeral_callback(self.matrix_ephemeral_callback, Event)
-            
+                    print("self.async_client already existed ...no need re-create it")
             
             
             
@@ -6437,135 +6827,187 @@ class VocoAdapter(Adapter):
                 else:
                     print("ERROR, COULD NOT CREATE ACCOUNT FOR USER")
                     self.user_account_created = False
+                    
                 time.sleep(2)
             
             
-            if self.DEBUG:
-                print("\nNEXT creating the Candle Matrix account.")
-            #register_response = await async_client.register( self.persistent_data['matrix_candle_username'], self.persistent_data['matrix_candle_password'], str(self.persistent_data['matrix_device_id']) )
-            #register_response = await async_client.register( self.persistent_data['matrix_candle_username'], self.persistent_data['matrix_candle_password'], str(self.persistent_data['matrix_device_id']))
-            register_response = await self.async_client.register( self.persistent_data['matrix_candle_username'], self.persistent_data['matrix_candle_password'], str(self.persistent_data['matrix_device_name']) )
             
             if self.DEBUG:
-                print("- register_response: " + str(dir(register_response)))
-
-            try:
-                
+                print("register_loop: ----- quick check: was the candle user already logged in?: " + str(self.async_client.logged_in))
+            
+            if self.async_client.logged_in == False:
                 if self.DEBUG:
-                    print("register_response.message: " + str(register_response.message))
-                    print("register_response.status_code: " + str(register_response.status_code))
-                
-                if register_response.status_code == 'M_USER_IN_USE':
-                    if self.DEBUG:
-                        print("it seems the account was already created")
-                        print("self.persistent_data['matrix_candle_username']: " + str(self.persistent_data['matrix_candle_username']) )
-                        print("self.persistent_data['matrix_candle_password']: " + str(self.persistent_data['matrix_candle_password']) )
-                    
-                    user_id = "@" + self.persistent_data['matrix_candle_username'] + ":" + self.persistent_data['matrix_server']
-                    if self.DEBUG:
-                        print("user_id: " + str(user_id))
-                    
-                    
-                    client = AsyncClient(server, user_id)
-                    client.add_event_callback(self.matrix_message_callback, RoomMessageText)
+                    print("\nNEXT creating the Candle Matrix account.")
+                #register_response = await async_client.register( self.persistent_data['matrix_candle_username'], self.persistent_data['matrix_candle_password'], str(self.persistent_data['matrix_device_id']) )
+                #register_response = await async_client.register( self.persistent_data['matrix_candle_username'], self.persistent_data['matrix_candle_password'], str(self.persistent_data['matrix_device_id']))
+                register_response = await self.async_client.register( self.persistent_data['matrix_candle_username'], self.persistent_data['matrix_candle_password'], str(self.persistent_data['matrix_device_name']) )
+            
+                if self.DEBUG:
+                    print("- register_response: " + str(dir(register_response)))
 
-
-                    #login_test = await client.login(self.persistent_data['matrix_candle_password'])
-                    
-                    #print(" login_test response " + str(login_test))
-                    
-                    
-                    
-                    #async_client = AsyncClient(server, user_id, config=self.matrix_config) # store_path=self.matrix_data_store_path, 
-       
-                    #if 'matrix_token' not in self.persistent_data:
-                    if self.DEBUG:
-                        print("register loop: about to test login")
-                    login_response = await async_client.login(self.persistent_data['matrix_candle_username'], self.persistent_data['matrix_candle_password']) #, device_name=str(self.persistent_data['matrix_device_id'])
-                    if self.DEBUG:
-                        print("login response: " + str(dir(login_response)))
-                        print("login_response.status_code: " + str(login_response.status_code))
-                        print("login_response.message: " + str(login_response.status_code))
-
-                    if (isinstance(login_response, LoginResponse)):
-                        if self.DEBUG:
-                            print("login succesful!")
-                            print('login_response.access_token: ' + str(login_response.access_token))
-                        self.persistent_data['matrix_token'] = str(login_response.access_token)
-                        self.save_persistent_data()
-                    
-                    
-                    #login_response2 = await async_client.login(user_id, self.persistent_data['matrix_candle_password'] ) #, device_name=str(self.persistent_data['matrix_device_id'])
-                    #print("login_response2.status_code: " + str(login_response2.status_code))
-                    #print("login_response2.message: " + str(login_response2.status_code))
-                    
-                    #login_test_response = loop.run_until_complete( self.login_loop( self.persistent_data['matrix_username'], password ) )
-                    #login_test_response = asyncio.run( self.login_loop( self.persistent_data['matrix_username'], password ) )
-                    #login_test_response = self.login_loop( self.persistent_data['matrix_username'], password )
-                    
-                    #print("login_test_response: " + str(login_test_response))
-                    #if login_test_response:
-                    #    print("seem to be logged in")
-                    #    logged_in = True
-                    
-                #print("async_client.access_token: " + str(async_client.access_token))
-                    
-            except Exception as ex:
-                print("register response test error: " + str(ex))
-                
-            if (isinstance(register_response, RegisterResponse)):
-                
                 try:
+                
                     if self.DEBUG:
-                        print("- the candle user register_response was a valid register response.")
-                        print("- dir: " + str(dir(register_response)))
-                        print("- RegisterResponse.access_token: " + str(register_response.access_token))
+                        print("register_response.message: " + str(register_response.message))
+                        print("register_response.status_code: " + str(register_response.status_code))
+                
+                    if register_response.status_code == 'M_USER_IN_USE':
+                        if self.DEBUG:
+                            print("it seems the account was already created")
+                            print("self.persistent_data['matrix_candle_username']: " + str(self.persistent_data['matrix_candle_username']) )
+                            print("self.persistent_data['matrix_candle_password']: " + str(self.persistent_data['matrix_candle_password']) )
                     
-                    # should this device id overwrite the one we provided? Seems like yes
-                    self.persistent_data['matrix_device_id'] = register_response.device_id
-                    self.persistent_data['matrix_token'] = register_response.access_token
-                    self.save_persistent_data()
+                        user_id = "@" + self.persistent_data['matrix_candle_username'] + ":" + self.persistent_data['matrix_server']
+                        if self.DEBUG:
+                            print("user_id: " + str(user_id))
+                    
+                        self.async_client.user_id = user_id
+                    
+                        #client = AsyncClient(server, user_id)
+                        #client.add_event_callback(self.matrix_message_callback, RoomMessageText)
+
+
+                        #login_test = await client.login(self.persistent_data['matrix_candle_password'])
+                    
+                        #print(" login_test response " + str(login_test))
+                    
+                        time.sleep(2)
+                    
+                        #async_client = AsyncClient(server, user_id, config=self.matrix_config) # store_path=self.matrix_data_store_path, 
+       
+                        #if 'matrix_token' not in self.persistent_data:
+                        if self.DEBUG:
+                            print("register loop: about to test login")
                         
-                    if event.body.lower() == 'hello':
-                         self.matrix_messages_queue.put({'title':'Welcome','message':'This is the Candle room. You can chat with Voco here. \n\n You can also ask Voco to speak a message out loud by starting you message with "speak:". Try sending this message: "speak: hello world".','level':'Normal'})
+                        device_name = randomWord()
+                        if 'matrix_device_id' in self.persistent_data:
+                            device_name = str(self.persistent_data['matrix_device_id'])
                         
+                        try:
+                            #await client.login("my-secret-password")
+                            login_response = await self.async_client.login(str(self.persistent_data['matrix_candle_password']) )
+                            #login_response = await self.async_client.login(user=user_id, password=self.persistent_data['matrix_candle_password'], device_name=device_name )
+                            if self.DEBUG:
+                                print("login response: " + str(dir(login_response)))
+                                print("login_response.status_code: " + str(login_response.status_code))
+                                print("login_response.message: " + str(login_response.status_code))
+
+                            if (isinstance(login_response, LoginResponse)):
+                                if self.DEBUG:
+                                    print("login succesful!")
+                                    print('login_response.access_token: ' + str(login_response.access_token))
+                                self.persistent_data['matrix_token'] = str(login_response.access_token)
+                                self.save_persistent_data()
+                    
+                                if self.DEBUG:
+                                    print("exporting keys")
+                                export_keys_response = await self.async_client.export_keys(self.matrix_keys_store_path, self.persistent_data['matrix_candle_password'])
+                                if self.DEBUG:
+                                    print("export_keys_response: " + str(export_keys_response))
+                    
+                        
+                                if self.matrix_started == False:
+                                    print("api handler: starting matrix after succesfull login")
+                                    return await self.matrix_main()
+                                else:
+                                    return True
+                                
+                        except Exception as ex:
+                            print("Error: login attempt failed: " + str(ex))
+                            
+                            try:
+                                login_response = await self.async_client.login(password=self.persistent_data['matrix_candle_password'], device_name=device_name )
+                                if self.DEBUG:
+                                    print("except login response: " + str(dir(login_response)))
+                                if (isinstance(login_response, LoginResponse)):
+                                    if self.DEBUG:
+                                        print("except login succesful!")
+                            except Exception as ex:
+                                print("Error: except login attempt also failed: " + str(ex))
+                            
+                        #login_response2 = await async_client.login(user_id, self.persistent_data['matrix_candle_password'] ) #, device_name=str(self.persistent_data['matrix_device_id'])
+                        #print("login_response2.status_code: " + str(login_response2.status_code))
+                        #print("login_response2.message: " + str(login_response2.status_code))
+                    
+                        #login_test_response = loop.run_until_complete( self.login_loop( self.persistent_data['matrix_username'], password ) )
+                        #login_test_response = asyncio.run( self.login_loop( self.persistent_data['matrix_username'], password ) )
+                        #login_test_response = self.login_loop( self.persistent_data['matrix_username'], password )
+                    
+                        #print("login_test_response: " + str(login_test_response))
+                        #if login_test_response:
+                        #    print("seem to be logged in")
+                        #    logged_in = True
+                    
+                    #print("async_client.access_token: " + str(async_client.access_token))
+                    
+                except Exception as ex:
+                    print("register response test error: " + str(ex))
+                
+                
+                
+                if (isinstance(register_response, RegisterResponse)):
+                
                     try:
                         if self.DEBUG:
-                            print("exporting keys")
-                        export_keys_response = await self.async_client.export_keys(self.matrix_keys_store_path, self.persistent_data['matrix_candle_password'])
-                        if self.DEBUG:
-                            print("export_keys_response: " + str(export_keys_response))
-                    except Exception as ex:
-                        print("error exporting keys: " + str(ex))
+                            print("- the candle user register_response was a valid register response.")
+                            print("- dir: " + str(dir(register_response)))
+                            print("- RegisterResponse.access_token: " + str(register_response.access_token))
+                    
+                        # should this device id overwrite the one we provided? Seems like yes
+                        self.persistent_data['matrix_device_id'] = register_response.device_id
+                        self.persistent_data['matrix_token'] = register_response.access_token
+                        self.persistent_data['chatting'] = True
+                        self.save_persistent_data()
+                    
+                        self.matrix_messages_queue.put({'title':'Welcome','message':'This is the Candle room. You can chat with Voco here. \n\n You can also ask Voco to speak a message out loud by starting you message with "speak:". Try sending this message: "speak: hello world".','level':'Normal'})
                         
-                except Exception as ex:
-                    print("getting RegisterResponse access token error: " + str(ex))
+                        try:
+                            if self.DEBUG:
+                                print("exporting keys")
+                            export_keys_response = await self.async_client.export_keys(self.matrix_keys_store_path, self.persistent_data['matrix_candle_password'])
+                            if self.DEBUG:
+                                print("export_keys_response: " + str(export_keys_response))
+                        except Exception as ex:
+                            print("error exporting keys: " + str(ex))
+                        
+                    except Exception as ex:
+                        print("getting RegisterResponse access token error: " + str(ex))
                
                
-                if self.DEBUG:
-                    print("------------------------------ - - - - - - - candle matrix account created")
-                    print("----- immediately logged in?: " + str(self.async_client.logged_in))
-                    print("--self.async_client.user_id is now: " + str(self.async_client.user_id))
+                    if self.DEBUG:
+                        print("------------------------------ - - - - - - - candle matrix account created")
+                        print("----- immediately logged in?: " + str(self.async_client.logged_in))
+                        print("--self.async_client.user_id is now: " + str(self.async_client.user_id))
                     
                 
             
                        
-                # Now, create a second account for the user?
-                # time.sleep(5)
-                # register_response = await async_client.register( self.persistent_data['matrix_username'], password, str(self.persistent_data['matrix_device_id']) )
+                    # Now, create a second account for the user?
+                    # time.sleep(5)
+                    # register_response = await async_client.register( self.persistent_data['matrix_username'], password, str(self.persistent_data['matrix_device_id']) )
                
-                #login_response = await async_client.login(password, device_name=str(self.persistent_data['matrix_device_id']))
-                #print("login response: " + str(login_response))
+                    #login_response = await async_client.login(password, device_name=str(self.persistent_data['matrix_device_id']))
+                    #print("login response: " + str(login_response))
                 
+                    if self.matrix_started == False:
+                        print("starting matrix after succesfull account creation")
+                        return await self.matrix_main()
+                    else:
+                        return True
+               
+                else:
+                    print('invalid register response')
+    
+            else:
+                print('Warning: register candle account: not needed, already logged in!')
                 if self.matrix_started == False:
-                    print("api handler: starting matrix after succesfull account creation")
+                    print("starting matrix after account creation was not necessary")
                     return await self.matrix_main()
                 else:
+                    print("Main matrix loop is already running")
                     return True
-               
-            else:
-                print('invalid register response')
-       
+            
+                
         except Exception as ex:
             print("Error in registerloop: " + str(ex))
    
@@ -6578,6 +7020,7 @@ class VocoAdapter(Adapter):
     # Periodic sync
     #
     
+    """
     def sync_matrix_forever(self):
         if self.DEBUG:
             print("in sync_matrix_forever")
@@ -6604,7 +7047,7 @@ class VocoAdapter(Adapter):
             if self.DEBUG:
                 print("sync_response: " + str(sync_response))
             return sync_response
-
+    """
 
     
 
@@ -6631,7 +7074,8 @@ class VocoAdapter(Adapter):
                 print("doing run_response_callbacks next")
             
             await self.async_client.run_response_callbacks([sync_result])
-            print("sync_loop: run_response_callbacks done")
+            if self.DEBUG:
+                print("sync_loop: run_response_callbacks done")
             
         except Exception as ex:
             print("sync_loop: sync error: " + str(ex))
@@ -6644,17 +7088,20 @@ class VocoAdapter(Adapter):
             state = False
             
         try:
-            print("__should_upload_keys?: " + str(self.async_client.should_upload_keys))
+            if self.DEBUG:
+                print("__should_upload_keys?: " + str(self.async_client.should_upload_keys))
             if self.async_client.should_upload_keys:
                 if self.DEBUG:
                     print("attemting to upload keys")
                 await self.async_client.keys_upload()
             
-            print("__should_claim_keys?: " + str(self.async_client.should_claim_keys))
+            if self.DEBUG:
+                print("__should_claim_keys?: " + str(self.async_client.should_claim_keys))
             if self.async_client.should_claim_keys:
                 await self.async_client.keys_claim(self.async_client.get_users_for_key_claiming())
             
-            print("__should_query_keys?: " + str(self.async_client.should_query_keys))
+            if self.DEBUG:
+                print("__should_query_keys?: " + str(self.async_client.should_query_keys))
             if self.async_client.should_query_keys:
                 await self.async_client.keys_query()
             

@@ -106,10 +106,12 @@ class VocoAPIHandler(APIHandler):
                             
                             if action == 'matrix_init':
                                 
+                                matrix_candle_username = self.adapter.persistent_data['matrix_candle_username']
                                 
                                 matrix_server = "..."
                                 if 'matrix_server' in self.adapter.persistent_data:
                                     matrix_server = str(self.adapter.persistent_data['matrix_server'])
+                                    matrix_candle_username = '@' + str(self.adapter.persistent_data['matrix_candle_username']) + ':' + str(self.adapter.persistent_data['matrix_server']) 
                                 
                                 matrix_username = "..."
                                 if 'matrix_username' in self.adapter.persistent_data:
@@ -120,17 +122,17 @@ class VocoAPIHandler(APIHandler):
                                     has_matrix_token = True
                                 
                                 
+                                
                                 return APIResponse(
                                     status=200,
                                     content_type='application/json',
                                     content=json.dumps({'state': True,
                                             'matrix_server': matrix_server,
                                             'matrix_username': matrix_username,
+                                            'matrix_candle_username': matrix_candle_username,
                                             'has_matrix_token': has_matrix_token}),
                                 )
                                 
-                                
-                            
                             elif action == 'create_matrix_account':
                                 state = False
                                 if self.DEBUG:
@@ -143,15 +145,16 @@ class VocoAPIHandler(APIHandler):
                                         invite_username = ""
                                         
                                         self.adapter.persistent_data['matrix_server'] = request.body['matrix_server']
+                                        
                                         if 'matrix_username' in request.body and 'matrix_password' in request.body:
                                             create_account_for_user = True
                                             self.adapter.persistent_data['matrix_username'] = request.body['matrix_username'] # this is only the first, local part of the ID (between @ and :)
-                                            self.adapter.save_persistent_data()
                                         
                                         elif 'invite_username' in request.body:
                                             if request.body['invite_username'].startswith("@") and ":" in request.body['invite_username']:
                                                 self.adapter.persistent_data['matrix_invite_username'] = request.body['invite_username'] # this is the full username on a (likely different) server. E.g. @user:example.org
-                                                self.adapter.save_persistent_data()
+                                        
+                                        self.adapter.save_persistent_data()
                                             
                                         if self.DEBUG:
                                             print("api handler: calling create_matrix_account")
@@ -172,7 +175,7 @@ class VocoAPIHandler(APIHandler):
                                 return APIResponse(
                                   status=200,
                                   content_type='application/json',
-                                  content=json.dumps({'state' : state, 'message' : '' }),
+                                  content=json.dumps({'state' : state, 'message' : '','matrix_candle_username':self.adapter.persistent_data['matrix_candle_username'] }),
                                 )
                                 
                                 
@@ -182,16 +185,28 @@ class VocoAPIHandler(APIHandler):
                                     print('ajax handling provide_matrix_account')
                                 
                                 try:
-                                    if 'matrix_password' in request.body and 'matrix_username' in request.body and 'matrix_server' in request.body:
+                                    if 'invite_username' in request.body and 'matrix_server' in request.body:
+                                        
+                                        print("request.body['matrix_server']: " + str(request.body['matrix_server']))
                                         
                                         self.adapter.persistent_data['matrix_server'] = request.body['matrix_server']
-                                        self.adapter.persistent_data['matrix_candle_username'] = request.body['matrix_username']
-                                        self.adapter.persistent_data['matrix_candle_password'] = request.body['matrix_password']
+                                        self.adapter.persistent_data['matrix_invite_username'] = request.body['invite_username']
+                                        
+                                        print("self.adapter.persistent_data['matrix_server']: " + str(self.adapter.persistent_data['matrix_server']))
+                                        
                                         self.adapter.save_persistent_data()
+                                        time.sleep(.1)
+                                        
                                         if self.DEBUG:
                                             print("api handler: calling create_matrix_account")
-                                        state = self.adapter.create_matrix_account(request.body['matrix_password'], False) # False, as in don't also create an account for the user. The password here isn't needed, since the value from persistent data will be used.
-                                        print("state from create_matrix_account: " + str(state))
+                                        state = self.adapter.create_matrix_account("no_account_needed", False) # False, as in don't also create an account for the user. The password here isn't needed, since the value from persistent data will be used.
+                                        if self.DEBUG:
+                                            print("api_handler: returned state from provide_matrix_account: " + str(state))
+                                            
+                                        if state:
+                                            # oddly, the matrix really had never been started before, the create_account call would have now run endless, resulting in a timeout of this api request.
+                                            # So if we end up here, the main loop must already have been running when the create_account api call happened. In this case it turns into a normal invite.
+                                            self.adapter.matrix_invite_queue.put( request.body['invite_username'] )
                                         #state = True
                                     else:
                                         if self.DEBUG:
@@ -206,6 +221,7 @@ class VocoAPIHandler(APIHandler):
                                   content=json.dumps({'state' : state, 'message' : '' }),
                                 )
                                 
+                                
                             elif action == 'invite':
                                 state = False
                                 if self.DEBUG:
@@ -215,10 +231,14 @@ class VocoAPIHandler(APIHandler):
                                     if 'username' in request.body:
                                         username = str(request.body['username'])
                                         if username.startswith('@') and ":" in username:
-                                            if self.DEBUG:
-                                                print("adding invited user into invite queue: " + str(username))
-                                            self.adapter.matrix_invite_queue.put(username)
-                                            state = True
+                                            
+                                            candle_username = '@' + str(self.adapter.persistent_data['matrix_candle_username']) + ':' + str(self.adapter.persistent_data['matrix_server']) 
+                                            
+                                            if username != candle_username:
+                                                if self.DEBUG:
+                                                    print("adding invited user into invite queue: " + str(username))
+                                                self.adapter.matrix_invite_queue.put(username)
+                                                state = True
                                         else:
                                             if self.DEBUG:
                                                 print("not a valid matrix username")
@@ -230,6 +250,52 @@ class VocoAPIHandler(APIHandler):
                                 except Exception as ex:
                                     print("Error handling invite matrix user: " + str(ex))
                         
+                                return APIResponse(
+                                  status=200,
+                                  content_type='application/json',
+                                  content=json.dumps({'state' : state, 'message' : '' }),
+                                )
+                                
+                            elif action == 'kick':
+                                state = False
+                                if self.DEBUG:
+                                    print('ajax handling matrix user kick')
+                                
+                                try:
+                                    if 'username' in request.body:
+                                        username = str(request.body['username'])
+                                        if username.startswith('@') and ":" in username:
+                                            
+                                            candle_username = '@' + str(self.adapter.persistent_data['matrix_candle_username']) + ':' + str(self.adapter.persistent_data['matrix_server']) 
+                                            
+                                            if username != candle_username:
+                                                if self.DEBUG:
+                                                    print("adding user into kick queue: " + str(username))
+                                                self.adapter.matrix_kick_queue.put(username)
+                                                state = True
+                                        else:
+                                            if self.DEBUG:
+                                                print("not a valid matrix username")
+                                        
+                                    else:
+                                        if self.DEBUG:
+                                            print("not all required parameters for kicking a user were provided")
+                            
+                                except Exception as ex:
+                                    print("Error handling kick matrix user: " + str(ex))
+                        
+                                return APIResponse(
+                                  status=200,
+                                  content_type='application/json',
+                                  content=json.dumps({'state' : state, 'message' : '' }),
+                                )
+                                
+                            elif action == 'refresh_matrix_members':
+                                state = True
+                                if self.DEBUG:
+                                    print('ajax handling refresh_matrix_members')
+                                self.adapter.refresh_matrix_members = True
+                                    
                                 return APIResponse(
                                   status=200,
                                   content_type='application/json',
@@ -253,7 +319,8 @@ class VocoAPIHandler(APIHandler):
                                 # reset text response in UI
                                 
                                 self.adapter.last_text_response = ""
-                            
+                                self.adapter.refresh_matrix_members = True
+                                
                                 # Update IP address and hostname
                                 self.adapter.update_network_info()
                             
@@ -385,11 +452,24 @@ class VocoAPIHandler(APIHandler):
                                         print("Error calculating time: " + str(ex))
                                         state = False
                                         
+                                        
+                                has_matrix_token = False
+                                if 'matrix_token' in self.adapter.persistent_data:
+                                    has_matrix_token = True
 
                                 return APIResponse(
                                     status=200,
                                     content_type='application/json',
-                                    content=json.dumps({'state' : state, 'update': '', 'items' : self.adapter.persistent_data['action_times'],'current_time':self.adapter.current_utc_time,'text_response':self.adapter.last_text_response, 'initial_injection_completed':self.adapter.initial_injection_completed,'missing_microphone':self.adapter.missing_microphone, 'matrix_started':self.adapter.matrix_started}),
+                                    content=json.dumps({'state' : state, 'update': '', 
+                                                'items' : self.adapter.persistent_data['action_times'],
+                                                'current_time':self.adapter.current_utc_time,
+                                                'text_response':self.adapter.last_text_response, 
+                                                'initial_injection_completed':self.adapter.initial_injection_completed,
+                                                'missing_microphone':self.adapter.missing_microphone, 
+                                                'matrix_started':self.adapter.matrix_started,
+                                                'matrix_room_members':self.adapter.matrix_room_members,
+                                                'has_matrix_token': has_matrix_token,
+                                                'user_account_created':self.adapter.user_account_created}),
                                 )
                             except Exception as ex:
                                 print("Error getting init data: " + str(ex))
