@@ -252,18 +252,37 @@ def clean_up_string_for_speaking(sentence):
     sentence = sentence.strip()
     return sentence
 
+
 def clean_up_string_for_chatting(sentence):
     # capitalize
-    numLetters = 0
-    capitalized_parts = []
-    for s in sentence.split('. '):
-        tmp = re.sub('^(\s*\w+)', lambda x:x.group(1).title(), s)
-        capitalized_parts.append(tmp)
-        if s.lstrip()[0] != tmp.lstrip()[0]:
-            numLetters += 1          
-    sentence = '. '.join(capitalized_parts)
-    sentence = sentence.replace('  ', ' ').replace(' i ', ' I ')
-    sentence = sentence.strip()
+    try:
+        sentence = sentence.strip()
+        sentence = sentence.replace('  ', ' ').replace(' i ', ' I ').replace(' .', '.')
+        
+        if len(sentence) > 5:
+            numLetters = 0
+            capitalized_parts = []
+            for s in sentence.split('. '):
+                print("s: " + str(s))
+                tmp = re.sub('^(\s*\w+)', lambda x:x.group(1).title(), s)
+                print("tmp: " + str(tmp))
+                capitalized_parts.append(tmp)
+                try:
+                    if s.lstrip()[0] != tmp.lstrip()[0]:
+                        numLetters += 1  
+                except Exception as ex:
+                    print("error in lstrip bonanza: " + str(ex)) 
+                           
+            sentence = '. '.join(capitalized_parts)
+            
+            
+            # If there is only one sentence, remove the trailing period
+            period_counter = sentence.count('.')
+            if period_counter == 1 and sentence[-1] == '.':
+                sentence = sentence[:-1]
+            
+    except Exception as ex:
+        print("Error cleaning up string for chatting: " + str(ex))
     return sentence
     
 
@@ -714,18 +733,3 @@ def randomPassword(length=12):
 
     
     
-def fix_capitalization(mystr):
-    numLetters = 0
-    newstr = []
-    for s in mystr.split('. '):
-        tmp = re.sub('^(\s*\w+)', lambda x:x.group(1).title(), s)
-        newstr.append(tmp)
-        # num of letters
-        if s.lstrip()[0] != tmp.lstrip()[0]:
-            numLetters += 1          
-    return '. '.join(newstr).replace(' i ', ' I ') #, numLetters #.replace(' i ', ' I ')
-
-
-
-
-

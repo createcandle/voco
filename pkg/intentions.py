@@ -61,10 +61,10 @@ def intent_get_time(self, slots, intent_message):
         
         return voice_message
         
-        voice_message = clean_up_string_for_speaking(voice_message)
-        if self.DEBUG:
-            print("(...) " + str(voice_message))
-        self.speak(voice_message,intent=intent_message)
+        #voice_message = clean_up_string_for_speaking(voice_message)
+        #if self.DEBUG:
+        #    print("(...) " + str(voice_message))
+        #self.speak(voice_message,intent=intent_message)
         
     except Exception as ex:
         print("Error dealing with get_time intent: " + str(ex))
@@ -247,10 +247,10 @@ def intent_set_timer(self, slots, intent_message):
         return voice_message
             
         # Speak voice message
-        voice_message = clean_up_string_for_speaking(voice_message)
-        if self.DEBUG:
-            print("(...) " + str(voice_message))
-        self.speak(voice_message,intent=intent_message)
+        #voice_message = clean_up_string_for_speaking(voice_message)
+        #if self.DEBUG:
+        #    print("(...) " + str(voice_message))
+        #self.speak(voice_message,intent=intent_message)
         
     except Exception as ex:
         print("Error while dealing with timer intent: " + str(ex))
@@ -301,11 +301,10 @@ def intent_get_timer_count(self, slots, intent_message):
             
         return voice_message
             
-        voice_message = clean_up_string_for_speaking(voice_message)
-        if self.DEBUG:
-            print("(...) " + str(voice_message))
-        
-        self.speak(voice_message,intent=intent_message)
+        #voice_message = clean_up_string_for_speaking(voice_message)
+        #if self.DEBUG:
+        #    print("(...) " + str(voice_message))
+        #self.speak(voice_message,intent=intent_message)
         
     except Exception as ex:
         print("Error while dealing with get_timer_count intent: " + str(ex))
@@ -416,10 +415,10 @@ def intent_list_timers(self, slots, intent_message):
                     
         return voice_message
                     
-        voice_message = clean_up_string_for_speaking(voice_message)
+        #voice_message = clean_up_string_for_speaking(voice_message)
         #if self.DEBUG:
         #    print("(...) " + str(voice_message))
-        self.speak(voice_message,intent=intent_message)
+        #self.speak(voice_message,intent=intent_message)
         
     except Exception as ex:
         print("Error while dealing with list_timers intent: " + str(ex))
@@ -565,10 +564,10 @@ def intent_stop_timer(self, slots, intent_message):
                   
         return voice_message
                     
-        voice_message = clean_up_string_for_speaking(voice_message)
-        if self.DEBUG:
-            print("(...) " + str(voice_message))
-        self.speak(voice_message,intent=intent_message)
+        #voice_message = clean_up_string_for_speaking(voice_message)
+        #if self.DEBUG:
+        #    print("(...) " + str(voice_message))
+        #self.speak(voice_message,intent=intent_message)
         
     except Exception as ex:
         print("Error in stop_timer: " + str(ex))
@@ -689,10 +688,10 @@ def intent_get_boolean(self, slots, intent_message, found_properties):
             
     return voice_message
             
-    voice_message = clean_up_string_for_speaking(voice_message)
-    if self.DEBUG:
-        print("(...) " + str(voice_message))
-    self.speak(voice_message,intent=intent_message)
+    #voice_message = clean_up_string_for_speaking(voice_message)
+    #if self.DEBUG:
+    #    print("(...) " + str(voice_message))
+    #self.speak(voice_message,intent=intent_message)
 
 
 
@@ -833,10 +832,10 @@ def intent_get_value(self, slots, intent_message,found_properties):
             
         return voice_message
             
-        voice_message = clean_up_string_for_speaking(voice_message)
-        if self.DEBUG:
-            print("(...) " + str(voice_message))
-        self.speak(voice_message,intent=intent_message)
+        #voice_message = clean_up_string_for_speaking(voice_message)
+        #if self.DEBUG:
+        #    print("(...) " + str(voice_message))
+        #self.speak(voice_message,intent=intent_message)
     
     except Exception as ex:
         print("Error in intent_get_value: " + str(ex))
@@ -1168,11 +1167,11 @@ def intent_set_state(self, slots, intent_message, found_properties, delayed_acti
             
         return voice_message
             
-        voice_message = clean_up_string_for_speaking(voice_message)
-        if self.DEBUG:
-            print("(...) " + str(voice_message))
-            print(str(intent_message))
-        self.speak(voice_message,intent=intent_message)
+        #voice_message = clean_up_string_for_speaking(voice_message)
+        #if self.DEBUG:
+        #    print("(...) " + str(voice_message))
+        #    print(str(intent_message))
+        #self.speak(voice_message,intent=intent_message)
         
     except Exception as ex:
         print("Error in intent_set_state: " + str(ex))
@@ -1497,10 +1496,10 @@ def intent_set_value(self, slots, intent_message, found_properties, original_val
             
         return voice_message
             
-        voice_message = clean_up_string_for_speaking(voice_message)
-        if self.DEBUG:
-            print("(...) " + str(voice_message))
-        self.speak(voice_message,intent=intent_message)
+        #voice_message = clean_up_string_for_speaking(voice_message)
+        #if self.DEBUG:
+        #    print("(...) " + str(voice_message))
+        #self.speak(voice_message,intent=intent_message)
         
     except Exception as ex:
         print("Error in intent_set_value: " + str(ex))

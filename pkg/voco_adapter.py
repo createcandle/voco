@@ -125,7 +125,7 @@ class VocoAdapter(Adapter):
         self.matrix_sync_interval = 5 # sync Matrix every 5 seconds
         self.last_matrix_sync_time = 0
         self.busy_syncing_matrix = False
-        self.currently_chatting = False
+        self.currently_chatting = None
         self.matrix_outbox = []
         self.matrix_room_members = []
         self.refresh_matrix_members = True
@@ -353,8 +353,8 @@ class VocoAdapter(Adapter):
         self.mqtt_connected = False
         self.voco_connected = True
         self.mqtt_others = {}
-        self.previous_hostname = "gateway"
-        self.hostname = "gateway"
+        self.previous_hostname = "candle"
+        self.hostname = "candle"
         self.ip_address = None
         self.should_restart_mqtt = True
         self.mqtt_busy_connecting = False
@@ -820,6 +820,10 @@ class VocoAdapter(Adapter):
             self.persistent_data['matrix_device_id'] = generate_matrix_device_id() # 10 uppercase characters
         
         self.candle_user_id = ""
+        
+        self.matrix_display_name = "Candle"
+        if self.hostname.lower() != "candle":
+            self.matrix_display_name += " " + str(self.hostname)
             
         if self.DEBUG:
             print("self.persistent_data['matrix_candle_username']: " + str(self.persistent_data['matrix_candle_username']))
@@ -1393,6 +1397,8 @@ class VocoAdapter(Adapter):
                 
             if not 'origin' in intent:
                 intent['origin'] = 'voice'
+            else:
+                print("speak: origin: " + str(intent['origin']))
                 
             # text input from UI
             if self.DEBUG:
@@ -1904,7 +1910,7 @@ class VocoAdapter(Adapter):
                                     self.possible_injection_failure = True
                                 
                             if time.time() - self.addon_start_time > 240 and self.initial_injection_completed == False:
-                                print("attempting reboot of addon")
+                                print("Error. Voco failed to load properly. Attempting reboot of addon")
                                 self.close_proxy()
                                 
                             if self.still_busy_booting == False:
@@ -2077,8 +2083,8 @@ class VocoAdapter(Adapter):
                                 
                             # Some action items should be spoken too, no matter the origin (e.g. if the origin is Matrix)
                             if 'origin' in intent_message:
-                                if self.DEBUG:
-                                    print("origin check. item['type']: " + str(item['type']))
+                                #if self.DEBUG:
+                                #    print("origin check. item['type']: " + str(item['type']))
                                 if item['type'] == 'timer' or item['type'] == 'wake' or item['type'] == 'alarm' or item['type'] == 'reminder':
                                     if intent_message['origin'] == 'text' or intent_message['origin'] == 'matrix':
                                         intent_message['origin'] = 'both'
@@ -2094,6 +2100,9 @@ class VocoAdapter(Adapter):
                             
                             # Doing timers in the chat would create wayyy to many messages
                             if item['type'] == 'countdown':
+                                #if self.DEBUG:
+                                #    print("Fixing countdown to voice only")
+                                intent_message['origin'] = 'voice'
                                 item['origin'] = 'voice'
                                 
                         except Exception as ex:
@@ -3341,21 +3350,35 @@ class VocoAdapter(Adapter):
                     elif self.persistent_data['feedback_sounds'] == True and self.intent_received == False:
                         if self.DEBUG:
                             print("No intent received")
-                    
-                        if 'siteId' in payload:
-                            if self.DEBUG:
-                                print("siteId was in /toggleOn payload: " + str(payload['siteId']))
-                            if payload['siteId'] == self.persistent_data['site_id'] or payload['siteId'] == 'default' or payload['siteId'] == 'everywhere':
-                                if self.DEBUG:
-                                    print("I should play an end-of-input sound")
                             
-                                if self.persistent_data['feedback_sounds'] == True:
-                                    self.play_sound( str(self.end_of_input_sound) )
-                            else:
+                        if 'siteId' in payload:
+                            returned_text = False
+                            if payload['siteId'].startswith('text-'):
+                                payload['siteId'] = payload['siteId'].replace('text-','')
+                                returned_text = True
+                                
+                            elif payload['siteId'].startswith('matrix-'):
+                                payload['siteId'] = payload['siteId'].replace('matrix-','')
+                                returned_text = True
+                                self.speak("Sorry, what? ",intent={'siteId': payload['siteId'],'origin':'matrix' })
+                                
+                                
+                            if returned_text == False:
                                 if self.DEBUG:
-                                    print("The satelite should play a toggleOn sound. Sending MQTT message to hermes/voco/" + str(payload['siteId']) + "/play")
-                                self.mqtt_client.publish("hermes/voco/" + str(payload['siteId']) + "/play",json.dumps({"sound_file":"end_of_input"}))
-                    
+                                    print("siteId was in /toggleOn payload: " + str(payload['siteId']))
+                                if payload['siteId'] == self.persistent_data['site_id'] or payload['siteId'] == 'default' or payload['siteId'] == 'everywhere':
+                                
+                                
+                                        if self.DEBUG:
+                                            print("I should play an end-of-input sound")
+                                        if self.persistent_data['feedback_sounds'] == True:
+                                            self.play_sound( str(self.end_of_input_sound) )
+                                        
+                                else:
+                                    if self.DEBUG:
+                                        print("The satelite should play a toggleOn sound. Sending MQTT message to hermes/voco/" + str(payload['siteId']) + "/play")
+                                    self.mqtt_client.publish("hermes/voco/" + str(payload['siteId']) + "/play",json.dumps({"sound_file":"end_of_input"}))
+                                
                         #else:
                         #    print("ToggleOn detected, but no siteId in payload. So playing the sound here.")
                         #    if self.persistent_data['feedback_sounds'] == True:
@@ -3748,11 +3771,10 @@ class VocoAdapter(Adapter):
         voice_message = ""
         
         
-        print("\n\n\n     ---- INTENT ----")
-        print(str(intent_message))
-        print("\n\n\n")
-        
-        print("intent_message['origin']: " + str(intent_message['origin']))
+        #print("\n\n\n     ---- INTENT ----")
+        #print(str(intent_message))
+        #print("\n\n\n")
+        #print("intent_message['origin']: " + str(intent_message['origin']))
         
         try:
             if try_alternative == False:
@@ -3777,7 +3799,8 @@ class VocoAdapter(Adapter):
                 else:
                     final_test = True # first test is also the last test if there are no alternatives available
         except Exception as ex:
-            print("error setting up alternatives loop: " + str(ex))
+            if self.DEBUG:
+                print("error setting up alternatives loop: " + str(ex))
         
         try:
             all_possible_intents = [str(intent_message['intent']['intentName']).replace('createcandle:','')]
@@ -3926,7 +3949,8 @@ class VocoAdapter(Adapter):
                     print("\nUSING INCOMING SLOTS: " + str(slots))
             
             except Exception as ex:
-                print("!\nERROR handling intent in master callback: " + str(ex))
+                if self.DEBUG:
+                    print("!\nERROR handling intent in master callback: " + str(ex))
                 voice_message = "Sorry, there was an error." 
                 #self.speak("Sorry, there was an error.",intent=intent_message)
                 break
@@ -3979,8 +4003,10 @@ class VocoAdapter(Adapter):
                                 self.speak("I did not understand what you wanted to change.",intent=intent_message)
                             if self.DEBUG:
                                 print("did not understand the change based on these slots: " + str(slots))
-                            break
+                            return
                         else:
+                            if first_test:
+                                first_voice_message = "I did not understand what you wanted to change."
                             continue
                             #self.master_intent_callback(intent_message, True) # let's try an alternative intent, if there is one.
                    
@@ -3993,15 +4019,17 @@ class VocoAdapter(Adapter):
                         if final_test:
                             if not self.persistent_data['is_satellite']:
                                 self.speak("I was unable to perform the change you wanted.",intent=intent_message)
-                            break
+                            return
                         else:
+                            if first_test:
+                                first_voice_message = "I was unable to perform the change you wanted."
                             continue
                             #self.master_intent_callback(intent_message, True) # let's try an alternative intent, if there is one.
-                        if self.DEBUG:
-                            print('n')
+
                     
             except Exception as ex:
-                print("Error massaging data: " + str(ex))
+                if self.DEBUG:
+                    print("Error massaging data: " + str(ex))
 
 
             # Alternative routing. Some heuristics, since Snips sometimes chooses the wrong intent.
@@ -4045,15 +4073,21 @@ class VocoAdapter(Adapter):
                         if slots['boolean'] != None:
                             if self.DEBUG:
                                 print("Error, intent was set_value but no values were present. However, a boolean value was present. trying alternative if possible.")
-                            if final_test:
-                                incoming_intent == 'set_state' # Switch to another intent type which has a better shot.
-                            else:
-                                continue #self.master_intent_callback(intent_message, True)
+                            incoming_intent == 'set_state' # Switch to another intent type which has a better shot.
+                            
+                            #if final_test:
+                                
+                            #else:
+                            #    if first_test:
+                            #        first_voice_message = "I did not understand what value you wanted to change"
+                            #    continue #self.master_intent_callback(intent_message, True)
                         else:
                             if self.DEBUG:
                                 print("request did not contain a valid value to set to")
                                 
                             if final_test == False:
+                                if first_test:
+                                    first_voice_message = "Sorry, I did not understand what value you wanted to change. "
                                 continue
                                 #self.master_intent_callback(intent_message, True)
                             
@@ -4075,17 +4109,20 @@ class VocoAdapter(Adapter):
                 if incoming_intent == 'list_timers' and slots['timer_type'] == None:
                     if self.DEBUG:
                         print("list_timers intent, but no timer type in slots, so cannot be correct intent")
-                    voice_message = "I did not understand the type of timer."
                     if final_test == False:
+                        if first_test:
+                            first_voice_message = "I did not understand the type of timer. "
                         continue
                     
                 if incoming_intent == 'set_timer' and (slots['duration'] == None or slots['end_time'] == None) and slots['time_string'] == None:
                     if self.DEBUG:
                         print("The spoken sentence did not contain a time")
-                    self.play_sound(self.error_sound,intent=intent_message)
-                    time.sleep(.2)
-                    voice_message = "You didn't provide a time."
+                    #self.play_sound(self.error_sound,intent=intent_message)
+                    #time.sleep(.2)
+                    voice_message = "I did not understand the time. "
                     if final_test == False:
+                        if first_test:
+                            first_voice_message = "I did not understand the time. "
                         continue
             
 
@@ -4191,6 +4228,7 @@ class VocoAdapter(Adapter):
                     elif len(found_properties) == 0:
                         if self.DEBUG:
                             print("found_properties length was 0")
+                        voice_message = "Sorry, I couldn't find a match. "
                         if final_test:
                             if not self.persistent_data['is_satellite']:
                                 if self.DEBUG:
@@ -4198,8 +4236,8 @@ class VocoAdapter(Adapter):
                                 voice_message = "Sorry, I couldn't find a match. "
                                 #self.speak("Sorry, I couldn't find a match. ",intent=intent_message)
                             break #return
-                        else:
-                            continue
+                        #else:
+                        #    continue
                             #self.master_intent_callback(intent_message, True) # let's try an alternative intent, if there is one.
                     
                     elif self.token != "":
@@ -4212,7 +4250,8 @@ class VocoAdapter(Adapter):
                         elif incoming_intent == 'get_boolean':
                             voice_message = intent_get_boolean(self, slots, intent_message,found_properties)
 
-                        print("thing manipulation intent handler returned voice message: " + str(voice_message))
+                        if self.DEBUG:
+                            print("thing manipulation intent handler returned voice message: " + str(voice_message))
 
                 #elif self.token != "":
                 #    if self.DEBUG:
@@ -4230,8 +4269,16 @@ class VocoAdapter(Adapter):
             
             if self.DEBUG:
                 print("loop done: #" + str(x))
-              
+                print("- voice_message: " + str(voice_message))
+                print("- first_voice_message: " + str(first_voice_message))
                 
+            
+            if voice_message == "":
+                if final_test:
+                    continue
+                else:
+                    voice_message = "Sorry, I am confused"
+                    
             if first_test:
                 first_voice_message = voice_message
                 
@@ -4239,14 +4286,10 @@ class VocoAdapter(Adapter):
                 if self.DEBUG:
                     print("voice message from loop started with OK, so we are definitely done.")
                 break
+                
             elif voice_message.startswith('Sorry'):
                 if final_test == False:
                     continue
-            elif voice_message == "":
-                if final_test == False:
-                    continue
-                else:
-                    voice_message = "Sorry, I am confused"
                 
             else:
                 if self.DEBUG:
@@ -4259,18 +4302,30 @@ class VocoAdapter(Adapter):
             print("END OF FOR LOOP voice_message: " + str(voice_message))
 
 
-        if final_test == False:
-            # The for-loop was existed with a break. This can be good or bad.
-            pass
-            
-        elif first_test == False:
-            # we did more than one intent test
-            if voice_message.startswith('Sorry'):
-                # restore the error from the first loop, which is probably more useful
+        if voice_message == "":
+            if first_voice_message != "":
                 voice_message = first_voice_message
-
-
-        voice_message = clean_up_string_for_speaking(voice_message)
+        
+        if voice_message.startswith('Sorry'):
+            # restore the error from the first loop, which is probably more useful
+            if first_voice_message != "":
+                if self.DEBUG:
+                    print("restoring first voice response")
+                voice_message = first_voice_message
+                
+        #if final_test:
+            
+            
+        if final_test == False:
+            if self.DEBUG:
+                print("end of loop, but final_test was false. Loop must have ended early.")
+            # The for-loop was existed with a break. This can be good or bad.
+            #pass
+            
+        if first_test == True:
+            if self.DEBUG:
+                print("hole in one")
+            
         if self.DEBUG:
             print("\n(...) " + str(voice_message))
         self.speak(voice_message,intent=intent_message)
@@ -5936,9 +5991,10 @@ class VocoAdapter(Adapter):
                 
                 server = "https://" + str(self.persistent_data['matrix_server'])
                 self.candle_user_id = "@" + self.persistent_data['matrix_candle_username'] + ":" + self.persistent_data['matrix_server']
-                print("self.candle_user_id: " + str(self.candle_user_id))
+                
         
                 if self.DEBUG:
+                    print("self.candle_user_id: " + str(self.candle_user_id))
                     print("Async_client did not exist yet. Will log in to Matrix server with token this time")
         
                 self.async_client = AsyncClient(server, self.candle_user_id, config=self.matrix_config, store_path=self.matrix_data_store_path)
@@ -5970,7 +6026,8 @@ class VocoAdapter(Adapter):
                     self.persistent_data['matrix_device_id'] = str(login_response.device_id)
                     self.save_persistent_data()
                 else:
-                    print("x initial manual login failed")
+                    if self.DEBUG:
+                        print("x initial manual login failed")
                 
                 if not self.async_client.logged_in:
                     if 'matrix_token' in self.persistent_data:
@@ -6024,12 +6081,14 @@ class VocoAdapter(Adapter):
                             
                             
                         else:
-                            print("ERROR! matrix_device_id does not also have a local file. Deleting device_id from persistent data")
+                            if self.DEBUG:
+                                print("ERROR! matrix_device_id does not also have a local file. Deleting device_id from persistent data")
                             del self.persistent_data['matrix_device_id']
                             self.save_persistent_data()
                     
                     else:
-                        print("ERROR: device_id not in persistent data!")
+                        if self.DEBUG:
+                            print("ERROR: device_id not in persistent data!")
                     #if 'matrix_device_id' in self.persistent_data:
                     #    print("self.persistent_data['matrix_device_id']: " + str(self.persistent_data['matrix_device_id'])
                     
@@ -6044,7 +6103,8 @@ class VocoAdapter(Adapter):
                     #        print("Warning, no matrix sync token in persistent data")
     
                 else:
-                    print("Error doing load_store. Adding sync token: still not logged in!")
+                    if self.DEBUG:
+                        print("Error doing load_store. Adding sync token: still not logged in!")
                 
                 
                     
@@ -6083,7 +6143,9 @@ class VocoAdapter(Adapter):
                             # it'll be easier, since you may end up creating lots of sessions for
                             # @alice as you play with the script
                             #self.async_client.trust_devices(ALICE_USER_ID)
-            
+                           
+                            #print("slept for 15 extra seconds")
+                            
                             if 'matrix_room_id' not in self.persistent_data:
                                 if self.DEBUG:
                                     print("starting matrix_create_room ")
@@ -6096,17 +6158,43 @@ class VocoAdapter(Adapter):
                             else:
                                 if self.DEBUG:
                                     print("error, room was not created, cannot start load_room")
-            
+                            
+                            
+                            self.matrix_started = True
+                            
+                            #await asyncio.sleep(5)
+                            sync_response = await self.async_client.sync(timeout=30000,full_state=True)
+                            #await asyncio.sleep(5)
+                            #sync_response = await self.async_client.sync(timeout=30000,full_state=False)
+                            
+                            #if self.DEBUG:
+                            #    print("slept for 15 extra seconds")
+                            
+                            
                             
                             
                             #
                             #  KEEP THE FIRE GOING
                             #
+                            
+                            
+                            
+                            await self.async_client.set_displayname( self.matrix_display_name )
+                            # self.persistent_data['matrix_candle_username'], 
+                            #bla = False
         
-                            self.matrix_started = True
-        
+                            #time.sleep(3)
+                            await asyncio.sleep(3)
+                            
+                            self.currently_chatting = self.persistent_data['chatting']
+                            
                             sync_counter = 0
-                            while self.running:
+                            #phase1_counter = 0
+                            #phase1_active = True
+                            while self.running: # and phase1_active:
+                                
+                                should_sync = False
+                                
                                 #print("* in while loop of sync_matrix_forever")
                                 #print("self.currently_chatting: " + str(self.currently_chatting))
                                 #print("self.persistent_data['chatting']: " + str(self.persistent_data['chatting']))
@@ -6116,7 +6204,8 @@ class VocoAdapter(Adapter):
                                     if self.DEBUG:
                                         print("Chatting disabled")
                                     send_message_response = await self.send_message_to_matrix_async( 'Voco chat access has been disabled', 'Goodbye', 'High')
-            
+                                    should_sync = True
+                                    
                                 # if the user enabled chat access when chatting was disabled, send a hello message.
                                 elif self.persistent_data['chatting'] == True and self.currently_chatting == False:
                                     if self.DEBUG:
@@ -6134,33 +6223,37 @@ class VocoAdapter(Adapter):
                 
                                     send_message_response = await self.send_message_to_matrix_async( 'Voco chat access has been enabled', 'Hello', 'High')
                                     send_message_response = await self.send_message_to_matrix_async( 'You can now chat with Voco', '', 'Low')
-            
+                                    should_sync = True
             
                                 if self.persistent_data['chatting']:
                 
                                     # if Voco is being unloaded send a quick goodbye message
                                     if self.matrix_started == False:
                                         send_message_response = await self.send_message_to_matrix_async( 'Voco has been turned off', 'Goodbye', 'High')
+                                        should_sync = True
                                         break
             
                                     # send outgoing messages
                                     if self.matrix_messages_queue.empty() == False:
                                         if self.DEBUG:
                                             print("matrix outgoing messages queue was not empty.")
-                                        outgoing_matrix_message = self.matrix_messages_queue.get(False)
-                                        if outgoing_matrix_message != None:
-                                            if self.DEBUG:
-                                                print("* message to send to Matrix network in queue: " + str(outgoing_matrix_message))
-                                            if 'message' in outgoing_matrix_message:
-                                                send_message_response = await self.send_message_to_matrix_async( str(outgoing_matrix_message['message']), str(outgoing_matrix_message['title']), str(outgoing_matrix_message['level']) )
+                                        should_sync = True
+                                        while not self.matrix_messages_queue.empty():
+                                            outgoing_matrix_message = self.matrix_messages_queue.get(False)
+                                            if outgoing_matrix_message != None:
                                                 if self.DEBUG:
-                                                    print("* sent outgoing matrix message? send_message_response: " + str(send_message_response))
-            
+                                                    print("* message to send to Matrix network in queue: " + str(outgoing_matrix_message))
+                                                if 'message' in outgoing_matrix_message:
+                                                    send_message_response = await self.send_message_to_matrix_async( str(outgoing_matrix_message['message']), str(outgoing_matrix_message['title']), str(outgoing_matrix_message['level']) )
+                                                    if self.DEBUG:
+                                                        print("* sent outgoing matrix message? send_message_response: " + str(send_message_response))
+                                            
             
                                 # Invite new users into room
                                 if self.matrix_invite_queue.empty() == False:
                                     if self.DEBUG:
                                         print("User to invite was spotted in invite queue.")
+                                    should_sync = True
                                     invite_username = self.matrix_invite_queue.get(False)
                                     if invite_username != None:
                                         if self.DEBUG:
@@ -6174,6 +6267,7 @@ class VocoAdapter(Adapter):
                                 if self.matrix_kick_queue.empty() == False:
                                     if self.DEBUG:
                                         print("User to kick was spotted in kick queue.")
+                                    should_sync = True
                                     kick_username = self.matrix_kick_queue.get(False)
                                     if kick_username != None:
                                         if self.DEBUG:
@@ -6186,6 +6280,7 @@ class VocoAdapter(Adapter):
                                 # Refresh list of room members
                                 if self.refresh_matrix_members:
                                     self.refresh_matrix_members = False
+                                    should_sync = True
                                     if self.DEBUG:
                                         print("refreshing room members list")
                                     try:
@@ -6207,7 +6302,7 @@ class VocoAdapter(Adapter):
                                 
                                 sync_counter += 1
     
-                                sync_delay = 3 # wait a few seconds between syncs
+                                sync_delay = 3 # wait a bit between syncs
             
             
                                 # Speed up syncing if the user was recently active, decrease it if it has been a while since a message was received. Let's be nice to the server.
@@ -6218,25 +6313,50 @@ class VocoAdapter(Adapter):
                                 #else:
                                 #    sync_delay = 10 # wait 2 seconds between syncs
             
-                                if sync_counter > sync_delay:
+            
+                                if should_sync:
+                                    if self.DEBUG:
+                                        print("Should sync")
+                                    
+                                    #if self.persistent_data['chatting']:
+                                    #    sync_response = await self.sync_loop(False,"online")
+                                    #else:
+                                    #    sync_response = await self.sync_loop(False,"offline")
+                    
+                                    #if self.DEBUG:
+                                    #    print("* sync_response: " + str(sync_response))
+                                    
+            
+                                testje = False
+                                if sync_counter > sync_delay and testje:
                                     sync_counter = 0
+                                    #phase1_counter += 1
+                                    #if self.DEBUG:
+                                    #    print("phase1_counter: " + str(phase1_counter))
+                                    #if phase1_counter == 30:
+                                    #    if self.DEBUG:
+                                    #        print('completed 30 syncs in phase 1')
+                                        #phase1_active = False
+                                    
                                     if self.DEBUG:
                                         print("* starting sync. sync_delay: " + str(sync_delay))
                 
-                                    if self.persistent_data['chatting']:
-                                        sync_response = await self.sync_loop(False,"online")
-                                    else:
-                                        sync_response = await self.sync_loop(False,"offline")
+                                    #if self.persistent_data['chatting']:
+                                    #    sync_response = await self.sync_loop(False,"online")
+                                    #else:
+                                    #    sync_response = await self.sync_loop(False,"offline")
                     
-                                    if self.DEBUG:
-                                        print("* sync_response: " + str(sync_response))
+                                    #if self.DEBUG:
+                                    #    print("* sync_response: " + str(sync_response))
                 
-                
+                                    
                                     try:
+                                        """
                                         get_missing_sessions_result = self.async_client.get_missing_sessions( str(self.persistent_data['matrix_room_id']) )
                                         if self.DEBUG:
                                             print("matrix: while: get_missing_sessions_result: " + str(get_missing_sessions_result))
                             
+                                        
                                         for missing_user, missing_devices_list in get_missing_sessions_result.items():
                                             if self.DEBUG:
                                                 print(") ) ) ) : ", missing_user, missing_devices_list)
@@ -6260,41 +6380,43 @@ class VocoAdapter(Adapter):
                                                     if self.DEBUG:
                                                         print("skipping this missing device, since it's our own device. Odd.")
                                     
-                                
+                                        """
+                                        pass
                                     except Exception as ex:
                                         print("error in get_missing_sessions_result (likely no encryption!): " + str(ex))
                                 
+                                #if self.DEBUG:
+                                #    print("* zzz " + str(should_sync))
+                                #time.sleep(.2)
+                                await asyncio.sleep(0.2)
                                 
                                 
                                 
-                                
-                                if self.DEBUG:
-                                    print("* zzz")
-                                time.sleep(.2)
-            
-                                
-                                
-                                
-                                
-                                
-                                
-                                
-                                
-                                
-                                
-                
                         after_first_sync_task = asyncio.ensure_future(after_first_sync())
                 
+                        #if 'matrix_sync_token' in self.persistent_data:
+                        #    sync_forever_task = asyncio.ensure_future(
+                        #            self.async_client.sync_forever(30000, since=self.persistent_data['matrix_sync_token'],full_state=True)
+                        #        )
+                        #else:
+                        
+                        # sync tokens are theoretically handled by NIO, which stores them on sync (store_sync_tokens=True in config)
                         sync_forever_task = asyncio.ensure_future(
-                                self.async_client.sync_forever(30000, full_state=True)
+                                self.async_client.sync_forever(30000, full_state=True,loop_sleep_time=0)
                             )
+                            
+                        sync_forever_task2 = asyncio.ensure_future(
+                                self.async_client.sync_forever(30000, full_state=False,loop_sleep_time=0)
+                            )
+                        
                             
                         #matrix_messages_loop_forever_task = asyncio.ensure_future(
                         #        self.matrix_messages_loop_forever()
                         #    )
                 
                         if self.DEBUG:
-                            print("STARTING GATHER EXPERIMENT")
+                            print("Matrix: starting asyncio.gather")
+                        
                         await asyncio.gather(
                                 # The order here IS significant! You have to register the task to trust
                                 # devices FIRST since it awaits the first sync
@@ -6303,8 +6425,20 @@ class VocoAdapter(Adapter):
                                 sync_forever_task
                             )
                         if self.DEBUG:
-                            print("BEYOND GATHER EXPERIMENT")
+                            print("Beyond asyncio.gather")
                     
+                        boemel_task = asyncio.ensure_future(boemel())
+                    
+                        if self.DEBUG:
+                            print("\n\n-> BOEMEL\n\n")
+                        while True:
+                            await asyncio.gather(
+                                    # The order here IS significant! You have to register the task to trust
+                                    # devices FIRST since it awaits the first sync
+                                    boemel_task,
+                                    #matrix_messages_loop_forever_task,
+                                    sync_forever_task2
+                                )
                     
                     """
                     if self.DEBUG:
@@ -6462,6 +6596,219 @@ class VocoAdapter(Adapter):
 
 
 
+
+
+    async def boemel(self):
+        if self.DEBUG:
+            print("\n\nin boemel")
+        
+        return
+        
+        sync_counter = 0
+        while self.running:
+            
+            await self.send_component()
+            
+            if self.DEBUG:
+                print("* boeml")
+            #time.sleep(.1)
+            await asyncio.sleep(0.1)
+        
+        
+    async def send_component(self):
+            
+            should_sync = False
+            
+            #print("* in while loop of sync_matrix_forever")
+            #print("self.currently_chatting: " + str(self.currently_chatting))
+            #print("self.persistent_data['chatting']: " + str(self.persistent_data['chatting']))
+            # if the user disables chat access when chatting was enabled, send a goodbye message.
+            if self.persistent_data['chatting'] == False and self.currently_chatting == True:
+                self.currently_chatting = False
+                if self.DEBUG:
+                    print("Chatting disabled")
+                send_message_response = await self.send_message_to_matrix_async( 'Voco chat access has been disabled', 'Goodbye', 'High')
+                should_sync = True
+                
+            # if the user enabled chat access when chatting was disabled, send a hello message.
+            elif self.persistent_data['chatting'] == True and self.currently_chatting == False:
+                if self.DEBUG:
+                    print("Chatting (re-)enabled. Clearning chat messages queue")
+                #await self.sync_loop(False,"online") # purge any messages that were sent in the meantime
+                self.currently_chatting = True
+
+                # Clear all messages that arrived while chatting was disabled
+                while not self.matrix_messages_queue.empty():
+                    try:
+                        self.matrix_messages_queue.get(False)
+                    except Empty:
+                        continue
+                    self.matrix_messages_queue.task_done()
+
+                send_message_response = await self.send_message_to_matrix_async( 'Voco chat access has been enabled', 'Hello', 'High')
+                send_message_response = await self.send_message_to_matrix_async( 'You can now chat with Voco', '', 'Low')
+                should_sync = True
+
+            if self.persistent_data['chatting']:
+
+                # if Voco is being unloaded send a quick goodbye message
+                if self.matrix_started == False:
+                    send_message_response = await self.send_message_to_matrix_async( 'Voco has been turned off', 'Goodbye', 'High')
+                    should_sync = True
+                    #break
+
+                # send outgoing messages
+                if self.matrix_messages_queue.empty() == False:
+                    if self.DEBUG:
+                        print("matrix outgoing messages queue was not empty.")
+                    should_sync = True
+                    while not self.matrix_messages_queue.empty():
+                        if self.DEBUG:
+                            print(">")
+                        outgoing_matrix_message = self.matrix_messages_queue.get(False)
+                        if outgoing_matrix_message != None:
+                            if self.DEBUG:
+                                print("* message to send to Matrix network in queue: " + str(outgoing_matrix_message))
+                            if 'message' in outgoing_matrix_message:
+                                send_message_response = await self.send_message_to_matrix_async( str(outgoing_matrix_message['message']), str(outgoing_matrix_message['title']), str(outgoing_matrix_message['level']) )
+                                if self.DEBUG:
+                                    print("* sent outgoing matrix message? send_message_response: " + str(send_message_response))
+                        
+
+            # Invite new users into room
+            if self.matrix_invite_queue.empty() == False:
+                if self.DEBUG:
+                    print("User to invite was spotted in invite queue.")
+                should_sync = True
+                invite_username = self.matrix_invite_queue.get(False)
+                if invite_username != None:
+                    if self.DEBUG:
+                        print("inviting user: " + str(invite_username))
+                    invite_response = await self.async_client.room_invite(self.persistent_data['matrix_room_id'], invite_username)
+                    if self.DEBUG:
+                        print("invite response: " + str(invite_response))
+                    self.refresh_matrix_members = True
+
+            # Kick users from the room
+            if self.matrix_kick_queue.empty() == False:
+                if self.DEBUG:
+                    print("User to kick was spotted in kick queue.")
+                should_sync = True
+                kick_username = self.matrix_kick_queue.get(False)
+                if kick_username != None:
+                    if self.DEBUG:
+                        print("kicking user: " + str(kick_username))
+                    kick_response = await self.async_client.room_kick(self.persistent_data['matrix_room_id'], kick_username)
+                    if self.DEBUG:
+                        print("kick response: " + str(kick_response))
+                    self.refresh_matrix_members = True
+    
+            # Refresh list of room members
+            if self.refresh_matrix_members:
+                self.refresh_matrix_members = False
+                should_sync = True
+                if self.DEBUG:
+                    print("refreshing room members list")
+                try:
+                    room_joined_members_response = await self.async_client.joined_members( str(self.persistent_data['matrix_room_id']) )
+                    if room_joined_members_response.members:
+                        matrix_room_members = []
+                        for member in room_joined_members_response.members:
+                            if self.DEBUG:
+                                print("+ member.user_id: " + str(member.user_id))
+                            matrix_room_members.append({'user_id':member.user_id, 'display_name':member.display_name})
+
+                        self.matrix_room_members = matrix_room_members
+                except Exception as ex:
+                    print("error updating matrix room members list: " + str(ex))
+            
+            
+            
+            
+            
+            #sync_counter += 1
+
+            sync_delay = 3 # wait a bit between syncs
+
+
+            # Speed up syncing if the user was recently active, decrease it if it has been a while since a message was received. Let's be nice to the server.
+            #if self.last_time_matrix_message_received < (time.time() - 300):
+            #    sync_delay = 50 # wait 10 seconds between syncs
+            #elif self.last_time_matrix_message_received < (time.time() - 60):
+            #    sync_delay = 25 # wait 5 seconds between syncs
+            #else:
+            #    sync_delay = 10 # wait 2 seconds between syncs
+
+
+            if should_sync:
+                if self.DEBUG:
+                    print("Should sync")
+                
+                #if self.persistent_data['chatting']:
+                #    sync_response = await self.sync_loop(False,"online")
+                #else:
+                #    sync_response = await self.sync_loop(False,"offline")
+
+                #if self.DEBUG:
+                #    print("* sync_response: " + str(sync_response))
+                
+
+            
+                
+                
+                if self.DEBUG:
+                    print("* starting sync. sync_delay: " + str(sync_delay))
+
+                if self.persistent_data['chatting']:
+                    sync_response = await self.sync_loop(False,"online")
+                else:
+                    sync_response = await self.sync_loop(False,"offline")
+
+                if self.DEBUG:
+                    print("* sync_response: " + str(sync_response))
+
+                
+                try:
+                    """
+                    get_missing_sessions_result = self.async_client.get_missing_sessions( str(self.persistent_data['matrix_room_id']) )
+                    if self.DEBUG:
+                        print("matrix: while: get_missing_sessions_result: " + str(get_missing_sessions_result))
+        
+                    
+                    for missing_user, missing_devices_list in get_missing_sessions_result.items():
+                        if self.DEBUG:
+                            print(") ) ) ) : ", missing_user, missing_devices_list)
+                        for missing_device_id in missing_devices_list:
+            
+                            if missing_device_id != self.persistent_data['matrix_device_id']:
+                                if self.DEBUG:
+                                    print(" )-> " + str(missing_device_id))
+                                #self.async_client.verify_device(missing_device_id)
+                                
+                                for device_id, olm_device in self.async_client.device_store[missing_user].items():
+                                    if missing_device_id == device_id:
+                                        if self.DEBUG:
+                                            print("BINGO, found missing device id in device_store")
+                                        self.async_client.verify_device(olm_device)
+                                        if self.DEBUG:
+                                            print(f"Trusting {device_id} from user {missing_user}")
+                                
+                                
+                            else:
+                                if self.DEBUG:
+                                    print("skipping this missing device, since it's our own device. Odd.")
+                
+                    """
+                    pass
+                except Exception as ex:
+                    print("error in get_missing_sessions_result (likely no encryption!): " + str(ex))
+            
+            #if self.DEBUG:
+            #    print("* zzz " + str(should_sync))
+            #time.sleep(.2)
+            await asyncio.sleep(.2)
+        
+
     async def matrix_messages_loop_forever(self):
         if self.DEBUG:
             print("in matrix_messages_loop_forever_task. Self.running: " + str(self.running))
@@ -6470,14 +6817,16 @@ class VocoAdapter(Adapter):
         if self.DEBUG:
             print("Zync: SYNC WAIT COMPLETE")
         
-        time.sleep(1)
+        #time.sleep(1)
+        await asyncio.sleep(1)
             
         sync_counter = 0
         while self.running:
             
             if self.matrix_started or True:
                 sync_counter += 1
-                print("sync_counter: " + str(sync_counter))
+                if self.DEBUG:
+                    print("sync_counter: " + str(sync_counter))
                 sync_delay = 3 # wait a few seconds between syncs
     
     
@@ -6533,7 +6882,7 @@ class VocoAdapter(Adapter):
                 
             if self.DEBUG:
                 print("* zync")
-            time.sleep(.2)
+            await asyncio.sleep(0.1)
 
 
     
@@ -6766,10 +7115,9 @@ class VocoAdapter(Adapter):
 
 
 
-
-
     async def matrix_load_room(self):
-        print("in matrix_load_room")
+        if self.DEBUG:
+            print("in matrix_load_room")
         
         # We are logged in and a room exists
         if 'matrix_room_id' in self.persistent_data:
@@ -6801,7 +7149,8 @@ class VocoAdapter(Adapter):
                         room_members_list.append(member.user_id)
                         
                     self.matrix_room_members = matrix_room_members
-                    print("final self.matrix_room_members list: " + str(self.matrix_room_members))
+                    if self.DEBUG:
+                        print("final self.matrix_room_members list: " + str(self.matrix_room_members))
                     
                 
                 #room_members_list
@@ -6834,21 +7183,24 @@ class VocoAdapter(Adapter):
                     print("Error looping over rooms: " + str(ex))
             
             try:
-                print(" +  +  +  + ")
-                print("self.candle_user_id: " + str(self.candle_user_id))
-                print("self.persistent_data['matrix_room_id']: " + str(self.persistent_data['matrix_room_id']))
-                print("\n\nVERIFYING DEVICES\n\n")
-                print(".device_store: " + str(self.async_client.device_store))
+                if self.DEBUG:
+                    print(" +  +  +  + ")
+                    print("self.candle_user_id: " + str(self.candle_user_id))
+                    print("self.persistent_data['matrix_room_id']: " + str(self.persistent_data['matrix_room_id']))
+                    print("\n\nVERIFYING DEVICES\n\n")
+                    print(".device_store: " + str(self.async_client.device_store))
                 for device_olm in self.async_client.device_store:
                     #print("x")
                     #print("device_olm: " + str(device_olm))
                     #print("device_olm.user_id: " + str(device_olm.user_id))
                     if device_olm.user_id == self.candle_user_id and device_olm.device_id == self.persistent_data['matrix_device_id']:
-                        print("skipping verifying own device")
+                        if self.DEBUG:
+                            print("skipping verifying own device")
                         #print("\n M M M M M VERIFYING (temporary disabled)")
                     else:
                         self.async_client.verify_device(device_olm)
-                        print(f"^ Trusting {device_olm.device_id} from user {device_olm.user_id}")
+                        if self.DEBUG:
+                            print(f"^ Trusting {device_olm.device_id} from user {device_olm.user_id}")
                     #print("device owner: " + str(self.async_client.device_store[device_owner]))
             
                     #if device_owner == self.candle_user_id:
@@ -6873,17 +7225,19 @@ class VocoAdapter(Adapter):
             
             
             except Exception as ex:
-                print("Error in verifying devices: " + str(ex))
+                if self.DEBUG:
+                    print("Error in verifying devices: " + str(ex))
         
         
             try:
             
             
                 # Get room state
-                room_get_state_response = await self.async_client.room_get_state( str(self.persistent_data['matrix_room_id']) )
-                if self.DEBUG:
-                    print("room_get_state_response: " + str(room_get_state_response))
-        
+                #room_get_state_response = await self.async_client.room_get_state( str(self.persistent_data['matrix_room_id']) )
+                #if self.DEBUG:
+                #    print("room_get_state_response: " + str(room_get_state_response))
+                pass
+                
                 # INVITE (now already handled when room is created)
                 """
                 invite_user_id = "@" + self.persistent_data['matrix_username'] + ":" + self.persistent_data['matrix_server']
@@ -6931,7 +7285,8 @@ class VocoAdapter(Adapter):
             if self.async_client == None:
                 
                 await self.start_matrix_client_async()
-                print("- back in matrix_main")
+                if self.DEBUG:
+                    print("- back in matrix_main")
                 
            
             else:
@@ -6964,7 +7319,8 @@ class VocoAdapter(Adapter):
                     #    print("matrix: quick sync_result: " + str(sync_result))
                     #await self.async_client.run_response_callbacks(sync_result)
                 except Exception as ex:
-                    print("Error doing initial matrix sync: " + str(ex))
+                    if self.DEBUG:
+                        print("Error doing initial matrix sync: " + str(ex))
             
             
                 try:
@@ -7065,11 +7421,6 @@ class VocoAdapter(Adapter):
                 if self.DEBUG:
                     print("Starting main Matrix while loop")
             
-            
-            
-            
-            
-            
                 
                 return True
 
@@ -7111,9 +7462,20 @@ class VocoAdapter(Adapter):
                     self.speak(event.body[6:],intent={'siteId':self.persistent_data['site_id']})
                 else:
                     #if self.last_text_command != str(event.body):
-                    if room.user_name(event.sender) != self.persistent_data['matrix_candle_username']:
+                    if self.DEBUG:
+                        #print("event dir: " + str(dir(event)))
+                        #print("room.user_name: " + str(room.user_name))
+                        #print("room.user_name dir: " + str(dir(room.user_name)))
+                        print("room.user_name(event.sender): " + str(room.user_name(event.sender)))
+                        #print("=/=")
+                        #print("self.persistent_data['matrix_candle_username']: " + str(self.persistent_data['matrix_candle_username']))
+                        
+                    if room.user_name(event.sender) == self.persistent_data['matrix_candle_username'] or room.user_name(event.sender) == self.matrix_display_name:
+                        print("new message is room was sent by Candle, so will be ignored")
+                    else:
                         if self.DEBUG:
                             print("message was a normal matrix request via the chat app. Starting parsing.")
+                            print("new message is room was sent by Candle, so will be ignored")
                         
                         if event.body.lower() == 'hello':
                              self.matrix_messages_queue.put({'title':'','message':'Hello','level':'Normal'})
@@ -7122,23 +7484,42 @@ class VocoAdapter(Adapter):
                         else:
                             self.last_text_command = str(event.body)
                             self.parse_text('matrix') # return channel is matrix
-                    else:
-                        if self.DEBUG:
-                            print("new message is room was sent by Candle, so will be ignored")
+                    #else:
+                    #    if self.DEBUG:
+                    #        print("new message is room was sent by Candle, so will be ignored")
             else:
                 if self.DEBUG:
                     print("matrix_message_callback: ignoring incoming message")
         else:
             print("message callback error: missing room or event")
 
+
+
+
     # Batch tokens tell the server up until what date/time/state the messages have already been downloaded
     async def matrix_sync_callback(self,response):
         if self.DEBUG:
             print(f"in matrix_sync_callback. Latest batch token: {response.next_batch}")
-            print("sync dir: " + str(dir(response)))
-        self.persistent_data['matrix_sync_token'] = response.next_batch
-        self.save_persistent_data()
+            #print("sync dir: " + str(dir(response)))
+        #self.persistent_data['matrix_sync_token'] = response.next_batch
+        #self.save_persistent_data()
         
+        #await self.send_component()
+        
+        """
+        try:
+            get_missing_sessions_result = self.async_client.get_missing_sessions( str(self.persistent_data['matrix_room_id']) )
+            if self.DEBUG:
+                print("matrix: get_missing_sessions_result: " + str(get_missing_sessions_result))
+        
+            for missing_user, missing_device in get_missing_sessions_result.items():
+                if self.DEBUG:
+                    print(") ) ) ) ", missing_user, missing_device)
+    
+        except Exception as ex:
+            if self.DEBUG:
+                print("error in get_missing_sessions_result (likely no encryption!): " + str(ex))
+        """
         
         #.users_for_key_query.add(event.sender)
         
@@ -7166,7 +7547,8 @@ class VocoAdapter(Adapter):
 
     async def matrix_to_device_callback(self,event):
         if self.DEBUG:
-            print("IN to_device CALLBACK. Event Dir: " + str(dir(event)) )
+            print("IN to_device CALLBACK. Event: " + str(event) )
+            """
             try:
                 user_id = event.sender
                 device_id = event.requesting_device_id
@@ -7176,7 +7558,7 @@ class VocoAdapter(Adapter):
                     client.continue_key_share(request)
             except Exception as ex:
                 print("Error in to_device callback: " + str(ex)) 
-
+            """
 
     async def room_key_request_callback(self,response):
         if self.DEBUG:
@@ -7358,7 +7740,7 @@ class VocoAdapter(Adapter):
                     print("ERROR, COULD NOT CREATE ACCOUNT FOR USER")
                     self.user_account_created = False
                     
-                time.sleep(2)
+                await asyncio.sleep(2)
             
             
             
@@ -7401,7 +7783,7 @@ class VocoAdapter(Adapter):
                     
                         #print(" login_test response " + str(login_test))
                     
-                        time.sleep(2)
+                        await asyncio.sleep(2)
                     
                         #async_client = AsyncClient(server, user_id, config=self.matrix_config) # store_path=self.matrix_data_store_path, 
        
@@ -7599,43 +7981,46 @@ class VocoAdapter(Adapter):
             
         try:
             sync_result = await self.async_client.sync(timeout=30000,full_state=full_state,set_presence=set_presence) # milliseconds
-            await self.async_client.run_response_callbacks([sync_result])
+            
             if self.DEBUG:
                 print("\nmatrix: sync_result: " + str(sync_result))
                 print("\nmatrix: sync_result dir: " + str(dir(sync_result)))
                 print("\nmatrix: sync_result rooms: " + str(sync_result.rooms))
                 
-                try:
-                    for room_id, room_info in sync_result.rooms.join.items():
-                        room_header = " $%ˆ&* Messages for room {}:\n    ".format(room_id)
-                        if self.DEBUG:
-                            print("room_info: " + str(room_info))
-                            print("$$$$ room_header: " + str(room_header))
-                        messages = []
-                        for event in room_info.timeline.events:
+            """
+            try:
+                for room_id, room_info in sync_result.rooms.join.items():
+                    room_header = " $%ˆ&* Messages for room {}:\n    ".format(room_id)
+                    if self.DEBUG:
+                        print("room_info: " + str(room_info))
+                        print("$$$$ room_header: " + str(room_header))
+                    messages = []
+                    for event in room_info.timeline.events:
+                        
+                        try:
                             
-                            try:
-                                
-                                print("3333 encrypted event: " + str(event) )
-                                print("3333 encrypted event dir: " + str(dir(event)) )
-                                #decrypted = self.async_client.decrypt_event(event)
-                        
-                                #print("4444 str(decrypted event)! " + str(decrypted))
-                                #messages.append(decrypted)
-                                
-                            except Exception as ex:
-                                print("Error trying to decrypt message in room: " + str(ex))
-                                #self.async_client.users_for_key_query.add(event.sender)
-                        
-                                    
-                except Exception as ex:
-                    print("manual decrypt experiment error: " + str(ex))
+                            if self.DEBUG:
+                                print("encrypted event: " + str(event) )
+                                print("encrypted event dir: " + str(dir(event)) )
+                            #decrypted = self.async_client.decrypt_event(event)
+                    
+                            #print("4444 str(decrypted event)! " + str(decrypted))
+                            #messages.append(decrypted)
+                            
+                        except Exception as ex:
+                            print("Error trying to decrypt message in room: " + str(ex))
+                            #self.async_client.users_for_key_query.add(event.sender)
+                    
                 
-                print("doing run_response_callbacks next")
-            
-            
+            except Exception as ex:
+                print("manual decrypt experiment error: " + str(ex))
+            """
+                
+            await self.async_client.run_response_callbacks([sync_result])
             if self.DEBUG:
                 print("sync_loop: run_response_callbacks done")
+            
+            
             
         except Exception as ex:
             print("sync_loop: sync error: " + str(ex))
@@ -7666,7 +8051,7 @@ class VocoAdapter(Adapter):
                 await self.async_client.keys_query()
             
             try:
-                   
+                """
                 if 'matrix_room_id' in self.persistent_data:
                     
                     
@@ -7679,14 +8064,18 @@ class VocoAdapter(Adapter):
                         
                         try:
                             event = self.async_client.sharing_session[ self.persistent_data['matrix_room_id'] ]
-                            print("sharing_session event: " + str(event))
+                            if self.DEBUG:
+                                print("sharing_session event: " + str(event))
                             await event.wait()
-                            print("group session is now shared?")
+                            if self.DEBUG:
+                                print("group session is now shared?")
                         except Exception as ex:
-                            print("sync_loop: error sharing new room session: " + str(ex))
+                            if self.DEBUG:
+                                print("sync_loop: error sharing new room session: " + str(ex))
                 
                 else:
                     print("Error.. room id missing. Is this even possible?")
+                """
                 
                 #if self.async_client.olm.should_share_group_session:
                 #    print("6666 YES, should_share_group_session (but which room?)")
