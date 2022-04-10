@@ -51,7 +51,7 @@ try:
     from nio import (AsyncClient, AsyncClientConfig, ClientConfig, DevicesError, Event,InviteEvent, LoginResponse,
                  LocalProtocolError, MatrixRoom, MatrixUser, RoomMessageText, RegisterResponse, JoinedRoomsResponse,
                  crypto, exceptions, RoomSendResponse, SyncResponse, RoomCreateResponse, AccountDataEvent, 
-                 EnableEncryptionBuilder, ChangeHistoryVisibilityBuilder)
+                 EnableEncryptionBuilder, ChangeHistoryVisibilityBuilder, ToDeviceEvent, RoomKeyRequest)
 
 except Exception as ex:
     print("ERROR, could not load Matrix library: " + str(ex))
@@ -532,7 +532,7 @@ class VocoAdapter(Adapter):
         try:
             self.voice_messages_queue = queue.Queue()
             self.matrix_messages_queue = queue.Queue()
-            #self.matrix_messages_queue.put({'title':'Voco is back','message':'ready to chat!','level':'Low'})
+            self.matrix_messages_queue.put({'title':'Voco is back','message':'ready to chat!','level':'Low'})
             self.notifier = VocoNotifier(self,self.voice_messages_queue,verbose=True) # TODO: It could be nice to move speech completely to a queue system so that voice never overlaps.
         except Exception as ex:
             print("Error creating notifier: " + str(ex))
@@ -816,12 +816,16 @@ class VocoAdapter(Adapter):
             self.persistent_data['matrix_candle_password'] = randomPassword(16)
         if 'matrix_device_name' not in self.persistent_data:
             self.persistent_data['matrix_device_name'] = "candle_" + randomWord()
+        if 'matrix_device_id' not in self.persistent_data:
+            self.persistent_data['matrix_device_id'] = generate_matrix_device_id() # 10 uppercase characters
+        
+        self.candle_user_id = ""
             
         if self.DEBUG:
             print("self.persistent_data['matrix_candle_username']: " + str(self.persistent_data['matrix_candle_username']))
             print("self.persistent_data['matrix_candle_password']: " + str(self.persistent_data['matrix_candle_password']))
-       
-       
+        
+        self.save_persistent_data()
         self.start_matrix()
         
 
@@ -1389,7 +1393,7 @@ class VocoAdapter(Adapter):
                 
             if not 'origin' in intent:
                 intent['origin'] = 'voice'
-            
+                
             # text input from UI
             if self.DEBUG:
                 print("in speak, site_id of intent is now: " + str(site_id) + " (my own is: " + str(self.persistent_data['site_id']) + ")")
@@ -1399,12 +1403,13 @@ class VocoAdapter(Adapter):
             if intent['origin'] == 'text':
                 if self.DEBUG:
                     print("(...) response should be show as text: '" + voice_message + "' at: " + str(site_id))
-            elif intent['origin'] == 'matrix':
+            elif intent['origin'] == 'matrix' or intent['origin'] == 'both':
                 if self.DEBUG:
                     print("(...) response should be sent back to the matrix network: '" + voice_message + "' at: " + str(site_id))
             else:
                 if self.DEBUG:
                     print("in speak, origin was not text or matrix")
+
 
                 
             if site_id == 'everywhere' or site_id == self.persistent_data['site_id']:
@@ -1414,17 +1419,24 @@ class VocoAdapter(Adapter):
                 if intent['origin'] == 'text':
                     if self.DEBUG:
                         print("setting self.last_text_response to: " + str(voice_message))
-                    self.last_text_response = voice_message # this will cause the message to be sent back to the UI.
+                    self.last_text_response = clean_up_string_for_chatting(voice_message) # this will cause the message to be sent back to the UI.
                     return
                     
                 elif intent['origin'] == 'matrix':
                     if self.DEBUG:
-                        print("setting self.last_text_response to: " + str(voice_message))
+                        print("Origin was Matrix. Sending: " + str(voice_message))
                     #self.last_text_response = voice_message # this will cause the message to be sent back to the UI.
                     
-                    voice_message = voice_message.replace(' .', '.')
-                    self.matrix_messages_queue.put({'title':'','message': str(voice_message.capitalize()) ,'level':'Normal'})
+                    voice_message = clean_up_string_for_chatting(voice_message)
+                    self.matrix_messages_queue.put({'title':'','message': voice_message ,'level':'Normal'})
                     return
+                    
+                elif intent['origin'] == 'both':
+                    if self.DEBUG:
+                        print("Origin was Both. Sending to matrix first: " + str(voice_message))
+                    voice_message = clean_up_string_for_chatting(voice_message)
+                    self.matrix_messages_queue.put({'title':'','message': voice_message ,'level':'Normal'})
+                
                 
                 #if self.orphaned and self.persistent_data['is_satellite']:
                 #    voice_message = "I am not connected to the main voco server. " + voice_message
@@ -1439,8 +1451,7 @@ class VocoAdapter(Adapter):
                 self.unmute()
     
                 # filter out characters that cause weird pronounciation.
-                voice_message = voice_message.replace('[', '')
-                voice_message = voice_message.replace(']', '')
+                voice_message = clean_up_string_for_speaking(voice_message)
     
                 for option in self.audio_controls:
                     if str(option['human_device_name']) == str(self.persistent_data['audio_output']) or str(self.persistent_data['audio_output']) == 'Bluetooth speaker':
@@ -2062,11 +2073,32 @@ class VocoAdapter(Adapter):
                                 intent_message = item['intent_message']
                             else:
                                 intent_message = {'siteId':self.persistent_data['site_id']}
+                                item['intent_message'] = {'siteId':self.persistent_data['site_id']}
                                 
-                            intent_message['origin'] = 'voice'
+                            # Some action items should be spoken too, no matter the origin (e.g. if the origin is Matrix)
+                            if 'origin' in intent_message:
+                                if self.DEBUG:
+                                    print("origin check. item['type']: " + str(item['type']))
+                                if item['type'] == 'timer' or item['type'] == 'wake' or item['type'] == 'alarm' or item['type'] == 'reminder':
+                                    if intent_message['origin'] == 'text' or intent_message['origin'] == 'matrix':
+                                        intent_message['origin'] = 'both'
+                                        item['origin'] = 'both'
+                                        if self.DEBUG:
+                                            print("changed item origin to both")
+                            #    if intent_message['origin'] == 'text':
+                            #        if 'matrix_server' in self.persistent_data:
+                            #            intent_message['origin'] = 'matrix'
+                            #        else:
+                            #            intent_message['origin'] = 'voice'
+                            #intent_message['origin'] = 'voice'
+                            
+                            # Doing timers in the chat would create wayyy to many messages
+                            if item['type'] == 'countdown':
+                                item['origin'] = 'voice'
                                 
                         except Exception as ex:
-                            print("clock: intent message error: " + str(ex))
+                            if self.DEBUG:
+                                print("clock: intent message error: " + str(ex))
                             intent_message = {'siteId':self.persistent_data['site_id']}
                             
 
@@ -2101,8 +2133,10 @@ class VocoAdapter(Adapter):
                                     print("(...) TIMED boolean_related SWITCHING")
                                 #delayed_action = True
                                 #slots = self.extract_slots(intent_message)
-                                found_properties = self.check_things('set_state',item['slots'])
-                                intent_set_state(self, item['slots'],item['intent_message'],found_properties, item['original_value'])
+                                
+                                self.delayed_intent_player(item)
+                                #found_properties = self.check_things('set_state',item['slots'], item['intent_message'], item['original_value'])
+                                #intent_set_state(self, item['slots'],item['intent_message'],found_properties, item['original_value'])
 
                             # Delayed setting of a value
                             elif item['type'] == 'value' and self.current_utc_time >= int(item['moment']) and self.current_utc_time < int(item['moment']) + 60:
@@ -2110,8 +2144,9 @@ class VocoAdapter(Adapter):
                                     print("origval:" + str(item['original_value']))
                                     print("(...) TIMED SETTING OF A VALUE")
                                 #slots = self.extract_slots(intent_message)
-                                found_properties = self.check_things('set_value',item['slots'])
-                                intent_set_value(self, item['slots'],item['intent_message'],found_properties, item['original_value'])
+                                self.delayed_intent_player(item)
+                                #found_properties = self.check_things('set_value',item['slots'])
+                                #intent_set_value(self, item['slots'],item['intent_message'],found_properties, item['original_value'])
 
                             # Countdown
                             elif item['type'] == 'countdown':
@@ -2216,7 +2251,8 @@ class VocoAdapter(Adapter):
                         print("Error while removing old timers: " + str(ex))
 
                 except Exception as ex:
-                    print("Clock error: " + str(ex))
+                    if self.DEBUG:
+                        print("Clock error: " + str(ex))
 
                 # Check if anything from the notifier should be spoken
                 try:
@@ -2307,7 +2343,8 @@ class VocoAdapter(Adapter):
                                 #self.set_snips_state(False)
                                 
                 except Exception as ex:
-                    print("Error checking if microphone has been re- or disconnected: " + str(ex))
+                    if self.DEBUG:
+                        print("Error checking if microphone has been re- or disconnected: " + str(ex))
                 
                 
                 # Switch 'sound detected' back to off after a while (if the feature is enabled)
@@ -2379,7 +2416,8 @@ class VocoAdapter(Adapter):
             if self.devices['voco'] != None:
                 self.devices['voco'].properties['status'].update( str(status_string) )
         except:
-            print("Error setting status of voco device")
+            if self.DEBUG:
+                print("Error setting status of voco device")
 
 
 
@@ -2410,7 +2448,8 @@ class VocoAdapter(Adapter):
             for timer_type, count in self.timer_counts.items():
                 self.devices['voco'].properties[ str(timer_type) ].set_cached_value_and_notify( int(count) ) # Update the counts on the thing
         except Exception as ex:
-            print("Error, could not update timer counts on the voco device: " + str(ex))
+            if self.DEBUG:
+                print("Error, could not update timer counts on the voco device: " + str(ex))
 
 
 
@@ -2445,7 +2484,8 @@ class VocoAdapter(Adapter):
                 self.persistent_data['feedback_sounds'] = bool(state)
                 self.save_persistent_data()
         except Exception as ex:
-            print("Error settings Snips feedback sounds preference: " + str(ex))
+            if self.DEBUG:
+                print("Error settings Snips feedback sounds preference: " + str(ex))
  
  
     def set_sound_detected(self,state):
@@ -2454,7 +2494,8 @@ class VocoAdapter(Adapter):
         try:
             self.devices['voco'].properties['sound_detected'].update( bool(state) )
         except Exception as ex:
-            print("Error updating sound detection property: " + str(ex))
+            if self.DEBUG:
+                print("Error updating sound detection property: " + str(ex))
   
  
     def remove_thing(self, device_id):
@@ -2464,7 +2505,8 @@ class VocoAdapter(Adapter):
             if self.DEBUG:
                 print("User removed Voco device")
         except:
-            print("Could not remove things from devices")
+            if self.DEBUG:
+                print("Could not remove things from devices")
 
 
 
@@ -2791,7 +2833,8 @@ class VocoAdapter(Adapter):
                 return return_value
 
         except Exception as ex:
-            print("Error doing http request/loading returned json: " + str(ex))
+            if self.DEBUG:
+                print("Error doing http request/loading returned json: " + str(ex))
             if self.DEBUG:
                 self.speak("I could not connect. ", intent=intent)
             #return {"error": "I could not connect to the web things gateway"}
@@ -3686,7 +3729,8 @@ class VocoAdapter(Adapter):
                     print("Ping sent")
                         
             except Exception as ex:
-                print("Error sending MQTT ping: " + str(ex))
+                if self.DEBUG:
+                    print("Error sending MQTT ping: " + str(ex))
         else:
             if self.DEBUG:
                 print("self.mqtt_connected was likely false")
@@ -3700,6 +3744,15 @@ class VocoAdapter(Adapter):
     def master_intent_callback(self, intent_message, try_alternative=False):    # Triggered everytime Snips succesfully recognizes a voice intent
         
         final_test = False # there is a main incoming intent, and potentially some alternatives that can ale be tested. If we're on the last alternative (and still haven't gotten a good match), then this will cause various failure-related voice message to be spoken.
+        
+        voice_message = ""
+        
+        
+        print("\n\n\n     ---- INTENT ----")
+        print(str(intent_message))
+        print("\n\n\n")
+        
+        print("intent_message['origin']: " + str(intent_message['origin']))
         
         try:
             if try_alternative == False:
@@ -3735,16 +3788,10 @@ class VocoAdapter(Adapter):
                     all_possible_intents.append( str(intent_message['alternatives'][index]['intentName']).replace('createcandle:','') )
                     index += 1
         except Exception as ex:
-            print("Error get list of possible intents: " + str(ex))
+            if self.DEBUG:
+                print("Error getting list of possible intents: " + str(ex))
         
         
-        
-        if self.DEBUG:
-            print(".")
-            print("..")
-            print("all_possible_intents: " + str(all_possible_intents))
-            print("self.alternatives_counter: " + str(self.alternatives_counter))
-            
             
         
         try:
@@ -3762,9 +3809,6 @@ class VocoAdapter(Adapter):
                 print(">>")
                   
 
-
-            
-
             # check if there are multiple words in the sentence
             word_count = 1
             for i in sentence: 
@@ -3776,16 +3820,17 @@ class VocoAdapter(Adapter):
                     #print("hello intent_message: " + str(intent_message))
                     if intent_message['siteId'] == self.persistent_data['site_id']:
                         self.speak("Hello",intent=intent_message)
-                        
+                        return
                 if sentence == 'goodbye' or sentence == 'the by':
                     #print("hello intent_message: " + str(intent_message))
                     if intent_message['siteId'] == self.persistent_data['site_id']:
                         self.speak("Goodbye",intent=intent_message)
+                        return
                 
                 else: 
                     if self.DEBUG:
                         print("Heard just one word, but not 'hello'.")
-                    #pass   
+                    #pass
                     #self.speak("I didn't get that",intent=intent_message)
                 return
                 
@@ -3822,268 +3867,458 @@ class VocoAdapter(Adapter):
         for intent_option in intents_to_check:
         """
             
-        try:
-            if self.alternatives_counter == -1:
-                incoming_intent = str(intent_message['intent']['intentName']).replace('createcandle:','')   #intent_option.intentName
-                slots = self.extract_slots(intent_message['slots'], sentence)
-                
-            else:
-                incoming_intent = str(intent_message['alternatives'][self.alternatives_counter]['intentName']).replace('createcandle:','')   #intent_option.intentName
-                slots = self.extract_slots(intent_message['alternatives'][self.alternatives_counter]['slots'], sentence)
+        first_test = True
+        first_voice_message = ""
+        stop_looping = False
+        try_again = False
+        all_possible_intents_count = len(all_possible_intents)
+        if self.DEBUG:
+            print("all_possible_intents_count: " + str(all_possible_intents_count))
+        for x in range( all_possible_intents_count ):
+            #if self.DEBUG:
+            #    print("\n\n\n__LOOP " + str(x))
+            #    print("intent: " + str(all_possible_intents[x]))
             
             if self.DEBUG:
-                print("\nTESTING INTENT: " + str(incoming_intent))
-                print("\nUSING INCOMING SLOTS: " + str(slots))
+                print("\n\n\n.")
+                print("..")
+                print("...")
+                print("TEST #" + str(x))
+                print("final_test: " + str(final_test))
+                print("intent: " + str(all_possible_intents[x]))
+                print("all_possible_intents: " + str(all_possible_intents))
             
-        except Exception as ex:
-            print("!\nERROR handling intent in master callback: " + str(ex))
-            self.speak("Sorry, there was an error.",intent=intent_message)
-            return
+            if x > 0:
+                first_test = False
+                
+            if x == all_possible_intents_count:
+                final_test = True
+            
+            
+            
+            
+            
+            
+            
+            
+            if stop_looping:
+                if self.DEBUG:
+                    print("aborting loop")
+                break
+            
+            alternatives_counter = x - 1
+            if self.DEBUG:
+                print("alternatives_counter: " + str(alternatives_counter))
+            self.alternatives_counter = x - 1
+            
+            
+            try:
+                if self.alternatives_counter == -1:
+                    incoming_intent = str(intent_message['intent']['intentName']).replace('createcandle:','')   #intent_option.intentName
+                    slots = self.extract_slots(intent_message['slots'], sentence)
+                
+                else:
+                    incoming_intent = str(intent_message['alternatives'][self.alternatives_counter]['intentName']).replace('createcandle:','')   #intent_option.intentName
+                    slots = self.extract_slots(intent_message['alternatives'][self.alternatives_counter]['slots'], sentence)
+            
+                if self.DEBUG:
+                    print("\nTESTING INTENT: " + str(incoming_intent))
+                    print("\nUSING INCOMING SLOTS: " + str(slots))
+            
+            except Exception as ex:
+                print("!\nERROR handling intent in master callback: " + str(ex))
+                voice_message = "Sorry, there was an error." 
+                #self.speak("Sorry, there was an error.",intent=intent_message)
+                break
         
 
         
-        if incoming_intent == None or incoming_intent == 'None':
-            if self.DEBUG:
-                print("intent was None")
-            self.speak("Sorry, I didn't understand your intention.",intent=intent_message)
-            return
-        
-        
-        # If the thing title is on a satellite, stop processing here.
-        #if slots['thing'] in self.satellite_thing_titles and not self.persistent_data['is_satellite']:
-        #    return
-        
-        
-        # Some custom heuristics to avoid strange situations
-        try:
-            # Deal with some odd things
-            if slots['start_time'] != None:
-                if slots['start_time'] < time.time():
-                    slots['start_time'] = None
-                    
-                    
-                    
-            if (incoming_intent == 'get_value' or incoming_intent == 'set_value' or incoming_intent == 'set_state' or incoming_intent == 'get_boolean') and slots['thing'] == None and slots['property'] == None and slots['boolean'] == None and slots['number'] == None and slots['percentage'] == None and slots['string'] == None:
+            if incoming_intent == None or incoming_intent == 'None':
                 if self.DEBUG:
-                    print("pretty much everything was missing.")
-                    
+                    print("intent was None")
                 if final_test:
-                    self.speak("Sorry, I don't understand.",intent=intent_message)
-                    return
-                else:
-                    self.master_intent_callback(intent_message, True) # let's try an alternative intent, if there is one.
-            
-            # if intent is thing related, but no thing or property name is provided, or no value, then the intent must be wrong.
-            elif (incoming_intent == 'get_value' or incoming_intent == 'set_value' or incoming_intent == 'set_state' or incoming_intent == 'get_boolean'):
-                
-                # no thing details
-                if slots['thing'] == None and slots['property'] == None:
-                    # This can't happen. TODO: should switch to alternative.
+                    voice_message = "Sorry, I didn't understand your intention."
+                    #self.speak("Sorry, I didn't understand your intention.",intent=intent_message)
+                break
+        
+        
+            # If the thing title is on a satellite, stop processing here.
+            #if slots['thing'] in self.satellite_thing_titles and not self.persistent_data['is_satellite']:
+            #    return
+        
+        
+            # Some custom heuristics to avoid strange situations
+            try:
+                # Deal with some odd things
+                if slots['start_time'] != None:
+                    if slots['start_time'] < time.time():
+                        slots['start_time'] = None
+                    
+                    
+                    
+                if (incoming_intent == 'get_value' or incoming_intent == 'set_value' or incoming_intent == 'set_state' or incoming_intent == 'get_boolean') and slots['thing'] == None and slots['property'] == None and slots['boolean'] == None and slots['number'] == None and slots['percentage'] == None and slots['string'] == None:
+                    if self.DEBUG:
+                        print("pretty much everything was missing.")
+                    
                     if final_test:
-                        if not self.persistent_data['is_satellite']:
-                            self.speak("I did not understand what you wanted to change.",intent=intent_message)
-                        print("did not understand the change based on these slots: " + str(slots))
-                        return
+                        voice_message = "Sorry, I don't understand."
+                        break
+                        #return
                     else:
-                        self.master_intent_callback(intent_message, True) # let's try an alternative intent, if there is one.
+                        continue
+                        #self.master_intent_callback(intent_message, True) # let's try an alternative intent, if there is one.
+            
+                # if intent is thing related, but no thing or property name is provided, or no value, then the intent must be wrong.
+                elif (incoming_intent == 'get_value' or incoming_intent == 'set_value' or incoming_intent == 'set_state' or incoming_intent == 'get_boolean'):
+                
+                    # no thing details
+                    if slots['thing'] == None and slots['property'] == None:
+                        # This can't happen. TODO: should switch to alternative.
+                        if final_test:
+                            if not self.persistent_data['is_satellite']:
+                                self.speak("I did not understand what you wanted to change.",intent=intent_message)
+                            if self.DEBUG:
+                                print("did not understand the change based on these slots: " + str(slots))
+                            break
+                        else:
+                            continue
+                            #self.master_intent_callback(intent_message, True) # let's try an alternative intent, if there is one.
                    
                         
-                # no desired value
-                if (incoming_intent == 'set_value' or incoming_intent == 'set_state') and slots['boolean'] == None and slots['number'] == None and slots['percentage'] == None and slots['string'] == None:
-                    # This can't happen. TODO: should switch to alternative.
-                    if final_test:
-                        if not self.persistent_data['is_satellite']:
-                            self.speak("I was unable to perform the change you wanted.",intent=intent_message)
-                        return
-                    else:
-                        self.master_intent_callback(intent_message, True) # let's try an alternative intent, if there is one.
-
-                    
-        except Exception as ex:
-            print("Error massaging data: " + str(ex))
-
-
-        # Alternative routing. Some heuristics, since Snips sometimes chooses the wrong intent.
-        try:
-            
-            # Alternative route to get_boolean.
-            try:
-                if incoming_intent == 'get_value' and str(slots['property']) == "state":          
-                    if self.DEBUG:
-                        print("using alternative route to get_boolean")
-                    incoming_intent = 'createcandle:get_boolean'
-            
-            
-            #try:
-            #    if incoming_intent == 'set_state' and str(slots['boolean']) == "state":   #Eh? can the boolean slot ever be 'state'? Should this be None instead? set_state could also target enums, so testing for booleans alone is not ok.       
-            #        if self.DEBUG:
-            #            print("using alternative route to get_boolean")
-            #        incoming_intent = 'createcandle:get_boolean'
-            #except:
-            #    print("alternate route 2 failed")
-            
-            
-                # Alternative route to set state
-                # TODO: Should I not trust Snips to have good alternative routes instead?
-            
-                if incoming_intent == 'set_timer' and sentence.startswith("turn"):          
-                    
-                    if sentence.startswith("turn on"):
-                        incoming_intent = 'createcandle:set_state'
-                        slots['boolean'] = True
+                    # no desired value
+                    if (incoming_intent == 'set_value' or incoming_intent == 'set_state') and slots['boolean'] == None and slots['number'] == None and slots['percentage'] == None and slots['string'] == None:
                         if self.DEBUG:
-                            print("using alternative route to set state")
-                    elif sentence.startswith("turn off"):
-                        incoming_intent = 'createcandle:set_state'
-                        slots['boolean'] = False
-                        if self.DEBUG:
-                            print("using alternative route to set state")
-                    
-
-                if incoming_intent == 'set_value' and slots['color'] is None and slots['number'] is None and slots['percentage'] is None and slots['string'] is None:
-                    if slots['boolean'] != None:
-                        print("Error, intent was set_value but no values were present. However, a boolean value was present. trying alternative if possible.")
+                            print("No desired value?")
+                        # This can't happen. TODO: should switch to alternative.
                         if final_test:
-                            incoming_intent == 'set_state' # Switch to another intent type which has a better shot.
+                            if not self.persistent_data['is_satellite']:
+                                self.speak("I was unable to perform the change you wanted.",intent=intent_message)
+                            break
                         else:
-                            self.master_intent_callback(intent_message, True)
-                    else:
+                            continue
+                            #self.master_intent_callback(intent_message, True) # let's try an alternative intent, if there is one.
                         if self.DEBUG:
-                            print("request did not contain a valid value to set to")
-                        if final_test == False:
-                            self.master_intent_callback(intent_message, True)
-                            
-                        #if final_test
-                        #    if not self.persistent_data['is_satellite']:
-                        #        self.speak("Your request did not contain a valid value.",intent=intent_message)
-                        #else:
-                        #    self.master_intent_callback(intent_message, True)
-                        #hermes.publish_end_session_notification(intent_message['site_id'], "Your request did not contain a valid value.", "")
-                        #return
-                        
+                            print('n')
+                    
             except Exception as ex:
-                print("intent redirect failed: " + str(ex))
-            
-            
+                print("Error massaging data: " + str(ex))
 
-            # Normal timer routing. Satellites delegate this to the central server. TODO: it might make sense to let things like wake-up alarms be handled on the satellite. Then it still works if the connection is down.
-            if self.persistent_data['is_satellite'] == False:
-                if incoming_intent == 'get_time':
-                    intent_get_time(self, slots, intent_message)
-                elif incoming_intent == 'set_timer':
-                    intent_set_timer(self, slots, intent_message)
-                elif incoming_intent == 'get_timer_count':
-                    intent_get_timer_count(self, slots, intent_message)
-                elif incoming_intent == 'list_timers':
-                    intent_list_timers(self, slots, intent_message)
-                elif incoming_intent == 'stop_timer':
-                    intent_stop_timer(self, slots, intent_message)
-                elif self.token == "":
-                    self.speak("You need to provide an authentification token before devices can be controlled.")
-                    return
-                    
-                    
-            # Normal things control routing. Only four of the intents require searching for properties
-            if incoming_intent == 'get_value' or incoming_intent == 'set_value' or incoming_intent == 'set_state' or incoming_intent == 'get_boolean':
-                
-                #if slots['thing'] == None and slots['property'] == None
-                
-                # If this is a satellite, stop processing the incoming thing-related message.
-                if self.persistent_data['is_satellite']:
-                    if self.satellite_should_act_on_intent == False:
-                        return
+
+            # Alternative routing. Some heuristics, since Snips sometimes chooses the wrong intent.
+            try:
             
-                # get a list of potential matching properties
-                found_properties = self.check_things(incoming_intent,slots)
-                if self.DEBUG:
-                    print("Found properties: " + str(found_properties))
-                
-                # Check if the satellite should handle this thing.
-                if self.DEBUG:
-                    print("======+++++========++++======+++========++++======")
-                target_thing_title = ""
-                found_on_satellite = False
+                # Alternative route to get_boolean.
                 try:
-                    if slots['thing'] != None:
+                    if incoming_intent == 'get_value' and str(slots['property']) == "state":          
                         if self.DEBUG:
-                            print("thing title in slots: " + str(slots['thing']))
-                        target_thing_title = slots['thing']
-                        if 'space' in slots:
+                            print("using alternative route to get_boolean")
+                        incoming_intent = 'createcandle:get_boolean'
+            
+            
+                #try:
+                #    if incoming_intent == 'set_state' and str(slots['boolean']) == "state":   #Eh? can the boolean slot ever be 'state'? Should this be None instead? set_state could also target enums, so testing for booleans alone is not ok.       
+                #        if self.DEBUG:
+                #            print("using alternative route to get_boolean")
+                #        incoming_intent = 'createcandle:get_boolean'
+                #except:
+                #    print("alternate route 2 failed")
+            
+            
+                    # Alternative route to set state
+                    # TODO: Should I not trust Snips to have good alternative routes instead?
+            
+                    if incoming_intent == 'set_timer' and sentence.startswith("turn"):          
+                    
+                        if sentence.startswith("turn on"):
+                            incoming_intent = 'createcandle:set_state'
+                            slots['boolean'] = True
                             if self.DEBUG:
-                                print("space in slots: " + str(slots['space']))
-                            if slots['space'] != None:
-                            #if len(str(slots['space'])) > 1:
-                                target_thing_title = slots['space'] + " " + target_thing_title
-                        if self.DEBUG:
-                            print("target_thing_title = " + str(target_thing_title))
-                            print("self.satellite_thing_titles = " + str(self.satellite_thing_titles))
+                                print("using alternative route to set state")
+                        elif sentence.startswith("turn off"):
+                            incoming_intent = 'createcandle:set_state'
+                            slots['boolean'] = False
+                            if self.DEBUG:
+                                print("using alternative route to set state")
+                    
+
+                    if incoming_intent == 'set_value' and slots['color'] is None and slots['number'] is None and slots['percentage'] is None and slots['string'] is None:
+                        if slots['boolean'] != None:
+                            if self.DEBUG:
+                                print("Error, intent was set_value but no values were present. However, a boolean value was present. trying alternative if possible.")
+                            if final_test:
+                                incoming_intent == 'set_state' # Switch to another intent type which has a better shot.
+                            else:
+                                continue #self.master_intent_callback(intent_message, True)
+                        else:
+                            if self.DEBUG:
+                                print("request did not contain a valid value to set to")
+                                
+                            if final_test == False:
+                                continue
+                                #self.master_intent_callback(intent_message, True)
+                            
+                            #if final_test
+                            #    if not self.persistent_data['is_satellite']:
+                            #        self.speak("Your request did not contain a valid value.",intent=intent_message)
+                            #else:
+                            #    self.master_intent_callback(intent_message, True)
+                            #hermes.publish_end_session_notification(intent_message['site_id'], "Your request did not contain a valid value.", "")
+                            #return
                         
-                        # loop over the satellite thing data in self.satellite_thing_titles
-                        for satellite_id in self.satellite_thing_titles:
-                            #if target_thing_title in self.satellite_thing_titles[satellite_id]:
-                            for satellite_thing_title in self.satellite_thing_titles[satellite_id]:
-                                if satellite_thing_title.lower() == target_thing_title.lower():
-                                    if self.DEBUG:
-                                        print("A satellite has this thing, it should handle it.")
-                                    found_on_satellite = True
-                                elif len(found_properties) == 0: # if there isn't a match with a local thing, then try a little harder, and allow fuzzy matching with satellite thing titles
-                                    fuzz_ratio = simpler_fuzz(str(target_thing_title), satellite_thing_title)
-                                    if self.DEBUG:
-                                        print("fuzz: " + str(fuzz_ratio))
-                                    if fuzz_ratio > 85:
-                                        if self.DEBUG:
-                                            print("possible fuzzy match with satellite thing title")
-                                        found_on_satellite = True
-                                    
-                                    
                         
                 except Exception as ex:
-                    print("Error testing thing title against satellite titles: " + str(ex))
-                
-                
-                
-                if found_on_satellite and not self.persistent_data['is_satellite']:
+                    print("intent redirect failed: " + str(ex))
+            
+            
+            
+                # Skip some impossible timers
+                if incoming_intent == 'list_timers' and slots['timer_type'] == None:
                     if self.DEBUG:
-                         print("This thing title exists on a satellite. It should handle it.")
-                
-                elif len(found_properties) == 0:
+                        print("list_timers intent, but no timer type in slots, so cannot be correct intent")
+                    voice_message = "I did not understand the type of timer."
+                    if final_test == False:
+                        continue
+                    
+                if incoming_intent == 'set_timer' and (slots['duration'] == None or slots['end_time'] == None) and slots['time_string'] == None:
                     if self.DEBUG:
-                        print("found_properties length was 0")
-                    if final_test:
-                        if not self.persistent_data['is_satellite']:
-                            self.speak("Sorry, I couldn't find a match. ",intent=intent_message)
-                        return
-                    else:
-                        self.master_intent_callback(intent_message, True) # let's try an alternative intent, if there is one.
-                    
-                    
-                
-                elif self.token != "":
-                    if incoming_intent == 'get_value':
-                        intent_get_value(self, slots, intent_message,found_properties)
-                    elif incoming_intent == 'set_state':
-                        intent_set_state(self, slots, intent_message,found_properties)
-                    elif incoming_intent == 'set_value':
-                        intent_set_value(self, slots, intent_message,found_properties)
-                    elif incoming_intent == 'get_boolean':
-                        intent_get_boolean(self, slots, intent_message,found_properties)
+                        print("The spoken sentence did not contain a time")
+                    self.play_sound(self.error_sound,intent=intent_message)
+                    time.sleep(.2)
+                    voice_message = "You didn't provide a time."
+                    if final_test == False:
+                        continue
+            
 
+                # Normal timer routing. Satellites delegate this to the central server. TODO: it might make sense to let things like wake-up alarms be handled on the satellite. Then it still works if the connection is down.
+                if self.persistent_data['is_satellite'] == False:
+                    if incoming_intent == 'get_time':
+                        voice_message = intent_get_time(self, slots, intent_message)
+                        if not voice_message.startswith('Sorry'):
+                            stop_looping = True
+                            break
+                    elif incoming_intent == 'set_timer':
+                        voice_message = intent_set_timer(self, slots, intent_message)
+                        if not voice_message.startswith('Sorry'):
+                            stop_looping = True
+                            break
+                    elif incoming_intent == 'get_timer_count':
+                        voice_message = intent_get_timer_count(self, slots, intent_message)
+                        if not voice_message.startswith('Sorry'):
+                            stop_looping = True
+                            break
+                    elif incoming_intent == 'list_timers':
+                        voice_message = intent_list_timers(self, slots, intent_message)
+                        if not voice_message.startswith('Sorry'):
+                            stop_looping = True
+                            break
+                    elif incoming_intent == 'stop_timer':
+                        voice_message = intent_stop_timer(self, slots, intent_message)
+                        if not voice_message.startswith('Sorry'):
+                            stop_looping = True
+                            break
+                    elif self.token == "":
+                        voice_message = "You need to provide an authentification token before devices can be controlled."
+                        #self.speak("You need to provide an authentification token before devices can be controlled.")
+                        #return
+                        break
+                    
+                # Normal things control routing. Only four of the intents require searching for properties
+                if incoming_intent == 'get_value' or incoming_intent == 'set_value' or incoming_intent == 'set_state' or incoming_intent == 'get_boolean':
+                
+                    #if slots['thing'] == None and slots['property'] == None
+                
+                    # If this is a satellite, stop processing the incoming thing-related message.
+                    if self.persistent_data['is_satellite']:
+                        if self.satellite_should_act_on_intent == False:
+                            return
+            
+                    # get a list of potential matching properties
+                    found_properties = self.check_things(incoming_intent,slots)
+                    if self.DEBUG:
+                        print("Found properties: " + str(found_properties))
+                
+                    # Check if the satellite should handle this thing.
+                    if self.DEBUG:
+                        print("======+++++========++++======+++========++++======")
+                    target_thing_title = ""
+                    found_on_satellite = False
+                    try:
+                        if slots['thing'] != None:
+                            if self.DEBUG:
+                                print("thing title in slots: " + str(slots['thing']))
+                            target_thing_title = slots['thing']
+                            if 'space' in slots:
+                                if self.DEBUG:
+                                    print("space in slots: " + str(slots['space']))
+                                if slots['space'] != None:
+                                #if len(str(slots['space'])) > 1:
+                                    target_thing_title = slots['space'] + " " + target_thing_title
+                            if self.DEBUG:
+                                print("target_thing_title = " + str(target_thing_title))
+                                print("self.satellite_thing_titles = " + str(self.satellite_thing_titles))
+                        
+                            # loop over the satellite thing data in self.satellite_thing_titles
+                            for satellite_id in self.satellite_thing_titles:
+                                #if target_thing_title in self.satellite_thing_titles[satellite_id]:
+                                for satellite_thing_title in self.satellite_thing_titles[satellite_id]:
+                                    if satellite_thing_title.lower() == target_thing_title.lower():
+                                        if self.DEBUG:
+                                            print("A satellite has this thing, it should handle it.")
+                                        found_on_satellite = True
+                                    elif len(found_properties) == 0: # if there isn't a match with a local thing, then try a little harder, and allow fuzzy matching with satellite thing titles
+                                        fuzz_ratio = simpler_fuzz(str(target_thing_title), satellite_thing_title)
+                                        if self.DEBUG:
+                                            print("fuzz: " + str(fuzz_ratio))
+                                        if fuzz_ratio > 85:
+                                            if self.DEBUG:
+                                                print("possible fuzzy match with satellite thing title")
+                                            found_on_satellite = True
+                                    
+                                    
+                        
+                    except Exception as ex:
+                        print("Error testing thing title against satellite titles: " + str(ex))
+                
+                
+                
+                    if found_on_satellite and not self.persistent_data['is_satellite']:
+                        if self.DEBUG:
+                             print("This thing title exists on a satellite. It should handle it. Stopping.")
+                        return
+                        #voice_message = "Sorry, that device is available on a satellite"
+                        #break
+                
+                    elif len(found_properties) == 0:
+                        if self.DEBUG:
+                            print("found_properties length was 0")
+                        if final_test:
+                            if not self.persistent_data['is_satellite']:
+                                if self.DEBUG:
+                                    print("didn't find any matching properties in the final intent test. Giving up.")
+                                voice_message = "Sorry, I couldn't find a match. "
+                                #self.speak("Sorry, I couldn't find a match. ",intent=intent_message)
+                            break #return
+                        else:
+                            continue
+                            #self.master_intent_callback(intent_message, True) # let's try an alternative intent, if there is one.
+                    
+                    elif self.token != "":
+                        if incoming_intent == 'get_value':
+                            voice_message = intent_get_value(self, slots, intent_message,found_properties)
+                        elif incoming_intent == 'set_state':
+                            voice_message = intent_set_state(self, slots, intent_message,found_properties)
+                        elif incoming_intent == 'set_value':
+                            voice_message = intent_set_value(self, slots, intent_message,found_properties)
+                        elif incoming_intent == 'get_boolean':
+                            voice_message = intent_get_boolean(self, slots, intent_message,found_properties)
+
+                        print("thing manipulation intent handler returned voice message: " + str(voice_message))
+
+                #elif self.token != "":
+                #    if self.DEBUG:
+                #        print("Error: the code could not handle that intent. Under construction?")
+                #    self.speak("Sorry, I did not understand your intention.")
+                #else:
+                #    if self.DEBUG:
+                #        print("Error: the code could not handle that intent. Under construction?")
+                #    self.speak("You need to provide an authentification token before devices can be controlled.")
+                
+            except Exception as ex:
+                print("Error during routing: " + str(ex))
+               
+            
+            
+            if self.DEBUG:
+                print("loop done: #" + str(x))
+              
+                
+            if first_test:
+                first_voice_message = voice_message
+                
+            if voice_message.startswith('OK'):
+                if self.DEBUG:
+                    print("voice message from loop started with OK, so we are definitely done.")
+                break
+            elif voice_message.startswith('Sorry'):
+                if final_test == False:
+                    continue
+            elif voice_message == "":
+                if final_test == False:
+                    continue
+                else:
+                    voice_message = "Sorry, I am confused"
+                
+            else:
+                if self.DEBUG:
+                    print("Should we stop after this loop? Dubio.")
+                # TODO: is it ok to break off the testing here? Any error could heave already lead to a "continue" command.
+                break
+                
+        if self.DEBUG:
+            print("\n\nEND OF FOR LOOP IN master_intent_callback\n\n")
+            print("END OF FOR LOOP voice_message: " + str(voice_message))
+
+
+        if final_test == False:
+            # The for-loop was existed with a break. This can be good or bad.
+            pass
+            
+        elif first_test == False:
+            # we did more than one intent test
+            if voice_message.startswith('Sorry'):
+                # restore the error from the first loop, which is probably more useful
+                voice_message = first_voice_message
+
+
+        voice_message = clean_up_string_for_speaking(voice_message)
+        if self.DEBUG:
+            print("\n(...) " + str(voice_message))
+        self.speak(voice_message,intent=intent_message)
+
+
+
+
+    def delayed_intent_player(self, item):
+        
+        try:
+            if self.DEBUG:
+                print("\n\n(>) in delayed_intent_player. Item: \n" + str(item))
+                print("ORIGIN?: " + str(item['intent_message']['origin']))
+            voice_message = ""
+        
+        
+         
+            if item['type'] == 'boolean_related':
+                if self.DEBUG:
+                    print("(>) origval:" + str(item['original_value']))
+                    print("(>) TIMED boolean_related SWITCHING")
+                #delayed_action = True
+                #slots = self.extract_slots(intent_message)
+            
+                found_properties = self.check_things('set_state',item['slots'])
+                voice_message = intent_set_state(self,item['slots'],item['intent_message'],found_properties, item['original_value'])
+
+            # Delayed setting of a value
+            elif item['type'] == 'value':
+                if self.DEBUG:
+                    print("(>) origval:" + str(item['original_value']))
+                    print("(>) TIMED SETTING OF A VALUE")
+                #slots = self.extract_slots(intent_message)
+                found_properties = self.check_things('set_value',item['slots'])
+                voice_message = intent_set_value(self,item['slots'],item['intent_message'],found_properties, item['original_value'])
+        
+        
+            if voice_message == "":
+                voice_message = "Sorry, you set a timer, but I could not handle it"
+            else:
+                voice_message = "You set a timer. " + voice_message
+
+            self.speak(voice_message, item['intent_message'])
 
             
 
-            #elif self.token != "":
-            #    if self.DEBUG:
-            #        print("Error: the code could not handle that intent. Under construction?")
-            #    self.speak("Sorry, I did not understand your intention.")
-            #else:
-            #    if self.DEBUG:
-            #        print("Error: the code could not handle that intent. Under construction?")
-            #    self.speak("You need to provide an authentification token before devices can be controlled.")
-                
         except Exception as ex:
-            print("Error during routing: " + str(ex))
-
-
+            print("Error in delayed_intent_player: " + str(ex))
 
 
 
@@ -4204,8 +4439,6 @@ class VocoAdapter(Adapter):
                 
                 if self.DEBUG:
                     print("self.force_injection: " + str(self.force_injection))
-                
-                
                     print("len(thing_titles): " + str(len(thing_titles)))
                     print("len(fresh_thing_titles): " + str(len(fresh_thing_titles)))
                     print("diff: " + str(thing_titles^fresh_thing_titles))
@@ -5624,6 +5857,39 @@ class VocoAdapter(Adapter):
     
     
     
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
     #
     #  MATRIX CHAT
     #
@@ -5666,83 +5932,395 @@ class VocoAdapter(Adapter):
                     print("- matrix server url was present")
             
                 # try to log in to Matrix server with token
-            
-                candle_user_id = "@" + self.persistent_data['matrix_candle_username'] + ":" + self.persistent_data['matrix_server']
+                
+                
                 server = "https://" + str(self.persistent_data['matrix_server'])
-        
-                print("candle_user_id: " + str(candle_user_id))
+                self.candle_user_id = "@" + self.persistent_data['matrix_candle_username'] + ":" + self.persistent_data['matrix_server']
+                print("self.candle_user_id: " + str(self.candle_user_id))
         
                 if self.DEBUG:
                     print("Async_client did not exist yet. Will log in to Matrix server with token this time")
         
-                self.async_client = AsyncClient(server, config=self.matrix_config, store_path=self.matrix_data_store_path)
+                self.async_client = AsyncClient(server, self.candle_user_id, config=self.matrix_config, store_path=self.matrix_data_store_path)
                 
                 self.async_client.add_event_callback(self.matrix_message_callback, RoomMessageText)
                 self.async_client.add_response_callback(self.matrix_sync_callback, SyncResponse)
                 self.async_client.add_global_account_data_callback(self.matrix_account_callback, AccountDataEvent)
                 self.async_client.add_room_account_data_callback(self.matrix_account_callback, AccountDataEvent)
                 self.async_client.add_ephemeral_callback(self.matrix_ephemeral_callback, Event)
-        
-                self.async_client.user_id = candle_user_id
+                self.async_client.add_to_device_callback(self.matrix_to_device_callback, ToDeviceEvent)
+                #self.async_client.add_to_device_callback(self.room_key_request_callback, RoomKeyRequest)
+                self.async_client.user_id = self.candle_user_id
                 
-                if 'matrix_token' in self.persistent_data:
-                    self.async_client.access_token = self.persistent_data['matrix_token']
-                    if self.async_client.logged_in:
-                        try:
-                            
-                            
-                            
-                            
-                            
-                            
-                            
-                            
-                            
-                            
-                            if self.DEBUG:
-                                print("calling initial sync_loop, asking for full state")
-                            
-                            # Do an initial sync. This will populate the rooms attribute of the async_client
-                            #await self.sync_loop(full_state=True, set_presence="online")
-                            #if self.DEBUG:
-                            #    print("did a full state initial sync using sync_loop")
-                            #sync_result = await self.async_client.sync(timeout=30000, full_state=True, set_presence="online") # milliseconds
-                            #if self.DEBUG:
-                            #    print("matrix: quick sync_result: " + str(sync_result))
-                            #await self.async_client.run_response_callbacks(sync_result)
-                        except Exception as ex:
-                            print("Error doing initial matrix sync: " + str(ex))
                 
+                login_response = await self.async_client.login(str(self.persistent_data['matrix_candle_password']) )
+                if self.DEBUG:
+                    print("x login response: " + str(dir(login_response)))
+                    
+
+                if (isinstance(login_response, LoginResponse)):
+                    if self.DEBUG:
+                        print("x login succesful!")
+                        print("x login response.transport_response: " + str(dir(login_response.transport_response)))
+                        #print("x login_response.status_code: " + str(login_response.status_code))
+                        #print("x login_response.message: " + str(login_response.message))
+                        print('x login_response.access_token: ' + str(login_response.access_token))
+                        print('x login_response.device_id: ' + str(login_response.device_id))
+                    self.persistent_data['matrix_token'] = str(login_response.access_token)
+                    self.persistent_data['matrix_device_id'] = str(login_response.device_id)
+                    self.save_persistent_data()
+                else:
+                    print("x initial manual login failed")
+                
+                if not self.async_client.logged_in:
+                    if 'matrix_token' in self.persistent_data:
+                        self.async_client.access_token = self.persistent_data['matrix_token']
+                        if self.async_client.logged_in:
+                            try:
+                                pass
+                                #if self.DEBUG:
+                                #    print("calling initial sync_loop, asking for full state")
+                            
+                                # Do an initial sync. This will populate the rooms attribute of the async_client
+                                #await self.sync_loop(full_state=True, set_presence="online")
+                                #if self.DEBUG:
+                                #    print("did a full state initial sync using sync_loop")
+                                #sync_result = await self.async_client.sync(timeout=30000, full_state=True, set_presence="online") # milliseconds
+                                #if self.DEBUG:
+                                #    print("matrix: FULL sync result: " + str(sync_result))
+                                #await self.async_client.run_response_callbacks(sync_result)
+                            except Exception as ex:
+                                print("Error doing initial matrix sync: " + str(ex))
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                #
+                #  IF LOGGED IN, TRY LOADING ENCRYPTION STORE
+                #
                 
                 # only get messages we haven't seen yet since the last succesful sync
-                if 'matrix_sync_token' in self.persistent_data:
-                    if self.DEBUG:
-                        print("matrix: restoring sync token to: " + str(self.persistent_data['matrix_sync_token']))
-                    self.async_client.next_batch = self.persistent_data['matrix_sync_token']
+                if self.async_client.logged_in:
+                    
+                    if 'matrix_device_id' in self.persistent_data:
+                        if self.DEBUG:
+                            print("device id was present in persistent data. Will check if local encryption file exists")
+                    
+                        theoretical_matrix_db_filename = self.candle_user_id + '_' + str(self.persistent_data['matrix_device_id']) + '.db' #candletest1:matrix.domainepublic.net_ULIVXRMDON.db
+                        theoretical_matrix_db_path = os.path.join(self.matrix_data_store_path, theoretical_matrix_db_filename)
+                        if self.DEBUG:
+                            print("load_store: theoretical_matrix_db_path: " + str(theoretical_matrix_db_path))
+                        if os.path.isfile(theoretical_matrix_db_path):
+                            self.theoretical_matrix_db_path = theoretical_matrix_db_path
+                            if self.DEBUG:
+                                print("BINGO: matrix database file existed. device.id: " + str(self.persistent_data['matrix_device_id']))
+                            self.async_client.device_id = self.persistent_data['matrix_device_id']
+                            load_store_response = self.async_client.load_store()
+                            
+                            
+                        else:
+                            print("ERROR! matrix_device_id does not also have a local file. Deleting device_id from persistent data")
+                            del self.persistent_data['matrix_device_id']
+                            self.save_persistent_data()
+                    
+                    else:
+                        print("ERROR: device_id not in persistent data!")
+                    #if 'matrix_device_id' in self.persistent_data:
+                    #    print("self.persistent_data['matrix_device_id']: " + str(self.persistent_data['matrix_device_id'])
+                    
+                    
+                    
+                    #if 'matrix_sync_token' in self.persistent_data:
+                    #    if self.DEBUG:
+                    #        print("matrix: restoring sync token to: " + str(self.persistent_data['matrix_sync_token']))
+                    #    self.async_client.next_batch = self.persistent_data['matrix_sync_token']
+                    #else:
+                    #    if self.DEBUG:
+                    #        print("Warning, no matrix sync token in persistent data")
+    
                 else:
-                    if self.DEBUG:
-                        print("Warning, no matrix sync token in persistent data")
-    
-    
+                    print("Error doing load_store. Adding sync token: still not logged in!")
+                
+                
+                    
                 
                 
                 
-    
+                
+                
+                    
                 #if 'matrix_device_id' in self.persistent_data:
                 #    self.async_client.device_id = self.persistent_data['matrix_device_id']
                 #else:
                 if self.async_client.logged_in:
+                    
+                    if self.async_client.olm:
+                        
+                        if self.DEBUG:
+                            print("\n\nENCRYPTION WAS LOADED SUCCESFULLY")
+                        
+                        async def after_first_sync():
+                            # We'll wait for the first firing of 'synced' before trusting devices.
+                            # client.synced is an asyncio event that fires any time nio syncs. This
+                            # code doesn't run in a loop, so it only fires once
+                            if self.DEBUG:
+                                print("Awaiting sync")
+                            await  self.async_client.synced.wait()
+                            if self.DEBUG:
+                                print("SYNC WAIT COMPLETE")
+                            # In practice, you want to have a list of previously-known device IDs
+                            # for each user you want ot trust. Here, we require that list as a
+                            # global variable
+                            #self.async_client.trust_devices(BOB_ID, BOB_DEVICE_IDS)
+
+                            # In this case, we'll trust _all_ of @alice's devices. NOTE that this
+                            # is a SUPER BAD IDEA in practice, but for the purpose of this example
+                            # it'll be easier, since you may end up creating lots of sessions for
+                            # @alice as you play with the script
+                            #self.async_client.trust_devices(ALICE_USER_ID)
+            
+                            if 'matrix_room_id' not in self.persistent_data:
+                                if self.DEBUG:
+                                    print("starting matrix_create_room ")
+                                await self.matrix_create_room()
+                            
+                            if 'matrix_room_id' in self.persistent_data:
+                                if self.DEBUG:
+                                    print("loading matrix room ")
+                                await self.matrix_load_room()
+                            else:
+                                if self.DEBUG:
+                                    print("error, room was not created, cannot start load_room")
+            
+                            
+                            
+                            #
+                            #  KEEP THE FIRE GOING
+                            #
+        
+                            self.matrix_started = True
+        
+                            sync_counter = 0
+                            while self.running:
+                                #print("* in while loop of sync_matrix_forever")
+                                #print("self.currently_chatting: " + str(self.currently_chatting))
+                                #print("self.persistent_data['chatting']: " + str(self.persistent_data['chatting']))
+                                # if the user disables chat access when chatting was enabled, send a goodbye message.
+                                if self.persistent_data['chatting'] == False and self.currently_chatting == True:
+                                    self.currently_chatting = False
+                                    if self.DEBUG:
+                                        print("Chatting disabled")
+                                    send_message_response = await self.send_message_to_matrix_async( 'Voco chat access has been disabled', 'Goodbye', 'High')
+            
+                                # if the user enabled chat access when chatting was disabled, send a hello message.
+                                elif self.persistent_data['chatting'] == True and self.currently_chatting == False:
+                                    if self.DEBUG:
+                                        print("Chatting (re-)enabled. Clearning chat messages queue")
+                                    #await self.sync_loop(False,"online") # purge any messages that were sent in the meantime
+                                    self.currently_chatting = True
+                
+                                    # Clear all messages that arrived while chatting was disabled
+                                    while not self.matrix_messages_queue.empty():
+                                        try:
+                                            self.matrix_messages_queue.get(False)
+                                        except Empty:
+                                            continue
+                                        self.matrix_messages_queue.task_done()
+                
+                                    send_message_response = await self.send_message_to_matrix_async( 'Voco chat access has been enabled', 'Hello', 'High')
+                                    send_message_response = await self.send_message_to_matrix_async( 'You can now chat with Voco', '', 'Low')
+            
+            
+                                if self.persistent_data['chatting']:
+                
+                                    # if Voco is being unloaded send a quick goodbye message
+                                    if self.matrix_started == False:
+                                        send_message_response = await self.send_message_to_matrix_async( 'Voco has been turned off', 'Goodbye', 'High')
+                                        break
+            
+                                    # send outgoing messages
+                                    if self.matrix_messages_queue.empty() == False:
+                                        if self.DEBUG:
+                                            print("matrix outgoing messages queue was not empty.")
+                                        outgoing_matrix_message = self.matrix_messages_queue.get(False)
+                                        if outgoing_matrix_message != None:
+                                            if self.DEBUG:
+                                                print("* message to send to Matrix network in queue: " + str(outgoing_matrix_message))
+                                            if 'message' in outgoing_matrix_message:
+                                                send_message_response = await self.send_message_to_matrix_async( str(outgoing_matrix_message['message']), str(outgoing_matrix_message['title']), str(outgoing_matrix_message['level']) )
+                                                if self.DEBUG:
+                                                    print("* sent outgoing matrix message? send_message_response: " + str(send_message_response))
+            
+            
+                                # Invite new users into room
+                                if self.matrix_invite_queue.empty() == False:
+                                    if self.DEBUG:
+                                        print("User to invite was spotted in invite queue.")
+                                    invite_username = self.matrix_invite_queue.get(False)
+                                    if invite_username != None:
+                                        if self.DEBUG:
+                                            print("inviting user: " + str(invite_username))
+                                        invite_response = await self.async_client.room_invite(self.persistent_data['matrix_room_id'], invite_username)
+                                        if self.DEBUG:
+                                            print("invite response: " + str(invite_response))
+                                        self.refresh_matrix_members = True
+            
+                                # Kick users from the room
+                                if self.matrix_kick_queue.empty() == False:
+                                    if self.DEBUG:
+                                        print("User to kick was spotted in kick queue.")
+                                    kick_username = self.matrix_kick_queue.get(False)
+                                    if kick_username != None:
+                                        if self.DEBUG:
+                                            print("kicking user: " + str(kick_username))
+                                        kick_response = await self.async_client.room_kick(self.persistent_data['matrix_room_id'], kick_username)
+                                        if self.DEBUG:
+                                            print("kick response: " + str(kick_response))
+                                        self.refresh_matrix_members = True
+                        
+                                # Refresh list of room members
+                                if self.refresh_matrix_members:
+                                    self.refresh_matrix_members = False
+                                    if self.DEBUG:
+                                        print("refreshing room members list")
+                                    try:
+                                        room_joined_members_response = await self.async_client.joined_members( str(self.persistent_data['matrix_room_id']) )
+                                        if room_joined_members_response.members:
+                                            matrix_room_members = []
+                                            for member in room_joined_members_response.members:
+                                                if self.DEBUG:
+                                                    print("+ member.user_id: " + str(member.user_id))
+                                                matrix_room_members.append({'user_id':member.user_id, 'display_name':member.display_name})
+                
+                                            self.matrix_room_members = matrix_room_members
+                                    except Exception as ex:
+                                        print("error updating matrix room members list: " + str(ex))
+                                
+                                
+                                
+                                
+                                
+                                sync_counter += 1
+    
+                                sync_delay = 3 # wait a few seconds between syncs
+            
+            
+                                # Speed up syncing if the user was recently active, decrease it if it has been a while since a message was received. Let's be nice to the server.
+                                #if self.last_time_matrix_message_received < (time.time() - 300):
+                                #    sync_delay = 50 # wait 10 seconds between syncs
+                                #elif self.last_time_matrix_message_received < (time.time() - 60):
+                                #    sync_delay = 25 # wait 5 seconds between syncs
+                                #else:
+                                #    sync_delay = 10 # wait 2 seconds between syncs
+            
+                                if sync_counter > sync_delay:
+                                    sync_counter = 0
+                                    if self.DEBUG:
+                                        print("* starting sync. sync_delay: " + str(sync_delay))
+                
+                                    if self.persistent_data['chatting']:
+                                        sync_response = await self.sync_loop(False,"online")
+                                    else:
+                                        sync_response = await self.sync_loop(False,"offline")
+                    
+                                    if self.DEBUG:
+                                        print("* sync_response: " + str(sync_response))
+                
+                
+                                    try:
+                                        get_missing_sessions_result = self.async_client.get_missing_sessions( str(self.persistent_data['matrix_room_id']) )
+                                        if self.DEBUG:
+                                            print("matrix: while: get_missing_sessions_result: " + str(get_missing_sessions_result))
+                            
+                                        for missing_user, missing_devices_list in get_missing_sessions_result.items():
+                                            if self.DEBUG:
+                                                print(") ) ) ) : ", missing_user, missing_devices_list)
+                                            for missing_device_id in missing_devices_list:
+                                
+                                                if missing_device_id != self.persistent_data['matrix_device_id']:
+                                                    if self.DEBUG:
+                                                        print(" )-> " + str(missing_device_id))
+                                                    #self.async_client.verify_device(missing_device_id)
+                                                    
+                                                    for device_id, olm_device in self.async_client.device_store[missing_user].items():
+                                                        if missing_device_id == device_id:
+                                                            if self.DEBUG:
+                                                                print("BINGO, found missing device id in device_store")
+                                                            self.async_client.verify_device(olm_device)
+                                                            if self.DEBUG:
+                                                                print(f"Trusting {device_id} from user {missing_user}")
+                                                    
+                                                    
+                                                else:
+                                                    if self.DEBUG:
+                                                        print("skipping this missing device, since it's our own device. Odd.")
+                                    
+                                
+                                    except Exception as ex:
+                                        print("error in get_missing_sessions_result (likely no encryption!): " + str(ex))
+                                
+                                
+                                
+                                
+                                
+                                if self.DEBUG:
+                                    print("* zzz")
+                                time.sleep(.2)
+            
+                                
+                                
+                                
+                                
+                                
+                                
+                                
+                                
+                                
+                                
+                
+                        after_first_sync_task = asyncio.ensure_future(after_first_sync())
+                
+                        sync_forever_task = asyncio.ensure_future(
+                                self.async_client.sync_forever(30000, full_state=True)
+                            )
+                            
+                        #matrix_messages_loop_forever_task = asyncio.ensure_future(
+                        #        self.matrix_messages_loop_forever()
+                        #    )
+                
+                        if self.DEBUG:
+                            print("STARTING GATHER EXPERIMENT")
+                        await asyncio.gather(
+                                # The order here IS significant! You have to register the task to trust
+                                # devices FIRST since it awaits the first sync
+                                after_first_sync_task,
+                                #matrix_messages_loop_forever_task,
+                                sync_forever_task
+                            )
+                        if self.DEBUG:
+                            print("BEYOND GATHER EXPERIMENT")
+                    
+                    
+                    """
                     if self.DEBUG:
                         #print("Warning, no device_id found in persistent data")
                         print("BEFORE self.async_client.device_id: " + str(self.async_client.device_id))
                     devices_response = await self.async_client.devices()
-                    print("matrix: devices?: " + str(devices_response))
+                    if self.DEBUG:
+                        print("matrix: devices?: " + str(devices_response))
                     if len(devices_response.devices) > 0:
-                        print("lots of devices")
-                        print("x" + devices_response.devices[0].id)
+                        if self.DEBUG:
+                            print("lots of devices")
+                            print("x" + devices_response.devices[0].id)
                         for device in devices_response.devices:
-                            print("dev: " + str(device))
-                            theoretical_matrix_db_filename = candle_user_id + '_' + str(device.id) + '.db' #candletest1:matrix.domainepublic.net_ULIVXRMDON.db
+                            if self.DEBUG:
+                                print("device: " + str(device))
+                            theoretical_matrix_db_filename = self.candle_user_id + '_' + str(device.id) + '.db' #candletest1:matrix.domainepublic.net_ULIVXRMDON.db
                             theoretical_matrix_db_path = os.path.join(self.matrix_data_store_path, theoretical_matrix_db_filename)
                             if self.DEBUG:
                                 print("load_store: theoretical_matrix_db_path: " + str(theoretical_matrix_db_path))
@@ -5750,8 +6328,8 @@ class VocoAdapter(Adapter):
                                 self.theoretical_matrix_db_path = theoretical_matrix_db_path
                                 if self.DEBUG:
                                     print("BINGO: matrix database file existed. device.id: " + str(device.id))
-                                self.async_client.device_id = device.id
-                                self.persistent_data['matrix_device_id'] = device.id
+                                #self.async_client.device_id = device.id
+                                #self.persistent_data['matrix_device_id'] = device.id
                                 load_store_response = self.async_client.load_store()
                                 if self.DEBUG:
                                     print("load_store_response: " + str(load_store_response))
@@ -5759,44 +6337,37 @@ class VocoAdapter(Adapter):
                                     
                                 
                                 try:
-                                    print(" +  +  +  + ")
-                                    print("candle_user_id: " + str(candle_user_id))
-                                    print("self.persistent_data['matrix_room_id']: " + str(self.persistent_data['matrix_room_id']))
-                                    print("\n\nVERIFYING DEVICES\n\n")
-                                    print(".device_store: " + str(self.async_client.device_store))
+                                    if self.DEBUG:
+                                        print(" +  +  +  + ")
+                                        print("self.candle_user_id: " + str(self.candle_user_id))
+                                        print("self.persistent_data['matrix_room_id']: " + str(self.persistent_data['matrix_room_id']))
+                                        print("\n\nVERIFYING DEVICES\n\n")
+                                        print(".device_store: " + str(self.async_client.device_store))
                                     for device_olm in self.async_client.device_store:
-                                        print("x")
-                                        print("device_olm: " + str(device_olm))
-                                        print("device_olm.user_id: " + str(device_olm.user_id))
-                                        #if device_olm.user_id != candle_user_id or device_olm.device_id != self.persistent_data['matrix_room_id']:
+                                        if self.DEBUG:
+                                            print("x")
+                                            print("device_olm: " + str(device_olm))
+                                            print("device_olm.user_id: " + str(device_olm.user_id))
+                                        #if device_olm.user_id != self.candle_user_id or device_olm.device_id != self.persistent_data['matrix_room_id']:
                                         #    print("\n M M M M M VERIFYING")
-                                        self.async_client.verify_device(device_olm)
+                                        #self.async_client.verify_device(device_olm)
                                         #print("device owner: " + str(self.async_client.device_store[device_owner]))
                         
-                                        #if device_owner == candle_user_id:
+                                        #if device_owner == self.candle_user_id:
                                         #    if 'matrix_device_id' in self.persistent_data:
                                         #        if device_id == self.persistent_data['matrix_device_id']
                                         #    continue
                                     
                                         #self.async_client.verify_device(device_olm)
                                 
-                                        """
-                                        for device_id, olm_device in self.async_client.device_store[device_owner].items():
-                                    
-                                            if device_owner == candle_user_id and device_id == self.persistent_data['matrix_device_id']:
-                                                print("skipping candle's own device")
-                                                continue
-
-                                            self.async_client.verify_device(olm_device)
-                                            print(f"Trusting {device_id} from user {device_owner}")
-                                        """
                         
-                                    print("DEVICE VERIFICATION DONE")
-                                    
-                                    print("doing full sync")
-                                    await self.sync_loop(full_state=True, set_presence="online")
                                     if self.DEBUG:
-                                        print("did a full state initial sync using sync_loop")
+                                        print("DEVICE VERIFICATION DONE")
+                                    
+                                    #print("doing full sync")
+                                    #await self.sync_loop(full_state=True, set_presence="online")
+                                    #if self.DEBUG:
+                                    #    print("did a full state initial sync using sync_loop")
                                     
                         
                                 except Exception as ex:
@@ -5805,15 +6376,17 @@ class VocoAdapter(Adapter):
                                     
                                     
                                 break
-                    
-                print("\n\nLOGGED IN? " + str(self.async_client.logged_in))
+                    """
+                            
+                if self.DEBUG:
+                    print("\n\nLOGGED IN? " + str(self.async_client.logged_in))
                 
                 
                 try:
                     
                     """
                     if 'matrix_device_id' in self.persistent_data:
-                        theoretical_matrix_db_filename = candle_user_id + '_' + self.persistent_data['matrix_device_id'] + '.db' #candletest1:matrix.domainepublic.net_ULIVXRMDON.db
+                        theoretical_matrix_db_filename = self.candle_user_id + '_' + self.persistent_data['matrix_device_id'] + '.db' #candletest1:matrix.domainepublic.net_ULIVXRMDON.db
                         self.theoretical_matrix_db_path = os.path.join(self.matrix_data_store_path, theoretical_matrix_db_filename)
                         if self.DEBUG:
                             print("load_store: self.theoretical_matrix_db_path: " + str(self.theoretical_matrix_db_path))
@@ -5839,10 +6412,14 @@ class VocoAdapter(Adapter):
                     if self.DEBUG:
                         print("matrix client was still not logged in")
                         
-                    #self.async_client.user_id = candle_user_id
+                    #self.async_client.user_id = self.candle_user_id
                     if 'matrix_token' in self.persistent_data and 'matrix_device_id' in self.persistent_data:
                         if self.DEBUG:
-                            print("matrix token was present")
+                            print("matrix token was, but did not allow for a succesfull login. Removing it.")
+                            del self.persistent_data['matrix_token']
+                            self.save_persistent_data()
+                            
+                    """
                         self.async_client.access_token = self.persistent_data['matrix_token']
                     else:
                         if self.DEBUG:
@@ -5860,6 +6437,7 @@ class VocoAdapter(Adapter):
                                 if self.DEBUG:
                                     print("login succesful!")
                                     print('login_response.access_token: ' + str(login_response.access_token))
+                                    print('login_response.device_id: ' + str(login_response.device_id))
                                 self.persistent_data['matrix_token'] = str(login_response.access_token)
                                 self.persistent_data['matrix_device_id'] = str(login_response.device_id)
                                 self.save_persistent_data()
@@ -5880,6 +6458,458 @@ class VocoAdapter(Adapter):
                         except Exception as ex:
                             print("Error: login attempt failed: " + str(ex))
 
+                    """
+
+
+
+    async def matrix_messages_loop_forever(self):
+        if self.DEBUG:
+            print("in matrix_messages_loop_forever_task. Self.running: " + str(self.running))
+            
+        await self.async_client.synced.wait()
+        if self.DEBUG:
+            print("Zync: SYNC WAIT COMPLETE")
+        
+        time.sleep(1)
+            
+        sync_counter = 0
+        while self.running:
+            
+            if self.matrix_started or True:
+                sync_counter += 1
+                print("sync_counter: " + str(sync_counter))
+                sync_delay = 3 # wait a few seconds between syncs
+    
+    
+                # Speed up syncing if the user was recently active, decrease it if it has been a while since a message was received. Let's be nice to the server.
+                #if self.last_time_matrix_message_received < (time.time() - 300):
+                #    sync_delay = 50 # wait 10 seconds between syncs
+                #elif self.last_time_matrix_message_received < (time.time() - 60):
+                #    sync_delay = 25 # wait 5 seconds between syncs
+                #else:
+                #    sync_delay = 10 # wait 2 seconds between syncs
+    
+                if sync_counter > sync_delay:
+                    sync_counter = 0
+                    if self.DEBUG:
+                        print("* starting sync. sync_delay: " + str(sync_delay))
+        
+                    #if self.persistent_data['chatting']:
+                    #    sync_response = await self.sync_loop(False,"online")
+                    #else:
+                    #    sync_response = await self.sync_loop(False,"offline")
+                    sync_response = await self.async_client.sync(timeout=30000,full_state=False) # milliseconds
+                    #await self.async_client.run_response_callbacks([sync_response])
+                    if self.DEBUG:
+                        print("* sync_response: " + str(sync_response))
+        
+                    """
+                    try:
+                        get_missing_sessions_result = self.async_client.get_missing_sessions( str(self.persistent_data['matrix_room_id']) )
+                        if self.DEBUG:
+                            print("matrix: while: get_missing_sessions_result: " + str(get_missing_sessions_result))
+                    
+                        for missing_user, missing_devices_list in get_missing_sessions_result.items():
+                            if self.DEBUG:
+                                print(") ) ) ) : ", missing_user, missing_devices_list)
+                            for missing_device_id in missing_devices_list:
+                        
+                                if missing_device_id != self.persistent_data['matrix_device_id']:
+                                    if self.DEBUG:
+                                        print(" )-> " + str(missing_device_id))
+                                    self.async_client.verify_device(missing_device_id)
+                                else:
+                                    if self.DEBUG:
+                                        print("skipping this missing device, since it's our own device. Odd.")
+                            
+                        
+                    except Exception as ex:
+                        print("error in get_missing_sessions_result (likely no encryption!): " + str(ex))
+                    """
+                        
+            else:
+                if self.DEBUG:
+                    print("* zync: matrix not started yet")
+                
+            if self.DEBUG:
+                print("* zync")
+            time.sleep(.2)
+
+
+    
+    async def matrix_create_room(self):
+        if self.DEBUG:
+            print("\nin matrix_create_room")
+            
+        joined_rooms_response = await self.async_client.joined_rooms()
+    
+        if self.DEBUG:
+            print("\njoined_rooms_response: " + str(joined_rooms_response))
+    
+        if (isinstance(joined_rooms_response, JoinedRoomsResponse)):
+   
+            if self.DEBUG:
+                print("got rooms_list: " + str(joined_rooms_response.rooms))
+            number_of_rooms = len(joined_rooms_response.rooms)
+   
+            if self.DEBUG:
+                print("number_of_rooms: " + str(number_of_rooms))
+        
+            if number_of_rooms == 0:
+                if self.DEBUG:
+                    print("attempting to create room now")
+            
+                try:
+                    #room_response = await self.async_client.room_create(name="Candle",federate=self.matrix_federate)
+                    #room_response = await async_client.room_create( self.persistent_data['matrix_token'], name="Candle",federate=False) #, initial_state=[enable_room_encryption_event_dict] )
+                
+                    #self.candle_user_id = "@" + self.persistent_data['matrix_candle_username'] + ":" + self.persistent_data['matrix_server']
+                
+                    invite_user_id = None
+                    if 'matrix_invite_username' in self.persistent_data:
+                        invite_user_id = self.persistent_data['matrix_invite_username'] # if the user skipped creating an accoun and provided an existing user_id
+                    elif 'matrix_username' in self.persistent_data:
+                        invite_user_id = "@" + self.persistent_data['matrix_username'] + ":" + self.persistent_data['matrix_server'] # if we generated an account for the user
+                
+                    room_response = None
+                
+                    try:
+                    
+                        # initial_state=[EnableEncryptionBuilder().as_dict()]
+                    
+                        #room_response = await self.async_client.room_create(name="Candle",federate=self.matrix_federate)
+                    
+                        # invite=[invite_user_id]
+                        if self.DEBUG:
+                            print("#\n# CREATING ROOM\n#")
+                            print("admin = self.async_client.user_id: " + str(self.async_client.user_id))
+                            print("self.candle_user_id: " + str(self.candle_user_id))
+                            print("invite_user_id: " + str(invite_user_id))
+                        
+                        invitees = []
+                        power_users = {self.candle_user_id: 100}
+                    
+                        if invite_user_id != None:
+                            invitees.append(invite_user_id)
+                            power_users[invite_user_id] = 100
+                    
+                    
+                        room_response = await self.async_client.room_create( name="Candle", topic="Talk to Voco", federate=self.matrix_federate, invite=invitees, initial_state=[{
+                                "type": "m.room.encryption",
+                                        "state_key": "",
+                                        "content": {
+                                            "algorithm": "m.megolm.v1.aes-sha2"
+                                        }
+                                    }
+                                
+                    
+                                ], power_level_override={
+                                    "type": "m.room.power_levels",
+                                            "state_key": "",
+                                            "content": {
+                                                "ban": 100,
+                                                "invite": 100,
+                                                "kick": 100,
+                                                "redact": 20,
+                                                "users_default": 50,
+                                                "users": power_users,
+                                                "events": {
+                                                    "m.room.message": 20,
+                                                    "m.room.avatar": 50,
+                                                    "m.room.canonical_alias": 50,
+                                                    "m.room.topic": 20,
+                                                    "m.room.history_visibility": 100,
+                                                },
+                                            }
+                                    })
+                
+                        if self.DEBUG:
+                            print("\nroom_response: " + str(room_response))
+                            print("room response dir: " + str(dir(room_response)))
+                            print(".")
+                
+                    except Exception as ex:
+                        print("Error creating room: " + str(dir(ex)))
+                
+                
+                
+           
+                    if (isinstance(room_response, RoomCreateResponse)):
+                        if self.DEBUG:
+                            print("succesfully created room: " + str(room_response))
+                            print("room dir: " + str(dir(room_response)))
+               
+                        if self.DEBUG:
+                            print("room_response.room_id: " + str(room_response.room_id))
+                    
+                    
+                        try:
+                            self.persistent_data['matrix_room_id'] = str(room_response.room_id)
+                        
+                            if self.DEBUG:
+                                print("room ID saved: " + str(self.persistent_data['matrix_room_id']))
+                        
+                        
+                            #await self.async_client.join( self.persistent_data['matrix_room_id'] )
+                    
+                            sync_result = await self.async_client.sync(timeout=30000) # milliseconds
+                            if self.DEBUG:
+                                print("matrix: quick sync_result: " + str(sync_result))
+                                print("client.rooms after room creation: " + str(self.async_client.rooms))
+                        
+                            
+                            #if hasattr(room_response, 'room_id'):
+                            #    print("room_id was in room response.. so far so good")
+                        
+                                # Joing the newly created room outselves
+                            
+                        
+                        except Exception as ex:
+                            print("Error in room_id extraction: " + str(ex))
+                    
+                    
+                        # Enable encryption for the room
+                        """
+                        encryption_enable_message = EnableEncryptionBuilder().as_dict()
+                        if self.DEBUG:
+                            print("encryption_enable_message: " + str(encryption_enable_message))
+                
+                        room_send_result = await self.async_client.room_send(
+                                    room_id = self.persistent_data['matrix_room_id'],
+                                    content = encryption_enable_message["content"],
+                                    message_type = encryption_enable_message['type']
+                                    #,ignore_unverified_devices=True
+                                )
+                
+                        if self.DEBUG:
+                            print("result from enabling room encryption: " + str(room_send_result))
+                        """
+                        try:
+                            # set the room to not allow newly added users to see what has been said in the past
+                            hide_history_event = ChangeHistoryVisibilityBuilder("joined").as_dict()
+                            if self.DEBUG:
+                                print("generated hide_history_event: " + str(hide_history_event))
+                            room_send_result = await self.async_client.room_send(
+                                        room_id = self.persistent_data['matrix_room_id'],
+                                        content = hide_history_event["content"],
+                                        message_type = hide_history_event['type']
+                                        #,ignore_unverified_devices=True
+                                    )
+                            if self.DEBUG:
+                                print("result from setting history visibility to joined: " + str(room_send_result))
+                    
+                        
+                            # Tell the server to automatically delete old messages from its database. This is an experimental Matrix feature, but better to be early.
+                            # https://matrix-org.github.io/synapse/latest/message_retention_policies.html?highlight=delete%20message#message-retention-policies
+                            room_send_result = await self.async_client.room_put_state(
+                                        room_id = self.persistent_data['matrix_room_id'],
+                                        content = {"max_lifetime":3600000}, # milliseconds
+                                        message_type = 'm.room.retention'
+                                    )
+                        
+                        except Exception as ex:
+                            print("Error changing histort setting: " + str(ex))
+                            
+                    else:
+                        if self.DEBUG:
+                            print("Error: Matrix room create response indicates failure")
+            
+                except Exception as ex:
+                    print("Error in room creation: " + str(ex)) 
+       
+                #print("room_response: " + str(room_response))
+           
+                #if room_id != None:
+                #    self.persistent_data['matrix_room_id'] = room_id
+                #    print("self.persistent_data['matrix_room_id']: " + str(self.persistent_data['matrix_room_id']))
+                #else:
+                #    print("room id was none?")
+           
+            else:
+                # we've joined some rooms. 
+            
+                # Check the the client rooms list is somehow still empty.
+                if len(self.async_client.rooms) == 0:
+                    if self.DEBUG:
+                        print("Hmm, apparently we joined rooms... but we didn't? Will try joining it again")
+                    await self.async_client.join( joined_rooms_response.rooms[0] )
+                
+                
+                    
+                # If the room id wasn't set yet, we do so now.
+                if 'matrix_room_id' not in self.persistent_data:
+                    if self.DEBUG:
+                        print("saving missing room id to persistence file")
+                    self.persistent_data['matrix_room_id'] = joined_rooms_response.rooms[0]
+                    #self.save_persistent_data()
+                    """
+                    try:
+                        await self.async_client.room_send(
+                            # Watch out! If you join an old room you'll see lots of old messages
+                            room_id=self.persistent_data['matrix_room_id'],
+                            message_type="m.room.encryption",
+                            content = { "algorithm": "m.megolm.v1.aes-sha2" }
+                        )
+                    except Exception as ex:
+                        print("error setting room to encrypted: "  + str(ex))
+                   """
+               
+                else:
+                    if self.DEBUG:
+                        print("room situation is ok")
+               
+        else:
+            if self.DEBUG:
+                print("getting joined rooms list failed")
+
+
+
+
+
+
+
+    async def matrix_load_room(self):
+        print("in matrix_load_room")
+        
+        # We are logged in and a room exists
+        if 'matrix_room_id' in self.persistent_data:
+        
+            if self.DEBUG:
+                print("room id: " + str(self.persistent_data['matrix_room_id']))
+        
+            try:
+                if self.DEBUG:
+                    print("starting a quick Matrix sync")
+                # Perhaps a sync will make the client really join the room
+                #sync_result = await self.async_client.sync(timeout=30000) # milliseconds
+                #if self.DEBUG:
+                #    print("matrix: quick sync_result: " + str(sync_result))
+                
+                room_members_list = []
+                room_joined_members_response = await self.async_client.joined_members( str(self.persistent_data['matrix_room_id']) )
+                if self.DEBUG:
+                    print("room_joined_members_response: " + str(room_joined_members_response))
+                    print("room_joined_members_response.members: " + str(room_joined_members_response.members))
+                if room_joined_members_response.members:
+                    matrix_room_members = []
+                    for member in room_joined_members_response.members:
+                        #print("+ member: " + str(member))
+                        #print("+ member dir: " + str(dir(member)))
+                        #print("+ member.user_id: " + str(member.user_id))
+                        #print("+ member.display_name: " + str(member.display_name))
+                        matrix_room_members.append({'user_id':member.user_id, 'display_name':member.display_name})
+                        room_members_list.append(member.user_id)
+                        
+                    self.matrix_room_members = matrix_room_members
+                    print("final self.matrix_room_members list: " + str(self.matrix_room_members))
+                    
+                
+                #room_members_list
+                
+                
+            except Exception as ex:
+                print("error while quickly syncing: " + str(ex))
+			
+            #try:
+            #    get_missing_sessions_result = self.async_client.get_missing_sessions( str(self.persistent_data['matrix_room_id']) )
+            #    if self.DEBUG:
+            #        print("matrix: get_missing_sessions_result: " + str(get_missing_sessions_result))
+            #        
+            #    for missing_user, missing_device in get_missing_sessions_result.items():
+            #        print(") ) ) ) ", missing_user, missing_device)
+            #    
+            #except Exception as ex:
+            #    print("error in get_missing_sessions_result (likely no encryption!): " + str(ex))
+        
+        
+            if self.DEBUG:
+                print("\n\n rooms:")
+            for room in self.async_client.rooms.keys():
+            
+                try:
+                    if self.DEBUG:
+                        print("room: " + str(self.async_client.rooms[room]))
+                        print("room dir: " + str(dir(self.async_client.rooms[room])))
+                except Exception as ex:
+                    print("Error looping over rooms: " + str(ex))
+            
+            try:
+                print(" +  +  +  + ")
+                print("self.candle_user_id: " + str(self.candle_user_id))
+                print("self.persistent_data['matrix_room_id']: " + str(self.persistent_data['matrix_room_id']))
+                print("\n\nVERIFYING DEVICES\n\n")
+                print(".device_store: " + str(self.async_client.device_store))
+                for device_olm in self.async_client.device_store:
+                    #print("x")
+                    #print("device_olm: " + str(device_olm))
+                    #print("device_olm.user_id: " + str(device_olm.user_id))
+                    if device_olm.user_id == self.candle_user_id and device_olm.device_id == self.persistent_data['matrix_device_id']:
+                        print("skipping verifying own device")
+                        #print("\n M M M M M VERIFYING (temporary disabled)")
+                    else:
+                        self.async_client.verify_device(device_olm)
+                        print(f"^ Trusting {device_olm.device_id} from user {device_olm.user_id}")
+                    #print("device owner: " + str(self.async_client.device_store[device_owner]))
+            
+                    #if device_owner == self.candle_user_id:
+                    #    if 'matrix_device_id' in self.persistent_data:
+                    #        if device_id == self.persistent_data['matrix_device_id']
+                    #    continue
+                        
+                    #self.async_client.verify_device(device_olm)
+                    
+                    """
+                    for device_id, olm_device in self.async_client.device_store[device_owner].items():
+                        
+                        if device_owner == self.candle_user_id and device_id == self.persistent_data['matrix_device_id']:
+                            print("skipping candle's own device")
+                            continue
+
+                        self.async_client.verify_device(olm_device)
+                        print(f"Trusting {device_id} from user {device_owner}")
+                    """
+            
+                #print("DEVICE VERIFICATION DONE")
+            
+            
+            except Exception as ex:
+                print("Error in verifying devices: " + str(ex))
+        
+        
+            try:
+            
+            
+                # Get room state
+                room_get_state_response = await self.async_client.room_get_state( str(self.persistent_data['matrix_room_id']) )
+                if self.DEBUG:
+                    print("room_get_state_response: " + str(room_get_state_response))
+        
+                # INVITE (now already handled when room is created)
+                """
+                invite_user_id = "@" + self.persistent_data['matrix_username'] + ":" + self.persistent_data['matrix_server']
+                if self.DEBUG:
+                    print("inviting main user into room: " + str(invite_user_id))
+
+                #invite_response = await self.async_client.room_invite(room_id=self.persistent_data['matrix_room_id'], user_id=invite_user_id)
+                #invite_response = await self.async_client.room_invite(room_id=self.persistent_data['matrix_room_id'], user_id=invite_user_id)
+                invite_response = await self.async_client.room_invite(self.persistent_data['matrix_room_id'], invite_user_id)
+                print("invite response: " + str(invite_response))
+                """
+        
+                #if self.DEBUG:
+                #    print("room_id exists. Sending hello world")
+       
+            
+            
+            except Exception as ex:
+                print("error while getting room state and sending welcome/loaded message: " + str(ex))
+    
+        else:
+            if self.DEBUG:
+                print("Error, matrix_room_id was not in persistent_data")
+        
+
+
 
     async def matrix_main(self):
         if self.DEBUG:
@@ -5892,7 +6922,7 @@ class VocoAdapter(Adapter):
             
             # try to log in to Matrix server with token
             
-            candle_user_id = "@" + self.persistent_data['matrix_candle_username'] + ":" + self.persistent_data['matrix_server']
+            self.candle_user_id = "@" + self.persistent_data['matrix_candle_username'] + ":" + self.persistent_data['matrix_server']
             server = "https://" + str(self.persistent_data['matrix_server'])
             
             if self.DEBUG:
@@ -5901,7 +6931,7 @@ class VocoAdapter(Adapter):
             if self.async_client == None:
                 
                 await self.start_matrix_client_async()
-                
+                print("- back in matrix_main")
                 
            
             else:
@@ -5925,7 +6955,8 @@ class VocoAdapter(Adapter):
                     if self.DEBUG:
                         print("calling initial sync_loop, asking for full state")
                     # Do an initial sync. This will populate the rooms attribute of the async_client
-                    await self.sync_loop(full_state=True, set_presence="online")
+                    
+                    sync_result = await self.sync_loop(full_state=True, set_presence="online")
                     if self.DEBUG:
                         print("did a full state extra sync using sync_loop")
                     #sync_result = await self.async_client.sync(timeout=30000, full_state=True, set_presence="online") # milliseconds
@@ -5961,8 +6992,9 @@ class VocoAdapter(Adapter):
                 
                 
                 
-                    print("self.async_client.olm: " + str(self.async_client.olm))
-                    print("self.async_client.store: " + str(self.async_client.store))
+                    if self.DEBUG:
+                        print("self.async_client.olm: " + str(self.async_client.olm))
+                        print("self.async_client.store: " + str(self.async_client.store))
                     #print("olm_account_shared: " + str(self.async_client.olm_account_shared))
                     
                     try:
@@ -5971,32 +7003,30 @@ class VocoAdapter(Adapter):
                             print("matrix: get_missing_sessions_result: " + str(get_missing_sessions_result))
                     
                         for missing_user, missing_device in get_missing_sessions_result.items():
-                            print(") ) ) ) ", missing_user, missing_device)
+                            if self.DEBUG:
+                                print(") ) ) ) ", missing_user, missing_device)
                 
                     except Exception as ex:
-                        print("error in get_missing_sessions_result (likely no encryption!): " + str(ex))
+                        if self.DEBUG:
+                            print("error in get_missing_sessions_result (likely no encryption!): " + str(ex))
                     
                     
                     if self.DEBUG:
                         
             
                         devices_response = await self.async_client.devices()
-                        print("matrix: devices?: " + str(devices_response.devices))
-                        
-                        print("device store:")
-                        print(f"{self.async_client.user_id}'s device store: {self.async_client.device_store[self.async_client.user_id]}")
+                        if self.DEBUG:
+                            print("matrix: devices?: " + str(devices_response.devices))
+                            print("device store:")
+                            print(f"{self.async_client.user_id}'s device store: {self.async_client.device_store[self.async_client.user_id]}")
             
                         
-            
-            
                         get_displayname_response = await self.async_client.get_displayname()
-                        print("__get_displayname_response: " + str(get_displayname_response))
+                        if self.DEBUG:
+                            print("__get_displayname_response: " + str(get_displayname_response))
                 
                 except Exception as ex:
                     print("Error doing a few queries: " + str(ex))
-            
-            
-            
             
             
                 if self.DEBUG:
@@ -6012,360 +7042,7 @@ class VocoAdapter(Adapter):
                 #    print("encrypted rooms dir: " + (str(dir(encrypted_room))) )
                 #    print("checking for joined room next")
                 
-                joined_rooms_response = await self.async_client.joined_rooms()
-            
-                if self.DEBUG:
-                    print("\njoined_rooms_response: " + str(joined_rooms_response))
-            
-                if (isinstance(joined_rooms_response, JoinedRoomsResponse)):
-           
-                    if self.DEBUG:
-                        print("got rooms_list: " + str(joined_rooms_response.rooms))
-                    number_of_rooms = len(joined_rooms_response.rooms)
-           
-                    if self.DEBUG:
-                        print("number_of_rooms: " + str(number_of_rooms))
                 
-                    if number_of_rooms == 0:
-                        if self.DEBUG:
-                            print("attempting to create room now")
-                    
-                        try:
-                            #room_response = await self.async_client.room_create(name="Candle",federate=self.matrix_federate)
-                            #room_response = await async_client.room_create( self.persistent_data['matrix_token'], name="Candle",federate=False) #, initial_state=[enable_room_encryption_event_dict] )
-                        
-                            #candle_user_id = "@" + self.persistent_data['matrix_candle_username'] + ":" + self.persistent_data['matrix_server']
-                        
-                            invite_user_id = None
-                            if 'matrix_invite_username' in self.persistent_data:
-                                invite_user_id = self.persistent_data['matrix_invite_username'] # if the user skipped creating an accoun and provided an existing user_id
-                            elif 'matrix_username' in self.persistent_data:
-                                invite_user_id = "@" + self.persistent_data['matrix_username'] + ":" + self.persistent_data['matrix_server'] # if we generated an account for the user
-                        
-                            room_response = None
-                        
-                            try:
-                            
-                                # initial_state=[EnableEncryptionBuilder().as_dict()]
-                            
-                                #room_response = await self.async_client.room_create(name="Candle",federate=self.matrix_federate)
-                            
-                                # invite=[invite_user_id]
-                                if self.DEBUG:
-                                    print("#\n# CREATING ROOM\n#")
-                                    print("admin = self.async_client.user_id: " + str(self.async_client.user_id))
-                                    print("candle_user_id: " + str(candle_user_id))
-                                    print("invite_user_id: " + str(invite_user_id))
-                                
-                                invitees = []
-                                power_users = {candle_user_id: 100}
-                            
-                                if invite_user_id != None:
-                                    invitees.append(invite_user_id)
-                                    power_users[invite_user_id] = 100
-                            
-                            
-                                room_response = await self.async_client.room_create( name="Candle", topic="Talk to Voco", federate=self.matrix_federate, invite=invitees, initial_state=[{
-                                        "type": "m.room.encryption",
-                                                "state_key": "",
-                                                "content": {
-                                                    "algorithm": "m.megolm.v1.aes-sha2"
-                                                }
-                                            }
-                                        
-                            
-                                        ], power_level_override={
-                                            "type": "m.room.power_levels",
-                                                    "state_key": "",
-                                                    "content": {
-                                                        "ban": 100,
-                                                        "invite": 100,
-                                                        "kick": 100,
-                                                        "redact": 20,
-                                                        "users_default": 50,
-                                                        "users": power_users,
-                                                        "events": {
-                                                            "m.room.message": 20,
-                                                            "m.room.avatar": 50,
-                                                            "m.room.canonical_alias": 50,
-                                                            "m.room.topic": 20,
-                                                            "m.room.history_visibility": 100,
-                                                        },
-                                                    }
-                                            })
-                        
-                                if self.DEBUG:
-                                    print("\nroom_response: " + str(room_response))
-                                    print("room response dir: " + str(dir(room_response)))
-                                    print(".")
-                        
-                            except Exception as ex:
-                                print("Error creating room: " + str(dir(ex)))
-                        
-                        
-                        
-                   
-                            if (isinstance(room_response, RoomCreateResponse)):
-                                if self.DEBUG:
-                                    print("succesfully created room: " + str(room_response))
-                                    print("room dir: " + str(dir(room_response)))
-                       
-                                if self.DEBUG:
-                                    print("room_response.room_id: " + str(room_response.room_id))
-                            
-                            
-                                try:
-                                    self.persistent_data['matrix_room_id'] = str(room_response.room_id)
-                                
-                                    if self.DEBUG:
-                                        print("room ID saved: " + str(self.persistent_data['matrix_room_id']))
-                                
-                                
-                                    #await self.async_client.join( self.persistent_data['matrix_room_id'] )
-                            
-                                    sync_result = await self.async_client.sync(timeout=30000) # milliseconds
-                                    if self.DEBUG:
-                                        print("matrix: quick sync_result: " + str(sync_result))
-                                        print("client.rooms after room creation: " + str(self.async_client.rooms))
-                                
-                                    
-                                    #if hasattr(room_response, 'room_id'):
-                                    #    print("room_id was in room response.. so far so good")
-                                
-                                        # Joing the newly created room outselves
-                                    
-                                
-                                except Exception as ex:
-                                    print("Error in room_id extraction: " + str(ex))
-                            
-                            
-                                # Enable encryption for the room
-                                """
-                                encryption_enable_message = EnableEncryptionBuilder().as_dict()
-                                if self.DEBUG:
-                                    print("encryption_enable_message: " + str(encryption_enable_message))
-                        
-                                room_send_result = await self.async_client.room_send(
-                                            room_id = self.persistent_data['matrix_room_id'],
-                                            content = encryption_enable_message["content"],
-                                            message_type = encryption_enable_message['type']
-                                            #,ignore_unverified_devices=True
-                                        )
-                        
-                                if self.DEBUG:
-                                    print("result from enabling room encryption: " + str(room_send_result))
-                                """
-                                try:
-                                    # set the room to not allow newly added users to see what has been said in the past
-                                    hide_history_event = ChangeHistoryVisibilityBuilder("joined").as_dict()
-                                    if self.DEBUG:
-                                        print("generated hide_history_event: " + str(hide_history_event))
-                                    room_send_result = await self.async_client.room_send(
-                                                room_id = self.persistent_data['matrix_room_id'],
-                                                content = hide_history_event["content"],
-                                                message_type = hide_history_event['type']
-                                                #,ignore_unverified_devices=True
-                                            )
-                                    if self.DEBUG:
-                                        print("result from setting history visibility to joined: " + str(room_send_result))
-                            
-                                
-                                    # Tell the server to automatically delete old messages from its database. This is an experimental Matrix feature, but better to be early.
-                                    # https://matrix-org.github.io/synapse/latest/message_retention_policies.html?highlight=delete%20message#message-retention-policies
-                                    room_send_result = await self.async_client.room_put_state(
-                                                room_id = self.persistent_data['matrix_room_id'],
-                                                content = {"max_lifetime":3600000}, # milliseconds
-                                                message_type = 'm.room.retention'
-                                            )
-                                
-                                except Exception as ex:
-                                    print("Error changing histort setting: " + str(ex))
-                                    
-                            else:
-                                if self.DEBUG:
-                                    print("Error: Matrix room create response indicates failure")
-                    
-                        except Exception as ex:
-                            print("Error in room creation: " + str(ex)) 
-               
-                        #print("room_response: " + str(room_response))
-                   
-                        #if room_id != None:
-                        #    self.persistent_data['matrix_room_id'] = room_id
-                        #    print("self.persistent_data['matrix_room_id']: " + str(self.persistent_data['matrix_room_id']))
-                        #else:
-                        #    print("room id was none?")
-                   
-                    else:
-                        # we've joined some rooms. 
-                    
-                        # Check the the client rooms list is somehow still empty.
-                        if len(self.async_client.rooms) == 0:
-                            if self.DEBUG:
-                                print("Hmm, apparently we joined rooms... but we didn't? Will try joining it again")
-                            await self.async_client.join( joined_rooms_response.rooms[0] )
-                        
-                        
-                            
-                        # If the room id wasn't set yet, we do so now.
-                        if 'matrix_room_id' not in self.persistent_data:
-                            if self.DEBUG:
-                                print("saving missing room id to persistence file")
-                            self.persistent_data['matrix_room_id'] = joined_rooms_response.rooms[0]
-                            #self.save_persistent_data()
-                            """
-                            try:
-                                await self.async_client.room_send(
-                                    # Watch out! If you join an old room you'll see lots of old messages
-                                    room_id=self.persistent_data['matrix_room_id'],
-                                    message_type="m.room.encryption",
-                                    content = { "algorithm": "m.megolm.v1.aes-sha2" }
-                                )
-                            except Exception as ex:
-                                print("error setting room to encrypted: "  + str(ex))
-                           """
-                       
-                        else:
-                            if self.DEBUG:
-                                print("room situation is ok")
-                       
-                       
-                       
-                    # We are logged in and a room exists
-                    if 'matrix_room_id' in self.persistent_data:
-                    
-                        if self.DEBUG:
-                            print("room id: " + str(self.persistent_data['matrix_room_id']))
-                    
-                        try:
-                            if self.DEBUG:
-                                print("starting a quick Matrix sync")
-                            # Perhaps a sync will make the client really join the room
-                            sync_result = await self.async_client.sync(timeout=30000) # milliseconds
-                            if self.DEBUG:
-                                print("matrix: quick sync_result: " + str(sync_result))
-                            
-                            """
-                            room_joined_members_response = await self.async_client.joined_members( str(self.persistent_data['matrix_room_id']) )
-                            if self.DEBUG:
-                                print("room_joined_members_response: " + str(room_joined_members_response))
-                                print("room_joined_members_response.members: " + str(room_joined_members_response.members))
-                            if room_joined_members_response.members:
-                                self.matrix_room_members = []
-                                for member in room_joined_members_response.members:
-                                    #print("+ member: " + str(member))
-                                    #print("+ member dir: " + str(dir(member)))
-                                    #print("+ member.user_id: " + str(member.user_id))
-                                    #print("+ member.display_name: " + str(member.display_name))
-                                    self.matrix_room_members.append({'user_id':member.user_id, 'display_name':member.display_name})
-                        
-                                print("final self.matrix_room_members list: " + str(self.matrix_room_members))
-                            """
-                            
-                        except Exception as ex:
-                            print("error while quickly syncing: " + str(ex))
-						
-                        try:
-                            get_missing_sessions_result = self.async_client.get_missing_sessions( str(self.persistent_data['matrix_room_id']) )
-                            if self.DEBUG:
-                                print("matrix: get_missing_sessions_result: " + str(get_missing_sessions_result))
-                                
-                            for missing_user, missing_device in get_missing_sessions_result.items():
-                                print(") ) ) ) ", missing_user, missing_device)
-                            
-                        except Exception as ex:
-                            print("error in get_missing_sessions_result (likely no encryption!): " + str(ex))
-                    
-                    
-                        if self.DEBUG:
-                            print("\n\n rooms:")
-                        for room in self.async_client.rooms.keys():
-                        
-                            try:
-                                if self.DEBUG:
-                                    print("room: " + str(self.async_client.rooms[room]))
-                                    print("room dir: " + str(dir(self.async_client.rooms[room])))
-                            except Exception as ex:
-                                print("Error looping over rooms: " + str(ex))
-                        
-                    
-                    
-                        
-                        try:
-                            print(" +  +  +  + ")
-                            print("candle_user_id: " + str(candle_user_id))
-                            print("self.persistent_data['matrix_room_id']: " + str(self.persistent_data['matrix_room_id']))
-                            print("\n\nVERIFYING DEVICES\n\n")
-                            print(".device_store: " + str(self.async_client.device_store))
-                            for device_olm in self.async_client.device_store:
-                                print("x")
-                                print("device_olm: " + str(device_olm))
-                                print("device_olm.user_id: " + str(device_olm.user_id))
-                                if device_olm.user_id != candle_user_id or device_olm.device_id != self.persistent_data['matrix_room_id']:
-                                    print("\n M M M M M VERIFYING")
-                                    self.async_client.verify_device(device_olm)
-                                #print("device owner: " + str(self.async_client.device_store[device_owner]))
-                        
-                                #if device_owner == candle_user_id:
-                                #    if 'matrix_device_id' in self.persistent_data:
-                                #        if device_id == self.persistent_data['matrix_device_id']
-                                #    continue
-                                    
-                                #self.async_client.verify_device(device_olm)
-                                
-                                """
-                                for device_id, olm_device in self.async_client.device_store[device_owner].items():
-                                    
-                                    if device_owner == candle_user_id and device_id == self.persistent_data['matrix_device_id']:
-                                        print("skipping candle's own device")
-                                        continue
-
-                                    self.async_client.verify_device(olm_device)
-                                    print(f"Trusting {device_id} from user {device_owner}")
-                                """
-                        
-                            #print("DEVICE VERIFICATION DONE")
-                        
-                        
-                        except Exception as ex:
-                            print("Error in verifying devices: " + str(ex))
-                    
-                    
-                        try:
-                        
-                        
-                            # Get room state
-                            room_get_state_response = await self.async_client.room_get_state( str(self.persistent_data['matrix_room_id']) )
-                            if self.DEBUG:
-                                print("room_get_state_response: " + str(room_get_state_response))
-                    
-                            # INVITE (now already handled when room is created)
-                            """
-                            invite_user_id = "@" + self.persistent_data['matrix_username'] + ":" + self.persistent_data['matrix_server']
-                            if self.DEBUG:
-                                print("inviting main user into room: " + str(invite_user_id))
-
-                            #invite_response = await self.async_client.room_invite(room_id=self.persistent_data['matrix_room_id'], user_id=invite_user_id)
-                            #invite_response = await self.async_client.room_invite(room_id=self.persistent_data['matrix_room_id'], user_id=invite_user_id)
-                            invite_response = await self.async_client.room_invite(self.persistent_data['matrix_room_id'], invite_user_id)
-                            print("invite response: " + str(invite_response))
-                            """
-                    
-                            #if self.DEBUG:
-                            #    print("room_id exists. Sending hello world")
-                   
-                        
-                        
-                        except Exception as ex:
-                            print("error while getting room state and sending welcome/loaded message: " + str(ex))
-                
-                    else:
-                        if self.DEBUG:
-                            print("Error, matrix_room_id was not in persistent_data")
-                   
-                else:
-                    if self.DEBUG:
-                        print("getting joined rooms list failed")
                
                 #default
                 # asyncio.run_coroutine_threadsafe(self.send(content), loop=self.loop)
@@ -6385,153 +7062,15 @@ class VocoAdapter(Adapter):
             
             
             
-                print("Starting main Matrix while loop")
-            
-                #
-                #  KEEP THE FIRE GOING
-                #
-            
-                sync_counter = 0
-                while self.running:
-                    #print("* in while loop of sync_matrix_forever")
-                    #print("self.currently_chatting: " + str(self.currently_chatting))
-                    #print("self.persistent_data['chatting']: " + str(self.persistent_data['chatting']))
-                    # if the user disables chat access when chatting was enabled, send a goodbye message.
-                    if self.persistent_data['chatting'] == False and self.currently_chatting == True:
-                        self.currently_chatting = False
-                        if self.DEBUG:
-                            print("Chatting disabled")
-                        send_message_response = await self.send_message_to_matrix_async( 'Voco chat access has been disabled', 'Goodbye', 'High')
-                
-                    # if the user enabled chat access when chatting was disabled, send a hello message.
-                    elif self.persistent_data['chatting'] == True and self.currently_chatting == False:
-                        if self.DEBUG:
-                            print("Chatting (re-)enabled. Clearning chat messages queue")
-                        #await self.sync_loop(False,"online") # purge any messages that were sent in the meantime
-                        self.currently_chatting = True
-                    
-                        # Clear all messages that arrived while chatting was disabled
-                        while not self.matrix_messages_queue.empty():
-                            try:
-                                self.matrix_messages_queue.get(False)
-                            except Empty:
-                                continue
-                            self.matrix_messages_queue.task_done()
-                    
-                        send_message_response = await self.send_message_to_matrix_async( 'Voco chat access has been enabled', 'Hello', 'High')
-                
-                
-                    if self.persistent_data['chatting']:
-                    
-                        # if Voco is being unloaded send a quick goodbye message
-                        if self.matrix_started == False:
-                            send_message_response = await self.send_message_to_matrix_async( 'Voco has been turned off', 'Goodbye', 'High')
-                            break
-                
-                        # send outgoing messages
-                        if self.matrix_messages_queue.empty() == False:
-                            if self.DEBUG:
-                                print("matrix outgoing messages queue was not empty.")
-                            outgoing_matrix_message = self.matrix_messages_queue.get(False)
-                            if outgoing_matrix_message != None:
-                                if self.DEBUG:
-                                    print("* message to send to Matrix network in queue: " + str(outgoing_matrix_message))
-                                if 'message' in outgoing_matrix_message:
-                                    send_message_response = await self.send_message_to_matrix_async( str(outgoing_matrix_message['message']), str(outgoing_matrix_message['title']), str(outgoing_matrix_message['level']) )
-                                    if self.DEBUG:
-                                        print("* sent outgoing matrix message? send_message_response: " + str(send_message_response))
-                
-                
-                    # Invite new users into room
-                    if self.matrix_invite_queue.empty() == False:
-                        if self.DEBUG:
-                            print("User to invite was spotted in invite queue.")
-                        invite_username = self.matrix_invite_queue.get(False)
-                        if invite_username != None:
-                            if self.DEBUG:
-                                print("inviting user: " + str(invite_username))
-                            invite_response = await self.async_client.room_invite(self.persistent_data['matrix_room_id'], invite_username)
-                            if self.DEBUG:
-                                print("invite response: " + str(invite_response))
-                            self.refresh_matrix_members = True
-                
-                    # Kick users from the room
-                    if self.matrix_kick_queue.empty() == False:
-                        if self.DEBUG:
-                            print("User to kick was spotted in kick queue.")
-                        kick_username = self.matrix_kick_queue.get(False)
-                        if kick_username != None:
-                            if self.DEBUG:
-                                print("kicking user: " + str(kick_username))
-                            kick_response = await self.async_client.room_kick(self.persistent_data['matrix_room_id'], kick_username)
-                            if self.DEBUG:
-                                print("kick response: " + str(kick_response))
-                            self.refresh_matrix_members = True
-                            
-                    # Refresh list of room members
-                    if self.refresh_matrix_members:
-                        self.refresh_matrix_members = False
-                        if self.DEBUG:
-                            print("refreshing room members list")
-                        try:
-                            room_joined_members_response = await self.async_client.joined_members( str(self.persistent_data['matrix_room_id']) )
-                            if room_joined_members_response.members:
-                                matrix_room_members = []
-                                for member in room_joined_members_response.members:
-                                    if self.DEBUG:
-                                        print("+ member.user_id: " + str(member.user_id))
-                                    matrix_room_members.append({'user_id':member.user_id, 'display_name':member.display_name})
-                    
-                                self.matrix_room_members = matrix_room_members
-                        except Exception as ex:
-                            print("error updating matrix room members list: " + str(ex))
-                
-                            
-                
-                    
-                    sync_counter += 1
-        
-                    sync_delay = 3 # wait a fwe seconds between syncs
-                
-                
-                    # Speed up syncing if the user was recently active, decrease it if it has been a while since a message was received. Let's be nice to the server.
-                    #if self.last_time_matrix_message_received < (time.time() - 300):
-                    #    sync_delay = 50 # wait 10 seconds between syncs
-                    #elif self.last_time_matrix_message_received < (time.time() - 60):
-                    #    sync_delay = 25 # wait 5 seconds between syncs
-                    #else:
-                    #    sync_delay = 10 # wait 2 seconds between syncs
-                
-                    if sync_counter > sync_delay:
-                        sync_counter = 0
-                        if self.DEBUG:
-                            print("* starting sync. sync_delay: " + str(sync_delay))
-                    
-                        if self.persistent_data['chatting']:
-                            sync_response = await self.sync_loop(False,"online")
-                        else:
-                            sync_response = await self.sync_loop(False,"offline")
-                        
-                        if self.DEBUG:
-                            print("* sync_response: " + str(sync_response))
-                    
-                    
-                        try:
-                            get_missing_sessions_result = self.async_client.get_missing_sessions( str(self.persistent_data['matrix_room_id']) )
-                            if self.DEBUG:
-                                print("matrix: get_missing_sessions_result: " + str(get_missing_sessions_result))
-                                
-                            for missing_user, missing_device in get_missing_sessions_result.items():
-                                print(") ) ) ) ", missing_user, missing_device)
-                            
-                        except Exception as ex:
-                            print("error in get_missing_sessions_result (likely no encryption!): " + str(ex))
-                    
-                    print("* zzz")
-                    time.sleep(.2)
+                if self.DEBUG:
+                    print("Starting main Matrix while loop")
             
             
-
+            
+            
+            
+            
+                
                 return True
 
         else:
@@ -6542,9 +7081,10 @@ class VocoAdapter(Adapter):
          
          
          
-     
+    # 
     # MATRIX CALLBACKS
-
+    #
+    
     async def matrix_message_callback(self, room, event):
         if self.DEBUG:
             print("\nINCOMING MESSAGE")
@@ -6557,7 +7097,7 @@ class VocoAdapter(Adapter):
                 print("event.decrypted: " + str(event.decrypted))
             
             self.last_time_matrix_message_received = time.time()
-                    
+            
             if self.matrix_started and self.currently_chatting:
                 body_check = event.body.lower()
             
@@ -6598,6 +7138,11 @@ class VocoAdapter(Adapter):
             print("sync dir: " + str(dir(response)))
         self.persistent_data['matrix_sync_token'] = response.next_batch
         self.save_persistent_data()
+        
+        
+        #.users_for_key_query.add(event.sender)
+        
+        
         #try:
         #    saved = await self.async_client.save_sync_token(response.next_batch)
         #except Exception as ex:
@@ -6618,7 +7163,29 @@ class VocoAdapter(Adapter):
 
     
     
-    
+
+    async def matrix_to_device_callback(self,event):
+        if self.DEBUG:
+            print("IN to_device CALLBACK. Event Dir: " + str(dir(event)) )
+            try:
+                user_id = event.sender
+                device_id = event.requesting_device_id
+                device = client.device_store[user_id][device_id]
+                client.verify_device(device)
+                for request in client.get_active_key_requests(user_id, device_id):
+                    client.continue_key_share(request)
+            except Exception as ex:
+                print("Error in to_device callback: " + str(ex)) 
+
+
+    async def room_key_request_callback(self,response):
+        if self.DEBUG:
+            print("IN room_key_request CALLBACK. Dir: " + str(dir(response)) )
+
+            # client.continue_key_share(room_key_request)
+            
+            
+            
     """
     def cb_autojoin_room(self, room: MatrixRoom, event: InviteEvent):
             
@@ -6658,42 +7225,9 @@ class VocoAdapter(Adapter):
                     print("async client already exists in self")
        
             else:
-                # This could never occur
-                if self.DEBUG:
-                    print("Async client didn't exist yet, creating it now")
-                candle_user_id = "@" + self.persistent_data['matrix_candle_username'] + ":" + self.persistent_data['matrix_server']
-                server = "https://" + str(self.persistent_data['matrix_server'])
                 
+                await self.start_matrix_client_async()
                 
-                
-                #client = Client(user_id, config=self.matrix_config, store_path=self.matrix_data_store_path)
-                #client.access_token = self.persistent_data['matrix_token']
-       
-                #if 'matrix_server' in self.persistent_data and 'matrix_username' in self.persistent_data and 'matrix_token' in self.persistent_data:
-           
-                    # Log in to Matrix server with token
-                    #if self.DEBUG:
-                    #    print("logging into Matrix server with token")
-                    #user_id = "@" + self.persistent_data['matrix_username'] + ":" + self.persistent_data['matrix_server']
-                    #server = "https://" + str(self.persistent_data['matrix_server'])
-           
-                self.async_client = AsyncClient(server, candle_user_id, config=self.matrix_config, store_path=self.matrix_data_store_path)
-                
-                self.async_client.add_event_callback(self.matrix_message_callback, RoomMessageText)
-                self.async_client.add_response_callback(self.matrix_sync_callback, SyncResponse)
-                self.async_client.add_global_account_data_callback(self.matrix_account_callback, AccountDataEvent)
-                self.async_client.add_room_account_data_callback(self.matrix_account_callback, AccountDataEvent)
-                self.async_client.add_ephemeral_callback(self.matrix_ephemeral_callback, Event)
-                
-                if 'matrix_device_id' in self.persistent_data:
-                    if self.DEBUG:
-                        print("device id was present in persistent data, adding it to client")
-                    self.async_client.device_id = self.persistent_data['matrix_device_id']
-                
-                self.async_client.access_token = self.persistent_data['matrix_token']
-                #self.async_client.user_id = user_id 
-                
-                #self.async_client.add_event_callback(self.matrix_message_callback, RoomMessageText)
                 
 
             if self.async_client.logged_in:
@@ -6712,10 +7246,6 @@ class VocoAdapter(Adapter):
                 #title = '<h2>' + title + '</h2>'
                 message = '<strong>' + message + '</strong>'
                 
-            
-            
-                
-            
             room_send_result = await self.async_client.room_send(
                         room_id=self.persistent_data['matrix_room_id'],
                         content={
@@ -7069,11 +7599,41 @@ class VocoAdapter(Adapter):
             
         try:
             sync_result = await self.async_client.sync(timeout=30000,full_state=full_state,set_presence=set_presence) # milliseconds
+            await self.async_client.run_response_callbacks([sync_result])
             if self.DEBUG:
-                print("matrix: sync_result: " + str(sync_result))
+                print("\nmatrix: sync_result: " + str(sync_result))
+                print("\nmatrix: sync_result dir: " + str(dir(sync_result)))
+                print("\nmatrix: sync_result rooms: " + str(sync_result.rooms))
+                
+                try:
+                    for room_id, room_info in sync_result.rooms.join.items():
+                        room_header = " $%ˆ&* Messages for room {}:\n    ".format(room_id)
+                        if self.DEBUG:
+                            print("room_info: " + str(room_info))
+                            print("$$$$ room_header: " + str(room_header))
+                        messages = []
+                        for event in room_info.timeline.events:
+                            
+                            try:
+                                
+                                print("3333 encrypted event: " + str(event) )
+                                print("3333 encrypted event dir: " + str(dir(event)) )
+                                #decrypted = self.async_client.decrypt_event(event)
+                        
+                                #print("4444 str(decrypted event)! " + str(decrypted))
+                                #messages.append(decrypted)
+                                
+                            except Exception as ex:
+                                print("Error trying to decrypt message in room: " + str(ex))
+                                #self.async_client.users_for_key_query.add(event.sender)
+                        
+                                    
+                except Exception as ex:
+                    print("manual decrypt experiment error: " + str(ex))
+                
                 print("doing run_response_callbacks next")
             
-            await self.async_client.run_response_callbacks([sync_result])
+            
             if self.DEBUG:
                 print("sync_loop: run_response_callbacks done")
             
@@ -7105,6 +7665,38 @@ class VocoAdapter(Adapter):
             if self.async_client.should_query_keys:
                 await self.async_client.keys_query()
             
+            try:
+                   
+                if 'matrix_room_id' in self.persistent_data:
+                    
+                    
+                    
+                    if self.async_client.olm.should_share_group_session( self.persistent_data['matrix_room_id'] ):
+                        
+                        if self.DEBUG:
+                            print("__should_share_group_session?: " + str(self.async_client.olm.should_share_group_session( self.persistent_data['matrix_room_id'] )))
+                        
+                        
+                        try:
+                            event = self.async_client.sharing_session[ self.persistent_data['matrix_room_id'] ]
+                            print("sharing_session event: " + str(event))
+                            await event.wait()
+                            print("group session is now shared?")
+                        except Exception as ex:
+                            print("sync_loop: error sharing new room session: " + str(ex))
+                
+                else:
+                    print("Error.. room id missing. Is this even possible?")
+                
+                #if self.async_client.olm.should_share_group_session:
+                #    print("6666 YES, should_share_group_session (but which room?)")
+                    #await self.async_client.keys_query()
+                    
+                    
+                    
+            except Exception as ex:
+                print("sync_loop: error during room session sharing check: " + str(ex))
+            
         except Exception as ex:
             print("sync_loop: error during additional key checks: " + str(ex))
             state = False
@@ -7113,6 +7705,46 @@ class VocoAdapter(Adapter):
         
         return state
 
+
+
+    def trust_devices(self, user_id: str, device_list: Optional[str] = None) -> None:
+        """Trusts the devices of a user.
+
+        If no device_list is provided, all of the users devices are trusted. If
+        one is provided, only the devices with IDs in that list are trusted.
+
+        Arguments:
+            user_id {str} -- the user ID whose devices should be trusted.
+
+        Keyword Arguments:
+            device_list {Optional[str]} -- The full list of device IDs to trust
+                from that user (default: {None})
+        """
+
+        print(f"{user_id}'s device store: {self.async_client.device_store[user_id]}")
+
+        # The device store contains a dictionary of device IDs and known
+        # OlmDevices for all users that share a room with us, including us.
+
+        # We can only run this after a first sync. We have to populate our
+        # device store and that requires syncing with the server.
+        for device_id, olm_device in self.async_client.device_store[user_id].items():
+            if device_list and device_id not in device_list:
+                # a list of trusted devices was provided, but this ID is not in
+                # that list. That's an issue.
+                print(
+                    f"Not trusting {device_id} as it's not in {user_id}'s pre-approved list."
+                )
+                continue
+
+            if user_id == self.async_client.user_id and device_id == self.async_client.device_id:
+                # We cannot explictly trust the device @alice is using
+                continue
+
+            self.async_client.verify_device(olm_device)
+            print(f"Trusting {device_id} from user {user_id}")
+                
+                
 
     # Logs in wit a password and stores the received matrix token
     def login_test(self, password):

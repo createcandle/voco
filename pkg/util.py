@@ -246,12 +246,26 @@ def get_api_url(link_list):
 
 def clean_up_string_for_speaking(sentence):
     sentence = sentence.replace('/', ' ').replace('\\', ' ').replace('+', ' plus ').replace('#', ' number ').replace('-', ' ').replace('&', ' and ').replace('  ', ' ')
+    sentence = sentence.replace('  ', ' ').replace('[', '').replace(']', '')
     sentence = sentence.replace('  ', ' ')
     sentence = sentence.lower()
     sentence = sentence.strip()
     return sentence
 
-
+def clean_up_string_for_chatting(sentence):
+    # capitalize
+    numLetters = 0
+    capitalized_parts = []
+    for s in sentence.split('. '):
+        tmp = re.sub('^(\s*\w+)', lambda x:x.group(1).title(), s)
+        capitalized_parts.append(tmp)
+        if s.lstrip()[0] != tmp.lstrip()[0]:
+            numLetters += 1          
+    sentence = '. '.join(capitalized_parts)
+    sentence = sentence.replace('  ', ' ').replace(' i ', ' I ')
+    sentence = sentence.strip()
+    return sentence
+    
 
 def split_sentences(st):
     sentences = re.split(r'[.?!]\s*', st)
@@ -683,6 +697,10 @@ def randomWord(length=8):
     vowels = "aeiou"
     return "".join(random.choice((consonants, vowels)[i%2]) for i in range(length))
     
+def generate_matrix_device_id(length=10):
+    consonants = "ABCDEFGHIJKLMNIOPQRSTUVWXYZ"
+    return "".join(random.choice(consonants) for i in range(length))
+
     
 def randomPassword(length=12):
     symbols = "!@#$%ˆ&*()" # string.punctuation
@@ -695,3 +713,19 @@ def randomPassword(length=12):
     return "".join(characters_array)
 
     
+    
+def fix_capitalization(mystr):
+    numLetters = 0
+    newstr = []
+    for s in mystr.split('. '):
+        tmp = re.sub('^(\s*\w+)', lambda x:x.group(1).title(), s)
+        newstr.append(tmp)
+        # num of letters
+        if s.lstrip()[0] != tmp.lstrip()[0]:
+            numLetters += 1          
+    return '. '.join(newstr).replace(' i ', ' I ') #, numLetters #.replace(' i ', ' I ')
+
+
+
+
+

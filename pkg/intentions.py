@@ -58,10 +58,14 @@ def intent_get_time(self, slots, intent_message):
         utc_timestamp = int(utcnow.timestamp())
         
         voice_message = "It is " + str(self.human_readable_time(utc_timestamp, False))
+        
+        return voice_message
+        
         voice_message = clean_up_string_for_speaking(voice_message)
         if self.DEBUG:
             print("(...) " + str(voice_message))
         self.speak(voice_message,intent=intent_message)
+        
     except Exception as ex:
         print("Error dealing with get_time intent: " + str(ex))
 
@@ -80,7 +84,6 @@ def intent_set_timer(self, slots, intent_message):
         #    print("Time string slot: " + str(slots['time_string']))
         #except:
         #    print("Error getting time string slot")
-        
         if slots['time_string'] != None:
             try:
                 sentence = sentence.replace("in " + slots['time_string'], " ")
@@ -111,10 +114,10 @@ def intent_set_timer(self, slots, intent_message):
         else:
             if self.DEBUG:
                 print("The spoken sentence did not contain a time")
-            self.play_sound(self.error_sound,intent=intent_message)
-            self.speak("You didn't provide a time.",intent=intent_message)
+            #self.play_sound(self.error_sound,intent=intent_message)
+            #self.speak("You didn't provide a time.",intent=intent_message)
             # TODO: we could ask for the time via a dialogue
-            return
+            return "Sorry, you didn't provide a time."
         
         time_delta_seconds = moment - current_time
         if self.DEBUG:
@@ -213,8 +216,9 @@ def intent_set_timer(self, slots, intent_message):
                 
                 # a little heuristic to prevent reminders being set for "for".
                 if str(matches.group(2)) == "for":
-                    self.speak("I didn't understand",intent=intent_message)
-                    return
+                    #self.speak("I didn't understand",intent=intent_message)
+                    return "Sorry, I didn't understand"
+                    
                 
                 if matches != None:
                     if self.DEBUG:
@@ -238,7 +242,9 @@ def intent_set_timer(self, slots, intent_message):
             self.persistent_data['action_times'].append({"intent_message":intent_message,"moment":moment,"type":"timer","slots":slots})
             if self.DEBUG:
                 print("timer was appended to the list")
-            voice_message = "A timer has been set for " + str(time_delta_voice_message)
+            voice_message = "OK, a timer has been set for " + str(time_delta_voice_message)
+            
+        return voice_message
             
         # Speak voice message
         voice_message = clean_up_string_for_speaking(voice_message)
@@ -269,7 +275,6 @@ def intent_get_timer_count(self, slots, intent_message):
             #return
         
         
-        
         elif str(slots['timer_type']) == 'countdown':
             if self.DEBUG:
                 print("user asked about countdown")
@@ -278,9 +283,11 @@ def intent_get_timer_count(self, slots, intent_message):
                 if str(item['type']) == 'countdown':
                     countdown_active = True
             if countdown_active:
-                self.speak("The countdown is running.",intent=intent_message)
+                voice_message = "The countdown is running."
+                #self.speak("The countdown is running.",intent=intent_message)
             else:
-                self.speak("There is no active countdown.",intent=intent_message)
+                voice_message = "There is no active countdown."
+                #self.speak("There is no active countdown.",intent=intent_message)
             
         else:
             timer_count = self.timer_counts[str(slots['timer_type'])]
@@ -292,11 +299,13 @@ def intent_get_timer_count(self, slots, intent_message):
             else:
                 voice_message = "There are " + str(timer_count) + " " + str(slots['timer_type']) + "s. " 
             
-            voice_message = clean_up_string_for_speaking(voice_message)
-            if self.DEBUG:
-                print("(...) " + str(voice_message))
+        return voice_message
+            
+        voice_message = clean_up_string_for_speaking(voice_message)
+        if self.DEBUG:
+            print("(...) " + str(voice_message))
         
-            self.speak(voice_message,intent=intent_message)
+        self.speak(voice_message,intent=intent_message)
         
     except Exception as ex:
         print("Error while dealing with get_timer_count intent: " + str(ex))
@@ -404,6 +413,8 @@ def intent_list_timers(self, slots, intent_message):
                             voice_message += " is set for " + str(self.human_readable_time( int(item['moment']) , True)) + ". "
                     except Exception as ex:
                         print("Error while building timer list voice_message: " + str(ex))
+                    
+        return voice_message
                     
         voice_message = clean_up_string_for_speaking(voice_message)
         #if self.DEBUG:
@@ -551,6 +562,8 @@ def intent_stop_timer(self, slots, intent_message):
                         voice_message = removed_count_message + " " + str(slots['timer_type']) + "s have been removed."
                 except Exception as ex:
                     print("Error removing timer(s)." + str(ex))
+                  
+        return voice_message
                     
         voice_message = clean_up_string_for_speaking(voice_message)
         if self.DEBUG:
@@ -673,6 +686,8 @@ def intent_get_boolean(self, slots, intent_message, found_properties):
             voice_message = "This property cannot be toggled"
         else:
             voice_message = "This device cannot be toggled"
+            
+    return voice_message
             
     voice_message = clean_up_string_for_speaking(voice_message)
     if self.DEBUG:
@@ -815,6 +830,9 @@ def intent_get_value(self, slots, intent_message,found_properties):
         if voice_message == "":
             voice_message = "Sorry, I could not find a value"
             
+            
+        return voice_message
+            
         voice_message = clean_up_string_for_speaking(voice_message)
         if self.DEBUG:
             print("(...) " + str(voice_message))
@@ -829,24 +847,28 @@ def intent_get_value(self, slots, intent_message,found_properties):
 # Toggling the state of boolean properties
 def intent_set_state(self, slots, intent_message, found_properties, delayed_action=None):   # If it is called from a timer, the delayed_action will be populated.
     if self.DEBUG:
-        print("  5 5 5 5 5 5 5  5   5  5  5  5  5  5 5 5  5  5 5 5 5  5  5 5 5  5 5 5 ")
-        print("in intent_set_state")
+        print("in intent_set_state. Incoming boolean: " + str(slots['boolean']))
+        print("origin: " + str(intent_message['origin']))
     sentence = slots['sentence']
     double_time = False
 
     try:
+        
         if slots['boolean'] is None:
             if self.DEBUG:
                 print("Error, no boolean set")
-            self.play_sound(self.error_sound,intent=intent_message)
-            return
+            #self.play_sound(self.error_sound,intent=intent_message)
+            return "Sorry, I did not understand"
+
+        
 
         if slots['boolean'] == 'state':
             if self.DEBUG:
                 print("in wrong intent, boolean was 'state' in intent_set_state, which requires true boolean values.")
-            self.play_sound(self.error_sound,intent=intent_message)
-            self.speak("Sorry, I couldn't handle your request.",intent=intent_message)
-            return
+            #self.play_sound(self.error_sound,intent=intent_message)
+            return "Sorry, I couldn't handle your request."
+            #self.speak("Sorry, I couldn't handle your request.",intent=intent_message)
+            #return
 
         # If this was a time-delayed request, then we override
         if delayed_action != None:
@@ -857,11 +879,28 @@ def intent_set_state(self, slots, intent_message, found_properties, delayed_acti
 
         human_readable_desired_state = str(slots['boolean'])
         
+        desired_state = None
+        
         if slots['boolean'] == 'on' or slots['boolean'] == 'lock' or slots['boolean'] == 'closed':
             desired_state = True
-        elif slots['boolean'] == 'off' or slots['boolean'] == 'unlock' or slots['boolean'] == 'open':
+        elif slots['boolean'] == 'off' or slots['boolean'] == 'of' or slots['boolean'] == 'unlock' or slots['boolean'] == 'open':
             desired_state = False
             
+        
+        if desired_state == None:
+            if self.DEBUG:
+                print("boolean was not clear.. giving it another go")
+            
+            if slots['boolean'].endswith(' of') or slots['boolean'].endswith(' off'):
+                desired_state = False
+            elif slots['boolean'].endswith(' on'):
+                desired_state = True
+        
+        if desired_state == None:
+            if self.DEBUG:
+                print("Warning, could not extract valid boolean from: " + str(slots['boolean']))
+            return "Sorry, I did not understand the intended state. "
+        
         opposite = "the opposite"
         if slots['boolean'] in self.opposites:
             opposite = self.opposites[slots['boolean']]
@@ -907,8 +946,6 @@ def intent_set_state(self, slots, intent_message, found_properties, delayed_acti
                     
                     
                     
-                    
-                    
                     if delayed_action == None: # to avoid getting into loops, where after the duration this would create another duration. 
                         if property_loop_counter < 1:
                         # we are here on the 'first time' (now), to see if any delayed toggling should (also) be scheduled.
@@ -950,8 +987,8 @@ def intent_set_state(self, slots, intent_message, found_properties, delayed_acti
                                         #self.persistent_data['action_times'].append({"intent_message":intent_message,"moment":slots['duration'],"type":"boolean_related","original_value": opposite,"slots":slots})
                                             #if slots['property'] != 'all' and len(found_properties) == 1:
                                         voice_message = "It was already " + str(slots['boolean']) + ". " #I will let you know when it switches to " + opposite
-                                        self.speak(voice_message,intent=intent_message)
-                                        return
+                                        #self.speak(voice_message,intent=intent_message)
+                                        return voice_message
                                         # return here?
                                     
                                 else:
@@ -962,9 +999,10 @@ def intent_set_state(self, slots, intent_message, found_properties, delayed_acti
                             
                                 #if slots['period'] != "for": # If this is a 'for' type of duration (e.g. for 5 minutes), then we should also continue and toggle now.
                                     # we arrive here if it's "in 5 minutes". So there is nothing to do now.
-                                    self.speak(voice_message,intent=intent_message)
-                                    print("___Period was not for. Should be returning. ")
-                                    return
+                                    #self.speak(voice_message,intent=intent_message)
+                                    if self.DEBUG:
+                                        print("___Period was not for. Should be returning. ")
+                                    return voice_message
                                 #else:
                                 
                                  # if this has multiple things
@@ -1008,7 +1046,8 @@ def intent_set_state(self, slots, intent_message, found_properties, delayed_acti
                                 # Only a single time value was provided
                                 else:
                                     if 'until' in sentence: # E.g. turn on the heater until 4 o'clock
-                                        print("until in sentence.")
+                                        if self.DEBUG:
+                                            print("until in sentence.")
                                         if bool(api_result[key]) != desired_state:
                                             #print("until in sentence and not already in desired state -> creating timer")
                                             slots['period'] = 'for' # TODO is this experiment useful?
@@ -1025,20 +1064,22 @@ def intent_set_state(self, slots, intent_message, found_properties, delayed_acti
                                         voice_message = clean_up_string_for_speaking(voice_message)
                                         if self.DEBUG:
                                             print("(...) " + str(voice_message))
-                                        self.speak(voice_message,intent=intent_message)
-                                        time.sleep(.3) # TODO DEBUG, remove
-                                        return
+                                        #self.speak(voice_message,intent=intent_message)
+                                        #time.sleep(.3) # TODO DEBUG, remove
+                                        return voice_message
                             
+                    
+                     # SET_STATE NOW
+                    
+                    
                     else:
-                        voice_message = " You set a timer. "
+                        voice_message = ""
                         if self.DEBUG:
                             print("")
                             print("This is a time delayed replay")
                         if slots['period'] == 'for':
                             back = " back " # We are switching something back after a while has passed
                     
-                    
-                    # IN SET_STATE
                     
                     try:
                         
@@ -1122,8 +1163,10 @@ def intent_set_state(self, slots, intent_message, found_properties, delayed_acti
             
         if len(found_properties) > 1:
             voice_message = "Switching everything to " + str(human_readable_desired_state)
-            if delayed_action != None:
-                voice_message = "You set a timer. " + voice_message
+            #if delayed_action != None:
+            #    voice_message = "You set a timer. " + voice_message
+            
+        return voice_message
             
         voice_message = clean_up_string_for_speaking(voice_message)
         if self.DEBUG:
@@ -1172,9 +1215,10 @@ def intent_set_value(self, slots, intent_message, found_properties, original_val
             desired_value  = str(slots['string'])
             #print("intent to set value to a string (but not a color)")
         else:
-            self.play_sound(self.error_sound,intent=intent_message)
-            self.speak("Your request did not contain a valid value.",intent=intent_message)
-            return
+            #self.play_sound(self.error_sound,intent=intent_message)
+            return "Sorry, your request did not contain a valid value. "
+            #self.speak("Your request did not contain a valid value.",intent=intent_message)
+            #return
         if self.DEBUG:
             print("desired_value = " + str(desired_value))
             
@@ -1186,7 +1230,6 @@ def intent_set_value(self, slots, intent_message, found_properties, original_val
         if self.DEBUG:
             print("")
             print("found " + str(len(found_properties)) + " properties: " + str(found_properties))
-            
             print(str(found_properties))
             
         # Filter out properties that the desired value is not compatible with. #TODO: move this to earlier in the pipeline? In case an alternative intent turns out to be a better fit?
@@ -1235,8 +1278,8 @@ def intent_set_value(self, slots, intent_message, found_properties, original_val
                             if key == "error":
                                 if api_result[key] == 500:
                                     voice_message += str(found_property['thing']) + " seems to be disconnected. "
-                                    self.speak(voice_message,intent=intent_message)
-                                    return
+                                    #self.speak(voice_message,intent=intent_message)
+                                    returnvoice_message
                                     #continue
                                 
                             else:
@@ -1268,8 +1311,8 @@ def intent_set_value(self, slots, intent_message, found_properties, original_val
                                     if str(desired_value) == str(original_value): # The property to set to 'for a while' is already at the desired value
                                         #continue # TODO But could also use Break here.
                                         # "it's allready " + str(original_value)
-                                        self.speak("it's already " + str(original_value),intent=intent_message)
-                                        return
+                                        #self.speak("it's already " + str(original_value),intent=intent_message)
+                                        return "it's already " + str(original_value)
                                     else:
                                         self.persistent_data['action_times'].append({"intent_message":intent_message,"moment":slots['duration'],"type":"value","original_value":original_value,"slots":slots})
                                         extra_message = " I will let you know when it changes back to " + str(original_value)
@@ -1311,14 +1354,8 @@ def intent_set_value(self, slots, intent_message, found_properties, original_val
                                     self.persistent_data['action_times'].append({"intent_message":intent_message,"moment":slots['end_time'],"type":"value","original_value":desired_value,"slots":slots})
                                    
                                 voice_message += " at " + self.human_readable_time(slots['end_time'], True)
-                                voice_message = clean_up_string_for_speaking(voice_message)
                                 
-                                
-                                
-                                if self.DEBUG:
-                                    print("(...) " + str(voice_message))
-                                self.speak(voice_message,intent=intent_message)
-                                return
+                                return voice_message
                     except Exception as ex:
                         print("Error in setting delayed switch moment: " + str(ex))
                     
@@ -1329,7 +1366,6 @@ def intent_set_value(self, slots, intent_message, found_properties, original_val
             if slots['period'] == 'for':
                 desired_value = original_value # We're changing the value back to what it was before
                 back = " back"
-            #voice_message += "You set a timer. "
             
             
         
@@ -1338,16 +1374,19 @@ def intent_set_value(self, slots, intent_message, found_properties, original_val
             # IN SET_VALUE
             for found_property in found_properties:
 
-                print("set_value: checking found prop: " + str(str(found_property['readOnly'])))
-                #print("Checking found property. url:" + str(found_property['property_url']))
-                print("-type: " + str(found_property['type']))
-                print("-addendum: " + str(addendum))
-                #print("-read only? " + str(found_property['readOnly']))
+                if self.DEBUG:
+                    print("set_value: checking found prop: " + str(str(found_property['readOnly'])))
+                    #print("Checking found property. url:" + str(found_property['property_url']))
+                    print("-type: " + str(found_property['type']))
+                    print("-addendum: " + str(addendum))
+                    #print("-read only? " + str(found_property['readOnly']))
                 
                 if len(addendum) == 0:
-                    print("addendum was 0 length")
+                    if self.DEBUG:
+                        print("addendum was 0 length")
                     if found_property['unit'] != None:
-                        print("unit existed in property: " + str(found_property['unit']))
+                        if self.DEBUG:
+                            print("unit existed in property: " + str(found_property['unit']))
                         addendum = " " + str(found_property['unit'])
                 
                 try:
@@ -1360,13 +1399,15 @@ def intent_set_value(self, slots, intent_message, found_properties, original_val
                             if self.DEBUG:
                                 print("called api for value, it gave: " + str(api_result))
                         except:
-                            print("Error calling the API")
+                            if self.DEBUG:
+                                print("Error calling the API")
                             continue
                         
                         try:
                             key = list(api_result.keys())[0]
                         except:
-                            print("still set_value: error parsing the returned json")
+                            if self.DEBUG:
+                                print("still set_value: error parsing the returned json")
                             continue
                             
                         if key == "error":
@@ -1383,7 +1424,8 @@ def intent_set_value(self, slots, intent_message, found_properties, original_val
                                     api_value = hex_to_color_name(api_value) # turn the API call result into a human readable value
                                     #print("color after:" + str(api_value))
                             except:
-                                print("Error getting human readable color name")
+                                if self.DEBUG:
+                                    print("Error getting human readable color name")
                                 
                             if self.DEBUG:
                                 print("Checking if not already the desired value. " + str(api_value) + " =?= " + str(desired_value))
@@ -1437,9 +1479,9 @@ def intent_set_value(self, slots, intent_message, found_properties, original_val
                                             if str(found_property['property']) == 'on/off':
                                                 found_property['property'] = 'state'
                                         
-                                            voice_message = "Setting " + str(found_property['property']) + back + " to " + str(desired_value) + str(addendum) + " . " + extra_message
+                                            voice_message = "OK, setting " + str(found_property['property']) + back + " to " + str(desired_value) + str(addendum) + " . " + extra_message
                                         else:
-                                            voice_message = "Setting " + str(found_property['thing']) + back + " to " + str(desired_value) + str(addendum) + " . " + extra_message
+                                            voice_message = "OK, setting " + str(found_property['thing']) + back + " to " + str(desired_value) + str(addendum) + " . " + extra_message
                                         
                 except Exception as ex:
                     print("Error in intent_set_value while dealing with found non-boolean property: " + str(ex))
@@ -1452,6 +1494,8 @@ def intent_set_value(self, slots, intent_message, found_properties, original_val
                 
         if voice_message == "":
             voice_message = "Sorry, I could not change anything"
+            
+        return voice_message
             
         voice_message = clean_up_string_for_speaking(voice_message)
         if self.DEBUG:
