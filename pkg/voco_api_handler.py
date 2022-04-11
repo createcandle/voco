@@ -144,27 +144,26 @@ class VocoAPIHandler(APIHandler):
                                         create_account_for_user = False
                                         invite_username = ""
                                         
-                                        self.adapter.persistent_data['matrix_server'] = request.body['matrix_server']
+                                        self.adapter.persistent_data['matrix_server'] = str(request.body['matrix_server'])
+                                        self.adapter.matrix_server = 'https://' + str(request.body['matrix_server'])
                                         
                                         if 'matrix_username' in request.body and 'matrix_password' in request.body:
                                             create_account_for_user = True
-                                            self.adapter.persistent_data['matrix_username'] = request.body['matrix_username'] # this is only the first, local part of the ID (between @ and :)
+                                            self.adapter.persistent_data['matrix_username'] = str(request.body['matrix_username']) # this is only the first, local part of the ID (between @ and :)
                                         
+                                        # TODO: isn't the first invite a separate api call now?
                                         elif 'invite_username' in request.body:
                                             if request.body['invite_username'].startswith("@") and ":" in request.body['invite_username']:
-                                                self.adapter.persistent_data['matrix_invite_username'] = request.body['invite_username'] # this is the full username on a (likely different) server. E.g. @user:example.org
+                                                self.adapter.persistent_data['matrix_invite_username'] = str(request.body['invite_username']) # this is the full username on a (likely different) server. E.g. @user:example.org
                                         
-                                        self.adapter.save_persistent_data()
+                                        #self.adapter.save_persistent_data()
                                             
                                         if self.DEBUG:
                                             print("api handler: calling create_matrix_account")
-                                        state = self.adapter.create_matrix_account(request.body['matrix_password'],create_account_for_user)
+                                        state = self.adapter.create_matrix_account(str(request.body['matrix_password']),create_account_for_user)
                                         if self.DEBUG:
                                             print("api handler: state from create_matrix_account: " + str(state))
-                                        if state:
-                                            self.adapter.should_start_matrix = True
-                                            
-                                        #state = True
+                                             
                                     else:
                                         if self.DEBUG:
                                             print("not all required parameters for creating an account were provided")
@@ -187,15 +186,18 @@ class VocoAPIHandler(APIHandler):
                                 try:
                                     if 'invite_username' in request.body and 'matrix_server' in request.body:
                                         
-                                        print("request.body['matrix_server']: " + str(request.body['matrix_server']))
+                                        if self.DEBUG:
+                                            print("request.body['matrix_server']: " + str(request.body['matrix_server']))
                                         
-                                        self.adapter.persistent_data['matrix_server'] = request.body['matrix_server']
-                                        self.adapter.persistent_data['matrix_invite_username'] = request.body['invite_username']
+                                        self.adapter.persistent_data['matrix_server'] = str(request.body['matrix_server'])
+                                        self.adapter.matrix_server = 'https://' + str(request.body['matrix_server'])
+                                        if self.DEBUG:
+                                            print("self.adapter.persistent_data['matrix_server']: " + str(self.adapter.persistent_data['matrix_server']))
+                                            
+                                        self.adapter.persistent_data['matrix_invite_username'] = str(request.body['invite_username'])
                                         
-                                        print("self.adapter.persistent_data['matrix_server']: " + str(self.adapter.persistent_data['matrix_server']))
-                                        
-                                        self.adapter.save_persistent_data()
-                                        time.sleep(.1)
+                                        #self.adapter.save_persistent_data()
+                                        #time.sleep(.1)
                                         
                                         if self.DEBUG:
                                             print("api handler: calling create_matrix_account")
@@ -203,10 +205,11 @@ class VocoAPIHandler(APIHandler):
                                         if self.DEBUG:
                                             print("api_handler: returned state from provide_matrix_account: " + str(state))
                                             
+                                        # TODO: is adding the username to the invite queue overkill? Isn't the user already invited through the room creation process?
                                         if state:
                                             # oddly, the matrix really had never been started before, the create_account call would have now run endless, resulting in a timeout of this api request.
                                             # So if we end up here, the main loop must already have been running when the create_account api call happened. In this case it turns into a normal invite.
-                                            self.adapter.matrix_invite_queue.put( request.body['invite_username'] )
+                                            self.adapter.matrix_invite_queue.put( str(request.body['invite_username']) )
                                         #state = True
                                     else:
                                         if self.DEBUG:
@@ -457,6 +460,10 @@ class VocoAPIHandler(APIHandler):
                                 if 'matrix_token' in self.adapter.persistent_data:
                                     has_matrix_token = True
 
+                                matrix_server = "..."
+                                if 'matrix_server' in self.adapter.persistent_data:
+                                    matrix_server = str(self.adapter.persistent_data['matrix_server'])
+
                                 return APIResponse(
                                     status=200,
                                     content_type='application/json',
@@ -469,6 +476,8 @@ class VocoAPIHandler(APIHandler):
                                                 'matrix_started':self.adapter.matrix_started,
                                                 'matrix_room_members':self.adapter.matrix_room_members,
                                                 'has_matrix_token': has_matrix_token,
+                                                'matrix_server': matrix_server,
+                                                'matrix_logged_in': self.adapter.matrix_logged_in,
                                                 'user_account_created':self.adapter.user_account_created}),
                                 )
                             except Exception as ex:

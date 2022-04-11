@@ -61,15 +61,15 @@ class VocoDevice(Device):
                             },
                             bool(self.adapter.persistent_data['listening']) )
                             
-            if 'matrix_server' in self.adapter.persistent_data:
-                self.properties["chatting"] = VocoProperty(
-                                self,
-                                "chatting",
-                                {
-                                    'title': "Chat",
-                                    'type': 'boolean'
-                                },
-                                bool(self.adapter.persistent_data['chatting']) )
+            #if 'matrix_server' in self.adapter.persistent_data:
+            self.properties["chatting"] = VocoProperty(
+                            self,
+                            "chatting",
+                            {
+                                'title': "Chat",
+                                'type': 'boolean'
+                            },
+                            bool(self.adapter.persistent_data['chatting']) )
 
             self.properties["feedback-sounds"] = VocoProperty(
                             self,

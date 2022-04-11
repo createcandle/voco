@@ -259,13 +259,19 @@ def clean_up_string_for_chatting(sentence):
         sentence = sentence.strip()
         sentence = sentence.replace('  ', ' ').replace(' i ', ' I ').replace(' .', '.')
         
-        if len(sentence) > 5:
+        # If there is only one sentence, remove the trailing period
+        period_counter = sentence.count('.')
+        if period_counter == 1 and sentence[-1] == '.':
+            sentence = sentence[:-1]
+            
+        # If there are multiple sentences, capitalize all of them
+        if len(sentence) > 5 and "." in sentence:
             numLetters = 0
             capitalized_parts = []
             for s in sentence.split('. '):
-                print("s: " + str(s))
+                #print("s: " + str(s))
                 tmp = re.sub('^(\s*\w+)', lambda x:x.group(1).title(), s)
-                print("tmp: " + str(tmp))
+                #print("tmp: " + str(tmp))
                 capitalized_parts.append(tmp)
                 try:
                     if s.lstrip()[0] != tmp.lstrip()[0]:
@@ -276,10 +282,8 @@ def clean_up_string_for_chatting(sentence):
             sentence = '. '.join(capitalized_parts)
             
             
-            # If there is only one sentence, remove the trailing period
-            period_counter = sentence.count('.')
-            if period_counter == 1 and sentence[-1] == '.':
-                sentence = sentence[:-1]
+            
+            
             
     except Exception as ex:
         print("Error cleaning up string for chatting: " + str(ex))
