@@ -15,7 +15,7 @@ jobs:
         python-version: 3.9
     - name: Install libolm-dev
       run: |
-        sudo apt-get install libolm-dev -y
+        sudo apt-get install libolm-dev:armhf -y
     - name: Package project
       run: |
         ./package.sh
