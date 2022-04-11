@@ -210,18 +210,18 @@
 		          `/extensions/${this.id}/api/ajax`,
                     {'action':'matrix_init'}
 		        ).then((body) => {
-                    console.log("matrix init response: ", body);
+                    //console.log("matrix init response: ", body);
                     if(typeof body.matrix_server != 'undefined' && typeof body.matrix_candle_username != 'undefined'){
-                        console.log("So far so good")
+                        //console.log("So far so good")
                         this.matrix_candle_username = body.matrix_candle_username;
                         
-                        console.log("matrix init respons: ", body.matrix_server);
+                        //console.log("matrix init server response: ", body.matrix_server);
                         if( body.matrix_server != '...' ){ // && body.has_matrix_token == true
-                            console.log("body.matrix_server has a value");
+                            //console.log("body.matrix_server has a value");
                             document.getElementById('extension-voco-matrix-create-account-step2').classList.remove('extension-voco-hidden');
                             
                             document.querySelector('.extension-voco-matrix-server').innerText = 'https://' + body.matrix_server;
-                            document.querySelector('.extension-voco-matrix-username').innerText = body.matrix_username;
+                            document.querySelector('.extension-voco-matrix-username').innerText = '@' + body.matrix_username + ':' + body.matrix_server;
                             
                             if(body.matrix_username == '...'){
                                 document.getElementById('extension-voco-matrix-download-app-tip').classList.add('extension-voco-hidden');
@@ -231,7 +231,7 @@
                             document.getElementById('extension-voco-matrix-candle-username-container').classList.remove('extension-voco-hidden');
                         }
                         else{
-                            console.log("body.matrix_server did not have a value. Showing chat step 1");
+                            //console.log("body.matrix_server did not have a value. Showing chat step 1");
                             document.getElementById('extension-voco-matrix-create-account-step1').classList.remove('extension-voco-hidden');
                             document.getElementById('extension-voco-matrix-create-new-account').classList.remove('extension-voco-hidden');
                         }
@@ -252,8 +252,8 @@
 		          `/extensions/${this.id}/api/init`
 
 		        ).then((body) => {
-					console.log("Voco Init API result:");
-					console.log(body);
+					//console.log("Voco Init API result:");
+					//console.log(body);
 					
                     if(typeof body.debug != 'undefined'){
                         if(body.debug){
@@ -735,7 +735,7 @@
         			}
         			else{
         				//console.log("not ok response while getting data");
-        				alert("Creating a new Matrix account for you failed, sorry. You could try again by refreshing the page, or you can create one manually if you prefer.");
+        				//alert("Creating a new Matrix account for you failed, sorry. You could try again by refreshing the page, or you can create one manually if you prefer.");
                         document.getElementById('extension-voco-matrix-create-account-step1').classList.remove('extension-voco-hidden');
         			}
 

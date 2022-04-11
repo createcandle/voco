@@ -723,6 +723,7 @@ body #extension-voco-view .extension-voco-tab-selected{
     padding:.5rem 1rem;
     display:inline-block;
     border-radius:.5rem;
+    cursor:pointer;
 }
 
 /*

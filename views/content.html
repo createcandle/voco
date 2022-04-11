@@ -91,7 +91,7 @@
 				<div id="extension-voco-satellites" class="extension-voco-centered-page">
 					<img src="/extensions/voco/images/satellites.png" alt="Satellites example"/>
 					<p>One microphone might not be enough to cover your entire home. That's why it's possible to create 'satellites'.</p> 
-					
+					<p>One controller will act as the central hub in your home. Satellites send their voice recordings to the central hub. Below you can point out which controller is acting as the central hub in your network.</p>
 					<div class="extension-voco-no-satellites">
 						<p>If other controllers are detected on the network, satellite mode will become available here.</p>
 					</div>
@@ -115,7 +115,7 @@
 								</form>
 							</div>
 						</div>
-						<p>Select the main controller you wish to connect to, and then enable satelite mode.</p>
+						<p>Select the main controller you wish to connect to, and then enable satelite mode. You can find a controller's IP address by goint to Settings and then Network.</p>
 						<p class="extension-voco-italic">Note: once in satellite mode, this device will no longer be able to control it's own things. It will only be able to control things or create timers on the main controller.</p>
 					
 					</div>
@@ -251,9 +251,9 @@
                             <p>Home server: <span class="extension-voco-matrix-server extension-voco-bold">...</span></p>
                             <p>Username: <span class="extension-voco-matrix-username extension-voco-bold">...</span></p>
                             <p>Password: <span id="extension-voco-matrix-show-hidden-password-output" class="extension-voco-bold">........</span> <span id="extension-voco-matrix-show-hidden-password-button" class="extension-voco-hidden">SHOW</span></p>
-                            <p class="extension-voco-matrix-input-description">Note that Voco does not store your Matrix password, for security reasons.</p>
+                            <p class="extension-voco-matrix-input-description">Note that for security reasons Voco does not store your Matrix password.</p>
                         </div>
-                        <p>Once logged in you will see a room called Candle. There you can give commands just as you would with your voice.</p>
+                        <p>Once logged in you will see that you have been invited to a room called Candle. There you can give commands just as you would with your voice.</p>
                         
                     </div>
                     
@@ -287,10 +287,11 @@
                         <h3>Tips</h4>
                         <p>
                             <ul>
-                                <li>You can disable chat control at any time. The Voice Control thing has a "chat" toggle. Voco will only reply when chat is enabled.</li>
-                                <li>You can now send notifications to your phone when things happen in your home. When you create a new automation rule, add the Matrix notifier.</li>
+                                <li>You can disable chat control at any time. The <a href="/things/voco">Voice Control thing</a> has a <span class="extension-voco-bold">chat</span> toggle. Voco will only reply when chat is enabled.</li>
+                                <li>You can send notifications to your phone when things happen in your home. When you <a href="/rules/new">create a new automation rule</a>, add the Matrix notifier.</li>
                             </ul>
                         </p>
+                    </div>
                     
                 </div>
                  
@@ -395,9 +396,9 @@
                     <p>Another exception is that you can use these special text commands:</p>
                     <p>
                         <ul>
-						    <li>Start a message to Voco with "speak:", and Voco will say that text out loud for you.</li>
-                            <li>Start a message to Voco with "speak everywhere:", and Voco will say that text out loud for you through all the Voco satellites as well.</li>
-                            <li>Start a message to Voco with "popup:", and the message will be shown on a popup in the interface.</li>
+						    <li>Start a message to Voco with <span class="extension-voco-bold">speak:</span>, and Voco will say that text out loud for you.</li>
+                            <li>Start a message to Voco with <span class="extension-voco-bold">speak everywhere:</span>, and Voco will say that text out loud for you through all the Voco satellites as well.</li>
+                            <li>Start a message to Voco with <span class="extension-voco-bold">popup:</span>, and the message will be shown on a popup in the interface.</li>
                         </ul>
                     </p>
                     

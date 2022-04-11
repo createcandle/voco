@@ -6320,7 +6320,8 @@ class VocoAdapter(Adapter):
                                         self.currently_chatting = False
                                         if self.DEBUG:
                                             print("Chatting disabled")
-                                        send_message_response = await self.send_message_to_matrix_async( 'Voco chat access has been disabled', '', 'High')
+                                        if len(self.matrix_room_members) > 1:
+                                            send_message_response = await self.send_message_to_matrix_async( 'Voco chat access has been disabled', '', 'High')
                                         #await asyncio.sleep(2)
                                         # TODO: also logout before closing the connection? Or will that invalidate the matrix token?
                                     
@@ -6338,16 +6339,18 @@ class VocoAdapter(Adapter):
                                             except Empty:
                                                 continue
                                             self.matrix_messages_queue.task_done()
-                
-                                        send_message_response = await self.send_message_to_matrix_async( 'Voco chat access has been enabled', '', 'High')
+                                        
+                                        if len(self.matrix_room_members) > 1:
+                                            send_message_response = await self.send_message_to_matrix_async( 'Voco chat access has been enabled', '', 'High')
                                         #send_message_response = await self.send_message_to_matrix_async( 'You can now chat with Voco', '', 'Low')
                                     
             
                                     # If Voco is being unloaded send a quick goodbye message
                                     if self.persistent_data['chatting']:
                                     
-                                        if self.matrix_started == False:
-                                            send_message_response = await self.send_message_to_matrix_async( 'Voco chat control has been disabled', 'Goodbye', 'High')
+                                        if self.matrix_started == False or self.running == False:
+                                            if len(self.matrix_room_members) > 1:
+                                                send_message_response = await self.send_message_to_matrix_async( 'Voco chat control has been disabled', '', 'High')
                                             await self.async_client.close()
                                             break
             
@@ -6982,7 +6985,7 @@ class VocoAdapter(Adapter):
                                 "formatted_body": f'{title}{message}',
                             },
                             message_type="m.room.message"
-                            ,ignore_unverified_devices=False
+                            #,ignore_unverified_devices=False
                         )
                 return True
            
