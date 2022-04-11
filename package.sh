@@ -7,7 +7,7 @@ version=$(grep '"version"' manifest.json | cut -d: -f2 | cut -d\" -f2)
 
 # Install missing dependencies
 sudo apt update -qq
-sudo apt install -y libasound2-dev
+sudo apt install -y libasound2-dev libolm-dev
 
 # Clean up from previous releases
 echo "removing old files"
