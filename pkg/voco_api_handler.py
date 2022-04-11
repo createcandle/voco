@@ -141,6 +141,8 @@ class VocoAPIHandler(APIHandler):
                                 try:
                                     if 'matrix_password' in request.body and 'matrix_username' in request.body and 'matrix_server' in request.body:
                                         
+                                        self.adapter.matrix_busy_registering = True
+                                        
                                         create_account_for_user = False
                                         invite_username = ""
                                         
@@ -164,6 +166,8 @@ class VocoAPIHandler(APIHandler):
                                         if self.DEBUG:
                                             print("api handler: state from create_matrix_account: " + str(state))
                                              
+                                        self.adapter.matrix_busy_registering = False
+                                             
                                     else:
                                         if self.DEBUG:
                                             print("not all required parameters for creating an account were provided")
@@ -186,6 +190,8 @@ class VocoAPIHandler(APIHandler):
                                 try:
                                     if 'invite_username' in request.body and 'matrix_server' in request.body:
                                         
+                                        self.adapter.matrix_busy_registering = True
+                                        
                                         if self.DEBUG:
                                             print("request.body['matrix_server']: " + str(request.body['matrix_server']))
                                         
@@ -204,6 +210,8 @@ class VocoAPIHandler(APIHandler):
                                         state = self.adapter.create_matrix_account("no_account_needed", False) # False, as in don't also create an account for the user. The password here isn't needed, since the value from persistent data will be used.
                                         if self.DEBUG:
                                             print("api_handler: returned state from provide_matrix_account: " + str(state))
+                                            
+                                        self.adapter.matrix_busy_registering = False
                                             
                                         # TODO: is adding the username to the invite queue overkill? Isn't the user already invited through the room creation process?
                                         if state:
@@ -428,7 +436,16 @@ class VocoAPIHandler(APIHandler):
                             
                             try:
                                 state = True
-                            
+                                
+                                if self.adapter.matrix_busy_registering == False:
+                                    if 'refresh_matrix_members' in request.body:
+                                        if bool(request.body['refresh_matrix_members']) == True:
+                                            if self.adapter.DEBUG:
+                                                print("poll has asked for a periodic refresh of the matrix members list")
+                                            self.adapter.refresh_matrix_members = True
+                                            
+                                
+                                
                                 action_count = len( self.adapter.persistent_data['action_times'] )
 
                                 for i in range(action_count):
@@ -478,6 +495,7 @@ class VocoAPIHandler(APIHandler):
                                                 'has_matrix_token': has_matrix_token,
                                                 'matrix_server': matrix_server,
                                                 'matrix_logged_in': self.adapter.matrix_logged_in,
+                                                'matrix_busy_registering':self.adapter.matrix_busy_registering,
                                                 'user_account_created':self.adapter.user_account_created}),
                                 )
                             except Exception as ex:

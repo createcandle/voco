@@ -261,52 +261,7 @@
                             document.getElementById('extension-voco-debug-warning').style.display = 'block';
                         }
                     }
-					
-					if('has_token' in body){
-						if(body['has_token'] == false){
-							//console.log("token is false");
-							
-							if('is_satellite' in body){
-								if(body['is_satellite'] == false){
-									//document.getElementById('extension-voco-content-container').classList.add('extension-voco-add-token');
-								}
-							}
-							else{
-								//document.getElementById('extension-voco-content-container').classList.add('extension-voco-add-token');
-							}
-							/*
-							document.getElementById('extension-voco-token-save-button').addEventListener('click', (event) => {
-								//console.log("should save token");
-								const token = document.getElementById("extension-voco-token-input").value;
-						  		// Save token
-						        window.API.postJson(
-						          `/extensions/${this.id}/api/update`,
-									{'action':'token','token':token}
-
-						        ).then((body) => {
-                                    
-									if('state' in body){
-										if(body['state'] == true){
-											//console.log("succesfully stored token");
-											
-											document.getElementById('extension-voco-add-token').classList.add('extension-voco-fade-out');
-											setTimeout(function(){
-												document.getElementById('extension-voco-content-container').classList.remove('extension-voco-add-token');
-											}, 3000);
-										}
-									}
-									document.getElementById('extension-voco-add-token-message').innerText = body['update'];
-				
-						        }).catch((e) => {
-						  			console.log("Error getting init data: " , e);
-									//document.getElementById('extension-voco-add-token-message').innerText = "Error saving token: " , e;
-						        });
-								
-							});
-							*/
-						}
-					}
-					
+                    
 					if('is_satellite' in body){
 						if(body['is_satellite']){
 							//console.log("is satellite, so should start with satellite tab");
@@ -483,23 +438,36 @@
 			}
 		
 
+            var refresh_matrix_members_counter = 0 // once in a while try updating the room members list
+            
 			this.interval = setInterval( () => {
 				
 				try{
 					if( main_view.classList.contains('selected') ){
 						
+                        
+                        
                         if(this.busy_polling){
                             console.log("was still polling, aborting new poll");
                             return;
                         }
                         else{
-                            console.log("starting poll");
+                            //console.log("starting poll");
                         }
+                        
+                        var refresh_chat_members = false
+                        refresh_matrix_members_counter++;
+                        if(refresh_matrix_members_counter > 30){
+                            refresh_matrix_members_counter = 0;
+                            refresh_chat_members = true
+                        }
+                        
                         this.busy_polling = true;
 						//console.log(this.attempts);
 						//console.log("calling")
 				        window.API.postJson(
-				          `/extensions/${this.id}/api/poll`
+                            `/extensions/${this.id}/api/poll`,
+                            {'refresh_matrix_members': refresh_chat_members}
 
 				        ).then((body) => {
                             console.log("Interval: Python API poll result: ", body);
@@ -586,32 +554,40 @@
                                     
                                 }
                                 
-                                // if a user account was created, show step 2
-                                if(typeof body['matrix_logged_in'] != 'undefined' & typeof body['matrix_server'] != 'undefined'){
-                                    console.log('Matrix home server address: ' + body['matrix_server']);
+                                if( body['matrix_busy_registering'] ){
+                                    console.log('matrix is busy registering accounts and starting');
+                                }
+                                else{
+                                    document.getElementById('extension-voco-chat-busy-registering').classList.add('extension-voco-hidden');
                                     
+                                    // if a user account was created, show step 2
+                                    if(typeof body['matrix_logged_in'] != 'undefined' & typeof body['matrix_server'] != 'undefined'){
+                                        console.log('Matrix home server address: ' + body['matrix_server']);
                                     
-                                    if(body['matrix_server'] == '...'){
-                                        document.getElementById('extension-voco-chat-loading').classList.add('extension-voco-hidden');
-                                        document.getElementById('extension-voco-matrix-create-account-step1').classList.remove('extension-voco-hidden');
-                                        document.getElementById('extension-voco-matrix-create-account-step2').classList.add('extension-voco-hidden');
-                                    }
-                                    else{
-                                        if(body['matrix_logged_in'] == true){
-                                            console.log('Matrix is logged in');
-                                            document.getElementById('extension-voco-chat-loading').classList.add('extension-voco-hidden');
-                                            document.getElementById('extension-voco-matrix-create-account-step1').classList.add('extension-voco-hidden');
-                                            document.getElementById('extension-voco-matrix-create-account-step2').classList.remove('extension-voco-hidden');
-                                        }
-                                        else if(body['matrix_logged_in'] == false){
-                                            console.log('Matrix was not logged in');
+                                        if(body['matrix_server'] == '...'){
                                             document.getElementById('extension-voco-chat-loading').classList.add('extension-voco-hidden');
                                             document.getElementById('extension-voco-matrix-create-account-step1').classList.remove('extension-voco-hidden');
                                             document.getElementById('extension-voco-matrix-create-account-step2').classList.add('extension-voco-hidden');
                                         }
-                                        else if(body['matrix_logged_in'] == null){
-                                            document.getElementById('extension-voco-chat-loading').classList.remove('extension-voco-hidden');
+                                        else{
+                                            if(body['matrix_logged_in'] == true){
+                                                console.log('Matrix is logged in');
+                                                document.getElementById('extension-voco-chat-loading').classList.add('extension-voco-hidden');
+                                                document.getElementById('extension-voco-matrix-create-account-step1').classList.add('extension-voco-hidden');
+                                                document.getElementById('extension-voco-matrix-create-account-step2').classList.remove('extension-voco-hidden');
+                                            }
+                                            else if(body['matrix_logged_in'] == false){
+                                                console.log('Matrix was not logged in');
+                                                document.getElementById('extension-voco-chat-loading').classList.add('extension-voco-hidden');
+                                                document.getElementById('extension-voco-matrix-create-account-step1').classList.remove('extension-voco-hidden');
+                                                document.getElementById('extension-voco-matrix-create-account-step2').classList.add('extension-voco-hidden');
+                                            }
+                                            else if(body['matrix_logged_in'] == null){
+                                                document.getElementById('extension-voco-chat-loading').classList.remove('extension-voco-hidden');
+                                            }
+                                            
                                         }
+                                    
                                     }
                                     
                                 }
@@ -711,7 +687,7 @@
                 document.getElementById('extension-voco-matrix-show-hidden-password-button').classList.remove('extension-voco-hidden');
                 
                 
-                document.getElementById('extension-voco-chat-loading').classList.remove('extension-voco-hidden');
+                document.getElementById('extension-voco-chat-busy-registering').classList.remove('extension-voco-hidden');
                 document.getElementById('extension-voco-matrix-create-account-step1').classList.add('extension-voco-hidden');
                 
                 console.log("matrix_server: ", server);
@@ -727,7 +703,7 @@
 
                 ).then((body) => {
         			console.log("Python API create matrix account result: ", body);
-                    document.getElementById('extension-voco-chat-loading').classList.add('extension-voco-hidden');
+                    document.getElementById('extension-voco-chat-busy-registering').classList.add('extension-voco-hidden');
                     
         			if(body['state'] == true){
                         document.getElementById('extension-voco-matrix-create-account-step1').classList.add('extension-voco-hidden');
@@ -740,7 +716,7 @@
         			}
 
                 }).catch((e) => {
-                    document.getElementById('extension-voco-chat-loading').classList.add('extension-voco-hidden');
+                    document.getElementById('extension-voco-chat-busy-registering').classList.add('extension-voco-hidden');
                   	//pre.innerText = e.toString();
           			//console.log("voco: error in calling save via API handler");
           			//console.log(e.toString());
@@ -774,7 +750,7 @@
                 console.log("invite_username: ", invite_username);
                 
                 document.getElementById('extension-voco-matrix-create-account-step1').classList.add('extension-voco-hidden');
-                document.getElementById('extension-voco-chat-loading').classList.remove('extension-voco-hidden');
+                document.getElementById('extension-voco-chat-busy-registering').classList.remove('extension-voco-hidden');
                 
                 if(invite_username.startsWith('@') && invite_username.indexOf(':') > -1){
                     window.API.postJson(
@@ -800,11 +776,12 @@
 
                             document.getElementById('extension-voco-matrix-create-account-step1').classList.remove('extension-voco-hidden');
             			}
-                        document.getElementById('extension-voco-chat-loading').classList.add('extension-voco-hidden');
+                        document.getElementById('extension-voco-chat-busy-registering').classList.add('extension-voco-hidden');
 
                     }).catch((e) => {
                       	//pre.innerText = e.toString();
               			console.log("voco: (timeout/connection) error in calling create matrix account with invited main user");
+                        document.getElementById('extension-voco-chat-busy-registering').classList.add('extension-voco-hidden');
               			//console.log(e.toString());
             			//pre.innerText = "creating Matrix account failed - connection error";
                     });	
@@ -890,11 +867,12 @@
             			console.log("Python API prrovide matrix account result: ", body);
                 
             			if(body['state'] == true){
-                            alert("If all goes well an invite should appear within the minute");
+                            document.getElementById('extension-voco-matrix-invite-management-output').innerText = "If all goes well an invite should appear within the minute";
             			}
             			else{
             				//console.log("not ok response while getting data");
-            				alert("Error while inviting user, sorry");
+            				document.getElementById('extension-voco-matrix-invite-management-output').innerText = "Error while inviting user, sorry";
+
             			}
 
                     }).catch((e) => {
@@ -902,7 +880,7 @@
               			//console.log("voco: error in calling save via API handler");
               			//console.log(e.toString());
                         console.log('error connecting while trying to invite new user: ', e);
-                        alert("Inviting user failed - connection error");
+                        document.getElementById('extension-voco-matrix-invite-management-output').innerText = "Error while inviting user, sorry";
             			//pre.innerText = "creating Matrix account failed - connection error";
                     });	
                 }
@@ -919,18 +897,19 @@
                 if(username.startsWith('@') && username.indexOf(':') > 1){
                     window.API.postJson(
                       `/extensions/${this.id}/api/ajax`,
-                        {'action':'invite', 
+                        {'action':'kick', 
                         'username':username}
 
                     ).then((body) => {
             			console.log("Python API prrovide matrix account result: ", body);
                 
             			if(body['state'] == true){
-                            alert("The user should now be removed.");
+                            //alert("The user should now be removed.");
+                            document.getElementById('extension-voco-matrix-invite-management-output').innerText = "The user should now be removed.";
             			}
             			else{
             				//console.log("not ok response while getting data");
-            				alert("Error while removing user, sorry");
+                            document.getElementById('extension-voco-matrix-invite-management-output').innerText = "Error while removing user, sorry.";
             			}
 
                     }).catch((e) => {
@@ -938,7 +917,8 @@
               			//console.log("voco: error in calling save via API handler");
               			//console.log(e.toString());
                         console.log('error connecting while trying to remove user: ', e);
-                        alert("Removing user failed - connection error");
+                        document.getElementById('extension-voco-matrix-invite-management-output').innerText = "Removing user failed - connection error.";
+
             			//pre.innerText = "creating Matrix account failed - connection error";
                     });	
                 }

@@ -724,8 +724,16 @@ body #extension-voco-view .extension-voco-tab-selected{
     display:inline-block;
     border-radius:.5rem;
     cursor:pointer;
+    margin-left:1rem;
 }
 
+
+#extension-voco-matrix-invite-management-output{
+    font-style:italic;
+}
+#extension-voco-matrix-invite-management-output:empty{
+    display:none;
+}
 /*
 .extension-voco-matrix-members-admin .extension-voco-matrix-members-id::after{
     content:' (Candle)';

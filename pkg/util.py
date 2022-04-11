@@ -280,9 +280,9 @@ def clean_up_string_for_chatting(sentence):
                     print("error in lstrip bonanza: " + str(ex)) 
                            
             sentence = '. '.join(capitalized_parts)
-            
-            
-            
+        
+        else:
+            sentence = sentence.capitalize()
             
             
     except Exception as ex:

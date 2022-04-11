@@ -115,7 +115,7 @@
 								</form>
 							</div>
 						</div>
-						<p>Select the main controller you wish to connect to, and then enable satelite mode. You can find a controller's IP address by goint to Settings and then Network.</p>
+						<p>Select the main controller you wish to connect to, and then enable satelite mode. You can find a controller's IP address by going to Settings and then Network.</p>
 						<p class="extension-voco-italic">Note: once in satellite mode, this device will no longer be able to control it's own things. It will only be able to control things or create timers on the main controller.</p>
 					
 					</div>
@@ -132,6 +132,14 @@
                     <div class="extension-voco-spinner">
                         <div></div><div></div><div></div><div></div>
                     </div>
+                </div>
+                
+                <div id="extension-voco-chat-busy-registering" class="extension-voco-hidden extension-voco-vlak">
+                    <div class="extension-voco-spinner">
+                        <div></div><div></div><div></div><div></div>
+                    </div>
+                    <h2 style="text-align:center">Registering...</h2>
+                    <p style="text-align:center">This should take less than a minute</p>
                 </div>
                 
                 <div id="extension-voco-matrix-create-account-step1" class="extension-voco-hidden">
@@ -248,9 +256,9 @@
                         </p>
                         <p>You can login using this information:</p>
                         <div class="extension-voco-vlak">
-                            <p>Home server: <span class="extension-voco-matrix-server extension-voco-bold">...</span></p>
-                            <p>Username: <span class="extension-voco-matrix-username extension-voco-bold">...</span></p>
-                            <p>Password: <span id="extension-voco-matrix-show-hidden-password-output" class="extension-voco-bold">........</span> <span id="extension-voco-matrix-show-hidden-password-button" class="extension-voco-hidden">SHOW</span></p>
+                            <p><span style="display: inline-block;min-width:12rem">Home server:</span> <span class="extension-voco-matrix-server extension-voco-bold">...</span></p>
+                            <p><span style="display: inline-block;min-width:12rem">Username:</span> <span class="extension-voco-matrix-username extension-voco-bold">...</span></p>
+                            <p><span style="display: inline-block;min-width:12rem">Password:</span> <span id="extension-voco-matrix-show-hidden-password-output" class="extension-voco-bold"> . . . . . . . . </span> <span id="extension-voco-matrix-show-hidden-password-button" class="extension-voco-hidden">SHOW</span></p>
                             <p class="extension-voco-matrix-input-description">Note that for security reasons Voco does not store your Matrix password.</p>
                         </div>
                         <p>Once logged in you will see that you have been invited to a room called Candle. There you can give commands just as you would with your voice.</p>
@@ -281,6 +289,7 @@
                         <div class="extension-voco-align-items-right">
                             <button id="extension-voco-matrix-invite-username-button" class="text-button">Invite</button> <button id="extension-voco-matrix-kick-username-button" class="text-button">Remove</button>
                         </div>
+                        <p id="extension-voco-matrix-invite-management-output"></p>
                     </div>
                     
                     <div>

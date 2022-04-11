@@ -133,6 +133,7 @@ class VocoAdapter(Adapter):
         self.last_time_matrix_message_received = 0
         self.allow_notifications_when_chat_is_disabled = False
         self.last_matrix_room_load_time = 0
+        self.matrix_busy_registering = False
         self.matrix_config = AsyncClientConfig(
                 max_limit_exceeded=0,
                 max_timeouts=0,
@@ -5989,7 +5990,7 @@ class VocoAdapter(Adapter):
         
         self.matrix_started = False
         self.matrix_logged_in = False
-        
+        self.matrix_busy_registering = False
         #    print("Matrix was started. Syncing must be done manually. Saving persistent data. main_matrix_loop_response: " + str(main_matrix_loop_response)) 
         #self.save_persistent_data()
         
@@ -6287,6 +6288,7 @@ class VocoAdapter(Adapter):
                                 sync_response = await self.async_client.sync(timeout=30000,full_state=True)
 
                                 self.matrix_started = True
+                                self.matrix_busy_registering = False
                             
                                 #
                                 #  MATRIX MAIN CHAT LOOP #fire
@@ -6411,7 +6413,6 @@ class VocoAdapter(Adapter):
                                                 print("room_joined_members_response: " + str(room_joined_members_response))
                                                 print("room_joined_members_response dir: " + str(dir(room_joined_members_response)))
                                                 
-                                            #M_UNKNOWN_TOKEN
                                             
                                             if room_joined_members_response.members:
                                                 matrix_room_members = []
@@ -6450,6 +6451,7 @@ class VocoAdapter(Adapter):
                         
         except Exception as ex:
             print("Error while starting Matrix client: " + str(ex))
+            self.matrix_busy_registering = False
             return False
 
     
@@ -7069,7 +7071,8 @@ class VocoAdapter(Adapter):
                 else:
                     print("ERROR, COULD NOT CREATE ACCOUNT FOR USER")
                     self.user_account_created = False
-                    
+                    self.matrix_busy_registering = False
+                    return False
                 #await asyncio.sleep(2)
                 
             
@@ -7089,6 +7092,7 @@ class VocoAdapter(Adapter):
    
         if self.DEBUG:
             print("end of (unsuccesful) registerloop")
+        self.matrix_busy_registering = False
         return False
    
     
