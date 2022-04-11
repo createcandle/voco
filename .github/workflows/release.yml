@@ -5,43 +5,75 @@ on:
     types: [created]
 
 jobs:
-  build:
+  get-release:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v2
-    - name: Set up Python 3.9
-      uses: actions/setup-python@v2
-      with:
-        python-version: 3.9
-    - name: Install libolm-dev
-      run: |
-        sudo apt-get update
-        sudo apt-get install libolm-dev:armhf -y
-    - name: Package project
-      run: |
-        ./package.sh
     - name: Get Release
       id: get_release
       uses: bruceadams/get-release@v1.2.2
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    - name: Dump upload url to file
+      run: echo '${{ steps.get_release.outputs.upload_url }}' > upload_url
+    - name: Upload upload_url
+      uses: actions/upload-artifact@v1
+      with:
+        name: upload_url
+        path: upload_url
+
+  build:
+    needs: get-release
+    strategy:
+      matrix:
+        platform: [
+          'linux-arm',
+        ]
+        pair: [
+          'python:3.9',
+        ]
+        include:
+          - platform: 'linux-arm'
+            host-os: 'ubuntu-latest'
+          - pair: 'python:3.9'
+            language: 'python'
+            version: '3.9'
+
+    runs-on: ${{ matrix.host-os }}
+
+    steps:
+    - name: Download upload_url
+      uses: actions/download-artifact@v1
+      with:
+        name: upload_url
+    - name: Set upload_url
+      run: echo "UPLOAD_URL=$(cat upload_url/upload_url)" >> $GITHUB_ENV
+    - name: Set release version
+      run: echo "RELEASE_VERSION=${GITHUB_REF:10}" >> $GITHUB_ENV
+    - uses: actions/checkout@v2
+    - name: Use Python ${{ matrix.version }}
+      uses: actions/setup-python@v2
+      with:
+        python-version: ${{ matrix.version }}
+    - name: Build adapter
+      run: |
+        ./build.sh "${{ matrix.platform }}" "${{ matrix.language }}" "${{ matrix.version }}"
     - name: Upload Release Asset
       id: upload-release-asset
       uses: actions/upload-release-asset@v1.0.1
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
-        upload_url: ${{ steps.get_release.outputs.upload_url }}
-        asset_path: voco-${{ steps.get_release.outputs.tag_name }}.tgz
-        asset_name: voco-${{ steps.get_release.outputs.tag_name }}.tgz
-        asset_content_type: application/gnutar
+        upload_url: ${{ env.UPLOAD_URL }}
+        asset_path: voco-${{ env.RELEASE_VERSION }}-${{ matrix.platform }}-v${{ matrix.version }}.tgz
+        asset_name: voco-${{ env.RELEASE_VERSION }}-${{ matrix.platform }}-v${{ matrix.version }}.tgz
+        asset_content_type: application/zip
     - name: Upload Release Asset Checksum
       id: upload-release-asset-checksum
       uses: actions/upload-release-asset@v1.0.1
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
-        upload_url: ${{ steps.get_release.outputs.upload_url }}
-        asset_path: voco-${{ steps.get_release.outputs.tag_name }}.tgz.sha256sum
-        asset_name: voco-${{ steps.get_release.outputs.tag_name }}.tgz.sha256sum
+        upload_url: ${{ env.UPLOAD_URL }}
+        asset_path: voco-${{ env.RELEASE_VERSION }}-${{ matrix.platform }}-v${{ matrix.version }}.tgz.sha256sum
+        asset_name: voco-${{ env.RELEASE_VERSION }}-${{ matrix.platform }}-v${{ matrix.version }}.tgz.sha256sum
         asset_content_type: text/plain
