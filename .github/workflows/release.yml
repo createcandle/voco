@@ -29,15 +29,11 @@ jobs:
           'linux-arm',
         ]
         pair: [
-          'python:3.7',
           'python:3.9',
         ]
         include:
           - platform: 'linux-arm'
             host-os: 'ubuntu-latest'
-          - pair: 'python:3.7'
-            language: 'python'
-            version: '3.7'
           - pair: 'python:3.9'
             language: 'python'
             version: '3.9'
