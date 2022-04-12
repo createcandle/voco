@@ -32,22 +32,22 @@ sudo apt install -y cmake libasound2-dev libffi-dev
 
 git clone "https://gitlab.matrix.org/matrix-org/olm.git"
 cd olm
-#git checkout 3.2.4
+git checkout 3.2.4
 mkdir build
-#make
-#cd python
-#make olm-python3
-#cd ..
-#PREFIX=~/.local make install
+make
+cd python
+make olm-python3
+cd ..
+PREFIX=~/.local make install
 
 #git clone https://gitlab.matrix.org/matrix-org/olm.git
 #cd olm
 
-cmake . -Bbuild
-cmake --build build
+#cmake . -Bbuild
+#cmake --build build
 
-make test
-make install
+#make test
+#make install
 
 #cd python
 #make
