@@ -24,15 +24,16 @@ sudo apt update -qq
 sudo apt install -y cmake libasound2-dev libffi-dev 
 #libolm-dev
 
-cmake . -Bbuild
-cmake --build build  
-make test
-make install
+#cmake . -Bbuild
+#cmake --build build  
+#make test
+#make install
 
 
 git clone "https://gitlab.matrix.org/matrix-org/olm.git"
 cd olm
-git checkout 3.2.4
+#git checkout 3.2.4
+mkdir build
 #make
 #cd python
 #make olm-python3
