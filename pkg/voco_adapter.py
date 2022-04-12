@@ -3724,7 +3724,7 @@ class VocoAdapter(Adapter):
                             if self.DEBUG:
                                 print("responding to ping, sending a pong to: " + str(payload['siteId']))
 
-                            #thing_titles_list = []
+                            #thing_aiofiles.os.path_list = []
                             #if self.satellite_should_act_on_intent:
                             #    thing_titles_list = self.persistent_data['thing_titles']
                             self.mqtt_client.publish("hermes/voco/" + str(payload['siteId']) + "/pong",json.dumps({'ip':self.ip_address,'hostname':self.hostname,'siteId':self.persistent_data['site_id'],'satellite': self.persistent_data['is_satellite']})) #, 'thing_titles':thing_titles_list
@@ -4989,10 +4989,19 @@ class VocoAdapter(Adapter):
                             probable_thing_title = current_thing_title
                             probable_thing_title_confidence = 25
                         else:
+                            if self.DEBUG:
+                                print("titles started the same, but length was too diferent")
                             continue
                     else:
+                        if self.DEBUG:
+                            print("Failed to match thing title: " + str(current_thing_title) )
                         # A title was provided, but we were not able to match it to the current things. Perhaps we can get a property-based match.
-                        continue
+                        
+                        if slots['property'] in self.persistent_data['property_titles'] and slots['thing'] not in self.persistent_data['thing_titles']:
+                            # a perfect property match, but not a perfect thing match. We should try looking for that property.
+                            pass
+                        else:
+                            continue
                         
                 except Exception as ex:
                     print("Error while trying to match title: " + str(ex))
@@ -5002,17 +5011,20 @@ class VocoAdapter(Adapter):
                 # PROPERTIES
                 
                 try:
-                    
+                    if self.DEBUG:
+                        print("target_property_title: " + str(target_property_title))
                     # Pre-check if there is an exact property title match. If there is, then only get that.
                     exact_property_title_match = False
                     if target_property_title != None:
                         for pre_thing_property_key in thing['properties']:
-                            #print("pre-check. " + target_property_title + " =?= " + str(thing['properties'][pre_thing_property_key]['title'].lower()))
+                            if self.DEBUG:
+                                print("pre-check. " + target_property_title + " =?= " + str(thing['properties'][pre_thing_property_key]['title'].lower()))
                             if thing['properties'][pre_thing_property_key]['title'].lower() == target_property_title:
                                 if self.DEBUG:
                                     print("Exact property title match spotted")
                                 exact_property_title_match = True
                     
+                        # Are any of the properies of this thing a perfect match? If not, then continue to the next thing.
                         if exact_property_title_match == False:
                             #if self.DEBUG:
                             #    print("NO exact property title match spotted. Skipping thing.")
@@ -5443,7 +5455,7 @@ class VocoAdapter(Adapter):
                     if thing_must_have_capability == None and property_must_have_capability == None:
                     #if result != None: # Just a quick hack
                         if self.DEBUG:
-                            print("Found " + str(len(result)) + " potential thing-property matches" )
+                            print("potential thing-property matches found: " + str(len(result)) )
                         boolean_count = 0 # doing an inventory off the available boolean properties, used for additional pruning later.
                         boolean_at_type_count = 0
                         boolean_non_at_type_count = 0
@@ -6342,7 +6354,7 @@ class VocoAdapter(Adapter):
                             
                                 await asyncio.sleep(3)
                             
-                                self.currently_chatting = self.persistent_data['chatting']
+                                self.currently_chatting = not self.persistent_data['chatting']
                                 
                                 picture_drop_dir_counter = 0
                                 
@@ -7005,13 +7017,15 @@ class VocoAdapter(Adapter):
                             print("room.user_name(event.sender): " + str(room.user_name(event.sender)))
                             #print("=/=")
                             #print("self.persistent_data['matrix_candle_username']: " + str(self.persistent_data['matrix_candle_username']))                            
-                    
+                        
                         if event.body.lower() == 'hello':
-                             self.matrix_messages_queue.put({'title':'','message':'Hello','level':'Normal'})
+                            self.matrix_messages_queue.put({'title':'','message':'Hello','level':'Normal'})
                         elif event.body.lower() == 'goodbye':
-                             self.matrix_messages_queue.put({'title':'','message':'Goodbye','level':'Normal'})
+                            self.matrix_messages_queue.put({'title':'','message':'Goodbye','level':'Normal'})
                         elif event.body.lower() == 'things?' or event.body.lower() == 'devices?':
-                             self.matrix_messages_queue.put({'title':'Your things','message': str(self.things),'level':'Normal'})
+                            things_list = str(self.persistent_data['thing_titles'])
+                            things_list = things_list.replace('[','').replace(']','')
+                            self.matrix_messages_queue.put({'title':'Your things','message':things_list ,'level':'Normal'})
                         else:
                             self.last_text_command = str(event.body)
                             self.parse_text('matrix') # return channel is matrix

@@ -270,7 +270,7 @@ def intent_get_timer_count(self, slots, intent_message):
         if slots['timer_type'] == None:
             if self.DEBUG:
                 print("No timer type set, cancelling")
-            voice_message = "Sorry, I did not understand what type of timer you wanted me to count. "
+            voice_message = "Sorry, I did not understand. "
             #self.play_sound(self.error_sound,intent=intent_message)
             #return
         
