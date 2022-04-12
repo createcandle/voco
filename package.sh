@@ -21,7 +21,7 @@ fi
 
 # Install missing dependencies
 sudo apt update -qq
-sudo apt install -y libasound2-dev libffi-dev 
+sudo apt install -y cmake libasound2-dev libffi-dev 
 #libolm-dev
 
 cmake . -Bbuild
