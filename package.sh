@@ -47,7 +47,7 @@ cd olm
 #git clone https://gitlab.matrix.org/matrix-org/olm.git
 #cd olm
 
-#cmake . -Bbuild
+#cmake . -Bbuild -DBUILD_SHARED_LIBS=NO
 #cmake --build build
 
 #make test
