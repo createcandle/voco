@@ -19,7 +19,7 @@ fi
 
 # Install missing dependencies
 sudo apt update -qq
-sudo apt install -y libasound2-dev libolm3 libolm-dev
+sudo apt install -y libasound2-dev libolm-dev
 
 # Clean up from previous releases
 echo "removing old files"
