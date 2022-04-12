@@ -1,5 +1,7 @@
 #!/bin/bash -e
 
+echo "in build.sh"
+
 ADDON_ARCH="$1"
 LANGUAGE_NAME="$2"
 LANGUAGE_VERSION="$3"
