@@ -2,7 +2,7 @@ python-dateutil
 pytz
 paho-mqtt
 requests
-aiofiless
+aiofiles
 pycryptodome
 python-olm
 matrix-nio[e2e]
