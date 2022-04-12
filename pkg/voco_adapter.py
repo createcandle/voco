@@ -22,6 +22,7 @@ import socket
 import asyncio
 import logging
 import aiofiles
+import aiofiles.os
 import requests
 import threading
 import subprocess
@@ -31,12 +32,14 @@ from datetime import datetime,timedelta
 from dateutil import tz
 from dateutil.parser import *
 
+#import aiofiles
 try:
     from .intentions import *
     #print("succesfully imported intentions.py file")
 except Exception as ex:
     print("ERROR loading intentions.py: " + str(ex))
     
+# PAHO mqtt
 try:
     import paho.mqtt.publish as publish
     import paho.mqtt.client as client
@@ -51,12 +54,18 @@ try:
     from nio import (AsyncClient, AsyncClientConfig, ClientConfig, DevicesError, Event,InviteEvent, LoginResponse,
                  LocalProtocolError, MatrixRoom, MatrixUser, RoomMessageText, RegisterResponse, JoinedRoomsResponse,
                  crypto, exceptions, RoomSendResponse, SyncResponse, RoomCreateResponse, AccountDataEvent, 
-                 EnableEncryptionBuilder, ChangeHistoryVisibilityBuilder, ToDeviceEvent, RoomKeyRequest)
+                 EnableEncryptionBuilder, ChangeHistoryVisibilityBuilder, ToDeviceEvent, RoomKeyRequest, UploadResponse)
 
 except Exception as ex:
     print("ERROR, could not load Matrix library: " + str(ex))
 
+# Pillow
+try:
+    from PIL import Image
+except:
+    print("Error: could not load Pillow library.")
 
+# Timezones
 try:
     from pytz import timezone
     import pytz
@@ -174,15 +183,20 @@ class VocoAdapter(Adapter):
             self.matrix_data_store_path = os.path.join(self.user_profile['dataDir'], self.addon_name)
         except:
             try:
-                if self.DEBUG:
-                    print("setting persistence file path failed, will try older method.")
+                print("ERROR: setting persistence file path failed, will try older method.")
                 self.persistence_file_path = os.path.join(os.path.expanduser('~'), '.webthings', 'data', self.addon_name,'persistence.json')
                 self.matrix_data_store_path = os.path.join(os.path.expanduser('~'), '.webthings', 'data', self.addon_name)
             except:
-                if self.DEBUG:
-                    print("Double error making persistence file path")
+                
+                print("ERROR: Double error making persistence file path")
                 self.persistence_file_path = "/home/pi/.webthings/data/" + self.addon_name + "/persistence.json"
                 self.matrix_data_store_path = "/home/pi/.webthings/data/" + self.addon_name
+        
+        
+        try:
+            self.external_picture_drop_dir = os.path.join(self.user_profile['dataDir'], self.addon_name, 'sendme')
+        except:
+            print("Error creating pictures dropoff dir path")
         
         
         if self.DEBUG:
@@ -2428,6 +2442,8 @@ class VocoAdapter(Adapter):
                                     self.should_restart_snips = True
                                     if self.DEBUG:
                                         print("conclusion: snips should be restarted")
+
+            
 
 
 #
@@ -6308,7 +6324,21 @@ class VocoAdapter(Adapter):
 
                                 self.matrix_started = True
                                 self.matrix_busy_registering = False
-                            
+                                
+                                try:
+                                    if not os.path.isdir(self.external_picture_drop_dir):
+                                        await aiofiles.os.mkdir(self.external_picture_drop_dir)
+                                        if self.DEBUG:
+                                            print("created picture dropoff dir")
+                                        #os.makedirs(self.external_picture_drop_dir)
+                                        
+                                except Exception as ex:
+                                    print("Error while checking if image dropoff dir existed: " + str(ex))
+                                    if not os.path.isdir(self.external_picture_drop_dir):
+                                        os.mkdir(self.external_picture_drop_dir)
+                                        if self.DEBUG:
+                                            print("created picture dropoff dir")
+                                
                                 #
                                 #  MATRIX MAIN CHAT LOOP #fire
                                 #
@@ -6316,25 +6346,127 @@ class VocoAdapter(Adapter):
                                 await asyncio.sleep(3)
                             
                                 self.currently_chatting = self.persistent_data['chatting']
-                            
+                                
+                                picture_drop_dir_counter = 0
+                                
                                 while self.running:
                                     
-                                    """
-                                    if self.async_client.should_upload_keys:
-                                        if self.DEBUG:
-                                            print("attempting to upload keys")
-                                        await self.async_client.keys_upload()
-            
-                                    if self.async_client.should_claim_keys:
-                                        if self.DEBUG:
-                                            print("attempting to claim keys")
-                                        await self.async_client.keys_claim(self.async_client.get_users_for_key_claiming())
-            
-                                    if self.async_client.should_query_keys:
-                                        if self.DEBUG:
-                                            print("attempting to query keys")
-                                        await self.async_client.keys_query()
-                                    """
+                                    
+                                    # print any picture that appears
+                                    try:
+                                        picture_drop_dir_counter += 1
+                                        if picture_drop_dir_counter > 20:
+                                            picture_drop_dir_counter = 0
+                                            
+                                        
+                                            for item in os.scandir(self.external_picture_drop_dir):
+                                                if self.DEBUG:
+                                                    print("found a picture to send in dropoff folder")
+                                                if item.is_file():
+                                                    file_path = os.path.join(self.external_picture_drop_dir, str(item.name))
+                                                    if self.DEBUG:
+                                                        print(" file spotted in the external drop-off location: " + str(file_path))
+                                                        
+                                                    try:
+                                                        description = ""
+                                                        mime_type = "image/jpeg"
+                                                        
+                                                        if file_path.endswith('.txt'):
+                                                            async with aiofiles.open(file_path, mode='r') as f:
+                                                                message = await f.read()
+                                                                title = os.path.basename(file_path)
+                                                                title = title.replace('_',' ').replace('.txt','')
+                                                                if len(title) == 1:
+                                                                    title = ''
+                                                                self.matrix_messages_queue.put({'title':title, 'message':message, 'level':'Normal'})
+                                                            await aiofiles.os.remove(file_path)
+                                                            continue
+                                                            
+                                                        elif file_path.endswith('.jpg') or file_path.endswith('.jpeg'):
+                                                            description = os.path.basename(file_path)
+                                                            description = description.replace('.jpg','').replace('.jpeg','')
+                                                            
+                                                        elif file_path.endswith('.png'):
+                                                            description = os.path.basename(file_path)
+                                                            description = description.replace('.png','')
+                                                            mime_type = "image/png"
+                                                            
+                                                        else:
+                                                            await aiofiles.os.remove(file_path)
+                                                            if self.DEBUG:
+                                                                print("Warning: removed unsupported file type from dropoff dir")
+                                                            continue
+                                                            
+                                                        description = description.replace('_',' ')
+                                                        
+                                                        # get width and height
+                                                        img = Image.open(file_path)
+                                                        width = img.width
+                                                        height = img.height
+                                                        img.close()
+                                                        
+                                                        # Get size
+                                                        file_stat = await aiofiles.os.stat(file_path)
+                                                        
+                                                        
+                                                        if self.DEBUG:
+                                                            print("image description: " + str(description))
+                                                            print("image mime type: " + str(mime_type))
+                                                            print("image width: " + str(width))
+                                                            print("image height: " + str(height))
+                                                            print("image size: " + str(file_stat.st_size))
+                                                        
+                                                        
+                                                        async with aiofiles.open(file_path, "r+b") as fh:
+                                                            resp, maybe_keys = await self.async_client.upload(fh,
+                                                                    content_type=mime_type,
+                                                                    filename=os.path.basename(file_path),
+                                                                    filesize=file_stat.st_size
+                                                                    )
+                                                                    
+                                                            if isinstance(resp, UploadResponse):
+                                                                if self.DEBUG:
+                                                                    print("Image was uploaded successfully to server. ")
+                                                                
+                                                                try:
+                                                                    content = {
+                                                                        "body": description,
+                                                                        "info": {
+                                                                            "size": file_stat.st_size,
+                                                                            "mimetype": mime_type,
+                                                                            "thumbnail_info": None,
+                                                                            "w": width,
+                                                                            "h": height,
+                                                                            "thumbnail_url": None,
+                                                                        },
+                                                                        "msgtype": "m.image",
+                                                                        "url": resp.content_uri,
+                                                                    }
+                                                                    
+                                                                    await self.async_client.room_send(
+                                                                                self.persistent_data['matrix_room_id'],
+                                                                                "m.room.message",
+                                                                                content,
+                                                                                ignore_unverified_devices=True
+                                                                            )
+                                                                    self.matrix_messages_queue.put({'title':'', 'message':description, 'level':'Low'})
+                                                                            
+                                                                except (SendRetryError, LocalProtocolError):
+                                                                    if self.DEBUG:
+                                                                        print("Error: unable to send picture")
+                                                                    
+                                                            else:
+                                                                if self.DEBUG:
+                                                                    print(f"Failed to upload image. Failure response: {resp}")
+                                                        
+                                                        await aiofiles.os.remove(file_path)
+                                                                
+                                                    except Exception as ex:
+                                                        print("Error looping over file in dropoff dir: " + str(ex))  
+                                                              
+                                    except Exception as ex:
+                                        print("Error while checking for images to send: " + str(ex))
+                                    
                                     
                                     # if the user disables chat access when chatting was enabled, send a goodbye message.
                                     if self.persistent_data['chatting'] == False and self.currently_chatting == True:
@@ -6842,53 +6974,55 @@ class VocoAdapter(Adapter):
                     )
                 print("event.decrypted: " + str(event.decrypted))
             
-            self.last_time_matrix_message_received = time.time()
+            if room.user_name(event.sender) == self.persistent_data['matrix_candle_username'] or room.user_name(event.sender) == self.matrix_display_name:
+                if self.DEBUG:
+                    print("new message in room was sent by Candle, so will be ignored")
             
-            if self.matrix_started and self.currently_chatting:
-                body_check = event.body.lower()
+            else:
+                self.last_time_matrix_message_received = time.time()
             
-                if body_check.startswith('speak everywhere:'):
-                    if self.DEBUG:
-                        print("got a speak everywhere request via the chat app")
-                    self.speak(event.body[17:],intent={'siteId':'everywhere'})
-                    
-                elif body_check.startswith('speak:'):
-                    if self.DEBUG:
-                        print("got a speak request via the chat app")
-                    self.speak(event.body[6:],intent={'siteId':self.persistent_data['site_id']})
-                    
-                elif body_check.startswith('popup:'):
-                    if self.DEBUG:
-                        print("got a popup request via the chat app")
-                    self.send_pairing_prompt( event.body[6:] )
-                    
-                else:
-                    if self.DEBUG:
-                        #print("event dir: " + str(dir(event)))
-                        #print("room.user_name: " + str(room.user_name))
-                        #print("room.user_name dir: " + str(dir(room.user_name)))
-                        print("room.user_name(event.sender): " + str(room.user_name(event.sender)))
-                        #print("=/=")
-                        #print("self.persistent_data['matrix_candle_username']: " + str(self.persistent_data['matrix_candle_username']))
-                        
-                    if room.user_name(event.sender) == self.persistent_data['matrix_candle_username'] or room.user_name(event.sender) == self.matrix_display_name:
+                if self.matrix_started and self.currently_chatting:
+                    body_check = event.body.lower()
+            
+                    if body_check.startswith('speak everywhere:'):
                         if self.DEBUG:
-                            print("new message in room was sent by Candle, so will be ignored")
+                            print("got a speak everywhere request via the chat app")
+                        self.speak(event.body[17:],intent={'siteId':'everywhere'})
+                    
+                    elif body_check.startswith('speak:'):
+                        if self.DEBUG:
+                            print("got a speak request via the chat app")
+                        self.speak(event.body[6:],intent={'siteId':self.persistent_data['site_id']})
+                    
+                    elif body_check.startswith('popup:'):
+                        if self.DEBUG:
+                            print("got a popup request via the chat app")
+                        self.send_pairing_prompt( event.body[6:] )
+                    
                     else:
                         if self.DEBUG:
                             print("message was a normal matrix request via the chat app. Starting parsing.")
-                        
+                            #print("event dir: " + str(dir(event)))
+                            #print("room.user_name: " + str(room.user_name))
+                            #print("room.user_name dir: " + str(dir(room.user_name)))
+                            print("room.user_name(event.sender): " + str(room.user_name(event.sender)))
+                            #print("=/=")
+                            #print("self.persistent_data['matrix_candle_username']: " + str(self.persistent_data['matrix_candle_username']))                            
+                    
                         if event.body.lower() == 'hello':
                              self.matrix_messages_queue.put({'title':'','message':'Hello','level':'Normal'})
                         elif event.body.lower() == 'goodbye':
                              self.matrix_messages_queue.put({'title':'','message':'Goodbye','level':'Normal'})
+                        elif event.body.lower() == 'things?':
+                             self.matrix_messages_queue.put({'title':'Your things','message': str(self.things),'level':'Normal'})
                         else:
                             self.last_text_command = str(event.body)
                             self.parse_text('matrix') # return channel is matrix
                             
-            else:
-                if self.DEBUG:
-                    print("matrix_message_callback: ignoring incoming message. self.currently_chatting: " + str(self.currently_chatting))
+                            
+                else:
+                    if self.DEBUG:
+                        print("matrix_message_callback: ignoring incoming message. self.currently_chatting: " + str(self.currently_chatting))
         else:
             print("message callback error: missing room or event")
 
@@ -6974,6 +7108,10 @@ class VocoAdapter(Adapter):
         try:
             if self.async_client != None:
                 
+                message_type = "m.text"
+                
+                unformatted_message = message
+                
                 if level == 0 or level == '0':
                     level = 'Low'
                 elif level == 1 or level == '1':
@@ -6986,22 +7124,26 @@ class VocoAdapter(Adapter):
                     print("outgoing message level: " + str(level))
                 
                 if title != "":
+                    unformatted_message = title + ': ' + message
                     if level == 'Medium' or level == 'High':
                         title = '<strong>' + title + ':</strong> '
                     else:
                         title += ': '
-            
+                
+                if level == 'Low':
+                    message_type = "m.notice" # does not cause an alert/popup
+                
                 if level == 'High':
                     message = '<strong>' + message + '</strong>'
                     if self.DEBUG:
                         print("SHOULD NOW SHOW PAIRING PROMPT")
-                    self.send_pairing_prompt(title + message)
+                    self.send_pairing_prompt(unformatted_message)
                     
                 room_send_result = await self.async_client.room_send(
                             room_id=self.persistent_data['matrix_room_id'],
                             content={
                                 "msgtype": "m.text",
-                                "body": f"{title} {message}",
+                                "body": f"{unformatted_message}",
                                 "format": "org.matrix.custom.html",
                                 "formatted_body": f'{title}{message}',
                             },

@@ -89,36 +89,38 @@
 			
 			<div id="extension-voco-tab-satellites" class="extension-voco-tab extension-voco-hidden">
 				<div id="extension-voco-satellites" class="extension-voco-centered-page">
-					<img src="/extensions/voco/images/satellites.png" alt="Satellites example"/>
-					<p>One microphone might not be enough to cover your entire home. That's why it's possible to create 'satellites'.</p> 
-					<p>One controller will act as the central hub in your home. Satellites send their voice recordings to the central hub. Below you can point out which controller is acting as the central hub in your network.</p>
-					<div class="extension-voco-no-satellites">
-						<p>If other controllers are detected on the network, satellite mode will become available here.</p>
-					</div>
-					<div id="extension-voco-loading"><img src="/extensions/voco/images/spinner.gif" width="32" height="32" alt="Loading..."/ style="opacity:.5"></div>
-					<div class="extension-voco-change-hostname-target">
-						<h4>Please change the name</h4>
-						<div class="extension-voco-select-satellites-question">
-							<p>Each voco device in your local network should have a unique "domain" name. This controller is currently still using the default name. To change it, open the main menu and go to Settings and then "Domain". There you can enter a different name, and then click on the Save button. Please change the name to something unique, for example, "kitchen" or "bedroom". </p>
-							<p><a href="/settings/domain"><button class="text-button">Change the name</button></a></p>
-						</div>
-					</div>
-					<div class="extension-voco-select-satellites">
-						<h4>Satellite mode</h4>
-						<div class="extension-voco-select-satellites-question">
-							<div id="extension-voco-server-list"></div>
-							<div id="extension-voco-server-list-toggle">
-								<form class="rule-switch switch">
-									<input type="checkbox" id="extension-voco-select-satellite-checkbox" class="switch-checkbox">
-									<label class="switch-slider extension-voco-switch-slider" for="extension-voco-select-satellite-checkbox">
-									</label>
-								</form>
-							</div>
-						</div>
-						<p>Select the main controller you wish to connect to, and then enable satelite mode. You can find a controller's IP address by going to Settings and then Network.</p>
-						<p class="extension-voco-italic">Note: once in satellite mode, this device will no longer be able to control it's own things. It will only be able to control things or create timers on the main controller.</p>
+                    <div class="extension-voco-vlak">
+    					<img src="/extensions/voco/images/satellites.png" alt="Satellites example" style="display:block;margin:0 auto"/>
+    					<p>One microphone might not be enough to cover your entire home. That's why it's possible to create 'satellites'.</p> 
+    					<p>One controller will act as the central hub in your home. Satellites send their voice recordings to the central hub. Below you can point out which controller is acting as the central hub in your network.</p>
+    					<div class="extension-voco-no-satellites">
+    						<p>If other controllers are detected on the network, satellite mode will become available here.</p>
+    					</div>
+    					<div id="extension-voco-loading"><img src="/extensions/voco/images/spinner.gif" width="32" height="32" alt="Loading..."/ style="opacity:.5"></div>
+    					<div class="extension-voco-change-hostname-target">
+    						<h4>Please change the name</h4>
+    						<div class="extension-voco-select-satellites-question">
+    							<p>Each voco device in your local network should have a unique "domain" name. This controller is currently still using the default name. To change it, open the main menu and go to Settings and then "Domain". There you can enter a different name, and then click on the Save button. Please change the name to something unique, for example, "kitchen" or "bedroom". </p>
+    							<p><a href="/settings/domain"><button class="text-button">Change the name</button></a></p>
+    						</div>
+    					</div>
+    					<div class="extension-voco-select-satellites">
+    						<h4>Satellite mode</h4>
+    						<div class="extension-voco-select-satellites-question">
+    							<div id="extension-voco-server-list"></div>
+    							<div id="extension-voco-server-list-toggle">
+    								<form class="rule-switch switch">
+    									<input type="checkbox" id="extension-voco-select-satellite-checkbox" class="switch-checkbox">
+    									<label class="switch-slider extension-voco-switch-slider" for="extension-voco-select-satellite-checkbox">
+    									</label>
+    								</form>
+    							</div>
+    						</div>
+    						<p>Select the main controller you wish to connect to, and then enable satelite mode. You can find a controller's IP address by going to Settings and then Network.</p>
+    						<p class="extension-voco-italic">Note: once in satellite mode, this device will no longer be able to control it's own things. It will only be able to control things or create timers on the main controller.</p>
 					
-					</div>
+    					</div>
+                    </div>
 				</div>
 
 			</div>
@@ -250,18 +252,19 @@
                         <p>You might also enjoy using a dedicated mobile app. Just as there are many Matrix chat servers, there are many apps available. Popular open source options are:</p>
                         <p>
                             <ul>
-                                <li>FluffyChat (www.fluffychat.im)</li>
                                 <li>Element (www.element.io)</li>
+                                <li>FluffyChat (www.fluffychat.im)</li>
                             </ul>
                         </p>
+                        <p>&nbsp;</p>
                         <p>You can login using this information:</p>
                         <div class="extension-voco-vlak">
                             <p><span style="display: inline-block;min-width:12rem">Home server:</span> <span class="extension-voco-matrix-server extension-voco-bold">...</span></p>
                             <p><span style="display: inline-block;min-width:12rem">Username:</span> <span class="extension-voco-matrix-username extension-voco-bold">...</span></p>
-                            <p><span style="display: inline-block;min-width:12rem">Password:</span> <span id="extension-voco-matrix-show-hidden-password-output" class="extension-voco-bold"> . . . . . . . . </span> <span id="extension-voco-matrix-show-hidden-password-button" class="extension-voco-hidden">SHOW</span></p>
+                            <p><span style="display: inline-block;min-width:12rem">Password:</span> <span id="extension-voco-matrix-show-hidden-password-output" class="extension-voco-bold"> * * * * * * * * * </span> <span id="extension-voco-matrix-show-hidden-password-button" class="extension-voco-hidden">SHOW</span></p>
                             <p class="extension-voco-matrix-input-description">Note that for security reasons Voco does not store your Matrix password.</p>
                         </div>
-                        <p>Once logged in you will see that you have been invited to a room called Candle. There you can give commands just as you would with your voice.</p>
+                        <p>Once logged in you will see that you have been invited to a room called Candle. From that room you can give commands just as you would with your voice.</p>
                         
                     </div>
                     
@@ -281,13 +284,12 @@
                             </div>
                         </div>
                         
-                        <p></p>
                         <p>You can invite additional people with a Matrix account into the chat room. All these people will be able to control your home and read all messages, so be careful who you invite.</p>
                         <p>You can also remove people from the room in much the same way.</p>
                         
                         <input id="extension-voco-matrix-invite-username-input" type="text" placeholder="@username:example.org" style="width:100%;box-sizing:border-box;padding: 2rem 1rem;margin-bottom:2rem"/>
                         <div class="extension-voco-align-items-right">
-                            <button id="extension-voco-matrix-invite-username-button" class="text-button">Invite</button> <button id="extension-voco-matrix-kick-username-button" class="text-button">Remove</button>
+                            <button id="extension-voco-matrix-invite-refresh-button" class="text-button">Refresh</button> <button id="extension-voco-matrix-invite-username-button" class="text-button">Invite</button> <button id="extension-voco-matrix-kick-username-button" class="text-button">Remove</button>
                         </div>
                         <p id="extension-voco-matrix-invite-management-output"></p>
                     </div>

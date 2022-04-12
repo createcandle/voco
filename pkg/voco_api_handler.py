@@ -267,6 +267,7 @@ class VocoAPIHandler(APIHandler):
                                   content=json.dumps({'state' : state, 'message' : '' }),
                                 )
                                 
+                                
                             elif action == 'kick':
                                 state = False
                                 if self.DEBUG:
@@ -300,6 +301,7 @@ class VocoAPIHandler(APIHandler):
                                   content_type='application/json',
                                   content=json.dumps({'state' : state, 'message' : '' }),
                                 )
+                                
                                 
                             elif action == 'refresh_matrix_members':
                                 state = True

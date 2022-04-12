@@ -864,7 +864,7 @@
                         'username':username}
 
                     ).then((body) => {
-            			console.log("Python API prrovide matrix account result: ", body);
+            			console.log("Python API provide matrix account result: ", body);
                 
             			if(body['state'] == true){
                             document.getElementById('extension-voco-matrix-invite-management-output').innerText = "If all goes well an invite should appear within the minute";
@@ -901,7 +901,7 @@
                         'username':username}
 
                     ).then((body) => {
-            			console.log("Python API prrovide matrix account result: ", body);
+            			console.log("Python API kick user result: ", body);
                 
             			if(body['state'] == true){
                             //alert("The user should now be removed.");
@@ -930,8 +930,42 @@
             
             
             
+            
+            // Refresh room members list
+            document.getElementById('extension-voco-matrix-invite-refresh-button').addEventListener('click', (event) => {
+                console.log("clicked on button to refresh participants");
+                
+                document.getElementById('extension-voco-matrix-invite-refresh-button').classList.add('extension-voco-hidden');
+                
+                document.getElementById('extension-voco-matrix-members-list').innerHTML = "";
+                
+                setTimeout(function(){
+                    document.getElementById('extension-voco-matrix-invite-refresh-button').classList.remove('extension-voco-hidden');
+                }, 5000);
+                
+                window.API.postJson(
+                  `/extensions/${this.id}/api/ajax`,
+                    {'action':'refresh_matrix_members'}
+
+                ).then((body) => {
+        			console.log("Refresh request sent", body);
+
+                }).catch((e) => {
+                  	//pre.innerText = e.toString();
+          			//console.log("voco: error in calling save via API handler");
+          			//console.log(e.toString());
+                    console.log('error doing room members refresh request: ', e);
+                    document.getElementById('extension-voco-matrix-invite-management-output').innerText = "Refresh request failed - connection error.";
+                    
+        			//pre.innerText = "creating Matrix account failed - connection error";
+                });	
+                
+            });
+            
+            
+            
         
-            console.log("adding click listeners to Matrix buttons");
+            //console.log("adding click listeners to Matrix buttons");
             
             // Learn more about Matrix
 			document.getElementById('extension-voco-matrix-learn-more-button').addEventListener('click', (event) => {

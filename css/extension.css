@@ -739,7 +739,9 @@ body #extension-voco-view .extension-voco-tab-selected{
     content:' (Candle)';
 }
 */
-
+.extension-voco-matrix-members-admin .extension-voco-matrix-members-id{
+    cursor:initial;
+}
 
 /*  spinner  */
 
@@ -844,6 +846,18 @@ body #extension-voco-view .extension-voco-tab-selected{
 		width: calc(100% - 3rem);
 	}
 	
+    .extension-voco-vlak{
+        padding:4rem 6rem;
+    }
+    
+    .extension-voco-vlak .extension-voco-vlak{
+        padding:2rem;
+    }
+    
+    .extension-voco-centered-page{
+        max-width:70rem;
+    }
+    
 	/*
 	.extension-voco-item{
 		width: calc(50% - 4rem);
