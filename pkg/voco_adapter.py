@@ -597,9 +597,6 @@ class VocoAdapter(Adapter):
         # Perhaps it should store the unique ID of the main controller, and check against that.
         #
 
-
-        
-        
         # Get all the things via the API.
         try:
             try_updating_things_counter = 0
@@ -6653,7 +6650,7 @@ class VocoAdapter(Adapter):
                             power_users[invite_user_id] = 100
                     
                     
-                        room_response = await self.async_client.room_create( name="Candle", topic="Talk to Voco", federate=self.matrix_federate, invite=invitees, initial_state=[{
+                        room_response = await self.async_client.room_create( name=self.matrix_display_name, topic="Talk to Voco", federate=self.matrix_federate, invite=invitees, initial_state=[{
                                 "type": "m.room.encryption",
                                         "state_key": "",
                                         "content": {
@@ -6674,7 +6671,7 @@ class VocoAdapter(Adapter):
                                                 "events": {
                                                     "m.room.message": 20,
                                                     "m.room.avatar": 50,
-                                                    "m.room.canonical_alias": 50,
+                                                    "m.room.canonical_alias": 40,
                                                     "m.room.topic": 20,
                                                     "m.room.history_visibility": 100,
                                                 },
@@ -7013,7 +7010,7 @@ class VocoAdapter(Adapter):
                              self.matrix_messages_queue.put({'title':'','message':'Hello','level':'Normal'})
                         elif event.body.lower() == 'goodbye':
                              self.matrix_messages_queue.put({'title':'','message':'Goodbye','level':'Normal'})
-                        elif event.body.lower() == 'things?':
+                        elif event.body.lower() == 'things?' or event.body.lower() == 'devices?':
                              self.matrix_messages_queue.put({'title':'Your things','message': str(self.things),'level':'Normal'})
                         else:
                             self.last_text_command = str(event.body)
