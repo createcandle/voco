@@ -19,9 +19,9 @@ import json
 import time
 import queue
 import socket
-
 import asyncio
 import logging
+import aiofiles
 import requests
 import threading
 import subprocess
@@ -2965,9 +2965,27 @@ class VocoAdapter(Adapter):
         except Exception as ex:
             print("Error: could not store data in persistent store: " + str(ex) )
             if self.DEBUG:
-                print(str(self.persistent_data))
+                print("- Not written: " + str(self.persistent_data))
             return False
 
+
+    async def save_persistent_data_async(self):
+        if self.DEBUG:
+            print("Saving to persistence data store asynchronously, at path: " + str(self.persistence_file_path))
+            
+        try:
+            async with aiofiles.open(self.persistence_file_path, mode='w') as f:
+                json_string = json.dumps( self.persistent_data ,indent=4)
+                await f.write(json_string)
+                if self.DEBUG:
+                    print("Data stored asynchronously")
+                return True
+                
+        except Exception as ex:
+            print("Error: could not asynchronously store data in persistent store: " + str(ex) )
+            if self.DEBUG:
+                print("- Not written: " + str(self.persistent_data))
+            return False
 
 
 
@@ -6016,10 +6034,8 @@ class VocoAdapter(Adapter):
                 if self.persistent_data['matrix_server'] != "":
                     if self.DEBUG:
                         print("- matrix server url was present")
-            
-                    # try to log in to Matrix server with token
                 
-                
+                    # create full server and candle_username variables
                     self.matrix_server = "https://" + str(self.persistent_data['matrix_server'])
                     self.candle_user_id = "@" + self.persistent_data['matrix_candle_username'] + ":" + self.persistent_data['matrix_server']
                 
@@ -6029,7 +6045,8 @@ class VocoAdapter(Adapter):
                         print("candle password: " + str(self.persistent_data['matrix_candle_password']))
                         print("Async_client did not exist yet. Will log in to Matrix server with token this time")
         
-                
+        
+                    # Start optional account creation process
                     if should_create_candle_account:
                         if self.DEBUG:
                             print("\nCreating the Candle Matrix account.")
@@ -6044,7 +6061,7 @@ class VocoAdapter(Adapter):
                         self.async_client.add_to_device_callback(self.matrix_to_device_callback, ToDeviceEvent)
                         #self.async_client.add_to_device_callback(self.room_key_request_callback, RoomKeyRequest)
                     
-                        if self.async_client.logged_in == False:
+                        if self.async_client.logged_in == False: # TODO: is it even possible to already be logged in here?
                             if self.DEBUG:
                                 print("\nNEXT creating the Candle Matrix account.")
                             try:
@@ -6091,7 +6108,6 @@ class VocoAdapter(Adapter):
                                             if self.DEBUG:
                                                 print("register_response.message: " + str(register_response.message))
                                     
-            
                                         if register_response.status_code == 'M_USER_IN_USE':
                                             if self.DEBUG:
                                                 print("it seems the account was already created earlier? Should just try to login instead.")
@@ -6146,7 +6162,8 @@ class VocoAdapter(Adapter):
                                 print('x login_response.device_id: ' + str(login_response.device_id))
                             self.persistent_data['matrix_token'] = str(login_response.access_token)
                             self.persistent_data['matrix_device_id'] = str(login_response.device_id)
-                            self.save_persistent_data()
+                            await self.save_persistent_data_async()
+                            
                         else:
                             if self.DEBUG:
                                 print("Error: Matrix: manual login failed too")
@@ -6204,11 +6221,13 @@ class VocoAdapter(Adapter):
                                     print("error importing keys: " + str(ex))
                                 """
                             
+                                
+                            
                             else:
                                 if self.DEBUG:
                                     print("ERROR! matrix_device_id does not also have a local file. Deleting device_id from persistent data")
                                 del self.persistent_data['matrix_device_id']
-                                self.save_persistent_data()
+                                await self.save_persistent_data_async()
                     
                         else:
                             if self.DEBUG:
@@ -6264,7 +6283,7 @@ class VocoAdapter(Adapter):
                                         if self.DEBUG:
                                             print("Matrix token is no longer valid")
                                         del self.persistent_data['matrix_token']
-                                        self.save_persistent_data()
+                                        await self.save_persistent_data_async()
                                         await self.async_client.close()
                                         return False
                             
@@ -6434,7 +6453,7 @@ class VocoAdapter(Adapter):
                 
                             # sync tokens are theoretically handled by NIO, which stores them on sync (store_sync_tokens=True in config)
                             sync_forever_task = asyncio.ensure_future(
-                                    self.async_client.sync_forever(30000, full_state=True,loop_sleep_time=2000)
+                                    self.async_client.sync_forever(30000, full_state=True,loop_sleep_time=200)
                                     )
                             
                 
@@ -6552,7 +6571,7 @@ class VocoAdapter(Adapter):
                     
                         try:
                             self.persistent_data['matrix_room_id'] = str(room_response.room_id)
-                            self.save_persistent_data()
+                            await self.save_persistent_data_async()
                             
                             if self.DEBUG:
                                 print("room ID saved: " + str(self.persistent_data['matrix_room_id']))
@@ -6636,7 +6655,7 @@ class VocoAdapter(Adapter):
                     if self.DEBUG:
                         print("saving missing room id to persistence file")
                     self.persistent_data['matrix_room_id'] = joined_rooms_response.rooms[0]
-                    self.save_persistent_data()
+                    await self.save_persistent_data_async()
                     
                
                 else:
@@ -6696,7 +6715,7 @@ class VocoAdapter(Adapter):
                             if self.DEBUG:
                                 print("Matrix token is no longer valid")
                             del self.persistent_data['matrix_token']
-                            self.save_persistent_data()
+                            await self.save_persistent_data_async()
                             return False
                 
                         #room_members_list
@@ -7267,7 +7286,7 @@ class VocoAdapter(Adapter):
                         print("login succesful!")
                         print('login_response.access_token: ' + str(login_response.access_token))
                     self.persistent_data['matrix_token'] = str(login_response.access_token)
-                    self.save_persistent_data()
+                    await self.save_persistent_data_async()
                     return True
                     #print("async_client.rooms: " + str(async_client.rooms))
                    
