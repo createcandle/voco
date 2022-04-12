@@ -20,7 +20,7 @@ fi
 
 # Install missing dependencies
 sudo apt update -qq
-sudo apt install -y libasound2-dev libolm-dev
+sudo apt install -y libasound2-dev libolm-dev python3-pip
 
 # Clean up from previous releases
 echo "removing old files"
@@ -47,7 +47,11 @@ mkdir -p lib package
 # Pull down Python dependencies
 #/usr/local/bin/python3.9 -m pip install --upgrade pip
 #python3 -m pip install --upgrade pip
-pip3 install --upgrade pip
+
+which python3
+which pip3
+
+#pip3 install --upgrade pip
 pip3 install -r requirements.txt -t lib --no-binary :all: --prefix "" --default-timeout=100
 
 # Remove local cffi so that the globally installed version doesn't clash
