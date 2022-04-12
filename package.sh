@@ -2,8 +2,17 @@
 
 version=$(grep '"version"' manifest.json | cut -d: -f2 | cut -d\" -f2)
 
+export PYTHONIOENCODING=utf8
+
 # Setup environment for building inside Dockerized toolchain
 [ $(id -u) = 0 ] && umask 0
+
+if [ -z "${ADDON_ARCH}" ]; then
+  TARFILE_SUFFIX=
+else
+  PYTHON_VERSION="$(python3 --version 2>&1 | cut -d' ' -f2 | cut -d. -f 1-2)"
+  TARFILE_SUFFIX="-${ADDON_ARCH}-v${PYTHON_VERSION}"
+fi
 
 # Install missing dependencies
 sudo apt update -qq
@@ -51,8 +60,13 @@ cd -
 
 # Make the tarball
 echo "creating archive"
-TARFILE="voco-${version}.tgz"
+TARFILE="voco-${version}${TARFILE_SUFFIX}.tgz"
 tar czf ${TARFILE} package
+
+# Make the tarball
+#echo "creating archive"
+#TARFILE="voco-${version}.tgz"
+#tar czf ${TARFILE} package
 
 echo "creating shasums"
 shasum --algorithm 256 ${TARFILE} > ${TARFILE}.sha256sum
