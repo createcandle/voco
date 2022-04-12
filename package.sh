@@ -6,7 +6,8 @@ pwd
 version=$(grep '"version"' manifest.json | cut -d: -f2 | cut -d\" -f2)
 
 export PYTHONIOENCODING=utf8
-export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/lib
+#export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/lib
+export LD_LIBRARY_PATH="$HOME/.local/lib:/usr/local/lib:$LD_LIBRARY_PATH" LIBRARY_PATH="$HOME/.local/lib/" CFLAGS="-I$HOME/.local/include"
 
 # Setup environment for building inside Dockerized toolchain
 [ $(id -u) = 0 ] && umask 0
@@ -20,7 +21,37 @@ fi
 
 # Install missing dependencies
 sudo apt update -qq
-sudo apt install -y libasound2-dev libffi-dev libolm-dev
+sudo apt install -y libasound2-dev libffi-dev 
+#libolm-dev
+
+cmake . -Bbuild
+cmake --build build  
+make test
+make install
+
+git clone "https://gitlab.matrix.org/matrix-org/olm.git"
+cd olm
+#git checkout 3.2.4
+#make
+#cd python
+#make olm-python3
+#cd ..
+#PREFIX=~/.local make install
+
+#git clone https://gitlab.matrix.org/matrix-org/olm.git
+#cd olm
+
+cmake . -Bbuild
+cmake --build build
+
+make test
+make install
+
+#cd python
+#make
+
+
+
 
 # Clean up from previous releases
 echo "removing old files"
