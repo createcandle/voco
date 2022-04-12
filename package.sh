@@ -3,6 +3,7 @@
 version=$(grep '"version"' manifest.json | cut -d: -f2 | cut -d\" -f2)
 
 export PYTHONIOENCODING=utf8
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/lib
 
 # Setup environment for building inside Dockerized toolchain
 [ $(id -u) = 0 ] && umask 0
@@ -16,7 +17,7 @@ fi
 
 # Install missing dependencies
 sudo apt update -qq
-sudo apt install -y libasound2-dev libolm-dev
+sudo apt install -y libasound2-dev libolm3 libolm-dev
 
 # Clean up from previous releases
 echo "removing old files"
@@ -41,6 +42,9 @@ echo "creating package"
 mkdir -p lib package
 
 # Pull down Python dependencies
+#/usr/local/bin/python3.9 -m pip install --upgrade pip
+#python3 -m pip install --upgrade pip
+pip3 install --upgrade pip
 pip3 install -r requirements.txt -t lib --no-binary :all: --prefix "" --default-timeout=100
 
 # Remove local cffi so that the globally installed version doesn't clash
