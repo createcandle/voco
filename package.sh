@@ -52,7 +52,8 @@ which python3
 which pip3
 
 #pip3 install --upgrade pip
-/usr/local/bin/python3.9 -m pip install --upgrade pip
+#/usr/local/bin/python3.9 -m pip install --upgrade pip
+pip3 install --user --upgrade pip
 pip3 install -r requirements.txt -t lib --no-binary :all: --prefix "" --default-timeout=100
 
 # Remove local cffi so that the globally installed version doesn't clash
