@@ -2,6 +2,10 @@
 
 echo "in package.sh"
 pwd
+which python3
+which pip3
+pip3 install --user --upgrade pip
+
 
 version=$(grep '"version"' manifest.json | cut -d: -f2 | cut -d\" -f2)
 
@@ -32,14 +36,14 @@ sudo apt install -y cmake libasound2-dev libffi-dev
 
 git clone "https://gitlab.matrix.org/matrix-org/olm.git"
 cd olm
-git checkout 3.2.4
-mkdir build
-make
-cd python
-make olm-python3
-cd ..
-PREFIX=~/.local make install
-
+ git checkout 3.2.4
+ mkdir build
+ make
+ cd python
+  make olm-python3
+  cd ..
+ PREFIX=~/.local make install
+ cd ..
 #git clone https://gitlab.matrix.org/matrix-org/olm.git
 #cd olm
 
@@ -81,12 +85,10 @@ mkdir -p lib package
 #/usr/local/bin/python3.9 -m pip install --upgrade pip
 #python3 -m pip install --upgrade pip
 
-which python3
-which pip3
 
 #pip3 install --upgrade pip
 #/usr/local/bin/python3.9 -m pip install --upgrade pip
-pip3 install --user --upgrade pip
+
 pip3 install -r requirements.txt -t lib --no-binary :all: --prefix "" --default-timeout=100
 
 # Remove local cffi so that the globally installed version doesn't clash
