@@ -1,6 +1,7 @@
 #!/bin/bash -e
 
 echo "in package.sh"
+pwd
 
 version=$(grep '"version"' manifest.json | cut -d: -f2 | cut -d\" -f2)
 
