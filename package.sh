@@ -41,7 +41,7 @@ echo "creating package"
 mkdir -p lib package
 
 # Pull down Python dependencies
-pip3 install -r requirements.txt -t lib --no-binary :all: --prefix ""
+pip3 install -r requirements.txt -t lib --no-binary :all: --prefix "" --default-timeout=100
 
 # Remove local cffi so that the globally installed version doesn't clash
 rm -rf ./lib/cffi*
