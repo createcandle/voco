@@ -35,7 +35,7 @@
 
 		<div id="extension-voco-missing-microphone" style="display:none">
             <img id="extension-voco-missing-microphone-icon" src="/extensions/voco/images/menu-icon.svg" />
-			<p style="text-align:center">No microphone was detected</p>
+			<p style="text-align:center">No microphone detected</p>
 		</div>
         
 		<div id="extension-voco-text-commands-container" style="display:none">
@@ -91,18 +91,21 @@
 				<div id="extension-voco-satellites" class="extension-voco-centered-page">
                     <div class="extension-voco-vlak">
     					<img src="/extensions/voco/images/satellites.png" alt="Satellites example" style="display:block;margin:0 auto"/>
-    					<p>One microphone might not be enough to cover your entire home. That's why it's possible to create 'satellites'.</p> 
-    					<p>One controller will act as the central hub in your home. Satellites send their voice recordings to the central hub. Below you can point out which controller is acting as the central hub in your network.</p>
+    					<p>One microphone might not be enough to cover your entire home. That's why it's possible to turn additional controllers into 'satellites'. One controller will act as the coordinator in your home. Satellites send their voice recordings to that central hub.</p>
+                        <p>Below you can point out which controller is acting as the central hub in your network.</p>
     					<div class="extension-voco-no-satellites">
     						<p>If other controllers are detected on the network, satellite mode will become available here.</p>
     					</div>
-    					<div id="extension-voco-loading"><img src="/extensions/voco/images/spinner.gif" width="32" height="32" alt="Loading..."/ style="opacity:.5"></div>
-    					<div class="extension-voco-change-hostname-target">
-    						<h4>Please change the name</h4>
-    						<div class="extension-voco-select-satellites-question">
-    							<p>Each voco device in your local network should have a unique "domain" name. This controller is currently still using the default name. To change it, open the main menu and go to Settings and then "Domain". There you can enter a different name, and then click on the Save button. Please change the name to something unique, for example, "kitchen" or "bedroom". </p>
-    							<p><a href="/settings/domain"><button class="text-button">Change the name</button></a></p>
-    						</div>
+    					<div id="extension-voco-loading">
+                            <div class="extension-voco-spinner">
+                                <div></div><div></div><div></div><div></div>
+                            </div>
+    					</div>
+    					<div class="extension-voco-change-hostname-target extension-voco-vlak">
+    						<h4>Please change the hostname first</h4>
+							<p>Each controller in your local network should have a unique "domain name", which identifies it on the local network. This controller is currently still using the default name. Having two controllers with the same default domain name on the same network will cause problems. That's why you should first change this controllers's hostname into something different and unique. It should be one word, such as "kitchen" or "bedroom".</p>
+                            <p>After you changed the hostname you will then be able to access this controller by typing that new name into a browser (whenever you're on the local network). For example, it might become <span style="font-style:italic">kitchen.local</span> instead of <span style="font-style:italic">candle.local</span>.</p>
+							<p><a href="/settings/domain"><button class="text-button">Change the name</button></a></p>
     					</div>
     					<div class="extension-voco-select-satellites">
     						<h4>Satellite mode</h4>
@@ -117,7 +120,7 @@
     							</div>
     						</div>
     						<p>Select the main controller you wish to connect to, and then enable satelite mode. You can find a controller's IP address by going to Settings and then Network.</p>
-    						<p class="extension-voco-italic">Note: once in satellite mode, this device will no longer be able to control it's own things. It will only be able to control things or create timers on the main controller.</p>
+    						<p class="extension-voco-italic">Note: once in satellite mode, this controller will no longer be able to control it's own things. The main controller in your home will take over from then on.</p>
 					
     					</div>
                     </div>
