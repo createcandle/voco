@@ -90,7 +90,10 @@
 }
 
 
-.extension-voco-select-satellites-question,
+.extension-voco-select-satellites-question{
+    
+}
+
 .extension-voco-item{
 	padding: 0;
 	display: flex;
