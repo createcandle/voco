@@ -811,6 +811,10 @@ body #extension-voco-view .extension-voco-tab-selected{
 }
 
 
+#extension-voco-list .extension-voco-spinner{
+    margin-top:6rem;
+}
+
 
 @media screen and (min-width: 641px) {
 	.extension-voco-line2{
