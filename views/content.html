@@ -59,7 +59,11 @@
 			
 			<div id="extension-voco-tab-timers" class="extension-voco-tab">
 				
-				<div id="extension-voco-list">    
+				<div id="extension-voco-list">
+                    <br/><br/><br/>
+                    <div class="extension-voco-spinner">
+                        <div></div><div></div><div></div><div></div>
+                    </div>
 				</div>
 
 				<div id="extension-voco-original-item" class="extension-voco-item">
@@ -102,14 +106,14 @@
                             </div>
     					</div>
     					<div class="extension-voco-change-hostname-target extension-voco-vlak">
-    						<h4>Please change the hostname first</h4>
-							<p>Each controller in your local network should have a unique "domain name", which identifies it on the local network. This controller is currently still using the default name. Having two controllers with the same default domain name on the same network will cause problems. That's why you should first change this controllers's hostname into something different and unique. It should be one word, such as "kitchen" or "bedroom".</p>
-                            <p>After you changed the hostname you will then be able to access this controller by typing that new name into a browser (whenever you're on the local network). For example, it might become <span style="font-style:italic">kitchen.local</span> instead of <span style="font-style:italic">candle.local</span>.</p>
+    						<h4>Please change the domain name first</h4>
+							<p>Each controller in your local network should have a unique "domain name", which identifies it on the local network. This controller is currently still using the default name. Having two controllers with the same default domain name on the same network will cause problems. Before you add a second controller, make sure to first change this controllers' hostname into something different and unique. It should be one word, such as "kitchen" or "bedroom".</p>
+                            <p>After you changed the name you will then be able to access this controller by typing that new name into a browser (whenever you're on the local network). For example, it might become <span style="font-style:italic">kitchen.local</span> instead of <span style="font-style:italic">candle.local</span>.</p>
 							<p><a href="/settings/domain"><button class="text-button">Change the name</button></a></p>
     					</div>
     					<div class="extension-voco-select-satellites">
     						<h4>Satellite mode</h4>
-    						<div class="extension-voco-select-satellites-question">
+    						<div class="extension-voco-select-satellites-question extension-voco-vlak">
     							<div id="extension-voco-server-list"></div>
     							<div id="extension-voco-server-list-toggle">
     								<form class="rule-switch switch">
@@ -286,13 +290,16 @@
                                 </div>
                             </div>
                         </div>
+                        <div class="extension-voco-align-items-right">
+                            <button id="extension-voco-matrix-invite-refresh-button" class="text-button">Refresh</button>
+                        </div>
                         
                         <p>You can invite additional people with a Matrix account into the chat room. All these people will be able to control your home and read all messages, so be careful who you invite.</p>
                         <p>You can also remove people from the room in much the same way.</p>
                         
                         <input id="extension-voco-matrix-invite-username-input" type="text" placeholder="@username:example.org" style="width:100%;box-sizing:border-box;padding: 2rem 1rem;margin-bottom:2rem"/>
                         <div class="extension-voco-align-items-right">
-                            <button id="extension-voco-matrix-invite-refresh-button" class="text-button">Refresh</button> <button id="extension-voco-matrix-invite-username-button" class="text-button">Invite</button> <button id="extension-voco-matrix-kick-username-button" class="text-button">Remove</button>
+                            <button id="extension-voco-matrix-invite-username-button" class="text-button">Invite</button> <button id="extension-voco-matrix-kick-username-button" class="text-button">Remove</button>
                         </div>
                         <p id="extension-voco-matrix-invite-management-output"></p>
                     </div>

@@ -555,7 +555,7 @@
                                 }
                                 
                                 if( body['matrix_busy_registering'] ){
-                                    //console.log('matrix is busy registering accounts and starting');
+                                    console.log('matrix is busy registering accounts and starting');
                                 }
                                 else{
                                     document.getElementById('extension-voco-chat-busy-registering').classList.add('extension-voco-hidden');
@@ -674,7 +674,7 @@
                 }
             
                 if(password1.startsWith('12345')){
-                    alert("Oh come one, that's not secure");
+                    alert("Oh come one, that's not secure!");
                     return
                 }
             
@@ -760,7 +760,7 @@
                         'invite_username':invite_username}
 
                     ).then((body) => {
-            			//console.log("Python API: create candle account and invite main user result: ", body);
+            			console.log("Python API: create candle account and invite main user result: ", body);
                 
             			if(body['state'] == true){
 
@@ -782,6 +782,7 @@
                       	//pre.innerText = e.toString();
               			//console.log("voco: (timeout/connection) error in calling create matrix account with invited main user");
                         document.getElementById('extension-voco-chat-busy-registering').classList.add('extension-voco-hidden');
+                        document.getElementById('extension-voco-matrix-create-account-step1').classList.remove('extension-voco-hidden');
               			//console.log(e.toString());
             			//pre.innerText = "creating Matrix account failed - connection error";
                     });	
