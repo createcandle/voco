@@ -51,10 +51,12 @@ try:
     #from nio import Client, AsyncClient, AsyncClientConfig, LoginResponse, RegisterResponse, JoinedRoomsResponse, SyncResponse, RoomCreateResponse, MatrixRoom, RoomMessageText
     from typing import Optional
 
-    from nio import (AsyncClient, AsyncClientConfig, ClientConfig, DevicesError, Event,InviteEvent, LoginResponse,
+    from nio import (AsyncClient, AsyncClientConfig, ClientConfig, DevicesError, Event, InviteEvent, LoginResponse,
                  LocalProtocolError, MatrixRoom, MatrixUser, RoomMessageText, RegisterResponse, JoinedRoomsResponse,
                  crypto, exceptions, RoomSendResponse, SyncResponse, RoomCreateResponse, AccountDataEvent, 
-                 EnableEncryptionBuilder, ChangeHistoryVisibilityBuilder, ToDeviceEvent, RoomKeyRequest, UploadResponse)
+                 EnableEncryptionBuilder, ChangeHistoryVisibilityBuilder, ToDeviceEvent, RoomKeyRequest, UploadResponse,
+                 CallInviteEvent, RoomEncryptedAudio, RoomEncryptedFile, RoomEncryptedMedia, CallInviteEvent, CallEvent, 
+                 RoomMessageMedia, DownloadResponse)
 
 except Exception as ex:
     print("ERROR, could not load Matrix library: " + str(ex))
@@ -442,7 +444,7 @@ class VocoAdapter(Adapter):
         self.hey_snips_path = os.path.join(self.snips_path,"assistant","custom_hotword")
         self.hey_candle_path = os.path.join(self.snips_path,"hey_candle")
         self.matrix_keys_store_path = os.path.join(self.matrix_data_store_path, "keys.txt")
-        
+        self.matrix_temp_ogg_file = os.path.join(os.sep, "tmp","matrix_audio_file.ogg")
         self.start_of_input_sound = "start_of_input"
         self.end_of_input_sound = "end_of_input"
         self.alarm_sound = "alarm"
@@ -1376,7 +1378,8 @@ class VocoAdapter(Adapter):
                 #sound_file = os.path.splitext(sound_file)[0] + str(self.persistent_data['speaker_volume']) + '.wav'
                 #sound_command = "aplay " + str(sound_file) + " -D plughw:" + str(self.current_card_id) + "," + str(self.current_device_id)
                 #os.system()
-                
+                self.aplay(sound_file)
+                """
                 output_device_string = "plughw:" + str(self.current_card_id) + "," + str(self.current_device_id)
                 
                 if self.persistent_data['bluetooth_device_mac'] != None:
@@ -1398,7 +1401,10 @@ class VocoAdapter(Adapter):
                 # unmute if the audio output was muted.
                 #self.unmute()
                 
+           
                 subprocess.run(sound_command, capture_output=True, shell=False, check=False, encoding=None, errors=None, text=None, env=None, universal_newlines=None)
+                """
+           
             else:
                 if self.DEBUG:
                     print("Not playing this sound here")
@@ -1407,6 +1413,68 @@ class VocoAdapter(Adapter):
             print("Error playing sound: " + str(ex))
             
 
+
+    def aplay(self,file_path):
+        output_device_string = "plughw:" + str(self.current_card_id) + "," + str(self.current_device_id)
+        
+        if self.persistent_data['bluetooth_device_mac'] != None:
+            bluetooth_amixer_test = run_command('amixer -D bluealsa scontents')
+            if self.DEBUG:
+                print("bluetooth_amixer_test: " + str(bluetooth_amixer_test))
+                
+            if len(bluetooth_amixer_test) > 10:
+                if self.kill_ffplay_before_speaking:
+                    subprocess.run(['pkill','ffplay'], capture_output=True, shell=False, check=False, encoding=None, errors=None, text=None, env=None, universal_newlines=None)
+                output_device_string = "bluealsa:DEV=" + str(self.persistent_data['bluetooth_device_mac'])
+        
+        sound_command = ["aplay", str(sound_file),"-D", output_device_string]
+        subprocess.run(sound_command, capture_output=True, shell=False, check=False, encoding=None, errors=None, text=None, env=None, universal_newlines=None)
+        
+        
+    def ffplay(self,file_path):
+        try:
+            #output_device_string = "plughw:" + str(self.current_card_id) + "," + str(self.current_device_id)
+
+            environment = os.environ.copy()
+			
+            bt_connected = False
+        
+            if self.persistent_data['bluetooth_device_mac'] != None:
+                bluetooth_amixer_test = run_command('amixer -D bluealsa scontents')
+                if self.DEBUG:
+                    print("bluetooth_amixer_test: " + str(bluetooth_amixer_test))
+                
+                if len(bluetooth_amixer_test) > 10:
+                    bt_connected = True
+                    #output_device_string = "bluealsa:DEV=" + str(self.persistent_data['bluetooth_device_mac'])
+        
+            if self.DEBUG:
+                print("ffplay: bt_connected: " + str(bt_connected))
+            if bt_connected:
+            
+                environment["SDL_AUDIODRIVER"] = "alsa"
+                #environment["AUDIODEV"] = "bluealsa:" + str(self.persistent_data['bluetooth_device_mac'])
+                environment["AUDIODEV"] = "bluealsa:00:00:00:00:00:00"
+        
+            #my_command = ("ffplay", "-nodisp", "-vn", "-infbuf","-autoexit","-volume",str(self.persistent_data['speaker_volume']), str(file_path) )
+            my_command = ("ffplay", "-nodisp", "-vn", "-infbuf","-autoexit","-volume","100", str(file_path) )
+            # ffplay -nodisp -vn -infbuf -autoexit -volume 100
+            
+            if self.DEBUG:
+                print("Voco will call this ffplay subprocess command: " + str(my_command))
+                print("starting ffplay...")
+            self.ffplayer = subprocess.Popen(my_command, 
+                            env=environment,
+                            stdin=subprocess.PIPE,
+                            stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE)
+            
+        except Exception as ex:
+            print("Error attemping ffplay: " + str(ex))
+        
+        
+        
+        
 
     def speak(self, voice_message="",intent='default'):
         try:
@@ -6079,6 +6147,8 @@ class VocoAdapter(Adapter):
                         self.async_client = AsyncClient(self.matrix_server, config=self.matrix_config, store_path=self.matrix_data_store_path)
                     
                         self.async_client.add_event_callback(self.matrix_message_callback, RoomMessageText)
+                        self.async_client.add_event_callback(self.matrix_message_callback, CallInviteEvent)
+                        self.async_client.add_event_callback(self.matrix_message_callback, Event)
                         self.async_client.add_response_callback(self.matrix_sync_callback, SyncResponse)
                         self.async_client.add_global_account_data_callback(self.matrix_account_callback, AccountDataEvent)
                         self.async_client.add_room_account_data_callback(self.matrix_room_account_callback, AccountDataEvent)
@@ -6150,7 +6220,10 @@ class VocoAdapter(Adapter):
                     else:
                 
                         self.async_client = AsyncClient(self.matrix_server, self.candle_user_id, config=self.matrix_config, store_path=self.matrix_data_store_path)
+                        #self.async_client.add_event_callback(self.matrix_message_callback, (RoomMessageText, RoomEncryptedAudio, RoomEncryptedFile,RoomEncryptedMedia,CallInviteEvent,CallEvent,RoomMessageMedia))
                         self.async_client.add_event_callback(self.matrix_message_callback, RoomMessageText)
+                        self.async_client.add_event_callback(self.matrix_audio_file_callback, RoomEncryptedAudio)
+                        #self.async_client.add_event_callback(self.matrix_message_callback)
                         self.async_client.add_response_callback(self.matrix_sync_callback, SyncResponse)
                         self.async_client.add_global_account_data_callback(self.matrix_account_callback, AccountDataEvent)
                         self.async_client.add_room_account_data_callback(self.matrix_room_account_callback, AccountDataEvent)
@@ -6971,6 +7044,58 @@ class VocoAdapter(Adapter):
     # 
     # MATRIX CALLBACKS
     #
+    
+    async def matrix_audio_file_callback(self, room, event):
+        if self.DEBUG:
+            print("\nINCOMING AUDO FILE")
+        if room != None and event != None:
+            try:
+                if self.DEBUG:
+                    print(
+                        f"Message received in room: {room.display_name}\n"
+                        f"{room.user_name(event.sender)} | {event.body}"
+                        )
+                    print("event.decrypted: " + str(event.decrypted))
+                    print("event: " + str(event))
+                    print("event dir: " + str(dir(event)))
+            
+                    print("event.url: " + str(event.url))
+                    #print("body: " + str(event.body))
+                    
+                    *_, a, b = event.url.split("/")
+                    print("a: " + str(a))
+                    print("b: " + str(b))
+                    
+                    try:
+                        print("event.mimetype: " + str(event.mimetype))
+                    except Exception as ex:
+                        print("Error handling matedata for incoming matrix audio file: " + str(ex))
+                    
+                    download_response = await self.async_client.download(a,b)
+                    if (isinstance(download_response, DownloadResponse)):
+                        #print("download succesfull:")
+                        #print(str(download_response))
+                        #print(str(dir(download_response)))
+                        #print(str(download_response.body))
+                        
+                        if event.mimetype == 'audio/ogg':
+                            print("ogg file")
+                            with open(self.matrix_temp_ogg_file, "wb") as f:
+                                f.write(download_response.body)
+                                print("ffplaying ogg file")
+                                self.ffplay(self.matrix_temp_ogg_file)
+                                
+                    else:
+                        print("download failed")
+
+                    # DownloadResponse
+                
+            
+            except Exception as ex:
+                print("Error handling incoming matrix audio file: " + str(ex))
+            
+            
+            
     
     async def matrix_message_callback(self, room, event):
         if self.DEBUG:

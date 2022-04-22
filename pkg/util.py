@@ -248,7 +248,6 @@ def clean_up_string_for_speaking(sentence):
     sentence = sentence.replace('/', ' ').replace('\\', ' ').replace('+', ' plus ').replace('#', ' number ').replace('-', ' ').replace('&', ' and ').replace('  ', ' ')
     sentence = sentence.replace('  ', ' ').replace('[', '').replace(']', '')
     sentence = sentence.replace('  ', ' ')
-    sentence = sentence.lower()
     sentence = sentence.strip()
     return sentence
 
@@ -284,6 +283,7 @@ def clean_up_string_for_chatting(sentence):
         else:
             sentence = sentence.capitalize()
             
+        sentence = sentence.replace('  ', ' ').replace(' i ', ' I ').replace(' .', '.')
             
     except Exception as ex:
         print("Error cleaning up string for chatting: " + str(ex))

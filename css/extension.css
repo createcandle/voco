@@ -785,6 +785,7 @@ body #extension-voco-view .extension-voco-tab-selected{
   left: 56px;
   animation: extension-voco-spinner3 0.6s infinite;
 }
+
 @keyframes extension-voco-spinner1 {
   0% {
     transform: scale(0);
@@ -853,6 +854,10 @@ body #extension-voco-view .extension-voco-tab-selected{
 		width: calc(100% - 3rem);
 	}
 	
+    #extension-candleappstore-selected-main{
+        padding:4rem;
+    }
+
     .extension-voco-vlak{
         padding:4rem 6rem;
     }
