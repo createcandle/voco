@@ -29,7 +29,7 @@
 				{'action':'token','token':jwt}
 
 	        ).then((body) => {
-
+                console.log("update jwt response: ", body);
 	        }).catch((e) => {
 	  			console.log("Error saving token: ", e);
 	        });
@@ -270,6 +270,17 @@
 							document.getElementById('extension-voco-content').classList.add('extension-voco-show-tab-satellites');
 						}
 					}
+                    else{
+                        // Not a satellite, so succesful injection matters
+                        if('possible_injection_failure' in body && 'mqtt_connected' in body){
+                            if(body.mqtt_connected == false){
+                                //document.getElementById("extension-voco-mqtt-error").style.display = 'block';
+                            }
+                            else if(body.possible_injection_failure){
+                                document.getElementById("extension-voco-injection-failure").style.display = 'block';
+                            }
+                        }
+                    }
 					
 					if('hostname' in body){
 						if(body['hostname'] == 'gateway' || body['hostname'] == 'candle'){
@@ -309,14 +320,7 @@
 					}
                     
                     
-                    if('possible_injection_failure' in body && 'mqtt_connected' in body){
-                        if(body.mqtt_connected == false){
-                            //document.getElementById("extension-voco-mqtt-error").style.display = 'block';
-                        }
-                        else if(body.possible_injection_failure){
-                            document.getElementById("extension-voco-injection-failure").style.display = 'block';
-                        }
-                    }
+                    
                     
                     
 					// Remove spinner
@@ -481,12 +485,18 @@
 								this.items_list = body['items'];
 								this.current_time = body['current_time'];
 								
-                                if(body['initial_injection_completed']){
-                                    document.getElementById('extension-voco-injection-busy').style.display = 'none';
-                                    document.getElementById('extension-voco-text-commands-container').style.display = 'block';
+                                if(body['is_satellite'] == false){
+                                    if(body['initial_injection_completed']){
+                                        document.getElementById('extension-voco-injection-busy').style.display = 'none';
+                                        document.getElementById('extension-voco-text-commands-container').style.display = 'block';
+                                    }
+                                    else{
+                                        document.getElementById('extension-voco-injection-busy').style.display = 'block';
+                                        document.getElementById('extension-voco-text-commands-container').style.display = 'none';
+                                    }
                                 }
                                 else{
-                                    document.getElementById('extension-voco-injection-busy').style.display = 'block';
+                                    document.getElementById('extension-voco-injection-busy').style.display = 'none';
                                     document.getElementById('extension-voco-text-commands-container').style.display = 'none';
                                 }
                                 

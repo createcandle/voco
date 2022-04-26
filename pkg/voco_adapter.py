@@ -2002,11 +2002,11 @@ class VocoAdapter(Adapter):
                                 
                             if time.time() - self.addon_start_time > 120:
                                 self.still_busy_booting = False
-                                if self.initial_injection_completed == False:
+                                if self.initial_injection_completed == False and self.persistent_data['is_satellite'] == False:
                                     self.possible_injection_failure = True
                                 
-                            if time.time() - self.addon_start_time > 240 and self.initial_injection_completed == False:
-                                print("Error. Voco failed to load properly. Attempting reboot of addon")
+                            if time.time() - self.addon_start_time > 240 and self.initial_injection_completed == False and self.persistent_data['is_satellite'] == False:
+                                print("Error. Voco failed to load properly. Attempting complete reboot of addon")
                                 self.close_proxy()
                                 
                             if self.still_busy_booting == False:
@@ -2026,22 +2026,14 @@ class VocoAdapter(Adapter):
                                     self.run_snips()
                             
                             
-                                # If (part of) Snips has crashed, and there is no valid reason for snips to be down, try and restart it.
-                                # - if the microphone is disconnected, then there is no need to restart snips straight away
-                                # - if we're a satellite, Voco will already be restarted at voco attempt 5
-                                # - if we're a satellite, and we lost connection to the main server, there is no need to enable snips, as it won't be able to connect to the main MQTT server
-                                elif self.is_snips_running() < 7 and self.missing_microphone == False and self.periodic_voco_attempts < 4 and self.currently_scanning_for_missing_mqtt_server == False:
-                                    if self.DEBUG:
-                                        print("clock thread is attempting to restart snips")
-                                    self.set_status_on_thing("restarting")
-                                    self.run_snips()
-                            
+                                
                                 else:
                                     
                                     if self.initial_injection_completed == False and self.injection_in_progress == False:
                                         if self.DEBUG:
                                             print("Clock: attempting a forced injection since no injection complete message was received yet")
-                                        self.inject_updated_things_into_snips(True) # Force a new injection until it sticks
+                                        if self.persistent_data['is_satellite'] == False:
+                                            self.inject_updated_things_into_snips(True) # Force a new injection until it sticks
                                     
                                     
                                     #print("snips did not need to be restarted")
@@ -2145,13 +2137,16 @@ class VocoAdapter(Adapter):
                              
                             else:
                                 if self.DEBUG:
-                                    print("still busy booting?? self.mqtt_connected_succesfully_at_least_once: " + str(self.mqtt_connected_succesfully_at_least_once))
+                                    print("still busy booting?? self.mqtt_connected_succesfully_at_least_once?: " + str(self.mqtt_connected_succesfully_at_least_once))
                                 if self.injection_in_progress == False and self.mqtt_connected == True:
-                                    if self.DEBUG:
-                                        print("Clock: attempting a forced injection since no injection complete message was received yet")
-                                    self.inject_updated_things_into_snips(True) # Force a new injection until it sticks
-                                 
-                               
+                                    if self.persistent_data['is_satellite'] == False:
+                                        if self.DEBUG:
+                                            print("Clock: attempting a forced injection since no injection complete message was received yet")
+                                        self.inject_updated_things_into_snips(True) # Force a new injection until it sticks
+                                    elif self.satellite_should_act_on_intent:
+                                        if self.DEBUG:
+                                            print("Clock: attempting a forced injection on a satellite with intention recognition since no injection complete message was received yet")
+                                        self.inject_updated_things_into_snips(True) # Force a new injection until it sticks
                         else:
                             if self.DEBUG:
                                 print("WARNING: clock: still no mqtt client?")
@@ -2499,14 +2494,14 @@ class VocoAdapter(Adapter):
                                     print("clock: second opinion on Snips being down: self.is_snips_running() count: " + str(alternative_process_counter))
                             
                                 if self.persistent_data['is_satellite']:
-                                    if alternative_process_counter == 0:
+                                    if alternative_process_counter < 2: # == 0:
                                         if self.DEBUG:
-                                            print("conclusion: snips should be restarted")
+                                            print("conclusion: snips satellite should be restarted")
                                         self.should_restart_snips = True
                                 elif alternative_process_counter < 7:
                                     self.should_restart_snips = True
                                     if self.DEBUG:
-                                        print("conclusion: snips should be restarted")
+                                        print("conclusion: snips coordinator should be restarted")
 
             
 
@@ -2658,7 +2653,7 @@ class VocoAdapter(Adapter):
     def unload(self):
         if self.DEBUG:
             print("")
-            print("Shutting down Voco.")
+            print("In unload. Shutting down Voco.")
             print("")
             
         if self.matrix_started:
@@ -3450,7 +3445,7 @@ class VocoAdapter(Adapter):
                     if 'siteId' in payload:
                         if payload['siteId'] == self.persistent_data['site_id']:
                             self.mute()
-                        elif not self.persistent_data['is_satellite']:
+                        elif self.persistent_data['is_satellite'] == False:
                             self.mqtt_client.publish("hermes/voco/" + str(payload['siteId']) + "/mute",json.dumps({"mute":True}))
 
 

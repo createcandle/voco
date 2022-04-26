@@ -326,9 +326,19 @@ class VocoAPIHandler(APIHandler):
                                 print("Handling request to /init")
                             
                             try:
-                                #self.adapter.token = str(request.body['jwt'])
-                                #self.adapter.persistent_data['token'] = str(request.body['jwt'])
+                                if 'jwt' in request.body:
+                                    #self.adapter.token = str(request.body['jwt'])
+                                    #self.adapter.persistent_data['token'] = str(request.body['jwt'])
+                                    
+                                    token = str(request.body['jwt'])
+                                    token = token.replace("\n", "")
+                                    if self.DEBUG:
+                                        print("incoming token is: " + str(token))
                                 
+                                    if len(token) > 30:
+                                        self.adapter.token = token
+                                        self.adapter.persistent_data['token'] = token
+                                        self.adapter.save_persistent_data()
                                 # reset text response in UI
                                 
                                 self.adapter.last_text_response = ""
@@ -499,6 +509,7 @@ class VocoAPIHandler(APIHandler):
                                                 'matrix_logged_in': self.adapter.matrix_logged_in,
                                                 'matrix_busy_registering':self.adapter.matrix_busy_registering,
                                                 'user_account_created':self.adapter.user_account_created}),
+                                                'is_satellite':self.adapter.persistent_data['is_satellite']
                                 )
                             except Exception as ex:
                                 print("Error getting init data: " + str(ex))
