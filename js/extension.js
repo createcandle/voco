@@ -609,10 +609,12 @@
 							}
                             
                             this.busy_polling = false;
+                            document.getElementById('extension-voco-unavailable').style.display = 'none';
 
 				        }).catch((e) => {
 				  			//console.log("Error getting timer items: " , e);
 							console.log("Loading items failed - connection error?: ", e);
+                            document.getElementById('extension-voco-unavailable').style.display = 'block';
 							//pre.innerText = "Loading items failed - connection error";
 							this.attempts = 0;
                             this.busy_polling = false;
@@ -633,6 +635,7 @@
                     }
 				}catch(e){
                     console.log("Voco polling error: ", e);
+                    //document.getElementById('extension-voco-unavailable').style.display = 'block';
                 }
 				
 			}, 2000);

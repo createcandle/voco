@@ -508,8 +508,9 @@ class VocoAPIHandler(APIHandler):
                                                 'matrix_server': matrix_server,
                                                 'matrix_logged_in': self.adapter.matrix_logged_in,
                                                 'matrix_busy_registering':self.adapter.matrix_busy_registering,
-                                                'user_account_created':self.adapter.user_account_created}),
+                                                'user_account_created':self.adapter.user_account_created,
                                                 'is_satellite':self.adapter.persistent_data['is_satellite']
+                                                })
                                 )
                             except Exception as ex:
                                 print("Error getting init data: " + str(ex))

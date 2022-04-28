@@ -618,6 +618,7 @@ body #extension-voco-view .extension-voco-tab-selected{
 }
 
 #extension-voco-mqtt-error,
+#extension-voco-unavailable,
 #extension-voco-injection-failure,
 #extension-voco-debug-warning{
     max-width:60rem;
@@ -628,6 +629,9 @@ body #extension-voco-view .extension-voco-tab-selected{
     border-radius:.5rem;
 }
 
+#extension-voco-unavailable{
+    text-align:center;
+}
 
 #extension-voco-missing-microphone-icon{
     width:64px;

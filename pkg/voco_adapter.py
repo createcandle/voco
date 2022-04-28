@@ -2024,11 +2024,8 @@ class VocoAdapter(Adapter):
                                     self.set_status_on_thing("restarting")
                                     self.should_restart_snips = False
                                     self.run_snips()
-                            
-                            
                                 
                                 else:
-                                    
                                     if self.initial_injection_completed == False and self.injection_in_progress == False:
                                         if self.DEBUG:
                                             print("Clock: attempting a forced injection since no injection complete message was received yet")
