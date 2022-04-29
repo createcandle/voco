@@ -1339,7 +1339,7 @@ class VocoAdapter(Adapter):
 
 
 
-    def play_sound(self,sound_file,intent='default'):
+    def play_sound(self,sound_file="start_of_input",intent='default'):
         try:
             if self.DEBUG:
                 print("in play_sound. File: " + str(sound_file))
@@ -1415,6 +1415,7 @@ class VocoAdapter(Adapter):
 
 
     def aplay(self,file_path):
+        print("in aplay")
         output_device_string = "plughw:" + str(self.current_card_id) + "," + str(self.current_device_id)
         
         if self.persistent_data['bluetooth_device_mac'] != None:
@@ -1427,7 +1428,7 @@ class VocoAdapter(Adapter):
                     subprocess.run(['pkill','ffplay'], capture_output=True, shell=False, check=False, encoding=None, errors=None, text=None, env=None, universal_newlines=None)
                 output_device_string = "bluealsa:DEV=" + str(self.persistent_data['bluetooth_device_mac'])
         
-        sound_command = ["aplay", str(sound_file),"-D", output_device_string]
+        sound_command = ["aplay", str(file_path),"-D", output_device_string]
         subprocess.run(sound_command, capture_output=True, shell=False, check=False, encoding=None, errors=None, text=None, env=None, universal_newlines=None)
         
         
