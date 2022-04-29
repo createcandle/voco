@@ -474,6 +474,7 @@ body #extension-voco-view .extension-voco-tab-selected{
 	background-image:url('../images/countdown.svg');
 }
 
+.extension-voco-type-boolean_related .extension-voco-icon,
 .extension-voco-type-actuator .extension-voco-icon{
 	background-image:url('../images/actuator.svg');
 }
