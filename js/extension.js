@@ -29,7 +29,7 @@
 				{'action':'token','token':jwt}
 
 	        ).then((body) => {
-                console.log("update jwt response: ", body);
+                //console.log("update jwt response: ", body);
 	        }).catch((e) => {
 	  			console.log("Error saving token: ", e);
 	        });
@@ -247,9 +247,12 @@
                 
                 
                 
+                
+                
 		  		// Init
 		        window.API.postJson(
-		          `/extensions/${this.id}/api/init`
+		          `/extensions/${this.id}/api/init`,
+    				{'token':localStorage.getItem('jwt')}
 
 		        ).then((body) => {
 					//console.log("Voco Init API result:");
@@ -610,11 +613,14 @@
                             
                             this.busy_polling = false;
                             document.getElementById('extension-voco-unavailable').style.display = 'none';
+                            document.getElementById('extension-voco-text-commands-container').style.display = 'block';
+                            
 
 				        }).catch((e) => {
 				  			//console.log("Error getting timer items: " , e);
 							console.log("Loading items failed - connection error?: ", e);
                             document.getElementById('extension-voco-unavailable').style.display = 'block';
+                            document.getElementById('extension-voco-text-commands-container').style.display = 'none';
 							//pre.innerText = "Loading items failed - connection error";
 							this.attempts = 0;
                             this.busy_polling = false;
@@ -623,8 +629,6 @@
 				  		// Get list of items
 						if(this.attempts < 3){
 							this.attempts++;
-                            
-                            
 						}
 						else{
 							//pre.innerText = "Lost connection.";
@@ -633,9 +637,9 @@
                     else{
                         //console.log('voco is not selected');
                     }
-				}catch(e){
-                    console.log("Voco polling error: ", e);
-                    //document.getElementById('extension-voco-unavailable').style.display = 'block';
+				}
+                catch(e){
+                    console.log("Voco try polling error: ", e);
                 }
 				
 			}, 2000);

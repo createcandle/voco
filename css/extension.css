@@ -40,6 +40,12 @@
 }
 */
 
+#extension-voco-tutorial h2,
+#extension-voco-tutorial h3,
+#extension-voco-tutorial h4{
+    margin-top:8rem;
+}
+
 
 
 #extension-voco-view button{
@@ -535,11 +541,17 @@ body #extension-voco-view .extension-voco-tab-selected{
 
 /*  Text input */
 
+#extension-voco-text-commands-container{
+    margin-top:4rem;
+    background-color: rgba(0,0,0,.1);
+    padding: 2rem;
+    border-radius: 0.5rem;
+}
+
 #extension-voco-text-input-container{
 	display:flex;
 	flex-wrap:wrap;
-	margin-top:4rem;
-	margin-bottom:2rem;
+	margin-top:0;
 }
 
 #extension-voco-text-input-field{
@@ -553,6 +565,7 @@ body #extension-voco-view .extension-voco-tab-selected{
 	outline: none;
     margin:0 1rem 0 0;
 }
+
 
 #extension-voco-text-response-container{
 	margin-top:1rem;
