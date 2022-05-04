@@ -529,12 +529,12 @@ class VocoAdapter(Adapter):
         # If Bluealsa is detected, then this will add bluetooth as an option to the output dropdown of the thing
         self.bluetooth_device_check()
         
-        self.respeaker_detected = False
+        # Check if a respeaker hat is being used
         respeaker_check = run_command('aplay -l') 
         if 'seeed' in respeaker_check:
-            self.respeaker_detected = True
+            self.prefer_aplay = True
             if self.DEBUG:
-                print("respeaker hat detected, will use ffplay instead of omxplayer")
+                print("respeaker hat detected, will use aplay instead of omxplayer")
         
 
         # Create Voco device
@@ -1406,7 +1406,7 @@ class VocoAdapter(Adapter):
                     if len(bluetooth_amixer_test) > 10:
                         output_to_bluetooth = True
                 
-                if output_to_bluetooth == False and self.respeaker_detected == False and self.prefer_aplay == False:
+                if output_to_bluetooth == False and self.prefer_aplay == False:
                     self.omxplay(sound_file,output_to_bluetooth)
                 else:
                     self.aplay(sound_file,output_to_bluetooth)
@@ -1671,7 +1671,7 @@ class VocoAdapter(Adapter):
                                     output_to_bluetooth = True
                 
                             # which audio player to use?
-                            if output_to_bluetooth == False and self.respeaker_detected == False and self.prefer_aplay == False:
+                            if output_to_bluetooth == False and self.prefer_aplay == False:
                                 self.omxplay(file_to_play,output_to_bluetooth)
                             else:
                                 self.aplay(file_to_play,output_to_bluetooth)
