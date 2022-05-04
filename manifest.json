@@ -31,6 +31,7 @@
       "Microphone": "Auto",
       "Speaker": "Auto",
       "Audio sample rate": "16000",
+	  "Use Aplay instead of OMX Player": false,
       "Voice accent": "en-GB",
       "Voice pitch": "1.2",
       "Voice speed": "0.9",
@@ -89,6 +90,10 @@
             "48000"
           ],
           "type": "string"
+        },
+        "Use Aplay instead of OMX Player": {
+          "description": "In some cases Voco will use OMX Player to play audio files. If this is causing issues you can choose to only use Aplay.",
+          "type": "boolean"
         },
         "Voice accent": {
           "description": "Select an accent that you'd like the speaking voice to have. Default is en-GB",
@@ -199,7 +204,7 @@
     }
   },
   "short_name": "Voco",
-  "version": "3.0.24",
+  "version": "3.0.26",
   "web_accessible_resources": [
     "css/*.css",
     "images/*.svg",
