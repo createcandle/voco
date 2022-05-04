@@ -333,6 +333,7 @@ class VocoAdapter(Adapter):
         self.current_card_id = 0
         self.current_device_id = 0
         self.sample_rate = 16000
+        self.prefer_aplay = False
         
         # Bluetooth
         self.bluealsa_available = False
@@ -527,6 +528,13 @@ class VocoAdapter(Adapter):
 
         # If Bluealsa is detected, then this will add bluetooth as an option to the output dropdown of the thing
         self.bluetooth_device_check()
+        
+        self.respeaker_detected = False
+        respeaker_check = run_command('aplay -l') 
+        if 'seeed' in respeaker_check:
+            self.respeaker_detected = True
+            if self.DEBUG:
+                print("respeaker hat detected, will use ffplay instead of omxplayer")
         
 
         # Create Voco device
@@ -1164,9 +1172,19 @@ class VocoAdapter(Adapter):
                 if self.DEBUG:
                     print("-Audio sample rate is present in the config data.")
                 self.sample_rate = int(config['Audio sample rate'])
+        
+        
+            if 'Use Aplay instead of OMX Player' in config:
+                if bool(config['Use Aplay instead of OMX Player']) == True:
+                    self.prefer_aplay = True
+                if self.DEBUG:
+                    print("-Prefer aplay: " + str(self.prefer_aplay))
+        
         except Exception as ex:
             print("Error loading voice setting(s) from config: " + str(ex))
 
+            
+        
             
         # MQTT port
         try:
@@ -1378,7 +1396,22 @@ class VocoAdapter(Adapter):
                 #sound_file = os.path.splitext(sound_file)[0] + str(self.persistent_data['speaker_volume']) + '.wav'
                 #sound_command = "aplay " + str(sound_file) + " -D plughw:" + str(self.current_card_id) + "," + str(self.current_device_id)
                 #os.system()
-                self.aplay(sound_file)
+                
+                # Output audio to Bluetooth?
+                output_to_bluetooth = False
+                if self.persistent_data['bluetooth_device_mac'] != None:
+                    bluetooth_amixer_test = run_command('amixer -D bluealsa scontents')
+                    if self.DEBUG:
+                        print("bluetooth_amixer_test: " + str(bluetooth_amixer_test))
+                    if len(bluetooth_amixer_test) > 10:
+                        output_to_bluetooth = True
+                
+                if output_to_bluetooth == False and self.respeaker_detected == False and self.prefer_aplay == False:
+                    self.omxplay(sound_file,output_to_bluetooth)
+                else:
+                    self.aplay(sound_file,output_to_bluetooth)
+                    
+                
                 """
                 output_device_string = "plughw:" + str(self.current_card_id) + "," + str(self.current_device_id)
                 
@@ -1413,26 +1446,44 @@ class VocoAdapter(Adapter):
             print("Error playing sound: " + str(ex))
             
 
+    def omxplay(self,file_path, bluetooth=False):
+        if self.DEBUG:
+            print("in omxplay")
+            
+        if self.persistent_data['audio_output'] == 'Built-in headphone jack':
+            output_device_string = "local"
+        else:
+            output_device_string = "hdmi"
+        
+        if bluetooth:
+            output_device_string = "alsa:bluealsa"
+            
+        #if self.kill_ffplay_before_speaking:
+        #    subprocess.run(['pkill','omxplayer'], capture_output=True, shell=False, check=False, encoding=None, errors=None, text=None, env=None, universal_newlines=None)
+        
+        sound_command = ["omxplayer", "-o", output_device_string, str(file_path),]
+        subprocess.run(sound_command, capture_output=True, shell=False, check=False, encoding=None, errors=None, text=None, env=None, universal_newlines=None)
+    
 
-    def aplay(self,file_path):
-        print("in aplay")
+
+
+    def aplay(self,file_path, bluetooth=False):
+        if self.DEBUG:
+            print("in aplay")
         output_device_string = "plughw:" + str(self.current_card_id) + "," + str(self.current_device_id)
         
-        if self.persistent_data['bluetooth_device_mac'] != None:
-            bluetooth_amixer_test = run_command('amixer -D bluealsa scontents')
-            if self.DEBUG:
-                print("bluetooth_amixer_test: " + str(bluetooth_amixer_test))
-                
-            if len(bluetooth_amixer_test) > 10:
-                if self.kill_ffplay_before_speaking:
-                    subprocess.run(['pkill','ffplay'], capture_output=True, shell=False, check=False, encoding=None, errors=None, text=None, env=None, universal_newlines=None)
-                output_device_string = "bluealsa:DEV=" + str(self.persistent_data['bluetooth_device_mac'])
+        if bluetooth:
+            output_device_string = "bluealsa:DEV=" + str(self.persistent_data['bluetooth_device_mac'])
         
         sound_command = ["aplay", str(file_path),"-D", output_device_string]
         subprocess.run(sound_command, capture_output=True, shell=False, check=False, encoding=None, errors=None, text=None, env=None, universal_newlines=None)
         
         
+        
+        
     def ffplay(self,file_path):
+        if self.DEBUG:
+            print("in ffplay")
         try:
             #output_device_string = "plughw:" + str(self.current_card_id) + "," + str(self.current_device_id)
 
@@ -1599,34 +1650,32 @@ class VocoAdapter(Adapter):
                             #os.system("aplay -D plughw:" + str(self.current_card_id) + "," + str(self.current_device_id) + ' ' + self.response_wav )
                             #speak_command = ["ffplay", "-nodisp", "-vn", "-infbuf","-autoexit", self.response_wav,"-volume","100"]
                             
-                            output_device_string = "plughw:" + str(self.current_card_id) + "," + str(self.current_device_id)
+                            #output_device_string = "plughw:" + str(self.current_card_id) + "," + str(self.current_device_id)
                 
+                            
+                            # Play resampled file?
+                            file_to_play = self.response_wav
+                            # If a user is not using an output device with the default samplerate of 16000, then the wav file will have to be resampled first.
+                            if self.sample_rate != 16000:
+                                os.system('ffmpeg -loglevel panic -y -i ' + self.response_wav + ' -vn -af aresample=out_sample_fmt=s16:out_sample_rate=' + str(self.sample_rate) + ' ' + self.response2_wav)
+                                file_to_play = self.response2_wav
+                                
+                            
+                            # Output audio to Bluetooth?
+                            output_to_bluetooth = False
                             if self.persistent_data['bluetooth_device_mac'] != None:
                                 bluetooth_amixer_test = run_command('amixer -D bluealsa scontents')
                                 if self.DEBUG:
-                                    print("speak: bluetooth_amixer_test: " + str(bluetooth_amixer_test))
-                        
+                                    print("bluetooth_amixer_test: " + str(bluetooth_amixer_test))
                                 if len(bluetooth_amixer_test) > 10:
-                                    output_device_string = "bluealsa:DEV=" + str(self.persistent_data['bluetooth_device_mac'])
-                            
-                            # If a user is not using the default samplerate of 16000, then the wav file will have to be resampled.
-                            if self.sample_rate != 16000:
-                                os.system('ffmpeg -loglevel panic -y -i ' + self.response_wav + ' -vn -af aresample=out_sample_fmt=s16:out_sample_rate=' + str(self.sample_rate) + ' ' + self.response2_wav)
-                                speak_command = ["aplay", "-D", output_device_string, self.response2_wav] #,"2>/dev/null"
-                                
+                                    output_to_bluetooth = True
+                
+                            # which audio player to use?
+                            if output_to_bluetooth == False and self.respeaker_detected == False and self.prefer_aplay == False:
+                                self.omxplay(file_to_play,output_to_bluetooth)
                             else:
-                                speak_command = ["aplay","-D",output_device_string, self.response_wav]
-                            
-                            
-                            if self.DEBUG:
-                                print("speak aplay command: " + str(speak_command))
-                                print("-- aka " + str( ' '.join(speak_command) ))
-                        
-                            subprocess.run(speak_command, capture_output=True, shell=False, check=False, encoding=None, errors=None, text=None, env=None, universal_newlines=None)
-                            
-                            
-                            #os.system('rm ' + self.response_wav)
-                            #subprocess.check_call(speak_command,stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
+                                self.aplay(file_to_play,output_to_bluetooth)
+                                
                         except Exception as ex:
                             print("Error playing spoken voice response: " + str(ex))
         
@@ -2407,8 +2456,8 @@ class VocoAdapter(Adapter):
                                 self.run_snips()
                             if self.DEBUG:
                                 print("Microphone was auto-detected. Set to: " + str(self.microphone))
-                            if self.still_busy_booting == False:
-                                self.speak("A microphone has been connected.")
+                            #if self.still_busy_booting == False:
+                            #    self.speak("A microphone has been connected.")
                                 
                         elif self.microphone in self.capture_devices: # A mic is currenty plugged in
                             if self.missing_microphone:
@@ -2417,7 +2466,7 @@ class VocoAdapter(Adapter):
                                 self.missing_microphone = False
                                 if self.mqtt_connected == True:
                                     if self.still_busy_booting == False:
-                                        self.speak("The microphone has been reconnected.")
+                                        self.speak("The microphone has been connected.")
                                     #print("self.mqtt_client = " + str(self.mqtt_client))
                                     #self.stop_snips()
                                     #self.run_snips()
