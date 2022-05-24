@@ -1696,6 +1696,8 @@ class VocoAdapter(Adapter):
         if self.DEBUG:
             print("In mute. current_control_name: " + str(self.current_control_name))
         run_command("amixer sset " + str(self.current_control_name) + " mute")
+        #self.pause_omxplayer()
+
         
         
         
@@ -1703,9 +1705,48 @@ class VocoAdapter(Adapter):
         if self.DEBUG:
             print("In unmute. current_control_name: " + str(self.current_control_name))
         run_command("amixer sset " + str(self.current_control_name) + " unmute")
+        #self.pause_omxplayer()
 
+        
+    # dangerous if it gets out of sync somehow..
+    def pause_omxplayer(self):
+        if self.DEBUG:
+            print("Trying dbus mute of omxplayer")
 
-
+        omxplayerdbus_user = run_command('cat /tmp/omxplayerdbus.${USER:-root}')
+        if self.DEBUG:
+            print("DBUS_SESSION_BUS_ADDRESS: " + str(omxplayerdbus_user))
+        if omxplayerdbus_user != None:
+            if self.DEBUG:
+                print("trying dbus-send")
+            environment = os.environ.copy()
+            environment["DBUS_SESSION_BUS_ADDRESS"] = str(omxplayerdbus_user).strip()
+            environment["DISPLAY"] = ":0"
+        
+            if self.DEBUG:
+                print("environment: " + str(environment))
+            
+            dbus_volume = volume / 100
+            if self.DEBUG:
+                print("dbus_volume: " + str(dbus_volume))
+            
+            dbus_command = 'dbus-send --print-reply --session --reply-timeout=500 --dest=org.mpris.MediaPlayer2.omxplayer /org/mpris/MediaPlayer2 org.mpris.MediaPlayer2.Player.Action int32:16'
+            #dbus_command = 'dbus-send --print-reply --session --reply-timeout=500 --dest=org.mpris.MediaPlayer2.omxplayer /org/mpris/MediaPlayer2 org.freedesktop.DBus.Properties.Set string:"org.mpris.MediaPlayer2.Player" string:"Volume" double:' + str(dbus_volume)
+            #export DBUS_SESSION_BUS_ADDRESS=$(cat /tmp/omxplayerdbus.${USER:-root})
+            dbus_process = subprocess.Popen(dbus_command, 
+                            env=environment,
+                            shell=True,				# Streaming to bluetooth seems to only work if shell is true. The position of the volume string also seemed to matter
+                            stdin=subprocess.PIPE,
+                            stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE,
+                            close_fds=True)
+        
+            stdout,stderr = dbus_process.communicate()
+            
+            if self.DEBUG:
+                print("dbus stdout: " + str(stdout))
+                print("dbus stderr: " + str(stderr))
+    
 
 
 #
@@ -3437,7 +3478,7 @@ class VocoAdapter(Adapter):
                 self.last_injection_time = time.time() # if a site is injecting, all sites should wait a while before attempting their own injections.
                 self.injection_in_progress = True
                 if self.DEBUG:
-                    print("INJECTION PERFORM MESSAGE RECEIVED")
+                    print("INJECTION PERFORM MESSAGE RECEIVED (injection is now in progress)")
                     
             elif msg.topic.startswith('hermes/injection/complete'):
                 if self.DEBUG:

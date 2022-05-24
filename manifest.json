@@ -40,7 +40,7 @@
       "Sound detection": false,
       "Hey Candle": true,
 	  "Mute the radio": false,
-      "Satellite device control": true,
+      "Satellite device control": false,
 	  "Disable security": false,
 	  "MQTT port": 1885,
       "Debugging": false
@@ -48,7 +48,7 @@
     "schema": {
       "properties": {
         "Authorization token": {
-          "description": "Advanced. To be allowed to get information on all your devices, you have to create an 'authorization' code. It's basically a very long password. You can generate it yourself under Settings -> Developer -> Create local authorization. Any code you add here will override the code set throug the interface.",
+          "description": "Advanced. To be allowed to get information on all your devices, you have to create an 'authorization' code. It's basically a very long password. You can generate it yourself under Settings -> Developer -> Create local authorization. Any code you add here will override the code set through the interface.",
           "type": "string"
         },
         "Metric": {
@@ -92,7 +92,7 @@
           "type": "string"
         },
         "Use Aplay instead of OMX Player": {
-          "description": "In some cases Voco will use OMX Player to play audio files. If this is causing issues you can choose to only use Aplay.",
+          "description": "Advanced. In some cases Voco will use OMX Player to play audio files. If this is causing issues you can choose to only use Aplay.",
           "type": "boolean"
         },
         "Voice accent": {
@@ -167,8 +167,10 @@
           "type": "string"
         },
         "System audio volume": {
-          "description": "Advanced. When provided, the system volume will be set to this volume percentage level when Voco starts. This is separate from Voco's own volume, which is relative to the system volume. Can be between 0 and 100 percent. The default is 95.",
-          "type": "integer"
+          "description": "Advanced. When provided, the system volume will be set to this volume percentage level when Voco starts. This is separate from Voco's own volume, which is relative to the system volume. Can be between 0 and 100 percent. The default is 90.",
+          "type": "integer",
+		  "minimum": 10,
+		  "maximum": 100
         },
         "Sound detection": {
           "description": "When enabled, an extra switch will be created in the voice control thing. That switch will be turned on for 10 seconds whenever speech or sound is detected.",
