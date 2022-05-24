@@ -332,7 +332,7 @@ class VocoAdapter(Adapter):
         self.current_control_name = ""
         self.current_card_id = 0
         self.current_device_id = 0
-        self.sample_rate = 16000
+        self.sample_rate = 16000 # 48000
         self.prefer_aplay = False
         
         # Bluetooth
@@ -1696,8 +1696,6 @@ class VocoAdapter(Adapter):
         if self.DEBUG:
             print("In mute. current_control_name: " + str(self.current_control_name))
         run_command("amixer sset " + str(self.current_control_name) + " mute")
-        #self.pause_omxplayer()
-
         
         
         
@@ -1705,48 +1703,9 @@ class VocoAdapter(Adapter):
         if self.DEBUG:
             print("In unmute. current_control_name: " + str(self.current_control_name))
         run_command("amixer sset " + str(self.current_control_name) + " unmute")
-        #self.pause_omxplayer()
 
-        
-    # dangerous if it gets out of sync somehow..
-    def pause_omxplayer(self):
-        if self.DEBUG:
-            print("Trying dbus mute of omxplayer")
 
-        omxplayerdbus_user = run_command('cat /tmp/omxplayerdbus.${USER:-root}')
-        if self.DEBUG:
-            print("DBUS_SESSION_BUS_ADDRESS: " + str(omxplayerdbus_user))
-        if omxplayerdbus_user != None:
-            if self.DEBUG:
-                print("trying dbus-send")
-            environment = os.environ.copy()
-            environment["DBUS_SESSION_BUS_ADDRESS"] = str(omxplayerdbus_user).strip()
-            environment["DISPLAY"] = ":0"
-        
-            if self.DEBUG:
-                print("environment: " + str(environment))
-            
-            dbus_volume = volume / 100
-            if self.DEBUG:
-                print("dbus_volume: " + str(dbus_volume))
-            
-            dbus_command = 'dbus-send --print-reply --session --reply-timeout=500 --dest=org.mpris.MediaPlayer2.omxplayer /org/mpris/MediaPlayer2 org.mpris.MediaPlayer2.Player.Action int32:16'
-            #dbus_command = 'dbus-send --print-reply --session --reply-timeout=500 --dest=org.mpris.MediaPlayer2.omxplayer /org/mpris/MediaPlayer2 org.freedesktop.DBus.Properties.Set string:"org.mpris.MediaPlayer2.Player" string:"Volume" double:' + str(dbus_volume)
-            #export DBUS_SESSION_BUS_ADDRESS=$(cat /tmp/omxplayerdbus.${USER:-root})
-            dbus_process = subprocess.Popen(dbus_command, 
-                            env=environment,
-                            shell=True,				# Streaming to bluetooth seems to only work if shell is true. The position of the volume string also seemed to matter
-                            stdin=subprocess.PIPE,
-                            stdout=subprocess.PIPE,
-                            stderr=subprocess.PIPE,
-                            close_fds=True)
-        
-            stdout,stderr = dbus_process.communicate()
-            
-            if self.DEBUG:
-                print("dbus stdout: " + str(stdout))
-                print("dbus stderr: " + str(stderr))
-    
+
 
 
 #
@@ -1756,7 +1715,7 @@ class VocoAdapter(Adapter):
 
     def run_snips(self):
         if self.DEBUG:
-            print("in_run_snips")
+            print("\n\n[00]\nIN RUN_SNIPS")
         
         if self.busy_starting_snips:
             if self.DEBUG:
@@ -2226,6 +2185,7 @@ class VocoAdapter(Adapter):
                             else:
                                 if self.DEBUG:
                                     print("still busy booting?? self.mqtt_connected_succesfully_at_least_once?: " + str(self.mqtt_connected_succesfully_at_least_once))
+                                
                                 if self.injection_in_progress == False and self.mqtt_connected == True:
                                     if self.persistent_data['is_satellite'] == False:
                                         if self.DEBUG:
@@ -2235,6 +2195,13 @@ class VocoAdapter(Adapter):
                                         if self.DEBUG:
                                             print("Clock: attempting a forced injection on a satellite with intention recognition since no injection complete message was received yet")
                                         self.inject_updated_things_into_snips(True) # Force a new injection until it sticks
+                                    else:
+                                        if self.DEBUG:
+                                            print("basic satellite. Setting still_busy_booting to False")
+                                        self.still_busy_booting = False
+                                        self.initial_injection_completed = True
+                                        self.speak_welcome_message()
+                                        
                         else:
                             if self.DEBUG:
                                 print("WARNING: clock: still no mqtt client?")
@@ -2545,9 +2512,9 @@ class VocoAdapter(Adapter):
                     # check if running subprocesses are still running ok
                     
                     if self.missing_microphone == True and self.stop_snips_on_microphone_unplug:
-                        pass
-                        #if self.DEBUG:
-                        #    print("will not restart snips since snips should be disabled while microphone is missing.")
+                        #pass
+                        if self.DEBUG:
+                            print("will not restart snips since snips should be disabled while microphone is missing.")
                     
                     else:
                         #subprocess_running_ok = True
@@ -3352,7 +3319,7 @@ class VocoAdapter(Adapter):
                 
             # if this is a satellite, then connecting to MQTT could just be a test of going over multiple controllers in an attempt to find the main one
             snips_processes_count = self.is_snips_running()
-            if snips_processes_count < 7 and self.currently_scanning_for_missing_mqtt_server == False and self.persistent_data['is_satellite'] == False:
+            if snips_processes_count < 7 and self.currently_scanning_for_missing_mqtt_server == False: # and self.persistent_data['is_satellite'] == False:
                 if self.DEBUG:
                     print("not a satellite, so (re)starting snips in on_connect from MQTT")
                 #self.stop_snips()
@@ -3413,7 +3380,7 @@ class VocoAdapter(Adapter):
         if self.DEBUG:
             print("")
             print("")
-            print("MQTT message to topic " + str(msg.topic) + " received on: " + self.persistent_data['site_id'] + " a.k.a. hostname " + self.hostname)
+            print("MQTT message to topic: " + str(msg.topic) + ", received on: " + self.persistent_data['site_id'] + ", a.k.a. hostname: " + self.hostname)
             print("+")
             print(str(msg.payload.decode('utf-8')))
             print("+")
@@ -3475,20 +3442,29 @@ class VocoAdapter(Adapter):
         try:
             
             if msg.topic.startswith('hermes/injection/perform'):
-                self.last_injection_time = time.time() # if a site is injecting, all sites should wait a while before attempting their own injections.
-                self.injection_in_progress = True
-                if self.DEBUG:
-                    print("INJECTION PERFORM MESSAGE RECEIVED (injection is now in progress)")
+                
+                if self.persistent_data['is_satellite']:
+                    if self.DEBUG:
+                        print("INJECTION PERFORM MESSAGE RECEIVED, but I am a satellite, so I'm ignoring it")
+                else:
+                    self.last_injection_time = time.time() # if a site is injecting, all sites should wait a while before attempting their own injections.
+                    self.injection_in_progress = True
+                    if self.DEBUG:
+                        print("INJECTION PERFORM MESSAGE RECEIVED")
                     
             elif msg.topic.startswith('hermes/injection/complete'):
-                if self.DEBUG:
-                    print("INJECTION COMPLETE MESSAGE RECEIVED")
-                self.possible_injection_failure = False
-                self.injection_in_progress = False
-                # Voco is now really ready
-                if self.initial_injection_completed == False:
-                    self.initial_injection_completed = True
-                    self.speak_welcome_message()
+                if self.persistent_data['is_satellite']:
+                    if self.DEBUG:
+                        print("INJECTION COMPLETE MESSAGE RECEIVED, but I am a satellite, so I'm ignoring it")
+                else:
+                    if self.DEBUG:
+                        print("INJECTION COMPLETE MESSAGE RECEIVED")
+                    self.possible_injection_failure = False
+                    self.injection_in_progress = False
+                    # Voco is now really ready
+                    if self.initial_injection_completed == False:
+                        self.initial_injection_completed = True
+                        self.speak_welcome_message()
                
             elif msg.topic.startswith('hermes/hotword/' + self.persistent_data['site_id']):
                 
@@ -4004,19 +3980,40 @@ class VocoAdapter(Adapter):
                 print("error setting up alternatives loop: " + str(ex))
         
         try:
-            all_possible_intents = [str(intent_message['intent']['intentName']).replace('createcandle:','')]
+            all_possible_intents = []
+            most_likely_intent = str(intent_message['intent']['intentName']).replace('createcandle:','')
+            
+            if self.persistent_data['is_satellite'] and most_likely_intent in ['get_time','set_timer','get_timer_count','list_timers','stop_timer']:
+                if self.DEBUG:
+                    print("SATELLITE: master_intent_callback: NOT HANDLING TIMERS")
+                #return
+            
+            else:
+                all_possible_intents.append(most_likely_intent)
+            
             if 'alternatives' in intent_message:
                 index = 0
                 for key in intent_message['alternatives']:
                     #print(str(key))
-                    all_possible_intents.append( str(intent_message['alternatives'][index]['intentName']).replace('createcandle:','') )
+                    alt_intent_name = str(intent_message['alternatives'][index]['intentName']).replace('createcandle:','')
+                    if alt_intent_name != 'None':
+                        if self.persistent_data['is_satellite'] and alt_intent_name in ['get_time','set_timer','get_timer_count','list_timers','stop_timer']:
+                            if self.DEBUG:
+                                print("SATELLITE: master_intent_callback: NOT HANDLING alt TIMERS")
+                        else:
+                            all_possible_intents.append( alt_intent_name )
                     index += 1
         except Exception as ex:
             if self.DEBUG:
                 print("Error getting list of possible intents: " + str(ex))
         
         
-            
+        if len(all_possible_intents) == 0:
+            if self.DEBUG:
+                print("POSSIBLE INTENTS LIST IS EMPTY")
+            return
+        else:
+            print("\nall_possible_intents: " + str(all_possible_intents))
         
         try:
             #sentence = str(intent_message['input'])
@@ -4261,7 +4258,7 @@ class VocoAdapter(Adapter):
                     # Alternative route to set state
                     # TODO: Should I not trust Snips to have good alternative routes instead?
             
-                    if incoming_intent == 'set_timer' and sentence.startswith("turn"):          
+                    if incoming_intent == 'set_timer' and sentence.startswith("turn"):         
                     
                         if sentence.startswith("turn on"):
                             incoming_intent = 'createcandle:set_state'
@@ -4312,7 +4309,7 @@ class VocoAdapter(Adapter):
             
             
                 # Skip some impossible timers
-                if incoming_intent == 'list_timers' and slots['timer_type'] == None:
+                if incoming_intent == 'list_timers' and slots['timer_type'] == None and self.persistent_data['is_satellite'] == False:
                     if self.DEBUG:
                         print("list_timers intent, but no timer type in slots, so cannot be correct intent")
                     if final_test == False:
@@ -4320,7 +4317,7 @@ class VocoAdapter(Adapter):
                             first_voice_message = "I did not understand the type of timer. "
                         continue
                     
-                if incoming_intent == 'set_timer' and (slots['duration'] == None or slots['end_time'] == None) and slots['time_string'] == None:
+                if incoming_intent == 'set_timer' and (slots['duration'] == None or slots['end_time'] == None) and slots['time_string'] == None and self.persistent_data['is_satellite'] == False:
                     if self.DEBUG:
                         print("The spoken sentence did not contain a time")
                     #self.play_sound(self.error_sound,intent=intent_message)
@@ -4344,7 +4341,7 @@ class VocoAdapter(Adapter):
                         if not voice_message.startswith('Sorry'):
                             stop_looping = True
                             break
-                    elif incoming_intent == 'get_timer_count':
+                    elif incoming_intent == 'get_timer_count': 
                         voice_message = intent_get_timer_count(self, slots, intent_message)
                         if not voice_message.startswith('Sorry'):
                             stop_looping = True
@@ -4436,7 +4433,7 @@ class VocoAdapter(Adapter):
                     elif len(found_properties) == 0:
                         if self.DEBUG:
                             print("found_properties length was 0")
-                        voice_message = "Sorry, I couldn't find a match. "
+                        #voice_message = "Sorry, I couldn't find a match. "
                         if final_test:
                             if not self.persistent_data['is_satellite']:
                                 if self.DEBUG:
@@ -4484,6 +4481,10 @@ class VocoAdapter(Adapter):
             if voice_message == "":
                 if final_test:
                     continue
+                elif  self.persistent_data['is_satellite']:
+                    if self.DEBUG:
+                        print("voice message was empty string, and I am a satellite, so I am calling it a day")
+                    return
                 else:
                     voice_message = "Sorry, I am confused"
                     
@@ -4595,6 +4596,11 @@ class VocoAdapter(Adapter):
         #    print("Checking if new things/properties/strings should be injected into Snips")
         try:
             
+            if self.persistent_data['is_satellite']:
+                if self.DEBUG:
+                    print("inject_updated_things_into_snips, but I am a satellite, so skipping this.")
+                return
+                
             if force_injection == True:
                 self.force_injection = True # sic (adding to self)
             
@@ -7685,8 +7691,8 @@ class VocoAdapter(Adapter):
     
     
     def is_snips_running(self):
-        #if self.DEBUG:
-        #    print("In is_snips_running")
+        if self.DEBUG:
+            print("In is_snips_running")
             
         p1 = subprocess.Popen(["ps", "-A"], stdout=subprocess.PIPE)
         p2 = subprocess.Popen(['grep', 'snips'], stdin=p1.stdout, stdout=subprocess.PIPE)
