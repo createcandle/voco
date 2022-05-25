@@ -262,6 +262,7 @@
                         if(body.debug){
                             this.debug = body.debug;
                             document.getElementById('extension-voco-debug-warning').style.display = 'block';
+                            console.log("Voco Init API result: ", body);
                         }
                     }
                     

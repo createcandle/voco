@@ -2512,9 +2512,9 @@ class VocoAdapter(Adapter):
                     # check if running subprocesses are still running ok
                     
                     if self.missing_microphone == True and self.stop_snips_on_microphone_unplug:
-                        #pass
-                        if self.DEBUG:
-                            print("will not restart snips since snips should be disabled while microphone is missing.")
+                        pass
+                        #if self.DEBUG:
+                        #    print("will not restart snips since snips should be disabled while microphone is missing.")
                     
                     else:
                         #subprocess_running_ok = True
@@ -3325,6 +3325,8 @@ class VocoAdapter(Adapter):
                 #self.stop_snips()
                 self.run_snips()
                 
+                
+            
                 
             #self.periodic_mqtt_attempts = 0
             #self.mqtt_connected = True
@@ -6055,14 +6057,14 @@ class VocoAdapter(Adapter):
                 if self.DEBUG:
                     print("------------------ This satellite wasn't already searching for missing main MQTT server, so the search process is starting now. Doing ARP scan.")
                 self.currently_scanning_for_missing_mqtt_server = True
-                self.gateways_ip_list = arpa_detect_gateways()
+                self.gateways_ip_list = avahi_detect_gateways(True)
                 if self.DEBUG:
                     print("------------------ self.gateways_ip_list length: " + str(len(self.gateways_ip_list)))
                     
-                if len(self.gateways_ip_list) == 0 or self.periodic_voco_attempts > 40:
-                    if self.DEBUG:
-                        print("------------------ Quick scan for gateways did not have any results, or didn't get any results in the past. Will try the slow full scan.")
-                    self.gateways_ip_list = arpa_detect_gateways(False) # disables the quickscan option.
+                #if len(self.gateways_ip_list) == 0 or self.periodic_voco_attempts > 40:
+                #    if self.DEBUG:
+                #        print("------------------ Quick scan for gateways did not have any results, or didn't get any results in the past. Will try the slow full scan.")
+                #    self.gateways_ip_list = arpa_detect_gateways(False) # disables the quickscan option.
                    
                     
                 for ip_address in self.gateways_ip_list:
@@ -6145,22 +6147,7 @@ class VocoAdapter(Adapter):
     
     
     
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
+
     
     
     

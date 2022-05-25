@@ -10,7 +10,7 @@ import requests
 import subprocess
 #import threading
 
-from .util import valid_ip, arpa_detect_gateways
+from .util import valid_ip, avahi_detect_gateways
 
 from datetime import datetime,timedelta
 #from dateutil import tz
@@ -352,8 +352,9 @@ class VocoAPIHandler(APIHandler):
                                     self.adapter.mqtt_client.publish("hermes/voco/ping",json.dumps({'ip':self.adapter.ip_address,'site_id':self.adapter.persistent_data['site_id']}))
                                     sleep(1)
                             
+                                """
                                 # Satellite targets
-                                self.adapter.gateways_ip_list = arpa_detect_gateways()
+                                self.adapter.gateways_ip_list = avahi_detect_gateways()
                                         
                                 satellite_targets = {}
                                 for ip_address in self.adapter.gateways_ip_list:
@@ -371,6 +372,11 @@ class VocoAPIHandler(APIHandler):
                                         satellite_targets[ip_address] = self.adapter.mqtt_others[ip_address] # should give the site_id
                                     else:
                                         satellite_targets[ip_address] = ip_address # if there is no known site_id for this IP addres, just give it the ip address as the name
+                                """    
+                                        
+                                satellite_targets = avahi_detect_gateways()
+                                if self.DEBUG:
+                                    print("satellite_targets: " + str(satellite_targets))
                             
                                 # Token
                                 has_token = False

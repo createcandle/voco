@@ -407,6 +407,7 @@ body #extension-voco-view .extension-voco-tab-selected{
 
 .extension-voco-radio-select-item span{
 	margin-left:1rem;
+    text-transform: capitalize;
 }
 
 .extension-voco-line2{

@@ -632,9 +632,77 @@ def generate_random_string(length):
 
 
 
+
+
 #
 #  A quick scan of the network.
 #
+def avahi_detect_gateways(list_only=False):
+    print("in avahi_detect_gateways")
+    command = ["avahi-browse","-p","-l","-a","-r","-k","-t"]
+    gateway_list = []
+    satellite_targets = {}
+    try:
+                
+        result = subprocess.run(command, universal_newlines=True, stdout=subprocess.PIPE) #.decode())
+        for line in result.stdout.split('\n'):
+            
+                
+            if  "IPv4;CandleMQTT-" in line:
+                print(str(line))
+                # get name
+                try:
+                    before = 'IPv4;CandleMQTT-'
+                    after = ';_mqtt._tcp;'
+                    name = line[line.find(before)+16 : line.find(after)]
+                except Exception as ex:
+                    print("invalid name: " + str(ex))
+                    continue
+                    
+                # get IP
+                #pattern = re.compile(r'(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})')
+                #ip = pattern.search(line)[0]
+                #lst.append(pattern.search(line)[0])
+
+                try:
+                    ip_address_list = re.findall(r'(?:\d{1,3}\.)+(?:\d{1,3})', str(line))
+                    print("ip_address_list = " + str(ip_address_list))
+                    if len(ip_address_list) > 0:
+                        ip_address = str(ip_address_list[0])
+                        if not valid_ip(ip_address):
+                            continue
+                    
+                        if ip_address not in gateway_list:
+                            gateway_list.append(ip_address)
+                            satellite_targets[ip_address] = name
+                        
+                except Exception as ex:
+                    print("no IP address in line: " + str(ex))
+                    
+               
+                
+    except Exception as ex:
+        print("Arp -a error: " + str(ex))
+        
+    if list_only:
+        return gateway_list
+    else:
+        return satellite_targets
+
+
+
+
+
+
+
+
+
+
+
+#
+#  A quick scan of the network.
+#
+
 def arpa_detect_gateways(quick=True):
     command = "arp -a"
     gateway_list = []
@@ -702,7 +770,8 @@ def arpa_detect_gateways(quick=True):
         print("Arp -a error: " + str(ex))
         
     return gateway_list
-    
+
+   
     
 def simpler_fuzz(s1, s2):
     #print("Simpler Fuzz is comparing: " + str(s1) + " =?= " + str(s2))
