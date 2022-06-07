@@ -540,7 +540,7 @@
 									this.regenerate_items();
 								}
 								else{
-									list.innerHTML = '<div class="extension-voco-centered-page" style="text-align:center"><p>There are currently no active timers, reminders or alarms.</p></div>';
+									list.innerHTML = '<div class="extension-voco-centered-page"><p style="width:100%;text-align:center;display:bloc">There are currently no active timers, reminders or alarms.</p>';
 								}
                                 
                                 

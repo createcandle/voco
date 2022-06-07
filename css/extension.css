@@ -73,6 +73,12 @@
 }
 
 
+#extension-voco-content-container{
+    width:100%;
+    max-width:80rem;
+    margin: 0 auto;
+}
+
 /*  DELETE  */
 
 
@@ -100,17 +106,12 @@
 .extension-voco-item{
 	padding: 0;
 	display: flex;
-	/*background-color: #46769C;*/
     background-color:rgba(0,0,0,.2);
 	border-radius:.5rem;
-	margin-top:1rem;
 	border-radius: .5rem;
 	position: relative;
 	width:100%;
-}
-
-.extension-voco-item{
-	margin-top: 4rem;
+	margin-bottom: 4rem;
 }
 
 
@@ -127,6 +128,7 @@
 	overflow: hidden;
 	display:flex;
 	flex-wrap:wrap;
+    box-sizing:border-box;
 }
 .extension-voco-item-right{
 	text-align:center;
@@ -137,11 +139,12 @@
 }
 
 #extension-voco-server-list-toggle{
-	border-left: 1px solid rgba(255,255,255,.3);
+	border-top: 1px solid rgba(255,255,255,.3);
 }
 
 #extension-voco-view .rule-switch{
 	padding-right:0;
+    padding-top:1rem;
 }
 
 
@@ -172,6 +175,8 @@
 	width:auto;
 	display:flex;
 	flex-wrap:wrap;
+    flex-direction:column;
+    margin:4rem auto;
 }
 
 
@@ -261,12 +266,11 @@ body #extension-voco-view .extension-voco-tab-selected{
 
 
 .extension-voco-tab-buttons{
-	margin-top: 4rem;
 	background-color: rgba(255,255,255,.1);
 	border-radius: .7rem;
 	overflow: hidden;
 	font-size:0;
-    max-width: 60rem;
+    /*max-width: 60rem;*/
     margin: 4rem auto 0 auto;
 }
 
@@ -363,13 +367,20 @@ body #extension-voco-view .extension-voco-tab-selected{
 
 /*   VOCO  Timers   */
 
+/*
+.extension-voco-centered-page{
+    padding:2rem 0;
+    max-width:80rem;
+}
+*/
+/*
 .extension-voco-centered-error,
 .extension-voco-centered-page{
 	padding:2rem 0;
 	max-width:60rem;
 	margin: 4rem auto;
 }
-
+*/
 .extension-voco-centered-error{
 	text-align:center;
     padding:2rem;
@@ -546,7 +557,7 @@ body #extension-voco-view .extension-voco-tab-selected{
     background-color: rgba(0,0,0,.1);
     padding: 2rem;
     border-radius: 0.5rem;
-    max-width: 60rem;
+    /*max-width: 60rem;*/
     margin: 4rem auto;
     box-sizing: border-box;
 }
@@ -686,6 +697,7 @@ body #extension-voco-view .extension-voco-tab-selected{
 
 #extension-voco-matrix-advanced-tip > p{
     display:flex;
+    flex-wrap:wrap;
     justify-content:space-between;
     align-items:center;
 }
@@ -716,6 +728,9 @@ body #extension-voco-view .extension-voco-tab-selected{
     margin-left:auto;
 }
 
+#extension-voco-matrix-learn-more-button{
+    margin-top:2rem;
+}
 
 .extension-voco-align-items-right{
     display:flex;
@@ -838,6 +853,27 @@ body #extension-voco-view .extension-voco-tab-selected{
 }
 
 
+@media screen and (max-width: 640px) {
+    #extension-voco-matrix-advanced-tip > p span{
+        display:block;
+        text-align:center;
+        padding:2rem;
+        width:100%;
+    }
+    #extension-voco-matrix-advanced-tip button{
+        margin: 0 auto;
+    }
+    .extension-voco-item{
+    	flex-direction:column;
+    }
+    .extension-voco-item-menu{
+        border-top:1px solid rgba(255,255,255,.3);
+    }
+    .extension-voco-item-setter{
+        border-right:none;
+    }
+}
+
 @media screen and (min-width: 641px) {
 	.extension-voco-line2{
 		width:auto;
@@ -853,11 +889,11 @@ body #extension-voco-view .extension-voco-tab-selected{
 	.extension-voco-time{
 		margin-right:1rem;
 	}
-    
+    /*
     .extension-voco-centered-page{
         padding: 2rem;
     }
-    
+    */
     .extension-voco-select-satellites-question{
         flex-direction:row;
     }
@@ -865,22 +901,31 @@ body #extension-voco-view .extension-voco-tab-selected{
     #extension-voco-view button{
         padding:1rem 2rem;
     }
+    #extension-voco-server-list-toggle{
+    	border-top: none;
+        border-left: 1px solid rgba(255,255,255,.3);
+    }
+    #extension-voco-server-list-toggle{
+        
+    }
 }
 
 
 @media screen and (min-width: 1025px) {
 	#extension-voco-view{
-		left:9.6rem;
-		top: 0;
 		height:100vh; 
+		/*
+        left:9.6rem;
+		top: 0;
 		position:absolute;
 		width: calc(100% - 9.6rem);
 		padding-right:9.6rem;
+        */
 	}
 	
 	#extension-voco-content-container{
 		height:auto;
-		width: calc(100% - 3rem);
+		/*width: calc(100% - 3rem);*/
 	}
 	
     #extension-candleappstore-selected-main{
@@ -894,11 +939,11 @@ body #extension-voco-view .extension-voco-tab-selected{
     .extension-voco-vlak .extension-voco-vlak{
         padding:2rem;
     }
-    
+    /*
     .extension-voco-centered-page{
         max-width:70rem;
     }
-    
+    */
     #extension-voco-text-input-field{
         margin:0 1rem 0 0;
     }
