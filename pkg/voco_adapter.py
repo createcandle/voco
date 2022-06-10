@@ -399,6 +399,7 @@ class VocoAdapter(Adapter):
         
         # Things scanner
         self.alternatives_counter = -1 # Snips offers alternative detected intents, in case the main one didn't work out. Starts at -1 so it is 0 when it gets to the alternatives array
+        self.confidence_score_threshold = 0.2
         
         # Voice settings
         self.voice_accent = "en-GB"
@@ -4019,7 +4020,7 @@ class VocoAdapter(Adapter):
                     #print(str(key))
                     
                     print("\nconfidenceScore: " + str(intent_message['alternatives'][index]['confidenceScore']))
-                    if intent_message['alternatives'][index]['confidenceScore'] > 0.1:
+                    if intent_message['alternatives'][index]['confidenceScore'] > self.confidence_score_threshold:
                         alt_intent_name = str(intent_message['alternatives'][index]['intentName']).replace('createcandle:','')
                         if alt_intent_name != 'None':
                             if self.persistent_data['is_satellite'] and alt_intent_name in ['get_time','set_timer','get_timer_count','list_timers','stop_timer']:
