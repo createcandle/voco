@@ -31,6 +31,8 @@ These are all examples. You don't have to phrase things exactly like this, the A
 - "Unlock the front door until 3 pm"
 - "Turn on the air filter tomorrow afternoon"
 - "Lock the front door at lunchtime" (11-13 o'clock)
+- At 5 o clock turn on the radio for 3 minutes
+
 ### Ask questions
 #### Query a specific device
 - "Is the front door locked?"
