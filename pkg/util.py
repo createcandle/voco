@@ -244,11 +244,20 @@ def get_api_url(link_list):
 
 
 
-def clean_up_string_for_speaking(sentence):
-    sentence = sentence.replace('/', ' ').replace('\\', ' ').replace('+', ' plus ').replace('#', ' number ').replace('-', ' ').replace('&', ' and ').replace('  ', ' ')
-    sentence = sentence.replace('  ', ' ').replace('[', '').replace(']', '')
-    sentence = sentence.replace('  ', ' ')
-    sentence = sentence.strip()
+def clean_up_string_for_speaking(sentence): # Also used in thing scanner!
+    #print("cleaning up: " + str(sentence))
+    if len(sentence):
+        sentence = sentence.replace('/', ' ').replace('\\', ' ').replace('+', ' plus ').replace('#', ' number ').replace('-', ' ').replace('&', ' and ').replace('  ', ' ')
+        sentence = sentence.replace('  ', ' ').replace('[', '').replace(']', '')
+        sentence = sentence.replace('weather (','weather in ')
+        sentence = sentence.replace('(', ' ')
+        sentence = sentence.replace(')', ' ')
+        sentence = sentence.replace('  ', ' ')
+        sentence = sentence.replace('  ', ' ')
+        sentence = sentence.replace(' .', '.')
+        sentence = sentence.strip()
+        #sentence = sentence[0].upper() + sentence[1:] # this causes issues, as this function is used in the thing scanner too
+        #print("cleaned  up: " + str(sentence))
     return sentence
 
 
@@ -638,7 +647,7 @@ def generate_random_string(length):
 #  A quick scan of the network.
 #
 def avahi_detect_gateways(list_only=False):
-    print("in avahi_detect_gateways")
+    #print("in avahi_detect_gateways")
     command = ["avahi-browse","-p","-l","-a","-r","-k","-t"]
     gateway_list = []
     satellite_targets = {}
@@ -649,14 +658,14 @@ def avahi_detect_gateways(list_only=False):
             
                 
             if  "IPv4;CandleMQTT-" in line:
-                print(str(line))
+                #print(str(line))
                 # get name
                 try:
                     before = 'IPv4;CandleMQTT-'
                     after = ';_mqtt._tcp;'
                     name = line[line.find(before)+16 : line.find(after)]
                 except Exception as ex:
-                    print("invalid name: " + str(ex))
+                    #print("invalid name: " + str(ex))
                     continue
                     
                 # get IP
@@ -666,7 +675,7 @@ def avahi_detect_gateways(list_only=False):
 
                 try:
                     ip_address_list = re.findall(r'(?:\d{1,3}\.)+(?:\d{1,3})', str(line))
-                    print("ip_address_list = " + str(ip_address_list))
+                    #print("ip_address_list = " + str(ip_address_list))
                     if len(ip_address_list) > 0:
                         ip_address = str(ip_address_list[0])
                         if not valid_ip(ip_address):
@@ -677,12 +686,14 @@ def avahi_detect_gateways(list_only=False):
                             satellite_targets[ip_address] = name
                         
                 except Exception as ex:
-                    print("no IP address in line: " + str(ex))
+                    pass
+                    #print("no IP address in line: " + str(ex))
                     
                
                 
     except Exception as ex:
-        print("Arp -a error: " + str(ex))
+        #print("Arp -a error: " + str(ex))
+        pass
         
     if list_only:
         return gateway_list

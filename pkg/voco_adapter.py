@@ -334,6 +334,7 @@ class VocoAdapter(Adapter):
         self.current_device_id = 0
         self.sample_rate = 16000 # 48000
         self.prefer_aplay = False
+        self.currently_muted = False
         
         # Bluetooth
         self.bluealsa_available = False
@@ -410,7 +411,10 @@ class VocoAdapter(Adapter):
         self.generic_properties = ["level","levels","value","values","states","all values","all levels"]
         #self.capabilities = ["temperature"]
         self.numeric_property_names = ["first","second","third","fourth","fifth","sixth","seventh"]
-         
+        
+        self.get_all_properties_allowed_list = ['temperature','humidity','weather prediction','weather','song','artist','raining','snowing','playing'] # if the user asks for these properties, then allow properties to be listed from all devices
+        self.get_all_properties_not_allowed_list = ['state','level','value'] # because they are too vague, the user cannot ask for a list of all values/states of these property names
+        
         # Time
         #self.time_zone = "Europe/Amsterdam"
         self.time_zone = str(time.tzname[0])
@@ -1405,8 +1409,9 @@ class VocoAdapter(Adapter):
                         print("bluetooth_amixer_test: " + str(bluetooth_amixer_test))
                     if len(bluetooth_amixer_test) > 10:
                         output_to_bluetooth = True
-                
-                if output_to_bluetooth == False and self.prefer_aplay == False:
+                        
+                # HDMI output on the Raspad can act a little weird. In those cases using OMXPLayer works better
+                if output_to_bluetooth == False and self.prefer_aplay == False and self.persistent_data['audio_output'] != 'Built-in headphone jack':
                     self.omxplay(sound_file,output_to_bluetooth)
                 else:
                     self.aplay(sound_file,output_to_bluetooth)
@@ -1448,7 +1453,7 @@ class VocoAdapter(Adapter):
 
     def omxplay(self,file_path, bluetooth=False):
         if self.DEBUG:
-            print("in omxplay")
+            print("in omxplay. bluetooth: " + str(bluetooth))
             
         if self.persistent_data['audio_output'] == 'Built-in headphone jack':
             output_device_string = "local"
@@ -1671,7 +1676,7 @@ class VocoAdapter(Adapter):
                                     output_to_bluetooth = True
                 
                             # which audio player to use?
-                            if output_to_bluetooth == False and self.prefer_aplay == False:
+                            if output_to_bluetooth == False and self.prefer_aplay == False and self.persistent_data['audio_output'] != 'Built-in headphone jack':
                                 self.omxplay(file_to_play,output_to_bluetooth)
                             else:
                                 self.aplay(file_to_play,output_to_bluetooth)
@@ -1695,15 +1700,28 @@ class VocoAdapter(Adapter):
     def mute(self):
         if self.DEBUG:
             print("In mute. current_control_name: " + str(self.current_control_name))
-        run_command("amixer sset " + str(self.current_control_name) + " mute")
-        
+        if self.currently_muted == False:
+            
+            run_command("amixer sset " + str(self.current_control_name) + " mute")
+            self.currently_muted = True
+            if self.DEBUG:
+                print("actually muted")
+        else:
+            if self.DEBUG:
+                print("not actually muted: was already muted!")
         
         
     def unmute(self):
         if self.DEBUG:
             print("In unmute. current_control_name: " + str(self.current_control_name))
-        run_command("amixer sset " + str(self.current_control_name) + " unmute")
-
+        if self.currently_muted:
+            if self.DEBUG:
+                print("actually unmuting")
+            run_command("amixer sset " + str(self.current_control_name) + " unmute")
+            self.currently_muted = False
+        else:
+            if self.DEBUG:
+                print("not unmuting, since mute doesn't actually seem to be active")
 
 
 
@@ -3804,6 +3822,8 @@ class VocoAdapter(Adapter):
                             print("Playing soundfile: " + payload['sound_file'])
                             
                         if payload['sound_file'] != 'start_of_input':
+                            if self.DEBUG:
+                                print("soundfile was not start_of_input, so unmuting")
                             self.unmute()
                             
                         self.play_sound(payload['sound_file'])
@@ -3902,7 +3922,7 @@ class VocoAdapter(Adapter):
     def on_publish(self, client, userdata, msg):
         #print(".")
         if self.DEBUG:
-            print("      -> MQTT message published succesfully")
+            print("      -> MQTT message published succesfully: " + str(msg))
         self.periodic_mqtt_attempts = 0
         self.mqtt_connected = True
         #print(str(msg))
@@ -3997,13 +4017,17 @@ class VocoAdapter(Adapter):
                 index = 0
                 for key in intent_message['alternatives']:
                     #print(str(key))
-                    alt_intent_name = str(intent_message['alternatives'][index]['intentName']).replace('createcandle:','')
-                    if alt_intent_name != 'None':
-                        if self.persistent_data['is_satellite'] and alt_intent_name in ['get_time','set_timer','get_timer_count','list_timers','stop_timer']:
-                            if self.DEBUG:
-                                print("SATELLITE: master_intent_callback: NOT HANDLING alt TIMERS")
-                        else:
-                            all_possible_intents.append( alt_intent_name )
+                    
+                    print("\nconfidenceScore: " + str(intent_message['alternatives'][index]['confidenceScore']))
+                    if intent_message['alternatives'][index]['confidenceScore'] > 0.1:
+                        alt_intent_name = str(intent_message['alternatives'][index]['intentName']).replace('createcandle:','')
+                        if alt_intent_name != 'None':
+                            if self.persistent_data['is_satellite'] and alt_intent_name in ['get_time','set_timer','get_timer_count','list_timers','stop_timer']:
+                                if self.DEBUG:
+                                    print("SATELLITE: master_intent_callback: NOT HANDLING alt TIMERS")
+                            else:
+                                all_possible_intents.append( alt_intent_name )
+                                
                     index += 1
         except Exception as ex:
             if self.DEBUG:
@@ -4019,6 +4043,9 @@ class VocoAdapter(Adapter):
         
         try:
             #sentence = str(intent_message['input'])
+            if intent_message['input'] == None:
+                return
+                
             sentence = str(intent_message['input']).lower()
             
             if self.DEBUG and self.alternatives_counter == -1:
@@ -4059,6 +4086,8 @@ class VocoAdapter(Adapter):
                 
                 
             elif 'unknownword' in sentence:
+                if self.DEBUG:
+                    print("spotted unknownword in sentence")
                 #if self.persistent_data['is_satellite'] == False:
                 if final_test and intent_message['siteId'] == self.persistent_data['site_id']:
                     self.speak("I didn't quite get that",intent=intent_message)
@@ -4181,33 +4210,67 @@ class VocoAdapter(Adapter):
                         slots['start_time'] = None
                     
                     
+                if sentence.startswith('load ') and incoming_intent == 'get_value':
+                    if self.DEBUG:
+                        print("Applying ugly heuristic to allow for value decrease ('load the' detected at start of sentence)")
+                    incoming_intent = 'set_value'
+                    
                     
                 if (incoming_intent == 'get_value' or incoming_intent == 'set_value' or incoming_intent == 'set_state' or incoming_intent == 'get_boolean') and slots['thing'] == None and slots['property'] == None and slots['boolean'] == None and slots['number'] == None and slots['percentage'] == None and slots['string'] == None:
                     if self.DEBUG:
                         print("pretty much everything was missing.")
                     
-                    if final_test:
-                        voice_message = "Sorry, I don't understand. "
-                        break
-                        #return
+                    if incoming_intent == 'set_value' and (sentence.startswith('increase ') or sentence.startswith('decrease ') or sentence.startswith('degrees ') or sentence.startswith('lower ') or sentence.startswith('load ') or sentence.startswith('raise ')):
+                        relative_change_word = sentence.split()[0]
+                        if self.DEBUG:
+                            print("no wait, user may want a relative value change: " + str(relative_change_word))
+                            print("slots['thing']: " + str(slots['thing']))
+                        if slots['thing'] != None and slots['thing'] != 'volume' and slots['thing'] != 'brightness':
+                            if relative_change_word == 'increase' or relative_change_word == 'raise':
+                                slots['number'] = -123456789
+                            else:
+                                slots['number'] = -123456788
+                        else:
+                            if final_test:
+                                voice_message = "Sorry, I don't understand which thing you want to change. "
+                                break
+                                #return
+                            else:
+                                if first_test:
+                                    first_voice_message = "Sorry, I don't understand which thing you want to change. "
+                                continue
+                        
                     else:
-                        if first_test:
-                            first_voice_message = "Sorry, I don't understand. "
-                        continue
-                        #self.master_intent_callback(intent_message, True) # let's try an alternative intent, if there is one.
+                    
+                        if final_test:
+                            voice_message = "Sorry, I don't understand. "
+                            break
+                            #return
+                        else:
+                            if first_test:
+                                first_voice_message = "Sorry, I don't understand. "
+                            continue
+                            #self.master_intent_callback(intent_message, True) # let's try an alternative intent, if there is one.
             
                 # if intent is thing related, but no thing or property name is provided, or no value, then the intent must be wrong.
                 elif (incoming_intent == 'get_value' or incoming_intent == 'set_value' or incoming_intent == 'set_state' or incoming_intent == 'get_boolean'):
-                
+                    if self.DEBUG:
+                        print("get or set, a value or boolean")
+                    
                     # no thing details
                     if slots['thing'] == None and slots['property'] == None:
+                        if self.DEBUG:
+                            print("Error, both thing and property were empty")
+                            
                         # This can't happen. TODO: should switch to alternative.
                         if final_test:
                             if not self.persistent_data['is_satellite']:
-                                self.speak("I did not understand what you wanted to change.",intent=intent_message)
+                                #self.speak("I did not understand what you wanted to change.",intent=intent_message)
+                                voice_message = "Sorry, I don't understand. "
                             if self.DEBUG:
                                 print("did not understand the change based on these slots: " + str(slots))
-                            return
+                            #return
+                            continue
                         else:
                             if first_test:
                                 first_voice_message = "I did not understand what you wanted to change. "
@@ -4216,19 +4279,38 @@ class VocoAdapter(Adapter):
                    
                         
                     # no desired value
-                    if (incoming_intent == 'set_value' or incoming_intent == 'set_state') and slots['boolean'] == None and slots['number'] == None and slots['percentage'] == None and slots['string'] == None:
+                    if (incoming_intent == 'set_value' or incoming_intent == 'set_state') and slots['boolean'] == None and slots['number'] == None and slots['percentage'] == None and slots['string'] == None  and slots['color'] == None:
                         if self.DEBUG:
-                            print("No desired value?")
-                        # This can't happen. TODO: should switch to alternative.
-                        if final_test:
-                            if not self.persistent_data['is_satellite']:
-                                self.speak("I was unable to perform the change you wanted.",intent=intent_message)
-                            return
+                            print("No desired value? sentence: " + str(sentence))
+        
+                        if incoming_intent == 'set_state' and sentence.startswith('turn') and (sentence.endswith(' off') or sentence.endswith(' on')):
+                            if self.DEBUG:
+                                print("no wait, 'turn' and 'on/off' were at opposite ends in the sentence")
+                            if sentence.endswith(' off'):
+                                slots['boolean'] = 'off'
+                            else:
+                                slots['boolean'] = 'on'
+                                
+                        elif incoming_intent == 'set_value' and (sentence.startswith('increase ') or sentence.startswith('decrease ') or sentence.startswith('degrees ') or sentence.startswith('lower ')  or sentence.startswith('load ') or sentence.startswith('raise ')):
+                            relative_change_word = sentence.split()[0]
+                            if self.DEBUG:
+                                print("no wait, user may want a relative value change: " + str(relative_change_word))
+                            if relative_change_word == 'increase' or relative_change_word == 'raise':
+                                slots['number'] = -123456789
+                            else:
+                                slots['number'] = -123456788
+                                
                         else:
-                            if first_test:
-                                first_voice_message = "I was unable to perform the change you wanted. "
-                            continue
-                            #self.master_intent_callback(intent_message, True) # let's try an alternative intent, if there is one.
+                            # This can't happen. TODO: should switch to alternative.
+                            if final_test:
+                                if not self.persistent_data['is_satellite']:
+                                    self.speak("I was unable to perform the change you wanted.",intent=intent_message)
+                                return
+                            else:
+                                if first_test:
+                                    first_voice_message = "I was unable to perform the change you wanted. "
+                                continue
+                                #self.master_intent_callback(intent_message, True) # let's try an alternative intent, if there is one.
                     
                     
                     
@@ -4246,15 +4328,6 @@ class VocoAdapter(Adapter):
                         if self.DEBUG:
                             print("using alternative route to get_boolean")
                         incoming_intent = 'createcandle:get_boolean'
-            
-            
-                #try:
-                #    if incoming_intent == 'set_state' and str(slots['boolean']) == "state":   #Eh? can the boolean slot ever be 'state'? Should this be None instead? set_state could also target enums, so testing for booleans alone is not ok.       
-                #        if self.DEBUG:
-                #            print("using alternative route to get_boolean")
-                #        incoming_intent = 'createcandle:get_boolean'
-                #except:
-                #    print("alternate route 2 failed")
             
             
                     # Alternative route to set state
@@ -4395,7 +4468,6 @@ class VocoAdapter(Adapter):
                                 if self.DEBUG:
                                     print("space in slots: " + str(slots['space']))
                                 if slots['space'] != None:
-                                #if len(str(slots['space'])) > 1:
                                     target_thing_title = slots['space'] + " " + target_thing_title
                             if self.DEBUG:
                                 print("target_thing_title = " + str(target_thing_title))
@@ -4405,18 +4477,19 @@ class VocoAdapter(Adapter):
                             for satellite_id in self.satellite_thing_titles:
                                 #if target_thing_title in self.satellite_thing_titles[satellite_id]:
                                 for satellite_thing_title in self.satellite_thing_titles[satellite_id]:
-                                    if satellite_thing_title.lower() == target_thing_title.lower():
-                                        if self.DEBUG:
-                                            print("A satellite has this thing, it should handle it.")
-                                        found_on_satellite = True
-                                    elif len(found_properties) == 0: # if there isn't a match with a local thing, then try a little harder, and allow fuzzy matching with satellite thing titles
-                                        fuzz_ratio = simpler_fuzz(str(target_thing_title), satellite_thing_title)
-                                        if self.DEBUG:
-                                            print("fuzz: " + str(fuzz_ratio))
-                                        if fuzz_ratio > 85:
+                                    if target_thing_title != None:
+                                        if satellite_thing_title.lower() == target_thing_title.lower():
                                             if self.DEBUG:
-                                                print("possible fuzzy match with satellite thing title")
+                                                print("A satellite has this thing, it should handle it.")
                                             found_on_satellite = True
+                                        elif len(found_properties) == 0: # if there isn't a match with a local thing, then try a little harder, and allow fuzzy matching with satellite thing titles
+                                            fuzz_ratio = simpler_fuzz(str(target_thing_title), satellite_thing_title)
+                                            if self.DEBUG:
+                                                print("fuzz: " + str(fuzz_ratio))
+                                            if fuzz_ratio > 85:
+                                                if self.DEBUG:
+                                                    print("possible fuzzy match with satellite thing title")
+                                                found_on_satellite = True
                                     
                                     
                         
@@ -4488,7 +4561,7 @@ class VocoAdapter(Adapter):
                         print("voice message was empty string, and I am a satellite, so I am calling it a day")
                     return
                 else:
-                    voice_message = "Sorry, I am confused"
+                    voice_message = "Sorry, I don't understand. "
                     
             if first_test:
                 first_voice_message = voice_message
@@ -4524,8 +4597,6 @@ class VocoAdapter(Adapter):
                     print("restoring first voice response")
                 voice_message = first_voice_message
                 
-        #if final_test:
-            
             
         if final_test == False:
             if self.DEBUG:
@@ -4752,6 +4823,13 @@ class VocoAdapter(Adapter):
                     #)
                     self.persistent_data['property_strings'] = list(fresh_property_strings)
                     
+                    fresh_property_strings.add('raise')
+                    fresh_property_strings.add('lower')
+                    fresh_property_strings.add('higher')
+                    fresh_property_strings.add('lower')
+                    fresh_property_strings.add('increase')
+                    fresh_property_strings.add('decrease')
+                    
                     operation = ('addFromVanilla',{"string" : list(fresh_property_strings) })
                     operations.append(operation)
                 
@@ -4899,45 +4977,80 @@ class VocoAdapter(Adapter):
         # do a pre-check that may split up long thing titles into a thing and property, but only if there is a perfect match, and only works for one-word titles and properties. #TODO could be improved by actually looking inside things to see if the property is present.
         #separationHints = [ "in" ]
         #two_parts = re.split('|'.join(r'(?:\b\w*'+re.escape(w)+r'\w*\b)' for w in meetingStrings), text, 1)[-1] # looks for parts of separator words.
-        if slots['property'] == None and not slots['thing'] in self.persistent_data['thing_titles']:
-            if self.DEBUG:
-                print(" *  *  *   *")
-                print("property was none, and thing title was not directly found in things titles list")
-                print("self.persistent_data['thing_titles'] = " + str(self.persistent_data['thing_titles']))
-                print("self.persistent_data['property_titles'] = " + str(self.persistent_data['property_titles']))
-                print(" *  *  *  *")
+        if slots['property'] == None and slots['thing'] != None: # and not slots['thing'] in self.persistent_data['thing_titles']:
             
-            old_title_parts = slots['thing'].split(' ') #.partition(" ") #partition splits into two parts. Also useful, but not here.
-            thing_title_detected = ""
-            property_title_detected = ""
-            if self.DEBUG:
-                print("len(property_title_detected): " + str(len(property_title_detected)))
-                print("old_title_parts: " + str(old_title_parts))
-            for word in old_title_parts:
-                
-                if len(word) > 3:
-                    if self.DEBUG:
-                        print("word: " + str(word))
+            thing_is_known = False            
+            for capitalised_title in self.persistent_data['thing_titles']:
+                if capitalised_title.lower() == slots['thing'].lower():
+                    thing_is_known = True
+                    break
+        
+            if thing_is_known == False:
+                if self.DEBUG:
+                    print(" *  *  *   *")
+                    print("property was none, and thing title was not directly found in things titles list")
+                    print("self.persistent_data['thing_titles']: " + str(self.persistent_data['thing_titles']))
+                    print("self.persistent_data['property_titles']: " + str(self.persistent_data['property_titles']))
+                    print("self.get_all_properties_allowed_list: " + str(self.get_all_properties_allowed_list))
+                    print(" *  *  *  *")
+        
+                thing_is_known_as_property = False
+                for capitalised_property_title in self.persistent_data['property_titles']:
+                    if capitalised_property_title.lower() == slots['thing'].lower():
+                        thing_is_known_as_property = True
+                        break
                     
-                    for thing in self.things:
-                        if word == clean_up_string_for_speaking(thing['title']):
+                if thing_is_known_as_property:
+                    if self.DEBUG:
+                        print("thing title not found, but there is a property with that exact name...: " + str(slots['thing']))
+                    if slots['thing'].lower() not in self.get_all_properties_not_allowed_list:
+                        slots['property'] = slots['thing']
+                        slots['thing'] = None
+                        if self.DEBUG:
+                            print("Setting property title from the thing title, and clearing thing title")
+                
+                    else:
+                        if self.DEBUG:
+                            print("not allowing too vague title to become the property")
+                
+                    if slots['property'].lower() in self.get_all_properties_allowed_list: # not used currently.
+                         if self.DEBUG:
+                             print("note: this property was in the list of properties that are likely to be generally asked for")
+                    
+            
+                else:
+                    old_title_parts = slots['thing'].split(' ') #.partition(" ") #partition splits into two parts. Also useful, but not here.
+                    thing_title_detected = ""
+                    property_title_detected = ""
+                    if self.DEBUG:
+                        print("len(property_title_detected): " + str(len(property_title_detected)))
+                        print("old_title_parts: " + str(old_title_parts))
+                    for word in old_title_parts:
+            
+                        if len(word) > 3:
                             if self.DEBUG:
-                                print("THING TITLE MATCH: " + str(word))
-                                print("thing['properties']: " + json.dumps(thing['properties'], indent=4))
-                            for word2 in old_title_parts:
-                                if word2 != word and len(word2) > 3: # the current word is already taken by the thing now
+                                print("word: " + str(word))
+                
+                            for thing in self.things:
+                                if word == clean_up_string_for_speaking(thing['title']):
                                     if self.DEBUG:
-                                        print(" -word2: " + str(word2))
-                                    for thing_property_key in thing['properties']:
-                                        if self.DEBUG:
-                                            print(" - > ? : " + str( clean_up_string_for_speaking( thing['properties'][thing_property_key]['title'] ) ))
-                                        if word2 == clean_up_string_for_speaking( thing['properties'][thing_property_key]['title'] ):
-                                            
-                                            slots['thing'] = word
-                                            slots['property'] = word2
+                                        print("THING TITLE MATCH: " + str(word))
+                                        print("thing['properties']: " + json.dumps(thing['properties'], indent=4))
+                                    for word2 in old_title_parts:
+                                        if word2 != word and len(word2) > 3: # the current word is already taken by the thing now
                                             if self.DEBUG:
-                                                print("---> managed to split a thing string into thing and property strings * * *")
-                                            break
+                                                print(" -word2: " + str(word2))
+                                            for thing_property_key in thing['properties']:
+                                                if self.DEBUG:
+                                                    print(" - > ? : " + str( clean_up_string_for_speaking( thing['properties'][thing_property_key]['title'] ) ))
+                                                if word2 == clean_up_string_for_speaking( thing['properties'][thing_property_key]['title'] ):
+                                        
+                                                    slots['thing'] = word
+                                                    slots['property'] = word2
+                                                    if self.DEBUG:
+                                                        print("---> managed to split a thing string into thing and property strings * * *")
+                                                    break
+            
                     
             """        
                     if len(property_title_detected) == 0 and word in self.persistent_data['property_titles']:
@@ -5253,7 +5366,7 @@ class VocoAdapter(Adapter):
                         
                         
                         # Get basic info
-
+                        
                         # This dictionary holds properties of the potential match. There can be multiple matches, for example if the user wants to hear the temperature level of all things.
                         match_dict = {
                                 "thing": probable_thing_title,
@@ -5278,7 +5391,7 @@ class VocoAdapter(Adapter):
                             if 'type' in thing['properties'][thing_property_key]:
                                 match_dict['type'] = thing['properties'][thing_property_key]['type']
                             else:
-                                match_dict['type'] = None # This is a little too precautious, since the type should theoretically always be defined?
+                                match_dict['type'] = None # This is a little too careful, since the type should theoretically always be defined?
                         except Exception as ex:
                             if self.DEBUG:
                                 print("Error while checking property type: "  + str(ex))
@@ -5293,7 +5406,7 @@ class VocoAdapter(Adapter):
                                 print("Error looking up capability @type: "  + str(ex))
                             pass
                         
-                        
+                        # get unit
                         try:
                             if 'unit' in thing['properties'][thing_property_key]:
                                 if self.DEBUG:
@@ -5473,10 +5586,21 @@ class VocoAdapter(Adapter):
                                 if self.DEBUG:
                                     print("looking for a 'state' (a.k.a. boolean type)")
                                 #print("type:" + str(thing['properties'][thing_property_key]['type']))
-                                if thing['properties'][thing_property_key]['type'] == 'boolean':
+                                if thing['properties'][thing_property_key]['type'] == 'boolean': # Superfluous? this filtering should already have taken place earlier now?
                                     # While looking for state, found a boolean
                                     result.append(match_dict.copy())
                                     continue
+                            
+                            # If a device doesn't have 'state' but does have 'playing', use that.
+                            #elif target_property_title == None and 'state' not in thing['properties'].keys() and 'playing' in thing['properties'].keys():
+                            ##elif target_property_title == 'state' and match_dict['thing'] != None: # TODO maybe first check if 'state' is a literal property of this thing, and if so, skip adding all booleans.
+                            #    if self.DEBUG:
+                            #        print("looking for a 'state' (a.k.a. boolean type)")
+                            #    #print("type:" + str(thing['properties'][thing_property_key]['type']))
+                            #    if thing['properties'][thing_property_key]['type'] == 'boolean':
+                            #        # While looking for state, found a boolean
+                            #        result.append(match_dict.copy())
+                            #        continue
                         
                             # Looking for a level inside a matched thing.
                             elif target_property_title == 'level' and match_dict['thing'] != None:
@@ -5620,7 +5744,7 @@ class VocoAdapter(Adapter):
                         boolean_non_at_type_count = 0
                         highest_match_percentage = 0
                         things_spotted = []
-                        highest_thing_match = 0
+                        highest_thing_match = -1
                         best_matched_thing = None
                         #index = 0
                         #new_result = []
@@ -5633,6 +5757,8 @@ class VocoAdapter(Adapter):
                             if int(found_property['confidence']) > highest_thing_match:
                                 highest_thing_match = int(found_property['confidence'])
                                 best_matched_thing = found_property['thing']
+                                if self.DEBUG:
+                                    print("selected new best matched thing: " + str(best_matched_thing))
                             
                             if found_property['thing'] not in things_spotted:
                                 things_spotted.append(found_property['thing'])
@@ -5640,6 +5766,10 @@ class VocoAdapter(Adapter):
 
                                 
                             if boolean_related == True:
+                                if self.DEBUG:
+                                    print("boolean related")
+                                    print("found_property['type']: " + str(found_property['type']))
+                                    print("slots['boolean']: " + str(slots['boolean']))
                                 
                                 if found_property['type'] == 'boolean' and slots['boolean'] != None:
                                     if self.DEBUG:
@@ -5658,7 +5788,8 @@ class VocoAdapter(Adapter):
                                                 print("this enum has 'on' or 'off', so it can stay: " + str(found_property['enum']) )
                                         else:
                                             del result[i]
-                                    else:
+                                    elif found_property['type'] != 'boolean':
+                                    #elif found_property['boolean'] != None:
                                         if self.DEBUG:
                                             print("boolean_related, so deleting non-boolean property: " + str(found_property['property']) )
                                         del result[i]
@@ -5678,7 +5809,7 @@ class VocoAdapter(Adapter):
                         # If two things were spotted, choose the one with the best match percentage
                         if len(things_spotted) > 1:
                             if self.DEBUG:
-                                print("after pruning, more than one thing's properties have been spotted. Selecting best matched thing.")
+                                print("after pruning, more than one thing's properties have been spotted. Selecting best matched thing. best_matched_thing: " + str(best_matched_thing))
                             #index = 0
                             #for found_property in result:
                             for i in range(len(result) - 1, -1, -1):
@@ -5687,7 +5818,8 @@ class VocoAdapter(Adapter):
                                 if found_property['thing'] != best_matched_thing:
                                     if self.DEBUG:
                                         print("deleting an property that was not the best match: " + str(found_property))
-                                    del result[i]
+                                    if len(result) > 1:
+                                        del result[i]
                                 #index += 1
                             
                                 
