@@ -31,7 +31,7 @@ These are all examples. You don't have to phrase things exactly like this, the A
 - "Unlock the front door until 3 pm"
 - "Turn on the air filter tomorrow afternoon"
 - "Lock the front door at lunchtime" (11-13 o'clock)
-- At 5 o clock turn on the radio for 3 minutes
+- "At 5 o clock turn on the radio for 3 minutes"
 
 ### Ask questions
 #### Query a specific device
@@ -39,7 +39,7 @@ These are all examples. You don't have to phrase things exactly like this, the A
 - "Is the bedroom heater on or off?"
 - "What is the humidity level of the weather station?"
 #### More general queries
-- What are the levels of the plant sensor?" -> Will give you all sensor values of the plant sensor
+- "What are the levels of the plant sensor?" -> Will give you all sensor values of the plant sensor
 
 ### Timers
 #### Set timers
