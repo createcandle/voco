@@ -22,6 +22,7 @@ These are all examples. You don't have to phrase things exactly like this, the A
 - "Set the color of the living room light to green"
 - "Set the brightness of the kitchen light to 70 percent"
 - "Set the kitchen light to 70"
+- "Turn off the lights"
 #### Toggle devices at a certain time
 - "Turn on the blender in 3 minutes"
 - "Close the garage door at 23 minutes past 4"
