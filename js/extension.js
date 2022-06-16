@@ -22,18 +22,18 @@
             this.matrix_candle_username = "";
             this.matrix_password = "...";
             
-            const jwt = localStorage.getItem('jwt');
+            setTimeout(() => {
+                const jwt = localStorage.getItem('jwt');
+    	        window.API.postJson(
+    	          `/extensions/${this.id}/api/update`,
+    				{'action':'token','token':jwt}
 
-	        window.API.postJson(
-	          `/extensions/${this.id}/api/update`,
-				{'action':'token','token':jwt}
-
-	        ).then((body) => {
-                //console.log("update jwt response: ", body);
-	        }).catch((e) => {
-	  			console.log("Error saving token: ", e);
-	        });
-            
+    	        ).then((body) => {
+                    //console.log("update jwt response: ", body);
+    	        }).catch((e) => {
+    	  			console.log("Error saving token: ", e);
+    	        });
+            }, 5100);
 
 			fetch(`/extensions/${this.id}/views/content.html`)
 	        .then((res) => res.text())
@@ -266,6 +266,7 @@
                         }
                     }
                     
+                    
 					if('is_satellite' in body){
 						if(body['is_satellite']){
 							//console.log("is satellite, so should start with satellite tab");
@@ -273,6 +274,11 @@
 							document.getElementById('extension-voco-content').classList.remove('extension-voco-show-tab-timers');
 							document.getElementById('extension-voco-content').classList.add('extension-voco-show-tab-satellites');
 						}
+                        
+                        if('connected_satellites' in body){
+                            this.show_connected_satellites( body['connected_satellites'], body['is_satellite'] );
+                        }
+                        
 					}
                     else{
                         // Not a satellite, so succesful injection matters
@@ -323,10 +329,6 @@
 						}
 					}
                     
-                    
-                    
-                    
-                    
 					// Remove spinner
 					document.getElementById("extension-voco-loading").remove();
 					
@@ -336,6 +338,7 @@
 					//pre.innerText = "Error getting initial Voco data: " , e;
 		        });	
 				
+                
                 
 				document.getElementById('extension-voco-select-satellite-checkbox').addEventListener('change', (event) => {
 					//console.log(event);
@@ -379,10 +382,7 @@
 
 
 				        }).catch((e) => {
-				          	//pre.innerText = e.toString();
-				  			//console.log("voco: error in calling init via API handler");
 				  			console.log("Error changing satellite state: ", e);
-							//pre.innerText = "Loading items failed - connection error";
 				        });	
 			
 					}
@@ -428,15 +428,16 @@
 					}
 					else{
 						console.log("not ok response while getting Voco items list");
-						pre.innerText = body['state'];
+						//pre.innerText = body['state'];
 					}
+                    
+                    if('connected_satellites' in body && 'is_satellite' in body){
+                        this.show_connected_satellites( body['connected_satellites'], body['is_satellite'] );
+                    }
 		
 
 		        }).catch((e) => {
-		          	//pre.innerText = e.toString();
-		  			//console.log("voco: error in calling init via API handler");
 		  			console.log("Error getting Voco timer items: " , e);
-					//pre.innerText = "Loading items failed - connection error";
 		        });	
 				
 				
@@ -1247,6 +1248,57 @@
 				console.log("Error in regenerate items: ", e); // pass exception object to error handler
 			}
 		}
+        
+        
+        // Creates a list of satellites that have recently connected to this controller and regard it as their main controller
+        show_connected_satellites(connected_satellites, is_satellite){
+            try{
+                console.log("in show_connected_satellites. connected_satellites: ", connected_satellites);
+                console.log("this.current_time: " + this.current_time);
+            
+                const list_el = document.getElementById('extension-voco-connected-satellites-list');
+                list_el.innerHTML = "";
+            
+                for( var sat in connected_satellites ){
+                    console.log("sat: ", sat, connected_satellites[sat] );
+            
+                    if(connected_satellites[sat] > (this.current_time - 60)){
+            			var l = document.createElement("li");
+            			var t = document.createTextNode(sat);
+            			l.appendChild(t);
+                        list_el.appendChild(l);
+                    }
+                }
+            
+                if (connected_satellites.length == 0){
+                    list_el.innerHTML = "";
+                    document.getElementById('extension-voco-content-container').classList.remove('extension-voco-has-satellites');
+                    //document.getElementById('extension-voco-connected-satellites-list-container').classList.add('extension-voco-hidden');
+                }
+                else{
+                    document.getElementById('extension-voco-content-container').classList.add('extension-voco-has-satellites');
+                    //document.getElementById('extension-voco-connected-satellites-list-container').classList.remove('extension-voco-hidden');
+                    
+                    // normally the selection for the pointing out the main voice control hub is not shown if the controller seems to be the main hub already.
+                    // But if it's also itself in satellite mode.. something strange is going on.
+    				if(is_satellite == true){
+    					document.getElementById('extension-voco-select-satellites').style.display = 'block'; 
+    				}
+                    
+                }
+                
+                
+                
+            }
+			catch (e) {
+				// statements to handle any exceptions
+				console.log("Error in show_connected_satellites: ", e); // pass exception object to error handler
+			}
+            
+        }
+        
+        
+        
 	}
 
 	new Voco();

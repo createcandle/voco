@@ -100,34 +100,52 @@
                     <div class="extension-voco-vlak">
     					<img src="/extensions/voco/images/satellites.png" alt="Satellites example" style="display:block;margin:0 auto"/>
     					<p>One microphone might not be enough to cover your entire home. That's why it's possible to turn additional controllers into 'satellites'. One controller will act as the coordinator in your home. Satellites send their voice recordings to that central hub.</p>
-                        <p>Below you can point out which controller is acting as the central hub in your network.</p>
-    					<div class="extension-voco-no-satellites">
-    						<p>If other controllers are detected on the network, satellite mode will become available here.</p>
-    					</div>
+                        
     					<div id="extension-voco-loading">
                             <div class="extension-voco-spinner">
                                 <div></div><div></div><div></div><div></div>
                             </div>
     					</div>
+                        
     					<div class="extension-voco-change-hostname-target extension-voco-vlak">
     						<h4>Please change the domain name first</h4>
 							<p>Each controller in your local network should have a unique "domain name", which identifies it on the local network. This controller is currently still using the default name. Having two controllers with the same default domain name on the same network will cause problems. Before you add a second controller, make sure to first change this controllers' hostname into something different and unique. It should be one word, such as "kitchen" or "bedroom".</p>
                             <p>After you changed the name you will then be able to access this controller by typing that new name into a browser (whenever you're on the local network). For example, it might become <span style="font-style:italic">kitchen.local</span> instead of <span style="font-style:italic">candle.local</span>.</p>
 							<p style="text-align:right"><a href="/settings/domain"><button class="text-button">Change the name</button></a></p>
     					</div>
+                        
+                        <div id="extension-voco-connected-satellites-list-container" class="extension-voco-vlak">
+                            <h4>Connected satellites</h4>
+                            <p>It seems this controller is acting as a main hub for some Voco satellites in your local network. These satellites have made a connection in the last 60 seconds:</p>
+                            <ul id="extension-voco-connected-satellites-list"></ul>
+                        </div>
+                        
     					<div class="extension-voco-select-satellites">
-    						<h4>Satellite mode</h4>
-    						<div class="extension-voco-select-satellites-question extension-voco-vlak">
-    							<div id="extension-voco-server-list"></div>
-    							<div id="extension-voco-server-list-toggle">
-    								<form class="rule-switch switch">
-    									<input type="checkbox" id="extension-voco-select-satellite-checkbox" class="switch-checkbox">
-    									<label class="switch-slider extension-voco-switch-slider" for="extension-voco-select-satellite-checkbox">
-    									</label>
-    								</form>
-    							</div>
+    						
+                            
+    						<div class="extension-voco-vlak">
+                                
+        						<h4>Satellite mode</h4>
+                            
+                                <p>Below you can point out which controller you are using as the central voice control hub in your network, and connect to it.</p>
+            					
+                                <div class="extension-voco-no-satellites">
+            						<p>If other controllers are detected on the network, satellite mode will become available here.</p>
+            					</div>
+                                
+                                <div class="extension-voco-select-satellites-question">
+        							<div id="extension-voco-server-list"></div>
+        							<div id="extension-voco-server-list-toggle">
+        								<form class="rule-switch switch">
+        									<input type="checkbox" id="extension-voco-select-satellite-checkbox" class="switch-checkbox">
+        									<label class="switch-slider extension-voco-switch-slider" for="extension-voco-select-satellite-checkbox">
+        									</label>
+        								</form>
+        							</div>
+                                </div>
+                                
     						</div>
-    						<p>Select the main controller you wish to connect to, and then enable satelite mode. You can find a controller's IP address by going to Settings and then Network.</p>
+    						<p>Select the main controller you wish to connect to, and then enable satelite mode.</p>
     						<p class="extension-voco-italic">Note: if you have things with the same name on both your main controller and a satellite, then please rename them so they have unique names. For example, call one of them "kitchen radio" and the other one "livingroom radio".</p>
 					
     					</div>

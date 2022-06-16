@@ -635,6 +635,39 @@ body #extension-voco-view .extension-voco-tab-selected{
 	padding:1rem;
 }
 
+
+/*  voco has connected satellites  */
+
+#extension-voco-connected-satellites-list-container{
+    display:none;
+    margin-bottom:4rem;
+}
+.extension-voco-has-satellites #extension-voco-connected-satellites-list-container{
+    display:block;
+}
+
+.extension-voco-has-satellites .extension-voco-select-satellites{
+    display:none;
+}
+
+#extension-voco-connected-satellites-list{
+    margin-bottom:2rem;
+    padding-left:0;
+}
+
+#extension-voco-connected-satellites-list li{
+    list-style-type: none;
+    background-color: rgba(255,255,255,.07);
+    border-radius: 0.5rem;
+    padding: 1rem 1.5rem;
+    margin: 1rem 0;
+    text-transform: capitalize;
+}
+
+
+
+/*  errors and warnings  */
+
 #extension-voco-missing-microphone,
 #extension-voco-injection-busy{
     max-width:60rem;
@@ -667,6 +700,10 @@ body #extension-voco-view .extension-voco-tab-selected{
     margin:2rem auto;
     display:block;
 }
+
+
+
+
 
 
 

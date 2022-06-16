@@ -427,17 +427,18 @@ class VocoAPIHandler(APIHandler):
                                     status=200,
                                     content_type='application/json',
                                     content=json.dumps({'state': True, 
-                                            'satellite_targets': satellite_targets, 
-                                            'hostname': self.adapter.hostname, 
-                                            'has_token':has_token, 'is_satellite':is_sat, 
-                                            'mqtt_server':self.adapter.persistent_data['mqtt_server'], 
-                                            'mqtt_connected':self.adapter.mqtt_connected, 
-                                            'mqtt_connected_succesfully_at_least_once':self.adapter.mqtt_connected_succesfully_at_least_once, 
-                                            'possible_injection_failure':self.adapter.possible_injection_failure, 
-                                            'matrix_server': matrix_server,
-                                            'matrix_username': matrix_username,
-                                            'has_matrix_token': has_matrix_token,
-                                            'debug':self.adapter.DEBUG}),
+                                                        'satellite_targets': satellite_targets, # avahi scan results
+                                                        'connected_satellites': self.adapter.connected_satellites, # controllers in satellite mode that have pinged this controller
+                                                        'hostname': self.adapter.hostname, 
+                                                        'has_token':has_token, 'is_satellite':is_sat, 
+                                                        'mqtt_server':self.adapter.persistent_data['mqtt_server'], 
+                                                        'mqtt_connected':self.adapter.mqtt_connected, 
+                                                        'mqtt_connected_succesfully_at_least_once':self.adapter.mqtt_connected_succesfully_at_least_once, 
+                                                        'possible_injection_failure':self.adapter.possible_injection_failure, 
+                                                        'matrix_server': matrix_server,
+                                                        'matrix_username': matrix_username,
+                                                        'has_matrix_token': has_matrix_token,
+                                                        'debug':self.adapter.DEBUG}),
                                 )
                             except Exception as ex:
                                 print("Error getting init data: " + str(ex))
@@ -502,21 +503,23 @@ class VocoAPIHandler(APIHandler):
                                 return APIResponse(
                                     status=200,
                                     content_type='application/json',
-                                    content=json.dumps({'state' : state, 'update': '', 
-                                                'items' : self.adapter.persistent_data['action_times'],
-                                                'current_time':self.adapter.current_utc_time,
-                                                'text_response':self.adapter.last_text_response, 
-                                                'initial_injection_completed':self.adapter.initial_injection_completed,
-                                                'missing_microphone':self.adapter.missing_microphone, 
-                                                'matrix_started':self.adapter.matrix_started,
-                                                'matrix_room_members':self.adapter.matrix_room_members,
-                                                'has_matrix_token': has_matrix_token,
-                                                'matrix_server': matrix_server,
-                                                'matrix_logged_in': self.adapter.matrix_logged_in,
-                                                'matrix_busy_registering':self.adapter.matrix_busy_registering,
-                                                'user_account_created':self.adapter.user_account_created,
-                                                'is_satellite':self.adapter.persistent_data['is_satellite']
-                                                })
+                                    content=json.dumps({'state' : state, 
+                                                        'update': '', 
+                                                        'items' : self.adapter.persistent_data['action_times'],
+                                                        'current_time':self.adapter.current_utc_time,
+                                                        'text_response':self.adapter.last_text_response, 
+                                                        'initial_injection_completed':self.adapter.initial_injection_completed,
+                                                        'missing_microphone':self.adapter.missing_microphone, 
+                                                        'matrix_started':self.adapter.matrix_started,
+                                                        'matrix_room_members':self.adapter.matrix_room_members,
+                                                        'has_matrix_token': has_matrix_token,
+                                                        'matrix_server': matrix_server,
+                                                        'matrix_logged_in': self.adapter.matrix_logged_in,
+                                                        'matrix_busy_registering':self.adapter.matrix_busy_registering,
+                                                        'user_account_created':self.adapter.user_account_created,
+                                                        'is_satellite':self.adapter.persistent_data['is_satellite'],
+                                                        'connected_satellites': self.adapter.connected_satellites,
+                                                        })
                                 )
                             except Exception as ex:
                                 print("Error getting init data: " + str(ex))
@@ -613,6 +616,7 @@ class VocoAPIHandler(APIHandler):
 
 
                                 # SATELLITE
+                                # called when the user switches satellite mode on or off, or selects a different satellite in the list.
                                 elif action == 'satellite':
                                     if self.DEBUG:
                                         print("handling satellite command")
@@ -648,6 +652,7 @@ class VocoAPIHandler(APIHandler):
                                             self.adapter.send_mqtt_ping(True)
                                             self.adapter.run_snips() # this stops Snips first
                                             update = 'Satellite mode enabled'
+                                            self.connected_satellites = {} # forget which satellites are connected to this controller
                                             if self.DEBUG:
                                                 print("- Satellite mode enabled")
                                         else:

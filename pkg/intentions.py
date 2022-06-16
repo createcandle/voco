@@ -586,7 +586,7 @@ def intent_stop_timer(self, slots, intent_message):
 # The boolean intent. Which should really be called get_state...
 def intent_get_boolean(self, slots, intent_message, found_properties):
     if self.DEBUG:
-        print("Getting boolean state")
+        print("in intent_get_boolean")
     
     voice_message = ""
         
@@ -614,8 +614,16 @@ def intent_get_boolean(self, slots, intent_message, found_properties):
                 print("found_property " + str(loop_counter) + " = " + str(found_property))
             loop_counter += 1
             
-            if found_property['property_url'] == None or found_property['property'] == None or found_property['type'] != "boolean":
-                #print("Skipping property: this result item was not a boolean")
+            if found_property['property_url'] == None or found_property['property'] == None:
+                if self.DEBUG:
+                    print("Skipping property: missing property name and/or property url")
+                continue
+                
+            if found_property['type'] == "boolean" or found_property['enum'] != None:
+                pass
+            else:
+                if self.DEBUG:
+                    print("intent_get_boolean: property is not a boolean or enum, skipping")
                 continue
                 
             if self.DEBUG:
@@ -625,28 +633,35 @@ def intent_get_boolean(self, slots, intent_message, found_properties):
             #print("api path = " + str(api_path))
             api_result = self.api_get(api_path, intent=intent_message)
             if self.DEBUG:
-                print("called api for data, it gave:" + str(api_result))
+                print("intent_get_boolean: called api for data, it gave:" + str(api_result))
                 
             try:
                 key = list(api_result.keys())[0]
-            except:
-                print("get boolean: error parsing the returned json")
+            except Exception as ex:
+                print("get boolean: error parsing the returned json: " + str(ex))
                 continue
                 
+            if self.DEBUG:
+                print("key: " + str(key))
+                print("api_result[key]: " + str(api_result[key]))
+                
             if key == "error":
+                if self.DEBUG:
+                    print("get boolean: api_get returned an error")
                 if api_result[key] == 500:
                     if len(found_properties) == 1 or (loop_counter == len(found_properties) and voice_message == ""):
-                        voice_message = "Sorry, " + str(found_property['thing']) + " seems to be disconnected. "
+                        #voice_message = "Sorry, " + str(found_property['thing']) + " seems to be disconnected. "
+                        voice_message = "I could not get the value for " + str(found_property['thing'])
                         break
-                    #else:
-                    #    continue
+                    else:
+                        continue # maybe better luck with the next found_property
             
             if api_result[key] == None:
                 if len(found_properties) == 1 or (loop_counter == len(found_properties) and voice_message == ""):
                     voice_message = "Sorry, " + str(found_property['property']) + " had no value. "
                     break
-                #else:
-                #    continue
+                else:
+                    continue
                     
             
             #if len(found_properties) == 1 or perfect_property_match_spotted == True:
@@ -654,31 +669,44 @@ def intent_get_boolean(self, slots, intent_message, found_properties):
                 voice_message = "it"
             
             #elif len(found_properties) > 1:
-            else:    
-                voice_message += str(found_property['property'])
+            else:
+                added_property_to_voice_message = False
+                if str(found_property['property']) != 'state' or found_property['thing'] == None:
+                    voice_message += str(found_property['property'])
+                    added_property_to_voice_message = True
+                
+                
                 if found_property['thing'] != None:
-                    voice_message += " of " + str(found_property['thing'])
+                    if str(found_property['thing']) not in str(found_property['property']):
+                        if added_property_to_voice_message:
+                            voice_message += " of "
+                        voice_message += str(found_property['thing'])
                     
             voice_message += " is "
             
-            if bool(api_result[key]) == True:
-                if found_property['@type'] == 'OpenProperty': # In the future a smart lock capability should be added here.
-                    voice_message += 'open'
-                elif found_property['@type'] == 'LockedProperty':
-                    voice_message += 'locked'
-                elif found_property['@type'] == 'OnOffProperty':
-                    voice_message += 'on'
-                else:
-                    voice_message += 'on'
-            elif bool(api_result[key]) == False:
-                if found_property['@type'] == 'OpenProperty':
-                    voice_message += 'closed'
-                elif found_property['@type'] == 'LockedProperty':
-                    voice_message += 'unlocked'
-                elif found_property['@type'] == 'OnOffProperty':
-                    voice_message += 'off'
-                else:
-                    voice_message += 'off'
+            if found_property['enum'] != None:
+                voice_message += str(api_result[key])
+                
+            elif found_property['type'] == 'boolean':
+                
+                if bool(api_result[key]) == True:
+                    if found_property['@type'] == 'OpenProperty': # In the future a smart lock capability should be added here.
+                        voice_message += 'open'
+                    elif found_property['@type'] == 'LockedProperty':
+                        voice_message += 'locked'
+                    elif found_property['@type'] == 'OnOffProperty':
+                        voice_message += 'on'
+                    else:
+                        voice_message += 'on'
+                elif bool(api_result[key]) == False:
+                    if found_property['@type'] == 'OpenProperty':
+                        voice_message += 'closed'
+                    elif found_property['@type'] == 'LockedProperty':
+                        voice_message += 'unlocked'
+                    elif found_property['@type'] == 'OnOffProperty':
+                        voice_message += 'off'
+                    else:
+                        voice_message += 'off'
             
             voice_message += " . "
                 
@@ -707,6 +735,8 @@ def intent_get_boolean(self, slots, intent_message, found_properties):
 
 
 def intent_get_value(self, slots, intent_message,found_properties):
+    if self.DEBUG:
+        print("in intent_get_value")
     
     voice_message = ""
     
@@ -736,6 +766,7 @@ def intent_get_value(self, slots, intent_message,found_properties):
                     if api_result == '{}':
                         #print("api result was a completely empty object")
                         continue
+                        
                 except:
                     print("get_value: could not compare returned json to {}")
                     continue
@@ -746,6 +777,8 @@ def intent_get_value(self, slots, intent_message,found_properties):
                     print("get_value: error parsing the returned json: " + str(ex))
                     continue
                     
+                if self.DEBUG:
+                    print("api_result key: " + str(key))
                 if key == "error":
                     if self.DEBUG:
                         print("Network Error")
@@ -770,9 +803,14 @@ def intent_get_value(self, slots, intent_message,found_properties):
                         voice_message += "it is "
                     else:
                         #voice_message += str(found_property['property']) + " is set to "
-                        if found_property['property'] not in str(found_property['thing']):
-                            voice_message += str(found_property['property']) + " of "
-                        voice_message += str(found_property['thing']) + " is " 
+                        if found_property['property'] != None:
+                            if found_property['property'] not in str(found_property['thing']):
+                                voice_message += str(found_property['property'])
+                        if found_property['thing'] != None:
+                            if voice_message != "" and str(found_property['thing']) not in str(found_property['property']): # not str(found_property['property']).endswith( str(found_property['thing']) ) 
+                                voice_message += " of "
+                                voice_message += str(found_property['thing'])
+                        voice_message += " is " 
                         
                 else:
                     voice_message += " "
@@ -838,9 +876,6 @@ def intent_get_value(self, slots, intent_message,found_properties):
                         elif found_property['unit'] == '%':
                             unit_message = 'percent'
                         
-                        
-                        
-                    
                     voice_message += str(api_value) + " " + unit_message
                 
                 voice_message += " . "
@@ -875,11 +910,24 @@ def intent_get_value(self, slots, intent_message,found_properties):
 
 
 
-# Toggling the state of boolean properties
+
+
+# Toggling the state of boolean properties (and sometimes enum properties)
 def intent_set_state(self, slots, intent_message, found_properties, delayed_action=None):   # If it is called from a timer, the delayed_action will be populated.
     if self.DEBUG:
         print("in intent_set_state. Incoming boolean: " + str(slots['boolean']))
-        print("origin: " + str(intent_message['origin']))
+
+    # TODO: why do I even care about origin here?
+    """
+    if 'origin' in intent_message:
+        if self.DEBUG:
+            print("origin: " + str(intent_message['origin']))
+    else:
+        if self.DEBUG:
+            print("intent_set_state: warning, no origin? Setting voice as default.")
+        intent_message['origin'] = 'voice'
+    """
+            
     sentence = slots['sentence']
     double_time = False
 
@@ -905,48 +953,75 @@ def intent_set_state(self, slots, intent_message, found_properties, delayed_acti
         voice_message = ""
         back = "" # used when the voice message should be 'back to', as in "switching back to off.
 
-        human_readable_desired_state = str(slots['boolean'])
         
-        desired_state = None
-        
-        if slots['boolean'] == 'on' or slots['boolean'] == 'lock' or slots['boolean'] == 'closed':
-            desired_state = True
-        elif slots['boolean'] == 'off' or slots['boolean'] == 'of' or slots['boolean'] == 'unlock' or slots['boolean'] == 'open':
-            desired_state = False
-            
-        
-        if desired_state == None:
-            if self.DEBUG:
-                print("boolean was not clear.. giving it another go")
-            
-            if slots['boolean'].endswith(' of') or slots['boolean'].endswith(' off'):
-                desired_state = False
-            elif slots['boolean'].endswith(' on'):
-                desired_state = True
-        
-        if desired_state == None:
-            if self.DEBUG:
-                print("Warning, could not extract valid boolean from: " + str(slots['boolean']))
-            return "Sorry, I did not understand the intended state. "
-        
-        opposite = "the opposite"
-        if slots['boolean'] in self.opposites:
-            opposite = self.opposites[slots['boolean']]
-            #print("the oposite is : " + str(opposite))
-            
-        # Search for a matching thing+property
-        #boolean_related = True
-        #found_properties = self.check_things(boolean_related,slots['thing'],slots['property'],slots['space'])
-        #if self.DEBUG:
-        #    print("")
-        #    print("found properties: " + str(found_properties))
             
         if len(found_properties) > 0:
             property_loop_counter = 0
             for found_property in found_properties:
                 
-                # We're only interested in actuators that we can switch. # TODO this has moved to the thing scanner
-                if str(found_property['type']) == "boolean" and found_property['readOnly'] != True: # can be None or False
+                print("\n\nfound_property: " + str(found_property) + "\n\n")
+                
+                # Figure out the intended state first
+                human_readable_desired_state = str(slots['boolean'])
+        
+                desired_state = None
+                comparable_desired_state = make_comparable(slots['boolean'])
+        
+                if str(found_property['type']) == "boolean":
+                    true_list = ['on','enabled','enable','lock','locked','closed','close','start','play','playing']
+                    false_list = ['off','disabled','disable','unlock','unlocked','opened','open','stop','pause','paused']
+        
+                    if comparable_desired_state in true_list:  #== 'on' or comparable_desired_state == 'lock' or slots['boolean'] == 'closed':
+                        desired_state = True
+                    elif comparable_desired_state in false_list: #slots['boolean'] == 'off' or slots['boolean'] == 'of' or slots['boolean'] == 'unlock' or slots['boolean'] == 'open':
+                        desired_state = False
+            
+        
+                    if desired_state == None:
+                        if self.DEBUG:
+                            print("boolean was not clear.. giving it another go")
+            
+                        if slots['boolean'].endswith(' of') or slots['boolean'].endswith(' off'):
+                            desired_state = False
+                        elif slots['boolean'].endswith(' on'):
+                            desired_state = True
+        
+                elif str(found_property['type']) == "string" and found_property['enum'] != None:
+                    if self.DEBUG:
+                        print('intent_set_state: handling an enum. Cool. setting desired_state to: ' + str(slots['boolean']))
+                    desired_state = str(slots['boolean'])
+        
+        
+                if desired_state == None:
+                    if self.DEBUG:
+                        print("Warning, could not extract valid boolean from: " + str(slots['boolean']))
+                    return "Sorry, I did not understand the intended state. "
+        
+                # this opposite string is used both the create the sentence, and as the opposite value that is stored in a timer. 
+                # TODO: If an opposite cannot be found, this could result in an attempt to set an enum value of "the opposite" instead of the actual proper opposive value. Perhaps the real likely opposite could be extracted from the enum list.
+                # One issue here is that the opposite of "open" could be "closed" or "close". Currently the opposites list prefers "close", but this could cause issues. Webthing seems to prefer "closed" in its use, but when speaking it could be both:
+                # "Set the curtian to closed" or "close the curtain"
+                # Perhaps a fuzzy search in the enum would be useful
+                
+                opposite = "the opposite"
+                if slots['boolean'] in self.opposites:
+                    opposite = self.opposites[slots['boolean']]
+                    if self.DEBUG:
+                        print("managed to create an opposite: " + str(opposite))
+                    #print("the oposite is : " + str(opposite))
+            
+                # Search for a matching thing+property
+                #boolean_related = True
+                #found_properties = self.check_things(boolean_related,slots['thing'],slots['property'],slots['space'])
+                #if self.DEBUG:
+                #    print("")
+                #    print("found properties: " + str(found_properties))
+                
+                
+                # FILTER OUT INCOMPATIBLE PROPERTY
+                # We're only interested in actuators that we can switch.
+                # TODO this has mostly moved to the thing scanner, so this might be superfluous now
+                if (str(found_property['type']) == "boolean" or found_property['enum'] != None) and found_property['readOnly'] != True: # can be None or False
                     
                     # if we already toggled one property, that's enough. Skip others.
                     if voice_message != "":
@@ -964,7 +1039,8 @@ def intent_set_state(self, slots, intent_message, found_properties, delayed_acti
                     try:
                         key = list(api_result.keys())[0]
                     except Exception as ex:
-                        print("set_state: error parsing the returned json: " + str(ex))
+                        if self.DEBUG:
+                            print("set_state: error parsing the returned json: " + str(ex))
                         continue
                         
                     if key == "error":
@@ -972,7 +1048,15 @@ def intent_set_state(self, slots, intent_message, found_properties, delayed_acti
                             voice_message = "Sorry, " + str(found_property['thing']) + " seems to be disconnected. "
                             continue
                     
-                    
+                        elif api_result[key] == 204: # the api returned an empty string
+                            if self.DEBUG:
+                                print("TODO: temporarily allowing this weird situation")
+                            pass
+                        
+                        else:
+                            if self.DEBUG:
+                                print('api_get returned an unhandled http status code: ' + str(api_result[key]))
+                            
                     
                     if delayed_action == None: # to avoid getting into loops, where after the duration this would create another duration. 
                         if property_loop_counter < 1:
@@ -1062,7 +1146,11 @@ def intent_set_state(self, slots, intent_message, found_properties, delayed_acti
                                     # not a "for x minutes" type of intent. Could be "in 5 minutes". Which means nothing has to be toggled now.
                                     if property_loop_counter == 0:
                                         self.persistent_data['action_times'].append({"intent_message":intent_message,"moment":slots['duration'],"type":"boolean_related","original_value":slots['boolean'],"slots":slots})
-                                        voice_message += "OK, I will let you know when it switches " + str(slots['boolean']) + ". "
+                                        
+                                        optional_to = "to "
+                                        if str(slots['boolean']).lower() == 'on' or str(slots['boolean']).lower() == 'off':
+                                            optional_to = ""
+                                        voice_message += "OK, I will let you know when it switches " + optional_to + str(slots['boolean']) + ". "
                             
                                 #if slots['period'] != "for": # If this is a 'for' type of duration (e.g. for 5 minutes), then we should also continue and toggle now.
                                     # we arrive here if it's "in 5 minutes". So there is nothing to do now.
@@ -1221,6 +1309,11 @@ def intent_set_state(self, slots, intent_message, found_properties, delayed_acti
                     
                     #break # don't handle multiple toggle properties as once.
                     property_loop_counter += 1
+                
+                else:
+                    if self.DEBUG:
+                        print("Error, property type was not compatible with the set_state intent. Might have been readOnly, or not boolean/enum")
+        
         else:
             #if slots['thing'] in self.satellites_thing_title_list and not self.persistent_data['is_satellite']:
             #    voice_message = " Acting on a satellite."
@@ -1408,13 +1501,17 @@ def intent_set_value(self, slots, intent_message, found_properties, original_val
                             # E.g. turn the heater on from 4 till 5 pm
                             elif slots['end_time'] is not None:
                             
-                                #voice_message = "OK, "
+                                if voice_message == "":
+                                    voice_message = "OK, "
+                                    
                                 if slots['start_time'] is not None:
                                     if self.DEV:
                                         print("has a start time too")
                                     # Both the from and to times are set.
                                     self.persistent_data['action_times'].append({"intent_message":intent_message,"moment":slots['start_time'],"type":"value","original_value":desired_value,"slots":slots})
                                     #desired_value = original_value
+                                
+                                    
                                 
                                     voice_message += "it will change to " + str(desired_value) + str(addendum)
                                     voice_message += " at " + self.human_readable_time(slots['start_time'], True) + ", and "
@@ -1524,9 +1621,6 @@ def intent_set_value(self, slots, intent_message, found_properties, original_val
                                                 desired_value = 0
                                         else:
                                             desired_value = api_value - 1
-                                else:
-                                    if self.DEBUG:
-                                        print("increase/decrease: not an integer!?")
                             
                             except Exception as ex:
                                 print("error increasing or decreasing value: " + str(ex))

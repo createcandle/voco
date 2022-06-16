@@ -217,15 +217,18 @@ def get_int_or_float(v):
 
 
 def make_comparable(value):
-    try:
-        if is_a_number(value):
-            value = get_int_or_float(value)
-        value = str(value)
-        value = value.lower()
-        value = value.replace('-', ' ')
-        value = value.replace('_', ' ')
-    except Exception as ex:
-        print("Error in make_comparable: " + str(ex))
+    if value != None:
+        try:
+            if is_a_number(value):
+                value = get_int_or_float(value)
+            value = str(value)
+            value = value.lower()
+            value = value.replace('-', ' ')
+            value = value.replace('_', ' ')
+        except Exception as ex:
+            print("Error in make_comparable: " + str(ex))
+    else:
+        print("Error: util: make comparable: value was None")
     return value
 
 
