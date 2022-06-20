@@ -159,6 +159,8 @@ class VocoAdapter(Adapter):
             print("error changing SSL verification mode: " + str(ex))
             
 
+        #print("sys.getdefaultencoding(): " + str( sys.getdefaultencoding() )) # should be utf-8
+
         try:
             os.system("pkill -f snips")
         except:
@@ -1604,7 +1606,18 @@ class VocoAdapter(Adapter):
             if not 'origin' in intent:
                 intent['origin'] = 'voice'
                 if self.DEBUG:
-                    print("speak: no origin defined, defaulting to voice")
+                    print("speak: no origin defined")
+                if site_id != None:
+                    if (site_id.startswith("text-") or site_id.startswith("matrix-")):
+                        if self.DEBUG:
+                            print("speak: extracting origin from sideId. Ideally this shouldn't happen...")
+                        if site_id.startswith('text-'):
+                            intent['origin'] = 'text'
+                            site_id = site_id.replace('text-','')
+                        elif site_id.startswith('matrix-'):
+                            intent['origin'] = 'matrix'
+                            site_id = site_id.replace('matrix-','')
+                    
             else:
                 if self.DEBUG:
                     print("speak: origin: " + str(intent['origin']))
@@ -3472,7 +3485,7 @@ class VocoAdapter(Adapter):
         
 
 
-    # Process a message as it arrives
+    # Process an mqtt message as it arrives
     def on_message(self, client, userdata, msg):
         if self.DEBUG:
             print("")
@@ -3705,6 +3718,8 @@ class VocoAdapter(Adapter):
                             intent_message['siteId'] = intent_message['siteId'][7:]
                             intent_message['origin'] = 'matrix'
                         else:
+                            if self.DEBUG:
+                                print("mqtt /hermes/intent: setting origin to voice")
                             intent_message['origin'] = 'voice'
                     else:
                         if self.DEBUG:
@@ -6727,7 +6742,7 @@ class VocoAdapter(Adapter):
                                     try:
                                         # TODO: test if this is useful
                                         if self.DEBUG:
-                                            print("exporting keys")
+                                            print("exporting keys. self.matrix_keys_store_path: " + str(self.matrix_keys_store_path))
                                         export_keys_response = await self.async_client.export_keys(self.matrix_keys_store_path, self.persistent_data['matrix_candle_password'])
                                         if self.DEBUG:
                                             print("export_keys_response: " + str(export_keys_response))
@@ -7228,7 +7243,7 @@ class VocoAdapter(Adapter):
                             return True
                         
         except Exception as ex:
-            print("Error while starting Matrix client: " + str(ex))
+            print("General error in start_matrix_client_async: " + str(ex))
             self.matrix_busy_registering = False
             return False
 
@@ -7598,7 +7613,7 @@ class VocoAdapter(Adapter):
                 if self.DEBUG:
                     print(
                         f"Message received in room: {room.display_name}\n"
-                        f"{room.user_name(event.sender)} | {event.body}"
+                        #f"{room.user_name(event.sender)} | {event}"
                         )
                     print("event.decrypted: " + str(event.decrypted))
                     print("event: " + str(event))
@@ -7607,31 +7622,35 @@ class VocoAdapter(Adapter):
                     print("event.url: " + str(event.url))
                     #print("body: " + str(event.body))
                     
-                    *_, a, b = event.url.split("/")
+                *_, a, b = event.url.split("/")
+                if self.DEBUG:
                     print("a: " + str(a))
                     print("b: " + str(b))
-                    
-                    try:
+                
+                try:
+                    if self.DEBUG:
                         print("event.mimetype: " + str(event.mimetype))
-                    except Exception as ex:
-                        print("Error handling matedata for incoming matrix audio file: " + str(ex))
+                except Exception as ex:
+                    print("Error handling matedata for incoming matrix audio file: " + str(ex))
+                
+                download_response = await self.async_client.download(a,b)
+                if (isinstance(download_response, DownloadResponse)):
+                    #print("download succesfull:")
+                    #print(str(download_response))
+                    #print(str(dir(download_response)))
+                    #print(str(download_response.body))
                     
-                    download_response = await self.async_client.download(a,b)
-                    if (isinstance(download_response, DownloadResponse)):
-                        #print("download succesfull:")
-                        #print(str(download_response))
-                        #print(str(dir(download_response)))
-                        #print(str(download_response.body))
-                        
-                        if event.mimetype == 'audio/ogg':
+                    if event.mimetype == 'audio/ogg':
+                        if self.DEBUG:
                             print("ogg file")
-                            with open(self.matrix_temp_ogg_file, "wb") as f:
-                                f.write(download_response.body)
+                        with open(self.matrix_temp_ogg_file, "wb") as f:
+                            f.write(download_response.body)
+                            if self.DEBUG:
                                 print("ffplaying ogg file")
-                                self.ffplay(self.matrix_temp_ogg_file)
-                                
-                    else:
-                        print("download failed")
+                            self.ffplay(self.matrix_temp_ogg_file)
+                            
+                else:
+                    print("download failed")
 
                     # DownloadResponse
                 
@@ -7644,68 +7663,74 @@ class VocoAdapter(Adapter):
     
     async def matrix_message_callback(self, room, event):
         if self.DEBUG:
-            print("\nINCOMING MESSAGE")
-        if room != None and event != None:
-            if self.DEBUG:
-                print(
-                    f"Message received in room: {room.display_name}\n"
-                    f"{room.user_name(event.sender)} | {event.body}"
-                    )
-                print("event.decrypted: " + str(event.decrypted))
-            
-            if room.user_name(event.sender) == self.persistent_data['matrix_candle_username'] or room.user_name(event.sender) == self.matrix_display_name:
+            print("\nINCOMING MATRIX MESSAGE")
+        try:
+            if room != None and event != None:
                 if self.DEBUG:
-                    print("new message in room was sent by Candle, so will be ignored")
+                    print(
+                        f"Message received in room: {room.display_name}\n"
+                        #f"{room.user_name(event.sender)} | {event.body}"
+                        )
+                    print("event.decrypted: " + str(event.decrypted))
             
-            else:
-                self.last_time_matrix_message_received = time.time()
+                if room.user_name(event.sender) == self.persistent_data['matrix_candle_username'] or room.user_name(event.sender) == self.matrix_display_name:
+                    if self.DEBUG:
+                        print("new message in room was sent by Candle, so will be ignored")
             
-                if self.matrix_started and self.currently_chatting:
-                    body_check = event.body.lower()
+                else:
+                    self.last_time_matrix_message_received = time.time()
             
-                    if body_check.startswith('speak everywhere:'):
-                        if self.DEBUG:
-                            print("got a speak everywhere request via the chat app")
-                        self.speak(event.body[17:],intent={'siteId':'everywhere'})
+                    if self.matrix_started and self.currently_chatting:
+                        body_check = event.body.lower()
+            
+                        if body_check.startswith('speak everywhere:'):
+                            if self.DEBUG:
+                                print("got a speak everywhere request via the chat app")
+                            self.speak(event.body[17:],intent={'siteId':'everywhere'})
                     
-                    elif body_check.startswith('speak:'):
-                        if self.DEBUG:
-                            print("got a speak request via the chat app")
-                        self.speak(event.body[6:],intent={'siteId':self.persistent_data['site_id']})
+                        elif body_check.startswith('speak:'):
+                            if self.DEBUG:
+                                print("got a speak request via the chat app")
+                            self.speak(event.body[6:],intent={'siteId':self.persistent_data['site_id']})
                     
-                    elif body_check.startswith('popup:'):
-                        if self.DEBUG:
-                            print("got a popup request via the chat app")
-                        self.send_pairing_prompt( event.body[6:] )
+                        elif body_check.startswith('popup:'):
+                            if self.DEBUG:
+                                print("got a popup request via the chat app")
+                            self.send_pairing_prompt( event.body[6:] )
                     
+                        else:
+                            if self.DEBUG:
+                                print("message was a normal matrix request via the chat app. Starting parsing.")
+                                #print("event dir: " + str(dir(event)))
+                                #print("room.user_name: " + str(room.user_name))
+                                #print("room.user_name dir: " + str(dir(room.user_name)))
+                                print("room.user_name(event.sender): " + str(room.user_name(event.sender)))
+                                #print("=/=")
+                                #print("self.persistent_data['matrix_candle_username']: " + str(self.persistent_data['matrix_candle_username']))                            
+                        
+                            if event.body.lower() == 'hello':
+                                self.matrix_messages_queue.put({'title':'','message':'Hello','level':'Normal'})
+                            elif event.body.lower() == 'goodbye':
+                                self.matrix_messages_queue.put({'title':'','message':'Goodbye','level':'Normal'})
+                            elif event.body.lower() == 'things?' or event.body.lower() == 'devices?':
+                                things_list = str(self.persistent_data['thing_titles'])
+                                things_list = things_list.replace('[','').replace(']','')
+                                self.matrix_messages_queue.put({'title':'Your things','message':things_list ,'level':'Normal'})
+                            else:
+                                self.last_text_command = str(event.body)
+                                self.parse_text('matrix') # return channel is matrix
+                            
+                            
                     else:
                         if self.DEBUG:
-                            print("message was a normal matrix request via the chat app. Starting parsing.")
-                            #print("event dir: " + str(dir(event)))
-                            #print("room.user_name: " + str(room.user_name))
-                            #print("room.user_name dir: " + str(dir(room.user_name)))
-                            print("room.user_name(event.sender): " + str(room.user_name(event.sender)))
-                            #print("=/=")
-                            #print("self.persistent_data['matrix_candle_username']: " + str(self.persistent_data['matrix_candle_username']))                            
-                        
-                        if event.body.lower() == 'hello':
-                            self.matrix_messages_queue.put({'title':'','message':'Hello','level':'Normal'})
-                        elif event.body.lower() == 'goodbye':
-                            self.matrix_messages_queue.put({'title':'','message':'Goodbye','level':'Normal'})
-                        elif event.body.lower() == 'things?' or event.body.lower() == 'devices?':
-                            things_list = str(self.persistent_data['thing_titles'])
-                            things_list = things_list.replace('[','').replace(']','')
-                            self.matrix_messages_queue.put({'title':'Your things','message':things_list ,'level':'Normal'})
-                        else:
-                            self.last_text_command = str(event.body)
-                            self.parse_text('matrix') # return channel is matrix
-                            
-                            
-                else:
-                    if self.DEBUG:
-                        print("matrix_message_callback: ignoring incoming message. self.currently_chatting: " + str(self.currently_chatting))
-        else:
-            print("message callback error: missing room or event")
+                            print("matrix_message_callback: ignoring incoming message. self.currently_chatting: " + str(self.currently_chatting))
+            else:
+                if self.DEBUG:
+                    print("message callback error: missing room or event")
+                    
+        except Exception as ex:
+            print("Error in matrix_message_callback: " + str(ex))
+        
 
 
 
