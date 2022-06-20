@@ -408,6 +408,7 @@ class VocoAdapter(Adapter):
         self.last_text_command = "" # for text input instead of voice input
         self.last_text_response = ""
         self.stop_snips_on_microphone_unplug = True
+        self.popup_heard_sentence = False # show the sentence that voco heard in a quick popup
         
         # Satellite
         self.satellite_local_intent_parsing = False
@@ -4169,8 +4170,8 @@ class VocoAdapter(Adapter):
                 index = 0
                 for key in intent_message['alternatives']:
                     #print(str(key))
-                    
-                    print("\nconfidenceScore: " + str(intent_message['alternatives'][index]['confidenceScore']))
+                    if self.DEBUG:
+                        print("\nconfidenceScore: " + str(intent_message['alternatives'][index]['confidenceScore']))
                     if intent_message['alternatives'][index]['confidenceScore'] > self.confidence_score_threshold:
                         alt_intent_name = str(intent_message['alternatives'][index]['intentName']).replace('createcandle:','')
                         if alt_intent_name != 'None':
@@ -4191,7 +4192,8 @@ class VocoAdapter(Adapter):
                 print("POSSIBLE INTENTS LIST IS EMPTY")
             return
         else:
-            print("\nall_possible_intents: " + str(all_possible_intents))
+            if self.DEBUG:
+                print("\nall_possible_intents: " + str(all_possible_intents))
         
         try:
             #sentence = str(intent_message['input'])
@@ -4257,8 +4259,8 @@ class VocoAdapter(Adapter):
             print("Error at beginning of master intent callback: " + str(ex))
             
             
-            
-            
+        if self.DEBUG or self.popup_heard_sentence:
+            self.send_pairing_prompt( "heard: " + str(sentence) )
             
             
         """
