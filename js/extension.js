@@ -24,14 +24,15 @@
             
             setTimeout(() => {
                 const jwt = localStorage.getItem('jwt');
+                //console.log("jwt: ", jwt);
     	        window.API.postJson(
     	          `/extensions/${this.id}/api/update`,
     				{'action':'token','token':jwt}
 
     	        ).then((body) => {
-                    //console.log("update jwt response: ", body);
+                    //console.log("delayed update jwt response: ", body);
     	        }).catch((e) => {
-    	  			console.log("Error saving token: ", e);
+    	  			console.log("Error (delayed) saving token: ", e);
     	        });
             }, 5100);
 
@@ -50,7 +51,7 @@
 		
 		// Cannot be used currently because of small bug in gateway
 		hide() {
-			console.log("voco hide called");
+			//console.log("voco hide called");
 			try{
 				clearInterval(this.interval);
 				//console.log("interval cleared");
@@ -1253,24 +1254,29 @@
         // Creates a list of satellites that have recently connected to this controller and regard it as their main controller
         show_connected_satellites(connected_satellites, is_satellite){
             try{
-                console.log("in show_connected_satellites. connected_satellites: ", connected_satellites);
-                console.log("this.current_time: " + this.current_time);
+                //console.log("in show_connected_satellites. connected_satellites: ", connected_satellites);
+                //console.log("this.current_time: " + this.current_time);
             
                 const list_el = document.getElementById('extension-voco-connected-satellites-list');
                 list_el.innerHTML = "";
+                
+                var recent_sats_count = 0;
             
                 for( var sat in connected_satellites ){
-                    console.log("sat: ", sat, connected_satellites[sat] );
+                    if(this.debug){
+                        console.log("sat: ", sat, connected_satellites[sat] );
+                    }
             
                     if(connected_satellites[sat] > (this.current_time - 60)){
             			var l = document.createElement("li");
             			var t = document.createTextNode(sat);
             			l.appendChild(t);
                         list_el.appendChild(l);
+                        recent_sats_count++;
                     }
                 }
             
-                if (connected_satellites.length == 0){
+                if (recent_sats_count == 0){
                     list_el.innerHTML = "";
                     document.getElementById('extension-voco-content-container').classList.remove('extension-voco-has-satellites');
                     //document.getElementById('extension-voco-connected-satellites-list-container').classList.add('extension-voco-hidden');

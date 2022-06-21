@@ -1421,8 +1421,25 @@ def intent_set_value(self, slots, intent_message, found_properties, original_val
                 # Setting properties at certain times
                 for found_property in found_properties:
                     try:
+                        
+                        if slots['string'] != None:
+                            if 'enum' in found_property:
+                                if found_property['enum'] != None:
+                                    spotted_in_enum = False
+                                    for option in found_property['enum']:
+                                        if make_comparable(desired_value) == make_comparable(option):
+                                            desired_value = option
+                                            spotted_in_enum = True
+                                            if self.DEBUG:
+                                                print('spotted desired value in enum')
+                                    if spotted_in_enum == False:
+                                        if self.DEBUG:
+                                            print("Warning, did not spot desired string value in enum")
+                                        continue
+                        
+                        
                         if str(found_property['type']) != "boolean" and found_property['readOnly'] != True: # so readOnly is allowed to be both None or False
-                            if self.DEV:
+                            if self.DEBUG:
                                 print("Can set value for " + str(found_property['property_url']))
                         
                             #print("looping over property in timer extraction part of set_value. Now looking at:")
@@ -1444,8 +1461,8 @@ def intent_set_value(self, slots, intent_message, found_properties, original_val
                                 if api_result[key] == 500:
                                     voice_message += str(found_property['thing']) + " seems to be disconnected. "
                                     #self.speak(voice_message,intent=intent_message)
-                                    returnvoice_message
-                                    #continue
+                                    #return voice_message
+                                    continue
                                 
                             else:
                                 original_value = api_result[key]

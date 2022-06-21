@@ -92,8 +92,8 @@ class VocoAPIHandler(APIHandler):
                 if request.path == '/init' or request.path == '/poll' or request.path == '/parse' or request.path == '/update' or request.path == '/ajax':
 
                     try:
-                        #if self.DEBUG:
-                        #    print("API handler is being called: " + str(request.path))
+                        if self.DEBUG:
+                            print("API handler is being called: " + str(request.path))
                     
                         
                         
@@ -326,20 +326,22 @@ class VocoAPIHandler(APIHandler):
                                 print("Handling request to /init")
                             
                             try:
-                                if 'jwt' in request.body:
+                                if 'token' in request.body:
                                     #self.adapter.token = str(request.body['jwt'])
                                     #self.adapter.persistent_data['token'] = str(request.body['jwt'])
                                     
-                                    token = str(request.body['jwt'])
+                                    token = str(request.body['token'])
                                     token = token.replace("\n", "")
                                     if self.DEBUG:
                                         print("incoming token is: " + str(token))
                                 
-                                    if len(token) > 30:
+                                    if len(token) > 20:
                                         self.adapter.token = token
                                         self.adapter.persistent_data['token'] = token
                                         self.adapter.save_persistent_data()
                                 # reset text response in UI
+                                else:
+                                    print("Error, no jwt in incoming /init request")
                                 
                                 self.adapter.last_text_response = ""
                                 self.adapter.refresh_matrix_members = True
@@ -430,7 +432,8 @@ class VocoAPIHandler(APIHandler):
                                                         'satellite_targets': satellite_targets, # avahi scan results
                                                         'connected_satellites': self.adapter.connected_satellites, # controllers in satellite mode that have pinged this controller
                                                         'hostname': self.adapter.hostname, 
-                                                        'has_token':has_token, 'is_satellite':is_sat, 
+                                                        'has_token':has_token, 
+                                                        'is_satellite':is_sat, 
                                                         'mqtt_server':self.adapter.persistent_data['mqtt_server'], 
                                                         'mqtt_connected':self.adapter.mqtt_connected, 
                                                         'mqtt_connected_succesfully_at_least_once':self.adapter.mqtt_connected_succesfully_at_least_once, 
@@ -438,7 +441,8 @@ class VocoAPIHandler(APIHandler):
                                                         'matrix_server': matrix_server,
                                                         'matrix_username': matrix_username,
                                                         'has_matrix_token': has_matrix_token,
-                                                        'debug':self.adapter.DEBUG}),
+                                                        'debug':self.adapter.DEBUG
+                                                        }),
                                 )
                             except Exception as ex:
                                 print("Error getting init data: " + str(ex))
@@ -451,7 +455,8 @@ class VocoAPIHandler(APIHandler):
                     
                     
                         elif request.path == '/poll':
-                            #print("Getting the poll data")
+                            if self.DEBUG:
+                                print("Getting the poll data")
                             
                             try:
                                 state = True
@@ -459,7 +464,7 @@ class VocoAPIHandler(APIHandler):
                                 if self.adapter.matrix_busy_registering == False:
                                     if 'refresh_matrix_members' in request.body:
                                         if bool(request.body['refresh_matrix_members']) == True:
-                                            if self.adapter.DEBUG:
+                                            if self.DEBUG:
                                                 print("poll has asked for a periodic refresh of the matrix members list")
                                             self.adapter.refresh_matrix_members = True
                                             
@@ -488,7 +493,8 @@ class VocoAPIHandler(APIHandler):
                                         self.adapter.persistent_data['action_times'][i]['clock'] = clock
             
                                     except Exception as ex:
-                                        print("Error calculating time: " + str(ex))
+                                        if self.DEBUG:
+                                            print("Error calculating time: " + str(ex))
                                         state = False
                                         
                                         
@@ -521,12 +527,14 @@ class VocoAPIHandler(APIHandler):
                                                         'connected_satellites': self.adapter.connected_satellites,
                                                         })
                                 )
+                                
                             except Exception as ex:
-                                print("Error getting init data: " + str(ex))
+                                if self.DEBUG:
+                                    print("Error getting init data: " + str(ex))
                                 return APIResponse(
                                     status=500,
                                     content_type='application/json',
-                                    content=json.dumps({'state' : False, 'update': "Internal error: no thing data", 'items' : [], 'current_time':0}),
+                                    content=json.dumps({'state' : False, 'update': "Poll error", 'items' : [], 'current_time':0}),
                                 )
                        
                     
@@ -544,7 +552,8 @@ class VocoAPIHandler(APIHandler):
                                     content=json.dumps({'state' : 'ok'}),
                                 )
                             except Exception as ex:
-                                print("Error handling parse data: " + str(ex))
+                                if self.DEBUG:
+                                    print("Error handling parse data: " + str(ex))
                                 return APIResponse(
                                     status=500,
                                     content_type='application/json',
@@ -558,7 +567,7 @@ class VocoAPIHandler(APIHandler):
                                 print("handling /update")
 
                             try:
-                                state = True
+                                state = False
                                 action = str(request.body['action'])
                                 update = "" 
                             
@@ -568,52 +577,68 @@ class VocoAPIHandler(APIHandler):
                                 # DELETE
                                 if action == 'delete':
                                     item_to_delete = None
-                                    moment = int(request.body['moment'])
-                                    sentence = str(request.body['sentence'])
-                                
-                                    if self.DEBUG:
-                                        print("deleting timer")
-                                    update = 'Unable to get detailed information'
                                     
-                                    action_count = len( self.adapter.persistent_data['action_times'] )
-                                    for i in range(action_count):
-                                        if self.adapter.persistent_data['action_times'][i]['moment'] == moment and self.adapter.persistent_data['action_times'][i]['slots']['sentence'] == sentence:
-                                            item_to_delete = i
+                                    try:
+                                    
+                                        moment = int(request.body['moment'])
+                                        sentence = str(request.body['sentence'])
                                 
-                                    if item_to_delete != None:
-                                        del self.adapter.persistent_data['action_times'][item_to_delete]
                                         if self.DEBUG:
-                                            print("deleted #" + str(item_to_delete))
-                                    else:
-                                        if self.DEBUG:
-                                            print("Error, could not find element to delete")
+                                            print("deleting timer")
+                                        update = 'Unable to get detailed information'
+                                    
+                                        action_count = len( self.adapter.persistent_data['action_times'] )
+                                        for i in range(action_count):
+                                            if self.adapter.persistent_data['action_times'][i]['moment'] == moment and self.adapter.persistent_data['action_times'][i]['slots']['sentence'] == sentence:
+                                                item_to_delete = i
+                                
+                                        if item_to_delete != None:
+                                            del self.adapter.persistent_data['action_times'][item_to_delete]
+                                            if self.DEBUG:
+                                                print("deleted #" + str(item_to_delete))
+                                            
+                                            state = True
+                                        else:
+                                            if self.DEBUG:
+                                                print("Error, could not find element to delete")
                                             state = False
-                       
+                                                
+                                        
+                                                
+                                    except Exception as ex:
+                                        print("error /update -> deleting: " + str(ex))
+                                                
                        
                                 # TOKEN
                                 elif action == 'token':
                                     if self.DEBUG:
-                                        print("adding token")
+                                        print("saving token")
                                     
                                     state = False
                                     update = 'Unable to store token'
+                                    
+                                    try:
+                                        token = str(request.body['token'])
+                                        token = token.replace("\n", "")
+                                        if self.DEBUG:
+                                            print("incoming token is: " + str(token))
                                 
-                                    token = str(request.body['token'])
-                                    token = token.replace("\n", "")
-                                    if self.DEBUG:
-                                        print("incoming token is: " + str(token))
+                                        if len(token) > 10:
+                                            self.adapter.token = token
+                                            self.adapter.persistent_data['token'] = token
+                                            self.adapter.save_persistent_data()
+                                            state = True
+                                            update = "Token saved"
                                 
-                                    if len(token) > 30:
-                                        self.adapter.token = token
-                                        self.adapter.persistent_data['token'] = token
-                                        self.adapter.save_persistent_data()
-                                        state = True
-                                        update = "Token saved"
-                                
-                                    else:
-                                        update = 'Token is too short. Is it an actual token?'
-
-
+                                        else:
+                                            if self.DEBUG:
+                                                print("bad token")
+                                            update = 'Token is too short. Is it an actual token?'
+                                            
+                                    except Exception as ex:
+                                        if self.DEBUG:
+                                            print("error updating token: " + str(ex))
+                                        state = False
 
                                 # SATELLITE
                                 # called when the user switches satellite mode on or off, or selects a different satellite in the list.
@@ -621,7 +646,7 @@ class VocoAPIHandler(APIHandler):
                                     if self.DEBUG:
                                         print("handling satellite command")
                                     
-                                    state = True
+                                    
                                     update = 'Unable to update satellite preference'
                                     if 'is_satellite' in request.body and 'mqtt_server' in request.body:
                                         update = "both in body"
@@ -641,28 +666,36 @@ class VocoAPIHandler(APIHandler):
                                                     content=json.dumps({'state' : False, 'update':"Please change the hostname first"}),
                                                 )
                                         except Exception as ex:
-                                            print("Error checking if hostname is something else than candle: " + str(ex))
+                                            if self.DEBUG:
+                                                print("Error checking if hostname is something other than 'candle': " + str(ex))
                                         
-                                        self.adapter.persistent_data['is_satellite'] = bool(request.body['is_satellite'])
+                                        try:
+                                            self.adapter.persistent_data['is_satellite'] = bool(request.body['is_satellite'])
 
-                                        #if bool(request.body['is_satellite']) != self.adapter.persistent_data['is_satellite']:
-                                        if self.adapter.persistent_data['is_satellite']:
-                                            self.adapter.persistent_data['mqtt_server'] = str(request.body['mqtt_server'])
-                                            self.adapter.run_mqtt()
-                                            self.adapter.send_mqtt_ping(True)
-                                            self.adapter.run_snips() # this stops Snips first
-                                            update = 'Satellite mode enabled'
-                                            self.connected_satellites = {} # forget which satellites are connected to this controller
+                                            #if bool(request.body['is_satellite']) != self.adapter.persistent_data['is_satellite']:
+                                            if self.adapter.persistent_data['is_satellite']:
+                                                self.adapter.persistent_data['mqtt_server'] = str(request.body['mqtt_server'])
+                                                self.adapter.run_mqtt()
+                                                self.adapter.send_mqtt_ping(True)
+                                                self.adapter.run_snips() # this stops Snips first
+                                                update = 'Satellite mode enabled'
+                                                self.connected_satellites = {} # forget which satellites are connected to this controller
+                                                if self.DEBUG:
+                                                    print("- Satellite mode enabled")
+                                            else:
+                                                self.adapter.persistent_data['mqtt_server'] = 'localhost'
+                                                self.adapter.persistent_data['main_site_id'] = self.adapter.persistent_data['site_id'] #reset to default
+                                                self.adapter.run_mqtt()
+                                                self.adapter.run_snips() # this stops Snips first
+                                                update = 'Satellite mode disabled'
+                                                if self.DEBUG:
+                                                    print("- Satellite mode disabled")
+                            
+                                            state = True
+                                                
+                                        except Exception as ex:
                                             if self.DEBUG:
-                                                print("- Satellite mode enabled")
-                                        else:
-                                            self.adapter.persistent_data['mqtt_server'] = 'localhost'
-                                            self.adapter.persistent_data['main_site_id'] = self.adapter.persistent_data['site_id'] #reset to default
-                                            self.adapter.run_mqtt()
-                                            self.adapter.run_snips() # this stops Snips first
-                                            update = 'Satellite mode disabled'
-                                            if self.DEBUG:
-                                                print("- Satellite mode disabled")
+                                                print("Error changing satellite mode: " + str(ex))
                             
                                         self.adapter.save_persistent_data()
                             
@@ -671,7 +704,8 @@ class VocoAPIHandler(APIHandler):
                                         if self.DEBUG:
                                             print(str(update))
                                     else:
-                                        print("Missing values in request body")
+                                        if self.DEBUG:
+                                            print("Missing values in request body")
 
                                 return APIResponse(
                                     status=200,
@@ -694,11 +728,12 @@ class VocoAPIHandler(APIHandler):
                             )
                         
                     except Exception as ex:
-                        print("Init issue: " + str(ex))
+                        if self.DEBUG:
+                            print("Voco api handler: generic api handler issue: " + str(ex))
                         return APIResponse(
                             status=500,
                             content_type='application/json',
-                            content=json.dumps("Error in API handler"),
+                            content=json.dumps("generic error in Voco API handler"),
                         )
                 else:
                     return APIResponse(status=404)    
