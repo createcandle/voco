@@ -959,7 +959,8 @@ def intent_set_state(self, slots, intent_message, found_properties, delayed_acti
             property_loop_counter = 0
             for found_property in found_properties:
                 
-                print("\n\nfound_property: " + str(found_property) + "\n\n")
+                if self.DEBUG:
+                    print("\n\nfound_property: " + str(found_property) + "\n\n")
                 
                 # Figure out the intended state first
                 human_readable_desired_state = str(slots['boolean'])
