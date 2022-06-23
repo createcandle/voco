@@ -43,6 +43,8 @@
       "Satellite device control": false,
 	  "Disable security": false,
 	  "MQTT port": 1885,
+	  "Send chat control notifications": false,
+	  "Show the sentence that Voco heard": false,
       "Debugging": false
     },
     "schema": {
@@ -188,6 +190,14 @@
           "description": "If this is a satellite, enabling this will allow you to control things on this satellite using your voice. It's recommended to give things on satellites unique names. For example, call 'radio' something like 'kitchen radio' instead. If a thing with the same name exists on the main controller and on a satellite, a voice command will always favour controlling the satellite's thing.",
           "type": "boolean"
         },
+        "Show the sentence that Voco heard": {
+          "description": "Advanced. Whenever you give a voice command, Voco can show a popup with the sentence it just heard. This can be useful to learn more about how Voco is handling your commands.",
+          "type": "boolean"
+        },
+        "Send chat control notifications": {
+          "description": "Advanced. If enabled, Voco will send a Matrix notification whenever it can be controlled via chat, or when this control has just been disabled.",
+          "type": "boolean"
+        },
         "Disable security": {
           "description": "Advanced. Disabling security might make Voco play nice with older/other versions of Candle or the Webthings Gateway.",
           "type": "boolean"
@@ -206,7 +216,7 @@
     }
   },
   "short_name": "Voco",
-  "version": "3.2.1",
+  "version": "3.2.2",
   "web_accessible_resources": [
     "css/*.css",
     "images/*.svg",
