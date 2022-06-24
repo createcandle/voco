@@ -306,20 +306,22 @@
 									if('is_satellite' in body){
 										//console.log("is_satellite: " + body['is_satellite']);
 										if(body['is_satellite']){
-											//console.log("It is a satellite");
+											//console.log("I am a satellite");
 											document.getElementById('extension-voco-select-satellite-checkbox').checked = true;
 										}
 									}
 									document.getElementById('extension-voco-content-container').classList.add('extension-voco-potential-satellite');
 									
 									var list_html = "";
+                                    //console.log("looking for body['main_controller_hostname']: ", body['main_controller_hostname']);
 									for (const key in body['satellite_targets']) {
 										//console.log(`${key}: ${body['satellite_targets'][key]}`);
+                                        
 										var checked_value = "";
-										if(key == body['mqtt_server'] || Object.keys(body['satellite_targets']).length == 1){
+										if(body['satellite_targets'][key] == body['main_controller_hostname'] || Object.keys(body['satellite_targets']).length == 1){
 											checked_value = 'checked="checked"';
 										}
-										list_html += '<div class="extension-voco-radio-select-item"><input type="radio" name="mqtt_server" value="' + key + '" ' + checked_value + ' /><span>' + body['satellite_targets'][key] + '</span></div>';
+										list_html += '<div class="extension-voco-radio-select-item"><input type="radio" name="main_controller_hostname" value="' + body['satellite_targets'][key] + '" ' + checked_value + ' /><span>' + body['satellite_targets'][key] + '</span></div>';
 									}
 									document.getElementById('extension-voco-server-list').innerHTML = list_html;
 								}
@@ -344,22 +346,46 @@
 				document.getElementById('extension-voco-select-satellite-checkbox').addEventListener('change', (event) => {
 					//console.log(event);
 					const is_sat = document.getElementById('extension-voco-select-satellite-checkbox').checked;
-			
-					var mqtt_server = 'localhost'; 
+			        
+					//var mqtt_server = 'localhost';
+                    var main_controller_hostname = null;
 					try{
-						mqtt_server = document.querySelector('input[name="mqtt_server"]:checked').value;
-			
-						//console.log("mqtt_server = " + mqtt_server);
-						//console.log("is_satellite = " + is_sat);
+                        if(document.querySelector('input[name="main_controller_hostname"]:checked') != null){
+    						//mqtt_server = document.querySelector('input[name="mqtt_server"]:checked').value;
+                            main_controller_hostname = document.querySelector('input[name="main_controller_hostname"]:checked').value;
+    			            //console.log("main_controller_hostname: ", main_controller_hostname);
+    						//console.log("mqtt_server = " + mqtt_server);
+    						//console.log("is_satellite = " + is_sat);
+                            //console.log("main_controller_hostname = " + main_controller_hostname);
+                        
+                        }
+						else{
+						    //console.log("no radio button selected?");
+                            if(is_sat){
+                                console.log("no radio button selected, cannot switch on");
+                                alert("Please select which server to connect to first");
+                                return;
+                            }
+                            else{
+                                //console.log("no radio button selected, but switching off satellite mode, so no problem");
+                                // No hostname selected, but since we're no longer a satellite it doesn't matter. The controller will set the own hostname.
+                            }
+						}
+                        
 				        window.API.postJson(
 				          `/extensions/${this.id}/api/update`,
-							{'action':'satellite','is_satellite': is_sat,'mqtt_server': mqtt_server}
+							    {'action':'satellite', 
+                                'is_satellite': is_sat,
+                                'main_controller_hostname': main_controller_hostname,
+                                }
 
 				        ).then((body) => {
-							//console.log("Python API satellite result:");
-							//console.log(body);
+							if(this.debug){
+                                console.log("Python API satellite result:");
+							    console.log(body);
+                            }
 							//console.log(body['items']);
-					
+				
 							if(body['state'] == true){
 								//console.log("satellite update state was true");
 								if(is_sat){
@@ -432,9 +458,7 @@
 						//pre.innerText = body['state'];
 					}
                     
-                    if('connected_satellites' in body && 'is_satellite' in body){
-                        this.show_connected_satellites( body['connected_satellites'], body['is_satellite'] );
-                    }
+                    
 		
 
 		        }).catch((e) => {
@@ -493,8 +517,16 @@
 								
                                 if(body['is_satellite'] == false){
                                     if(body['initial_injection_completed']){
-                                        document.getElementById('extension-voco-injection-busy').style.display = 'none';
-                                        document.getElementById('extension-voco-text-commands-container').style.display = 'block';
+                                        
+                                        if(body['busy_starting_snips']){
+                                            document.getElementById('extension-voco-injection-busy').style.display = 'block';
+                                            document.getElementById('extension-voco-text-commands-container').style.display = 'none';
+                                        }
+                                        else{
+                                            document.getElementById('extension-voco-injection-busy').style.display = 'none';
+                                            document.getElementById('extension-voco-text-commands-container').style.display = 'block';
+                                        }
+                                        
                                     }
                                     else{
                                         document.getElementById('extension-voco-injection-busy').style.display = 'block';
@@ -502,8 +534,14 @@
                                     }
                                 }
                                 else{
-                                    document.getElementById('extension-voco-injection-busy').style.display = 'none';
-                                    document.getElementById('extension-voco-text-commands-container').style.display = 'none';
+                                    if(body['busy_starting_snips']){
+                                        document.getElementById('extension-voco-injection-busy').style.display = 'block';
+                                        document.getElementById('extension-voco-text-commands-container').style.display = 'none';
+                                    }
+                                    else{
+                                        document.getElementById('extension-voco-injection-busy').style.display = 'none';
+                                        document.getElementById('extension-voco-text-commands-container').style.display = 'block';
+                                    }
                                 }
                                 
                                 if(body['missing_microphone']){
@@ -512,6 +550,17 @@
                                 else{
                                     document.getElementById('extension-voco-missing-microphone').style.display = 'none';
                                 }
+                                
+                                
+                                if(body['periodic_voco_attempts'] > 3){
+                                    document.getElementById('extension-voco-main-controller-not-responding').style.display = 'block';
+                                }
+                                else{
+                                    document.getElementById('extension-voco-main-controller-not-responding').style.display = 'none';
+                                }
+                                
+                                
+                                
                                 
                                 
 								if(body['text_response'].length != 0){
@@ -545,6 +594,13 @@
 									list.innerHTML = '<div class="extension-voco-centered-page"><p style="width:100%;text-align:center;display:bloc">There are currently no active timers, reminders or alarms.</p>';
 								}
                                 
+                                // Show satellites that are connected to this controller (if any)
+                                if(typeof body['connected_satellites'] != 'undefined' && typeof body['is_satellite'] != 'undefined'){
+                                    if(this.debug){
+                                        console.log("showing connected satellites");
+                                    }
+                                    this.show_connected_satellites( body['connected_satellites'], body['is_satellite'] );
+                                }
                                 
                                 
                                 // MATRIX

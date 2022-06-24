@@ -18,8 +18,12 @@
 		</div>
 		
         
-		<div id="extension-voco-mqtt-error" style="display:none">
+		<div id="extension-voco-mqtt-error" class="extension-voco-warning" style="display:none">
 			<p>Voco seems to have trouble connecting to the MQTT server. If this device is a satellite, then the main controller may be down. If it's the main (or only) Voco controller, then this may indicate a configuration error.</p>
+		</div>
+        
+		<div id="extension-voco-main-controller-not-responding" class="extension-voco-warning" style="display:none">
+			<p>The main Voco controller is not responding.</p>
 		</div>
         
         <div id="extension-voco-injection-busy" style="display:none">
@@ -29,11 +33,11 @@
             <p>Voco is still starting. This includes learning the names of all your devices. This should normally take no more than about 30 seconds, depending on how many things you have.</p>
         </div>
         
-		<div id="extension-voco-injection-failure" style="display:none">
+		<div id="extension-voco-injection-failure" class="extension-voco-warning" style="display:none">
 			<p>Voco seems to have trouble learning the names of your devices. Please make sure all the names of your things can be spoken. Avoid using any characters outside of the Latin alphabet. For example, do not use  # ! ? % & ( ) / ; + = .</p>
 		</div>
         
-		<div id="extension-voco-unavailable" style="display:none">
+		<div id="extension-voco-unavailable" class="extension-voco-warning" style="display:none">
 			<p>Voco seems to be unavailable at the moment</p>
 		</div>
 
@@ -487,7 +491,7 @@
         <br/>
         <br/>
 
-        <div id="extension-voco-debug-warning" style="display:none">
+        <div id="extension-voco-debug-warning" class="extension-voco-warning" style="display:none">
             <h2>Debugging is enabled</h2>
             <p>This addon is currently set to save detailed information about its operation in the internal logs. This may impact your privacy, as this also means that insights into your behaviour might be stored in those logs.</p>
             <p>You can disable debugging mode in this addon's settings.</p>

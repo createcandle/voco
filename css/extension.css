@@ -678,6 +678,7 @@ body #extension-voco-view .extension-voco-tab-selected{
     border-radius:.5rem;
 }
 
+.extension-voco-warning,
 #extension-voco-mqtt-error,
 #extension-voco-unavailable,
 #extension-voco-injection-failure,

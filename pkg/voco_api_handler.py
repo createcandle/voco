@@ -358,7 +358,7 @@ class VocoAPIHandler(APIHandler):
                                 # Satellite targets
                                 self.adapter.gateways_ip_list = avahi_detect_gateways()
                                         
-                                satellite_targets = {}
+                                self.adapter.satellite_targets = {}
                                 for ip_address in self.adapter.gateways_ip_list:
                                     
                                     if self.adapter.nbtscan_available:
@@ -367,18 +367,18 @@ class VocoAPIHandler(APIHandler):
                                             shorter = nbtscan_output.split(" ",1)[1]
                                             shorter = shorter.lstrip()
                                             parts = shorter.split()
-                                            satellite_targets[ip_address] = parts[0]
+                                            self.adapter.satellite_targets[ip_address] = parts[0]
                                         else:
-                                            satellite_targets[ip_address] = ip_address
+                                            self.adapter.satellite_targets[ip_address] = ip_address
                                     elif ip_address in self.adapter.mqtt_others:
-                                        satellite_targets[ip_address] = self.adapter.mqtt_others[ip_address] # should give the site_id
+                                        self.adapter.satellite_targets[ip_address] = self.adapter.mqtt_others[ip_address] # should give the site_id
                                     else:
-                                        satellite_targets[ip_address] = ip_address # if there is no known site_id for this IP addres, just give it the ip address as the name
+                                        self.adapter.satellite_targets[ip_address] = ip_address # if there is no known site_id for this IP addres, just give it the ip address as the name
                                 """    
                                         
-                                satellite_targets = avahi_detect_gateways()
+                                self.adapter.satellite_targets = avahi_detect_gateways()
                                 if self.DEBUG:
-                                    print("satellite_targets: " + str(satellite_targets))
+                                    print("self.adapter.satellite_targets: " + str(self.adapter.satellite_targets))
                             
                                 # Token
                                 has_token = False
@@ -403,7 +403,7 @@ class VocoAPIHandler(APIHandler):
                             
                             
                                 if self.DEBUG:
-                                    print("- satellite_targets: " + str(satellite_targets))
+                                    print("- self.adapter.satellite_targets: " + str(self.adapter.satellite_targets))
                                     print("- has_token: " + str(has_token))
                                     print("- is_satellite: " + str(is_sat))
                                     print("- hostname: " + str(self.adapter.hostname))
@@ -424,16 +424,23 @@ class VocoAPIHandler(APIHandler):
                                 if 'matrix_token' in self.adapter.persistent_data:
                                     has_matrix_token = True
                                     
+                                if 'main_controller_hostname' not in self.adapter.persistent_data:
+                                    if self.DEBUG:
+                                        print("ERROR, needed a strange fix for main_controller_hostname")
+                                    self.adapter.persistent_data['main_controller_hostname'] = self.adapter.hostname
+                                    
                             
                                 return APIResponse(
                                     status=200,
                                     content_type='application/json',
                                     content=json.dumps({'state': True, 
-                                                        'satellite_targets': satellite_targets, # avahi scan results
+                                                        'satellite_targets': self.adapter.satellite_targets, # avahi scan results
                                                         'connected_satellites': self.adapter.connected_satellites, # controllers in satellite mode that have pinged this controller
                                                         'hostname': self.adapter.hostname, 
                                                         'has_token':has_token, 
                                                         'is_satellite':is_sat, 
+                                                        'main_site_id':self.adapter.persistent_data['main_site_id'],
+                                                        'main_controller_hostname':self.adapter.persistent_data['main_controller_hostname'],
                                                         'mqtt_server':self.adapter.persistent_data['mqtt_server'], 
                                                         'mqtt_connected':self.adapter.mqtt_connected, 
                                                         'mqtt_connected_succesfully_at_least_once':self.adapter.mqtt_connected_succesfully_at_least_once, 
@@ -509,9 +516,10 @@ class VocoAPIHandler(APIHandler):
                                 return APIResponse(
                                     status=200,
                                     content_type='application/json',
-                                    content=json.dumps({'state' : state, 
-                                                        'update': '', 
-                                                        'items' : self.adapter.persistent_data['action_times'],
+                                    content=json.dumps({'state': state, 
+                                                        'update': '',
+                                                        'busy_starting_snips': self.adapter.busy_starting_snips,
+                                                        'items': self.adapter.persistent_data['action_times'],
                                                         'current_time':self.adapter.current_utc_time,
                                                         'text_response':self.adapter.last_text_response, 
                                                         'initial_injection_completed':self.adapter.initial_injection_completed,
@@ -525,6 +533,7 @@ class VocoAPIHandler(APIHandler):
                                                         'user_account_created':self.adapter.user_account_created,
                                                         'is_satellite':self.adapter.persistent_data['is_satellite'],
                                                         'connected_satellites': self.adapter.connected_satellites,
+                                                        'periodic_voco_attempts':self.adapter.periodic_voco_attempts,
                                                         })
                                 )
                                 
@@ -648,8 +657,7 @@ class VocoAPIHandler(APIHandler):
                                     
                                     
                                     update = 'Unable to update satellite preference'
-                                    if 'is_satellite' in request.body and 'mqtt_server' in request.body:
-                                        update = "both in body"
+                                    if 'is_satellite' in request.body and 'main_controller_hostname' in request.body:
                                         
                                         
                                         # If a device should become a satellite, the user should first change the hostname into something else
@@ -663,36 +671,77 @@ class VocoAPIHandler(APIHandler):
                                                 return APIResponse(
                                                     status=200,
                                                     content_type='application/json',
-                                                    content=json.dumps({'state' : False, 'update':"Please change the hostname first"}),
+                                                    content=json.dumps({'state' : False, 
+                                                                        'update':"Please change the hostname first"
+                                                                        }),
                                                 )
                                         except Exception as ex:
                                             if self.DEBUG:
                                                 print("Error checking if hostname is something other than 'candle': " + str(ex))
                                         
                                         try:
+                                            
+                                            
+                                            
+                                            
                                             self.adapter.persistent_data['is_satellite'] = bool(request.body['is_satellite'])
 
                                             #if bool(request.body['is_satellite']) != self.adapter.persistent_data['is_satellite']:
                                             if self.adapter.persistent_data['is_satellite']:
-                                                self.adapter.persistent_data['mqtt_server'] = str(request.body['mqtt_server'])
-                                                self.adapter.run_mqtt()
-                                                self.adapter.send_mqtt_ping(True)
-                                                self.adapter.run_snips() # this stops Snips first
-                                                update = 'Satellite mode enabled'
-                                                self.connected_satellites = {} # forget which satellites are connected to this controller
+                                                
+                                                self.adapter.persistent_data['main_controller_hostname'] = str(request.body['main_controller_hostname'])
+                                                
+                                                #self.adapter.persistent_data['mqtt_server'] = str(request.body['mqtt_server'])
+                                                
                                                 if self.DEBUG:
-                                                    print("- Satellite mode enabled")
+                                                    print("self.adapter.satellite_targets: " + str(self.adapter.satellite_targets))
+                                                if len(self.adapter.satellite_targets) == 0:
+                                                    if self.DEBUG:
+                                                        print("re-populating empty satellite_targets list")
+                                                    self.adapter.satellite_targets = avahi_detect_gateways()
+                                                
+                                                found_ip = False
+                                                for sat_ip_address in self.adapter.satellite_targets:
+                                                    if self.DEBUG:
+                                                        print("sat_ip_address: " + str(sat_ip_address) + ", self.adapter.satellite_targets[sat_ip_address]: " + str(self.adapter.satellite_targets[sat_ip_address]))
+                                                    if self.adapter.satellite_targets[sat_ip_address] == str(request.body['main_controller_hostname']):
+                                                        self.adapter.persistent_data['mqtt_server'] = sat_ip_address
+                                                        found_ip = True
+                                                        if self.DEBUG:
+                                                            print("found IP address for: " + str(request.body['main_controller_hostname']) + ", it is: "  + str(sat_ip_address) )
+                                                        
+                                                if found_ip:
+                                                    self.connected_satellites = {} # forget which satellites are connected to this controller
+                                                    self.adapter.initial_injection_completed = False
+                                                    self.adapter.addon_start_time = time.time()
+                                                    self.adapter.should_restart_mqtt = True
+                                                    self.adapter.run_mqtt()
+                                                    self.adapter.send_mqtt_ping(True)
+                                                    self.adapter.run_snips() # this stops Snips first
+                                                    state = True
+                                                    update = 'Satellite mode enabled'
+                                                    if self.DEBUG:
+                                                        print("- Satellite mode enabled")
+                                                        
+                                                    
+                                                        
+                                                else:
+                                                    update = 'Error: could not find IP address of prefered controller'
                                             else:
                                                 self.adapter.persistent_data['mqtt_server'] = 'localhost'
+                                                self.adapter.persistent_data['main_controller_hostname'] = self.adapter.hostname
                                                 self.adapter.persistent_data['main_site_id'] = self.adapter.persistent_data['site_id'] #reset to default
+                                                self.adapter.initial_injection_completed = False
+                                                self.adapter.addon_start_time = time.time()
+                                                self.adapter.should_restart_mqtt = True
                                                 self.adapter.run_mqtt()
                                                 self.adapter.run_snips() # this stops Snips first
+                                                state = True
                                                 update = 'Satellite mode disabled'
                                                 if self.DEBUG:
                                                     print("- Satellite mode disabled")
-                            
-                                            state = True
                                                 
+                                            
                                         except Exception as ex:
                                             if self.DEBUG:
                                                 print("Error changing satellite mode: " + str(ex))
@@ -703,6 +752,7 @@ class VocoAPIHandler(APIHandler):
                                         #update = 'Satellite settings have been saved'
                                         if self.DEBUG:
                                             print(str(update))
+                                            print("self.adapter.persistent_data['mqtt_server'] is now: " + str(self.adapter.persistent_data['mqtt_server']))
                                     else:
                                         if self.DEBUG:
                                             print("Missing values in request body")
