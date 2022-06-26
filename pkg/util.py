@@ -253,7 +253,13 @@ def get_api_url(link_list):
 def clean_up_string_for_speaking(sentence): # Also used in thing scanner!
     #print("cleaning up: " + str(sentence))
     if len(sentence):
-        sentence = sentence.replace('/', ' ').replace('\\', ' ').replace('+', ' plus ').replace('#', ' number ').replace('-', ' ').replace('&', ' and ').replace('  ', ' ')
+        sentence = sentence.replace('/', ' ')
+        sentence = sentence.replace('\\', ' ')
+        sentence = sentence.replace('+', ' plus ')
+        sentence = sentence.replace('#', ' number ')
+        sentence = sentence.replace('-', ' ')
+        sentence = sentence.replace('&', ' and ')
+        sentence = sentence.replace('  ', ' ')
         sentence = sentence.replace('  ', ' ').replace('[', '').replace(']', '')
         sentence = sentence.replace('weather (','weather in ')
         sentence = sentence.replace('(', ' ')
@@ -261,9 +267,17 @@ def clean_up_string_for_speaking(sentence): # Also used in thing scanner!
         sentence = sentence.replace('  ', ' ')
         sentence = sentence.replace('  ', ' ')
         sentence = sentence.replace(' .', '.')
+        sentence = sentence.replace(' ,', ',')
         sentence = sentence.strip()
         #sentence = sentence[0].upper() + sentence[1:] # this causes issues, as this function is used in the thing scanner too
         #print("cleaned  up: " + str(sentence))
+    return sentence
+
+def clean_up_thing_string(sentence):
+    if len(sentence):
+        sentence = clean_up_string_for_speaking(sentence)
+        sentence = sentence.replace(',', ' ')
+        sentence = sentence.lower()
     return sentence
 
 

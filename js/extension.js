@@ -199,7 +199,10 @@
 			});
 				
 			
-				
+			document.getElementById('extension-voco-unavailable').addEventListener('click', (event) => {
+				this.attempts = 0;
+			});
+            
 				
 			
 			try{

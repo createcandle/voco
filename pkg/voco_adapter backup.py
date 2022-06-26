@@ -284,15 +284,6 @@ class VocoAdapter(Adapter):
             if 'main_controller_hostname' not in self.persistent_data: # to remember what the main voco server is, for satellites.
                 print("main_controller_hostname was not in persistent data, adding it now.")
                 self.persistent_data['main_controller_hostname'] = self.hostname
-                
-            if 'main_controller_ip' not in self.persistent_data: # to remember what the main voco server is, for satellites.
-                print("main_controller_ip was not in persistent data, adding it now.")
-                self.persistent_data['main_controller_ip'] = '192.168.2.198'
-            
-            # TODO TEMPORARY!    
-            #self.persistent_data['main_controller_ip'] = '192.168.2.198'
-            #self.save_persistent_data()
-            
         except Exception as ex:
             print("Error adding variables to persistent data: " + str(ex))
             
@@ -408,18 +399,7 @@ class VocoAdapter(Adapter):
         self.busy_starting_snips = False # only true while run_snips is active
         self.still_busy_booting = True # will be set to false on the first completed run_snips. Used to only say "hello I am listening" once.
         self.external_processes = [] # Will hold all the spawned processes        
-        self.snips_satellite_parts = ['snips-audio-server','snips-hotword']
-        #self.snips_parts = ['snips-hotword','snips-audio-server','snips-tts','snips-nlu','snips-injection','snips-dialogue','snips-asr']
-        
-        self.snips_parts = ['snips-tts',
-                            'snips-audio-server',
-                            'snips-dialogue',
-                            'snips-asr',
-                            'snips-nlu',
-                            'snips-injection',
-                            'snips-hotword'
-                            ]
-        
+        self.snips_parts = ['snips-hotword','snips-audio-server','snips-tts','snips-nlu','snips-injection','snips-dialogue','snips-asr']
         #self.snips_main_site_id = None
         self.custom_assistant_url = None
         self.larger_vocabulary_url = "https://raspbian.snips.ai/stretch/pool/s/sn/snips-asr-model-en-500MB_0.6.0-alpha.4_armhf.deb"
@@ -445,7 +425,7 @@ class VocoAdapter(Adapter):
         #self.my_thing_title_list = []
         self.satellite_thing_titles = {}
         self.connected_satellites = {}
-        self.satellite_asr_payload = None # temporarily holds the ASR payload that the satellite passes on to the main controller
+        
         
         # MQTT client
         self.mqtt_client = None
@@ -462,9 +442,6 @@ class VocoAdapter(Adapter):
         self.disable_security = False
         self.mqtt_username = 'candle'
         self.mqtt_password = 'smarthome'
-        
-        # SECOND MQTT CLIENT
-        self.mqtt_second_client = None
         
         
         # Things
@@ -1493,17 +1470,12 @@ class VocoAdapter(Adapter):
             # helps to avoid triggering voice detection to voco making noise itself
             self.last_sound_activity = time.time() - 1
             
-            if site_id != 'default' and not site_id.endswith(self.persistent_data['site_id']):
+            if (site_id != 'default' and site_id != self.persistent_data['site_id']):
                 if self.DEBUG:
                     print("Play_sound is forwaring playing a sound to site_id: " + str(site_id))
                 self.mqtt_client.publish("hermes/voco/" + str(site_id) + "/play",json.dumps({"sound_file":str(sound_file)}))
             
-            if site_id == 'everywhere' or site_id.endswith(self.persistent_data['site_id']):
-                if self.DEBUG:
-                    print("playing sound locally. self.persistent_data['audio_output']: " + str(self.persistent_data['audio_output']))
-                
-                
-                
+            if site_id == 'everywhere' or site_id == self.persistent_data['site_id']:
                 sound_file = sound_file + str(self.persistent_data['speaker_volume']) + '.wav'
                 sound_file = os.path.join(self.addon_path,"sounds",sound_file)
                 #sound_file = os.path.splitext(sound_file)[0] + str(self.persistent_data['speaker_volume']) + '.wav'
@@ -1519,7 +1491,6 @@ class VocoAdapter(Adapter):
                     if len(bluetooth_amixer_test) > 10:
                         output_to_bluetooth = True
                         
-                
                 # HDMI output on the Raspad can act a little weird. In those cases using OMXPLayer works better
                 if output_to_bluetooth == False and self.prefer_aplay == False and self.persistent_data['audio_output'] != 'Built-in headphone jack':
                     self.omxplay(sound_file,output_to_bluetooth)
@@ -1649,9 +1620,6 @@ class VocoAdapter(Adapter):
                 intent = {'siteId':self.persistent_data['site_id']}
 
             site_id = intent['siteId']
-            
-            #if site_id == 'default':
-            #    site_id = self.persistent_data['site_id']
 
             # Make the voice detection ignore Voco speaking for the next few seconds:
             self.last_sound_activity = time.time() - 1
@@ -1660,29 +1628,12 @@ class VocoAdapter(Adapter):
                 #print("[...] intent: " + str(json.dumps(intent, indent=4)))
                 
                 
-            if site_id != None:
-                if site_id.startswith("text-") or site_id.startswith("matrix-") or site_id.startswith("voice-"):
-                    if self.DEBUG:
-                        print("speak: extracting origin from sideId. Ideally this shouldn't happen...")
-                    if site_id.startswith('text-'):
-                        intent['origin'] = 'text'
-                        site_id = site_id.replace('text-','')
-                    elif site_id.startswith('matrix-'):
-                        intent['origin'] = 'matrix'
-                        site_id = site_id.replace('matrix-','')
-                    elif site_id.startswith('voice-'):
-                        intent['origin'] = 'voice'
-                        site_id = site_id.replace('voice-','')
-                elif not 'origin' in intent:
-                    intent['origin'] = 'voice'        
-                        
-            """
             if not 'origin' in intent:
                 intent['origin'] = 'voice'
                 if self.DEBUG:
                     print("speak: no origin defined")
                 if site_id != None:
-                    if site_id.startswith("text-") or site_id.startswith("matrix-") or site_id.startswith("voice-"):
+                    if (site_id.startswith("text-") or site_id.startswith("matrix-")):
                         if self.DEBUG:
                             print("speak: extracting origin from sideId. Ideally this shouldn't happen...")
                         if site_id.startswith('text-'):
@@ -1691,14 +1642,10 @@ class VocoAdapter(Adapter):
                         elif site_id.startswith('matrix-'):
                             intent['origin'] = 'matrix'
                             site_id = site_id.replace('matrix-','')
-                        elif site_id.startswith('voice-'):
-                            intent['origin'] = 'voice'
-                            site_id = site_id.replace('voice-','')
                     
             else:
                 if self.DEBUG:
                     print("speak: origin: " + str(intent['origin']))
-            """
                 
             # text input from UI
             if self.DEBUG:
@@ -1718,7 +1665,7 @@ class VocoAdapter(Adapter):
 
 
                 
-            if site_id == 'everywhere' or site_id == 'default' or site_id == self.persistent_data['site_id']:
+            if site_id == 'everywhere' or site_id == self.persistent_data['site_id']:
                 if self.DEBUG:
                     print("handling speak for this site")
                 
@@ -1739,12 +1686,10 @@ class VocoAdapter(Adapter):
                     
                 elif intent['origin'] == 'both':
                     if self.DEBUG:
-                        print("Origin was Both. Speaking and sending to matrix: " + str(voice_message))
+                        print("Origin was Both. Sending to matrix first: " + str(voice_message))
                     voice_message = clean_up_string_for_chatting(voice_message)
                     self.matrix_messages_queue.put({'title':'','message': voice_message ,'level':'Normal'})
                 
-                
-                # TODO: should it also be possible to have text commands have a spoken response too (both meaning text+voice, instead of just matrix_voice)? Or is the text input seen as a 'silent command'?
                 
                 #if self.orphaned and self.persistent_data['is_satellite']:
                 #    voice_message = "I am not connected to the main voco server. " + voice_message
@@ -1894,7 +1839,7 @@ class VocoAdapter(Adapter):
                 print("Error: run_snips called while snips was already in the process of being started")
             #return
         
-        if self.mqtt_connected == False and self.still_busy_booting:
+        if not self.mqtt_connected and self.still_busy_booting:
             if self.DEBUG:
                 print("Error, run_snips aborted because MQTT didn't seem to be connected (yet), and it's still booting?")
             return
@@ -1907,26 +1852,28 @@ class VocoAdapter(Adapter):
         if self.DEBUG:
             print("running Snips (after killing potential running snips instances)")
         
-        """
+        
         if self.persistent_data['is_satellite']:
             #commands = ['snips-satellite'] # seems to give a segmentation fault on Armv6?
-            commands = self.snips_satellite_parts
+            commands = ['snips-audio-server','snips-hotword']
             #commands = ['snips-audio-server']
         else:
-            commands = self.snips_parts
-
-        """
-        commands = self.snips_parts
+            commands = [
+                'snips-tts',
+                'snips-audio-server',
+                'snips-dialogue',
+                'snips-asr',
+                'snips-nlu',
+                'snips-injection',
+                'snips-hotword'
+            ]
+        
         
         self.busy_starting_snips = True
         self.external_processes = []
         
         
         try:
-            
-            if self.DEBUG:
-                print("commands: " + str(commands))
-            
             snips_processes_count = self.is_snips_running()
             if self.DEBUG:
                 print("run_snips: initial snips_processes_count: " + str(snips_processes_count))
@@ -1969,34 +1916,13 @@ class VocoAdapter(Adapter):
             
             snips_check_output = run_command('ps aux | grep snips')
         
-            
-            local_mqtt_ip = "localhost:" + str(self.mqtt_port) # TODO: "localhost" is hardcoded here    
-            if self.DEBUG:
-                print("\n\nlocal_mqtt_ip: " + str(local_mqtt_ip))
-            
-            """
-            if self.persistent_data['is_satellite']:
-                
-                mqtt_ip = str(self.persistent_data['mqtt_server']) + ":" + str(self.mqtt_port)
-            else:
-                mqtt_ip = "localhost:" + str(self.mqtt_port) # TODO: "localhost" is hardcoded here
-            
-            if self.DEBUG:
-                print("\n\nmqtt_ip: " + str(mqtt_ip))
-            """
-            
-            
-            extra_dialogue_manager_command = []
-            
-            
             # Start the snips parts
             for unique_command in commands:
                 
                 if unique_command in snips_check_output:
-                    pass
-                    #if self.DEBUG:
-                    #    print("This part of snips will not be (re)started since it seems to still be running ok: " + str(unique_command))
-                    #continue
+                    if self.DEBUG:
+                        print("This part of snips will not be (re)started since it seems to still be running ok: " + str(unique_command))
+                    continue
                 
                 bin_path = os.path.join(self.snips_path,unique_command)
                 command = [bin_path,"-u",self.work_path,"-a",self.assistant_path,"-c",self.toml_path]
@@ -2005,29 +1931,15 @@ class VocoAdapter(Adapter):
                     security_commands = ['--mqtt-username',self.mqtt_username,'--mqtt-password',self.mqtt_password]
                     command = command + security_commands
                 
-                
-                #if unique_command == 'snips-audio-server' or unique_command == 'snips-satellite' or unique_command == 'snips-asr' or unique_command == 'snips-hotword':
-                #    command = command + ["--mqtt",local_mqtt_ip]
-                #else:
-                #    command = command + ["--mqtt",mqtt_ip]
-                
-                    
-                
                 if unique_command == 'snips-audio-server' or unique_command == 'snips-satellite':
-                    
-                    # I forgot what bind does exactly
                     mqtt_bind = self.persistent_data['site_id'] + "@mqtt"
-                    command = command + ["--bind",mqtt_bind] 
                     
-                    ###if self.persistent_data['is_satellite'] and ():
-                    ###    mqtt_ip = str(self.persistent_data['mqtt_server']) + ":" + str(self.mqtt_port)
-                    ###else:
-                    ###    mqtt_ip = "localhost:" + str(self.mqtt_port) # TODO: "localhost" is hardcoded here
-                    
-                    
-                    
-                    ###command = command + ["--mqtt",mqtt_ip,"--alsa_capture","plughw:" + str(self.capture_card_id) + "," + str(self.capture_device_id),"--disable-playback"]
-                    command = command + ["--alsa_capture","plughw:" + str(self.capture_card_id) + "," + str(self.capture_device_id),"--disable-playback"]
+                    if self.persistent_data['is_satellite']:
+                        mqtt_ip = str(self.persistent_data['mqtt_server']) + ":" + str(self.mqtt_port)
+                    else:
+                        mqtt_ip = "localhost:" + str(self.mqtt_port)
+                        
+                    command = command + ["--bind",mqtt_bind,"--mqtt",mqtt_ip,"--alsa_capture","plughw:" + str(self.capture_card_id) + "," + str(self.capture_device_id),"--disable-playback"]
                     # "--alsa_playback","default:CARD=ALSA",
                     
                 if unique_command == 'snips-injection':
@@ -2035,30 +1947,25 @@ class VocoAdapter(Adapter):
                     
                 if unique_command == 'snips-hotword' or unique_command == 'snips-satellite':
                     #if self.hey_candle:
-                    command = command + ["-t",str(self.hotword_sensitivity),"--hotword-id",str(self.persistent_data['site_id'])] #,"--model",self.hey_candle_path + "=.5" ]
-                    #command = command + ["--mqtt",mqtt_ip]
-                    #command = command + ["--mqtt",mqtt_ip]
-                    #command = command + ["--audio",str(self.persistent_data['site_id']) + "localhost:" + str(self.mqtt_port)]
-                    
+                    command = command + ["-t",str(self.hotword_sensitivity),"--hotword-id",self.persistent_data['site_id']] #,"--model",self.hey_candle_path + "=.5" ]
                     #,"--no_vad_inhibitor"  see https://docs.snips.ai/articles/platform/voice-activity-detection
                     #else:
                     #command = command + ["-t",str(self.hotword_sensitivity)] # "--no_vad_inhibitor"
                     if self.sound_detection:
                         command = command + ["--vad_messages"]
                     
+                #if unique_command == 'snips-satellite':
+                    #mqtt_bind = str(self.hostname) + "@mqtt"
+                    #mqtt_ip = str(self.persistent_data['mqtt_server']) + ":" + str(self.mqtt_port)
+                    #command = command + []
+                    #pass
+                    # "--vad_messages", # enabling vad messages will lead to an MQTT message every time voice is detected. Could be a security feature / creepy thing property..
                 #elif unique_command == 'snips-asr':
                 #    command = command + ["--thread_number","1"] # TODO Check if this actually helps.
-                
-                #if unique_command == 'snips-dialogue':
-                #    extra_dialogue_manager_command = command.copy()
-                #    extra_dialogue_manager_command = extra_dialogue_manager_command + ["--mqtt",mqtt_ip]
-                
-                # Add IP and port
-                command = command + ["--mqtt",local_mqtt_ip]
-                
+            
                 if self.DEBUG:
                     print("--generated command = " + str(command))
-                    print("-- aka:\n " + str( ' '.join(command) ) + "\n")
+                    print("-- aka " + str( ' '.join(command) ))
                     
                 try:
                     #if self.DEBUG:
@@ -2072,12 +1979,7 @@ class VocoAdapter(Adapter):
                 if self.DEBUG:
                     print("-- waiting a bit in Snips startup loop")
             
-            
-            #if self.persistent_data['is_satellite']:
-            #    if self.DEBUG:
-            #        print('extra_dialogue_manager_command: ' + str(extra_dialogue_manager_command))
-            #    #self.external_processes.append( Popen(extra_dialogue_manager_command, env=my_env, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT) )
-                
+               
             #hotword_command = [self.hotword_path,"--no_vad_inhibitor","-u",self.work_path,"-a",self.assistant_path,"-c",self.toml_path,"--hotword-id",self.hostname,"-t",str(self.hotword_sensitivity)]
             #if self.DEBUG:
             #    print("hotword_command = " + str(hotword_command))
@@ -2102,15 +2004,12 @@ class VocoAdapter(Adapter):
         
         #self.unmute()
         try:
-            self.inject_updated_things_into_snips(True)
-            """
             if not self.persistent_data['is_satellite']:
                 self.inject_updated_things_into_snips(True) # force snips to learn all the names
 
             elif self.satellite_should_act_on_intent:
                 self.inject_updated_things_into_snips(True) # force snips to learn all the names
                 # TODO: there is a bit of a clash here. inject_updated_things_into_snips will stop if it's on a satellite. Maybe it shouldn't stop injection...
-            """
             
         except Exception as ex:
             print("error injecting: " + str(ex))
@@ -2227,23 +2126,14 @@ class VocoAdapter(Adapter):
         #loop = self.get_or_create_eventloop()
         
         
-        if self.DEBUG == False:
+        if not self.DEBUG:
             if self.is_mosquitto_up() == False:
-                if self.DEBUG:
-                    print("mqtt not up yet, waiting 20 seconds")
                 time.sleep(20)
-        else:
-            if self.is_mosquitto_up() == False:
-                if self.DEBUG:
-                    print("mqtt not up yet, waiting 5 seconds")
+            else:
                 time.sleep(5)
-        
-        if self.DEBUG:
-            print("starting mqtt clients")
         
         self.run_mqtt() # this will also start run_snips once a connection is established
         
-        self.run_second_mqtt()
         
         self.current_utc_time = int(time.time())
         
@@ -2283,7 +2173,7 @@ class VocoAdapter(Adapter):
                         
                         
                         if self.should_restart_mqtt:
-                            ###self.should_restart_mqtt = False
+                            self.should_restart_mqtt = False
                             if self.DEBUG:
                                 print("Periodic check: self.should_restart_mqtt was true - will try to run_mqtt")
                             self.run_mqtt() # try connecting again. If Mosquitto is up, then it will create the MQTT client and try to connect.
@@ -2319,14 +2209,11 @@ class VocoAdapter(Adapter):
                                 
                                 else:
                                     if self.initial_injection_completed == False and self.injection_in_progress == False:
-                                        
+                                        if self.DEBUG:
+                                            print("Clock: attempting a forced injection since no injection complete message was received yet")
                                         if self.persistent_data['is_satellite'] == False:
-                                            if self.DEBUG:
-                                                print("Clock: attempting a forced injection since no injection complete message was received yet")
                                             self.inject_updated_things_into_snips(True) # Force a new injection until it sticks
-                                        else:
-                                            if self.DEBUG:
-                                                print("satellite: injection not complete and was asked to do a forced injection")
+                                    
                                     
                                     #print("snips did not need to be restarted")
                                     # Check if hostname has changed. This is extremely rare, but it could happen.
@@ -2799,11 +2686,11 @@ class VocoAdapter(Adapter):
                                     print("clock: second opinion on Snips being down: self.is_snips_running() count: " + str(alternative_process_counter))
                             
                                 if self.persistent_data['is_satellite']:
-                                    if alternative_process_counter < len(self.snips_satellite_parts): # == 0:
+                                    if alternative_process_counter < 2: # == 0:
                                         if self.DEBUG:
                                             print("conclusion: snips satellite should be restarted")
                                         self.should_restart_snips = True
-                                elif alternative_process_counter < len(self.snips_parts):
+                                elif alternative_process_counter < 7:
                                     self.should_restart_snips = True
                                     if self.DEBUG:
                                         print("conclusion: snips coordinator should be restarted")
@@ -3387,443 +3274,9 @@ class VocoAdapter(Adapter):
 
 
 
-
-
-
-
-
-
 #
 # MQTT
 #
-
-
-    # m2 2nd
-    # A second mqtt client just for snips to run locally
-    # The other "first" client can switch between being locally connected or connected to the main controller when in satellite mode
-    def run_second_mqtt(self):
-        if self.DEBUG:
-            print("in run_second_mqtt")
-        if self.persistent_data['main_controller_ip'] != None:
-            if self.DEBUG:
-                print("starting second client")
-        
-            try:
-                client_name = "voco_satellite_" + self.persistent_data['site_id']
-                self.mqtt_second_client = client.Client(client_id=client_name)
-                
-                self.mqtt_second_client.on_connect = self.on_second_connect
-                self.mqtt_second_client.on_disconnect = self.on_second_disconnect
-                self.mqtt_second_client.on_message = self.on_second_message
-                self.mqtt_second_client.on_publish = self.on_second_publish
-                
-                if self.disable_security == False:
-                    self.mqtt_second_client.username_pw_set(username=self.mqtt_username, password=self.mqtt_password)
-                
-                self.mqtt_second_client.connect("localhost", int(self.mqtt_port), keepalive=60)
-                
-                self.mqtt_second_client.loop_start()
-                
-            except Exception as ex:
-                print("Error creating second MQTT client: " + str(ex))
-
-            #HOST = "localhost"
-            #PORT = 1883
-        
-        
-    def on_second_connect(self, client, userdata, flags, rc):
-        if self.DEBUG:
-            print("in on_second_connect")
-        
-        if rc == 0:
-            if self.DEBUG:
-                print("good connect by second mqtt client")
-        
-            self.mqtt_connected = True
-        
-            self.mqtt_second_client.subscribe("hermes/hotword/#")
-            #self.mqtt_second_client.subscribe("hermes/intent/#")
-            
-            self.mqtt_second_client.subscribe("hermes/asr/textCaptured/#")
-            #self.mqtt_second_client.subscribe("hermes/dialogueManager/sessionStarted/#")
-            
-            #self.mqtt_second_client.subscribe("hermes/injection/#")
-            
-            if self.sound_detection:
-                self.mqtt_second_client.subscribe("hermes/voiceActivity/#")
-                
-                
-            self.run_snips()
-
-        else:
-            if self.DEBUG:
-                print("Error: on_second_connect: connection rc was not 0! It was: " + str(rc))
-                print("- NOT STARTING SNIPS!")
-
-    def on_second_disconnect(self, client, userdata, rc):
-        if self.DEBUG:
-            print("in on_second_disconnect")
-
-        if rc == 0:
-            if self.DEBUG:
-                print("good disconnect by second mqtt client")
-        else:
-            if self.DEBUG:
-                print("Error, baddisconnect by second mqtt client. rc: " + str(rc))
-                
-        self.stop_snips()
-
-
-        
-    def on_second_message(self, client, userdata, msg):
-        if self.DEBUG:
-            print('\n\n\n===========LOCAL MESSAGE===========')
-        payload = {}
-        try:
-            payload = json.loads(msg.payload.decode('utf-8')) 
-            #if self.DEBUG:
-            #    print(str(msg.payload.decode('utf-8')))
-        except Exception as ex:
-            if self.DEBUG:
-                print("Unable to parse payload from incoming mqtt message: " + str(ex))
-                
-        if self.DEBUG:
-            print("")
-            print("SECOND")
-            print("MQTT SECOND message to topic: " + str(msg.topic) + ", received on: " + self.persistent_data['site_id'] + ", a.k.a. hostname: " + self.hostname)
-            print("+")
-            print(str(payload))
-            print("+")
-            
-        if msg.topic == 'hermes/asr/textCaptured':
-            
-            if self.persistent_data['is_satellite']:
-                if self.DEBUG:
-                    print("stored asr payload")
-                self.satellite_asr_payload = payload
-                #self.mqtt_client.publish("hermes/dialogueManager/startSession",json.dumps({"init":{"type":"action","canBeEnqueued": True},"siteId":str(self.persistent_data['site_id'])}) ) #, "customData":{'origin':'voice','from_satellite':True,'from_satellite_id':str(self.persistent_data['site_id'])} }))
-                #self.mqtt_client.publish("hermes/dialogueManager/startSession",json.dumps({"init":{"type":"action","canBeEnqueued": True},"siteId":str(self.persistent_data['site_id'])}) ) #, "customData":{'origin':'voice','from_satellite':True,'from_satellite_id':str(self.persistent_data['site_id'])} }))
-                
-                if self.DEBUG:
-                    print("sending captured text to main controller: " + str(payload['text']))
-                self.mqtt_client.publish("hermes/voco/parse",json.dumps({ "siteId":str(self.persistent_data['site_id']),"text": payload['text'],'origin':'voice' }))
-                
-                
-                #'message' in payload and 'intent' in payload:
-                #self.mqtt_client.publish("hermes/voco/" + str(self.persistent_data['main_site_id']) + "/speak",json.dumps({'message':'What the fuck!', 'intent':'default', }))
-
-
-        """
-        # this is used to catch when a local session has been started to parse text input
-        elif msg.topic == 'hermes/dialogueManager/sessionStarted':
-            if self.DEBUG:
-                print("\n\n\nSESSION STARTED ON LOCAL CONTROLLER")
-            if 'siteId' in payload and 'sessionId' in payload:
-                if payload['siteId'] == None:
-                    if self.DEBUG:
-                        print("\nError, siteId was None\n")
-                else:
-                    
-                    if (payload['siteId'].startswith("text-") or payload['siteId'].startswith("matrix-")) and payload['siteId'].endswith(self.persistent_data['site_id']):
-                        if self.DEBUG:
-                            print("A session was succesfully started for a manual text input. Session ID = " + str(payload['sessionId']))
-                
-                        # Split manually inputted text string into array of words
-                
-                        text_words = self.last_text_command.split()
-                        fake_tokens = []
-                        at_word = 0
-                        range_start = 0
-                        for word in text_words:
-                            fake_tokens.append({"value":word,"confidence":1.0,"rangeStart":range_start,"rangeEnd":range_start + len(word),"time":{"start":float(at_word),"end":float(at_word + 1)}})
-                            at_word += 1
-                            range_start += len(word) + 1
-                        if self.DEBUG:
-                            print("fake ASR tokens: " + str(fake_tokens))
-                
-                        self.mqtt_client.publish("hermes/asr/textCaptured",json.dumps( {"text":self.last_text_command,"likelihood":1.0,"tokens":fake_tokens,"seconds":float(at_word),"siteId":payload['siteId'],"sessionId":str(payload['sessionId'])} ))
-                        #mosquitto_pub -t 'hermes/asr/textCaptured' -m '{"text":"what time is it","likelihood":1.0,"tokens":[{"value":"what","confidence":1.0,"rangeStart":0,"rangeEnd":4,"time":{"start":0.0,"end":1.0799999}},{"value":"time","confidence":1.0,"rangeStart":5,"rangeEnd":9,"time":{"start":1.0799999,"end":1.14}},{"value":"is","confidence":1.0,"rangeStart":10,"rangeEnd":12,"time":{"start":1.14,"end":1.29}},{"value":"it","confidence":1.0,"rangeStart":13,"rangeEnd":15,"time":{"start":1.29,"end":2.1}}],"seconds":2.0,"siteId":"nfhnlpva","sessionId":"c79b1488-167b-45f1-8005-b6bd22a31bfa"}'
-                
-                        self.last_text_command = ""
-                        
-                    
-        """
-        
-        
-        
-        
-        
-        
-        if msg.topic.startswith('hermes/injection/perform'):
-            
-            self.last_injection_time = time.time() # if a site is injecting, all sites should wait a while before attempting their own injections.
-            self.injection_in_progress = True
-            if self.DEBUG:
-                print("INJECTION PERFORM MESSAGE RECEIVED")
-            """
-            if self.persistent_data['is_satellite']:
-                if self.DEBUG:
-                    print("INJECTION PERFORM MESSAGE RECEIVED, but I am a satellite, so I'm ignoring it")
-            else:
-                self.last_injection_time = time.time() # if a site is injecting, all sites should wait a while before attempting their own injections.
-                self.injection_in_progress = True
-                if self.DEBUG:
-                    print("INJECTION PERFORM MESSAGE RECEIVED")
-            """
-                
-        elif msg.topic.startswith('hermes/injection/complete'):
-            if self.DEBUG:
-                print("INJECTION COMPLETE MESSAGE RECEIVED")
-            self.possible_injection_failure = False
-            self.injection_in_progress = False
-            # Voco is now really ready
-            if self.initial_injection_completed == False:
-                self.initial_injection_completed = True
-                self.speak_welcome_message()
-            """
-            if self.persistent_data['is_satellite']:
-                if self.DEBUG:
-                    print("INJECTION COMPLETE MESSAGE RECEIVED, but I am a satellite, so I'm ignoring it")
-            else:
-                if self.DEBUG:
-                    print("INJECTION COMPLETE MESSAGE RECEIVED")
-                self.possible_injection_failure = False
-                self.injection_in_progress = False
-                # Voco is now really ready
-                if self.initial_injection_completed == False:
-                    self.initial_injection_completed = True
-                    self.speak_welcome_message()
-           """
-        elif msg.topic.startswith('hermes/hotword/' + self.persistent_data['site_id']):
-            
-            if msg.topic.endswith('/detected'):
-                self.intent_received = False
-                if self.DEBUG:
-                    print("(...) Hotword detected")
-                
-                if 'siteId' in payload:
-                    #print("site_id was in hotword detected payload: " + str(payload['siteId']))
-                    if payload['siteId'] == self.persistent_data['site_id'] or payload['siteId'] == 'default' or payload['siteId'] == 'everywhere':
-                        if self.persistent_data['listening'] == True:
-                            if self.DEBUG:
-                                print("I should play a detected sound")
-                    
-                            if self.persistent_data['feedback_sounds'] == True:
-                                self.play_sound( str(self.start_of_input_sound) )
-                    
-                    else:
-                        if self.DEBUG:
-                            print("Not me, but the satelite '" + str(payload['siteId']) + "' should play a detected sound")
-                        self.mqtt_client.publish("hermes/voco/" + str(payload['siteId']) + "/play",json.dumps({"sound_file":"start_of_input"}))
-                    
-            if msg.topic.endswith('/loaded'):
-                if self.DEBUG:
-                    print("Received loaded message")
-                if self.persistent_data['is_satellite']:
-                    if self.DEBUG:
-                        print("sending normal mqtt ping in response to mqtt loaded message")
-                    time.sleep(.5)
-                    self.inject_updated_things_into_snips(True) # force snips to learn all the names
-                    self.send_mqtt_ping() # send  the list of things this satellite manages to the main voice controller
-                        
-                        
-
-        # TODO: what happens if the main controller and the satellite both hear the command in this new situation?
-        elif msg.topic == 'hermes/hotword/toggleOff':
-            if self.persistent_data['listening'] == True:
-                if self.DEBUG:
-                    print("MQTT message ends with toggleOff")
-                
-                if 'siteId' in payload:
-                    if payload['siteId'] == self.persistent_data['site_id']:
-                        self.mute()
-                    elif self.persistent_data['is_satellite'] == False:
-                        self.mqtt_client.publish("hermes/voco/" + str(payload['siteId']) + "/mute",json.dumps({"mute":True}))
-
-
-        
-        elif msg.topic == 'hermes/hotword/toggleOn':
-            
-            # unmute if the audio output was muted.
-            self.unmute()
-            if self.persistent_data['listening'] == True:
-                if self.persistent_data['is_satellite']: # and self.satellite_should_act_on_intent == False:
-                    if self.DEBUG:
-                        print("ignoring hermes/hotword/toggleOn")
-                    return
-        
-                elif self.intent_received == False:
-                    if self.DEBUG:
-                        print("No intent received")
-                        
-                    if 'siteId' in payload:
-                        if payload['siteId'] != None:
-                            returned_text = False
-                            if payload['siteId'].startswith('text-'):
-                                payload['siteId'] = payload['siteId'].replace('text-','')
-                                returned_text = True
-                            
-                            elif payload['siteId'].startswith('matrix-'):
-                                payload['siteId'] = payload['siteId'].replace('matrix-','')
-                                returned_text = True
-                                self.speak("?",intent={'siteId': payload['siteId'],'origin':'matrix' })
-                            
-                            
-                            if returned_text == False:
-                                if self.DEBUG:
-                                    print("siteId was in /toggleOn payload: " + str(payload['siteId']))
-                                if payload['siteId'] == self.persistent_data['site_id'] or payload['siteId'] == 'default' or payload['siteId'] == 'everywhere':
-                            
-                            
-                                        if self.DEBUG:
-                                            print("I should play an end-of-input sound")
-                                        if self.persistent_data['feedback_sounds'] == True:
-                                            self.play_sound( str(self.end_of_input_sound) )
-                                    
-                                else:
-                                    if self.DEBUG:
-                                        print("The satelite should play a toggleOn sound. Sending MQTT message to hermes/voco/" + str(payload['siteId']) + "/play")
-                                    self.mqtt_client.publish("hermes/voco/" + str(payload['siteId']) + "/play",json.dumps({"sound_file":"end_of_input"}))
-                        else:
-                            if self.DEBUG:
-                                print("toggleOn: Warning: sideId in payload, but it was None?")
-                            
-                    #else:
-                    #    print("ToggleOn detected, but no siteId in payload. So playing the sound here.")
-                    #    if self.persistent_data['feedback_sounds'] == True:
-                    #        self.play_sound( str(self.end_of_input_sound) )
-            
-                    #self.intent_received = True
-
-                self.intent_received = False
-        
-                # TODO: To support satellites it might be necessary to 'throw the voice' via the Snips audio server:
-                #binaryFile = open(self.listening_sound, mode='rb')
-                #wav = bytearray(binaryFile.read())
-                #publish.single("hermes/audioServer/{}/playBytes/whateverId".format("default"), payload=wav, hostname="localhost", client_id="")
-        
-        
-        """
-        elif msg.topic.startswith('hermes/hotword/' + self.persistent_data['site_id']):
-            
-            if msg.topic.endswith('/detected'):
-                self.intent_received = False
-                if self.DEBUG:
-                    print("(...) Hotword detected")
-                
-                if 'siteId' in payload:
-                    print("site_id was in hotword detected payload: " + str(payload['siteId']))
-                    if payload['siteId'] == self.persistent_data['site_id'] or payload['siteId'] == 'default' or payload['siteId'] == 'everywhere':
-                        if self.persistent_data['listening'] == True:
-                            if self.DEBUG:
-                                print("I should play a detected sound? feedback_sounds: " + str(self.persistent_data['feedback_sounds']))
-                    
-                            if self.persistent_data['feedback_sounds'] == True:
-                                self.play_sound( str(self.start_of_input_sound) )
-                    
-                    #else:
-                    #    if self.DEBUG:
-                    #        print("Not me, but the satelite '" + str(payload['siteId']) + "' should play a detected sound")
-                    #    self.mqtt_client.publish("hermes/voco/" + str(payload['siteId']) + "/play",json.dumps({"sound_file":"start_of_input"}))
-            
-        
-        """
-        
-        
-        
-        
-        # TODO: now intent is handled twice
-        """
-        elif msg.topic.startswith('hermes/intent'):
-            
-            #if self.persistent_data['is_satellite'] and self.satellite_should_act_on_intent == False:
-            #    if self.DEBUG:
-            #        print("Satellite is skipping intent handling")
-            #    return
-                
-            self.intent_received = True
-            if self.DEBUG:
-                print("-----------------------------------")
-                print(">> Received intent message.")
-                print("message received: "  + str(msg.payload.decode("utf-8")))
-                print("message topic: " + str(msg.topic))
-                
-            intent_name = os.path.basename(os.path.normpath(msg.topic))
-            if self.DEBUG:
-                print("intent_name: " + str(intent_name))
-            intent_message = json.loads(msg.payload.decode("utf-8"))
-
-
-            # remove the 'hack' that indicated the voice analysis actually started from a text input.
-            if 'siteid' in intent_message:
-                if intent_message['siteId'] != None:
-                    if intent_message['siteId'].startswith('text-'):
-                        if self.DEBUG:
-                            print("stripping 'site-' from siteId")
-                        intent_message['siteId'] = intent_message['siteId'][5:]
-                        intent_message['origin'] = 'text'
-                    elif intent_message['siteId'].startswith('matrix-'):
-                        if self.DEBUG:
-                            print("stripping 'matrix-' from siteId")
-                        intent_message['siteId'] = intent_message['siteId'][7:]
-                        intent_message['origin'] = 'matrix'
-                    else:
-                        if self.DEBUG:
-                            print("mqtt /hermes/intent: setting origin to voice")
-                        intent_message['origin'] = 'voice'
-                else:
-                    if self.DEBUG:
-                        print("siteId was in intent_message, but it was None?")
-
-            # Brute-force end the existing session
-            try:
-                self.mqtt_client.publish('hermes/dialogueManager/endSession', json.dumps({"text": "", "sessionId": intent_message['sessionId']}))
-            except Exception as ex:
-                print("error ending session: " + str(ex))
-            
-            
-            
-            # If a voice activation was picked up on this device, but it shouldn't be listening, then stop handling this intent. If it's a textual command or the voice command came from another site, then continue.
-            if 'siteid' in intent_message:
-                if intent_message['siteId'] != None:
-                    if intent_message['siteId'] == self.persistent_data['site_id'] and self.persistent_data['listening'] == False and intent_message['origin'] == 'voice':
-                        if self.DEBUG:
-                            print("not handling intent that originated on this device by voice because listening is set to false.")
-                        return
-                else:
-                    if self.DEBUG:
-                        print("siteId was in intent_message... but it was None?")
-                    
-            # Deal with the user's command
-            self.alternatives_counter = -1
-            self.master_intent_callback(intent_message)
-        
-        """
-            
-            
-    
-            
-            
-            
-    # React to a message departing
-    def on_second_publish(self, client, userdata, msg):
-        #print(".")
-        if self.DEBUG:
-            print("      -> MQTT SECOND message published succesfully. msg: " + str(msg))
-        #self.periodic_mqtt_attempts = 0
-        #self.mqtt_connected = True
-        #print(str(msg))
-
-
-
-
-
-
-
-
-
-
-
 
 
 
@@ -3961,14 +3414,14 @@ class VocoAdapter(Adapter):
             
                 if self.DEBUG:
                     print("MQTT client loop (re)started. self.should_restart_mqtt is now false.")  
-            
-            #try:    
-            #    if self.DEBUG:
-            #        print("self.mqtt_client.host: " + str(dir(self.mqtt_client.host)))
-            #        print("self.mqtt_client._host: " + str(dir(self.mqtt_client._host)))
-            #        print("self.mqtt_client: " + str(dir(self.mqtt_client)))
-            #except Exception as ex:
-            #    print("Error, that paho var did not exist: " + str(ex))
+            try:
+                
+                if self.DEBUG:
+                    print("self.mqtt_client.host: " + str(dir(self.mqtt_client.host)))
+                    print("self.mqtt_client._host: " + str(dir(self.mqtt_client._host)))
+                    print("self.mqtt_client: " + str(dir(self.mqtt_client)))
+            except Exception as ex:
+                print("that paho var did not exist: " + str(ex))
                 
         except Exception as ex:
             print("Error creating MQTT client connection: " + str(ex))
@@ -4016,9 +3469,9 @@ class VocoAdapter(Adapter):
             if rc == 7:
                 self.set_status_on_thing("Error, please reboot") # Could be multiple instances of Voco active at the same time
         
-        ###if self.DEBUG:
-        ###    print("- MQTT disconnect. calling stop_snips")
-        ###self.stop_snips()
+        if self.DEBUG:
+            print("- MQTT disconnect. calling stop_snips")
+        self.stop_snips()
         
         #if self.persistent_data['is_satellite']: # Run snips on the local server while the main server is disconnected.
             #self.orphaned = True
@@ -4044,7 +3497,7 @@ class VocoAdapter(Adapter):
             
             self.currently_scanning_for_missing_mqtt_server = False
                 
-            ###self.run_snips()
+            self.run_snips()
                 
             # if this is a satellite, then connecting to MQTT could just be a test of going over multiple controllers in an attempt to find the main one
             """
@@ -4069,37 +3522,27 @@ class VocoAdapter(Adapter):
                     
                 if self.DEBUG:
                     print("-on_connect: subscribing to topics")
-                
-                
-                #self.mqtt_client.subscribe("hermes/hotword/#") # now handled by the second local mqtt client
+                self.mqtt_client.subscribe("hermes/hotword/#")
                 self.mqtt_client.subscribe("hermes/intent/#")
-            
-                #self.mqtt_client.subscribe("hermes/asr/textCaptured/#") # now handled by the second local mqtt client
-                self.mqtt_client.subscribe("hermes/dialogueManager/sessionStarted/#")
-            
-                self.mqtt_client.subscribe("hermes/injection/#")
-            
-                #if self.sound_detection:
-                #    self.mqtt_client.subscribe("hermes/voiceActivity/#")
                 
+                self.mqtt_client.subscribe("hermes/asr/textCaptured/#")
+                self.mqtt_client.subscribe("hermes/dialogueManager/sessionStarted/#")
                 
                 self.mqtt_client.subscribe("hermes/voco/ping")
                 self.mqtt_client.subscribe("hermes/voco/pong")
-                
-                #if self.persistent_data['is_satellite'] == False:
                 self.mqtt_client.subscribe("hermes/voco/parse")
-                
                 self.mqtt_client.subscribe("hermes/voco/" + self.persistent_data['site_id'] + "/#")
                 
                 
                 #if self.DEBUG:
+                self.mqtt_client.subscribe("hermes/injection/#")
                 
                 
+                if self.sound_detection:
+                    self.mqtt_client.subscribe("hermes/voiceActivity/#")
                 
-                
-                
-            except Exception as ex:
-                print("Error subscribing to Voco MQTT with sitename: " + self.persistent_data['site_id'] + ", error: " + str(ex))
+            except:
+                print("Error subscribing to Voco MQTT with sitename: " + self.persistent_data['site_id'])
              
              
             if self.DEBUG:
@@ -4119,13 +3562,17 @@ class VocoAdapter(Adapter):
 
     # Process an mqtt message as it arrives
     def on_message(self, client, userdata, msg):
-        
         if self.DEBUG:
-            if self.persistent_data['is_satellite']:
-                print('\n\n\n------------MESSAGE ON MAIN CONTROLLER--------------')
-            else:
-                print('\n\n\n------------FIRST MESSAGE--------------')
-        
+            print("")
+            print("")
+            print("MQTT message to topic: " + str(msg.topic) + ", received on: " + self.persistent_data['site_id'] + ", a.k.a. hostname: " + self.hostname)
+            print("+")
+            print(str(msg.payload.decode('utf-8')))
+            print("+")
+            
+        self.periodic_mqtt_attempts = 0
+        self.mqtt_connected = True
+            
         payload = {}
         try:
             payload = json.loads(msg.payload.decode('utf-8')) 
@@ -4133,112 +3580,194 @@ class VocoAdapter(Adapter):
             #    print(str(msg.payload.decode('utf-8')))
         except Exception as ex:
             if self.DEBUG:
-                print("Error, unable to parse payload from incoming mqtt message: " + str(ex))
-                
-        if self.DEBUG:
-            print("")
-            print("")
-            print("MQTT message to topic: " + str(msg.topic) + ", received on: " + self.persistent_data['site_id'] + ", a.k.a. hostname: " + self.hostname)
-            print("+")
-            print(str(payload))
-            print("+")
-            
-        self.periodic_mqtt_attempts = 0
-        self.mqtt_connected = True
-            
-        
+                print("Unable to parse payload from incoming mqtt message: " + str(ex))
         
         
         if msg.topic == 'hermes/voco/parse':
             if self.DEBUG:
                 print("hermes/voco/parse: payload: " + str(payload))
-            if 'siteId' in payload and 'text' in payload and 'origin' in payload:
-                """
+            if 'siteId' in payload and 'text' in payload:
                 if payload['siteId'].endswith(self.persistent_data['site_id']):
                     if self.DEBUG:
                         print("")
                         print("******************************************")
                         print("starting parsing of text command at siteId: " + str(payload['siteId']))
                         print("text command: " + str(payload['text']))
-                """
-                
-                if self.persistent_data['is_satellite']:
-                    if payload['siteId'].endswith(self.persistent_data['site_id']):
-                        if self.DEBUG:
-                            print("in /parse, is satellite, and site_id matches with mine")
-                        self.last_text_command = payload['text']
-                        self.parse_text(site_id=payload['siteId'],origin=payload['origin'])
-                    else:
-                        if self.DEBUG:
-                            print("ignoring /parse message on this satellite")
-                else:
                     self.last_text_command = payload['text']
-                    self.parse_text(site_id=payload['siteId'],origin=payload['origin'])
+                    self.parse_text()
                     
-                    
+        
         # this is used to catch when a session has been started to parse text input
         if msg.topic == 'hermes/dialogueManager/sessionStarted':
-            
-            if self.persistent_data['is_satellite']:
-                if self.DEBUG:
-                    print("detected session start on main controller")
-                
             if 'siteId' in payload and 'sessionId' in payload:
                 if payload['siteId'] == None:
                     if self.DEBUG:
                         print("\nError, siteId was None\n")
-                elif payload['siteId'].endswith(self.persistent_data['site_id']):
-                    
+                elif (payload['siteId'].startswith("text-") or payload['siteId'].startswith("matrix-")) and payload['siteId'].endswith(self.persistent_data['site_id']):
                     if self.DEBUG:
-                        print("A session was succesfully started for this site_id. Session ID = " + str(payload['sessionId']))
-                    
-                    if payload['siteId'].startswith("text-") or payload['siteId'].startswith("matrix-") or self.persistent_data['is_satellite']: 
-                        if self.DEBUG:
-                            print("Creating faux textcaptured. self.last_text_command: " + str(self.last_text_command))
+                        print("A session was succesfully started for a manual text input. Session ID = " + str(payload['sessionId']))
                 
-                        # Split manually inputted text string into array of words
+                    # Split manually inputted text string into array of words
                 
-                        text_words = self.last_text_command.split()
-                        fake_tokens = []
-                        at_word = 0
-                        range_start = 0
-                        for word in text_words:
-                            fake_tokens.append({"value":word,"confidence":1.0,"rangeStart":range_start,"rangeEnd":range_start + len(word),"time":{"start":float(at_word),"end":float(at_word + 1)}})
-                            at_word += 1
-                            range_start += len(word) + 1
-                        if self.DEBUG:
-                            print("fake ASR tokens: " + str(fake_tokens))
-                
-                        self.mqtt_client.publish("hermes/asr/textCaptured",json.dumps( {"text":self.last_text_command,"likelihood":1.0,"tokens":fake_tokens,"seconds":float(at_word),"siteId":payload['siteId'],"sessionId":str(payload['sessionId'])} ))
-                        #mosquitto_pub -t 'hermes/asr/textCaptured' -m '{"text":"what time is it","likelihood":1.0,"tokens":[{"value":"what","confidence":1.0,"rangeStart":0,"rangeEnd":4,"time":{"start":0.0,"end":1.0799999}},{"value":"time","confidence":1.0,"rangeStart":5,"rangeEnd":9,"time":{"start":1.0799999,"end":1.14}},{"value":"is","confidence":1.0,"rangeStart":10,"rangeEnd":12,"time":{"start":1.14,"end":1.29}},{"value":"it","confidence":1.0,"rangeStart":13,"rangeEnd":15,"time":{"start":1.29,"end":2.1}}],"seconds":2.0,"siteId":"nfhnlpva","sessionId":"c79b1488-167b-45f1-8005-b6bd22a31bfa"}'
-                
-                        self.last_text_command = ""
-                    
-                    else:
-                        if self.DEBUG:
-                            print("was a voice start? or not a satellite? Not sending faux textCaptured")
-                        
-                            
-                    
-                else:
+                    text_words = self.last_text_command.split()
+                    fake_tokens = []
+                    at_word = 0
+                    range_start = 0
+                    for word in text_words:
+                        fake_tokens.append({"value":word,"confidence":1.0,"rangeStart":range_start,"rangeEnd":range_start + len(word),"time":{"start":float(at_word),"end":float(at_word + 1)}})
+                        at_word += 1
+                        range_start += len(word) + 1
                     if self.DEBUG:
-                        print("voice session start detected for other controller")
+                        print("fake ASR tokens: " + str(fake_tokens))
+                
+                    self.mqtt_client.publish("hermes/asr/textCaptured",json.dumps( {"text":self.last_text_command,"likelihood":1.0,"tokens":fake_tokens,"seconds":float(at_word),"siteId":payload['siteId'],"sessionId":str(payload['sessionId'])} ))
+                    #mosquitto_pub -t 'hermes/asr/textCaptured' -m '{"text":"what time is it","likelihood":1.0,"tokens":[{"value":"what","confidence":1.0,"rangeStart":0,"rangeEnd":4,"time":{"start":0.0,"end":1.0799999}},{"value":"time","confidence":1.0,"rangeStart":5,"rangeEnd":9,"time":{"start":1.0799999,"end":1.14}},{"value":"is","confidence":1.0,"rangeStart":10,"rangeEnd":12,"time":{"start":1.14,"end":1.29}},{"value":"it","confidence":1.0,"rangeStart":13,"rangeEnd":15,"time":{"start":1.29,"end":2.1}}],"seconds":2.0,"siteId":"nfhnlpva","sessionId":"c79b1488-167b-45f1-8005-b6bd22a31bfa"}'
+                
+                    self.last_text_command = ""
                     
-
-            else:
-                if self.DEBUG:
-                    print("- misssing siteId and/or sessionId in payload")
-
-
+                    
 
         try:
             
-            if msg.topic.startswith('hermes/intent'):
+            if msg.topic.startswith('hermes/injection/perform'):
                 
-                #if self.persistent_data['is_satellite'] and self.satellite_should_act_on_intent == False:
-                #    if self.DEBUG:
-                #        print("Satellite is skipping intent handling")
-                #    return
+                if self.persistent_data['is_satellite']:
+                    if self.DEBUG:
+                        print("INJECTION PERFORM MESSAGE RECEIVED, but I am a satellite, so I'm ignoring it")
+                else:
+                    self.last_injection_time = time.time() # if a site is injecting, all sites should wait a while before attempting their own injections.
+                    self.injection_in_progress = True
+                    if self.DEBUG:
+                        print("INJECTION PERFORM MESSAGE RECEIVED")
+                    
+            elif msg.topic.startswith('hermes/injection/complete'):
+                if self.persistent_data['is_satellite']:
+                    if self.DEBUG:
+                        print("INJECTION COMPLETE MESSAGE RECEIVED, but I am a satellite, so I'm ignoring it")
+                else:
+                    if self.DEBUG:
+                        print("INJECTION COMPLETE MESSAGE RECEIVED")
+                    self.possible_injection_failure = False
+                    self.injection_in_progress = False
+                    # Voco is now really ready
+                    if self.initial_injection_completed == False:
+                        self.initial_injection_completed = True
+                        self.speak_welcome_message()
+               
+            elif msg.topic.startswith('hermes/hotword/' + self.persistent_data['site_id']):
+                
+                if msg.topic.endswith('/detected'):
+                    self.intent_received = False
+                    if self.DEBUG:
+                        print("(...) Hotword detected")
+                    
+                    if 'siteId' in payload:
+                        #print("site_id was in hotword detected payload: " + str(payload['siteId']))
+                        if payload['siteId'] == self.persistent_data['site_id'] or payload['siteId'] == 'default' or payload['siteId'] == 'everywhere':
+                            if self.persistent_data['listening'] == True:
+                                if self.DEBUG:
+                                    print("I should play a detected sound")
+                        
+                                if self.persistent_data['feedback_sounds'] == True:
+                                    self.play_sound( str(self.start_of_input_sound) )
+                        
+                        else:
+                            if self.DEBUG:
+                                print("Not me, but the satelite '" + str(payload['siteId']) + "' should play a detected sound")
+                            self.mqtt_client.publish("hermes/voco/" + str(payload['siteId']) + "/play",json.dumps({"sound_file":"start_of_input"}))
+                        
+                if msg.topic.endswith('/loaded'):
+                    if self.DEBUG:
+                        print("Received loaded message")
+                    if self.persistent_data['is_satellite']:
+                        if self.DEBUG:
+                            print("sending normal mqtt ping in response to mqtt loaded message")
+                        time.sleep(.5)
+                        self.inject_updated_things_into_snips(True) # force snips to learn all the names
+                        self.send_mqtt_ping() # send  the list of things this satellite manages to the main voice controller
+                            
+                            
+
+                    
+            elif msg.topic == 'hermes/hotword/toggleOff':
+                if self.persistent_data['listening'] == True:
+                    if self.DEBUG:
+                        print("MQTT message ends with toggleOff")
+                    
+                    if 'siteId' in payload:
+                        if payload['siteId'] == self.persistent_data['site_id']:
+                            self.mute()
+                        elif self.persistent_data['is_satellite'] == False:
+                            self.mqtt_client.publish("hermes/voco/" + str(payload['siteId']) + "/mute",json.dumps({"mute":True}))
+
+
+            
+            elif msg.topic == 'hermes/hotword/toggleOn':
+                
+                # unmute if the audio output was muted.
+                self.unmute()
+                if self.persistent_data['listening'] == True:
+                    if self.persistent_data['is_satellite']: # and self.satellite_should_act_on_intent == False:
+                        if self.DEBUG:
+                            print("ignoring hermes/hotword/toggleOn")
+                        return
+            
+                    elif self.intent_received == False:
+                        if self.DEBUG:
+                            print("No intent received")
+                            
+                        if 'siteId' in payload:
+                            if payload['siteId'] != None:
+                                returned_text = False
+                                if payload['siteId'].startswith('text-'):
+                                    payload['siteId'] = payload['siteId'].replace('text-','')
+                                    returned_text = True
+                                
+                                elif payload['siteId'].startswith('matrix-'):
+                                    payload['siteId'] = payload['siteId'].replace('matrix-','')
+                                    returned_text = True
+                                    self.speak("?",intent={'siteId': payload['siteId'],'origin':'matrix' })
+                                
+                                
+                                if returned_text == False:
+                                    if self.DEBUG:
+                                        print("siteId was in /toggleOn payload: " + str(payload['siteId']))
+                                    if payload['siteId'] == self.persistent_data['site_id'] or payload['siteId'] == 'default' or payload['siteId'] == 'everywhere':
+                                
+                                
+                                            if self.DEBUG:
+                                                print("I should play an end-of-input sound")
+                                            if self.persistent_data['feedback_sounds'] == True:
+                                                self.play_sound( str(self.end_of_input_sound) )
+                                        
+                                    else:
+                                        if self.DEBUG:
+                                            print("The satelite should play a toggleOn sound. Sending MQTT message to hermes/voco/" + str(payload['siteId']) + "/play")
+                                        self.mqtt_client.publish("hermes/voco/" + str(payload['siteId']) + "/play",json.dumps({"sound_file":"end_of_input"}))
+                            else:
+                                if self.DEBUG:
+                                    print("toggleOn: Warning: sideId in payload, but it was None?")
+                                
+                        #else:
+                        #    print("ToggleOn detected, but no siteId in payload. So playing the sound here.")
+                        #    if self.persistent_data['feedback_sounds'] == True:
+                        #        self.play_sound( str(self.end_of_input_sound) )
+                
+                        #self.intent_received = True
+    
+                    self.intent_received = False
+            
+                    # TODO: To support satellites it might be necessary to 'throw the voice' via the Snips audio server:
+                    #binaryFile = open(self.listening_sound, mode='rb')
+                    #wav = bytearray(binaryFile.read())
+                    #publish.single("hermes/audioServer/{}/playBytes/whateverId".format("default"), payload=wav, hostname="localhost", client_id="") 
+            
+            elif msg.topic.startswith('hermes/intent'):
+                
+                if self.persistent_data['is_satellite'] and self.satellite_should_act_on_intent == False:
+                    if self.DEBUG:
+                        print("Satellite is skipping intent handling")
+                    return
                     
                 self.intent_received = True
                 if self.DEBUG:
@@ -4548,12 +4077,8 @@ class VocoAdapter(Adapter):
                         if 'thing_titles' in payload and 'satellite_intent_handling' in payload:
                             if payload['siteId'] not in self.satellite_thing_titles:
                                 if self.DEBUG:
-                                    print("creating a set to hold thing titles from satellite " + str(payload['siteId']))
+                                    print("creating a set to hold titles from satellite " + str(payload['siteId']))
                                 self.satellite_thing_titles[payload['siteId']] = set()
-                            
-                            if self.DEBUG:
-                                print('clearing list of things titles from satellite: ' + str(payload['siteId']))
-                            self.satellite_thing_titles[payload['siteId']].clear()
                             
                             if payload['satellite_intent_handling']:
                                 #if self.DEBUG:
@@ -4562,10 +4087,10 @@ class VocoAdapter(Adapter):
                                     #if self.DEBUG:
                                     #    print("adding thing_title to list of things that satellite will handle: " + str(thing_title))
                                     self.satellite_thing_titles[payload['siteId']].add(thing_title)
-                            #else:
-                            #    if self.DEBUG:
-                            #        print('clearing list of things that satellite will handle')
-                            #    self.satellite_thing_titles[payload['siteId']].clear()
+                            else:
+                                if self.DEBUG:
+                                    print('clearing list of things that satellite will handle')
+                                self.satellite_thing_titles[payload['siteId']].clear()
                             if self.DEBUG:
                                 print("self.satellite_thing_titles['" + payload['siteId']  + "'] is now this length: " + str(len(self.satellite_thing_titles[payload['siteId']])) )
                                 
@@ -4582,8 +4107,8 @@ class VocoAdapter(Adapter):
                                             'hostname':self.hostname,
                                             'siteId':self.persistent_data['site_id'],
                                             'satellite': self.persistent_data['is_satellite'],
-                                            'main_controller': self.persistent_data['main_site_id'],
-                                            #'thing_titles':thing_titles_list
+                                            'main_controller': self.persistent_data['main_site_id'] 
+                                            #, 'thing_titles':thing_titles_list
                                             })
                                         ) 
                     
@@ -4620,7 +4145,7 @@ class VocoAdapter(Adapter):
                             if payload['satellite'] == True and payload['siteId'] != self.persistent_data['site_id'] and payload['main_controller'] == self.persistent_data['site_id']:
                                 if self.persistent_data['is_satellite'] == False:
                                     if self.DEBUG:
-                                        print("SATELLITE SENT A PONG")
+                                        print("CONNECTED SATELLITE UPDATE")
                                     self.connected_satellites[ str(payload['hostname']) ] = int(time.time())
                                 
                         #set Should add/update this in self.mqtt_others
@@ -5282,7 +4807,7 @@ class VocoAdapter(Adapter):
                 
                         
                         
-                    # TODO: add the reverse too, where a satellite stops if the main controller (or even another satellite) has a better thing title match
+                    
                 
                     if found_on_satellite and not self.persistent_data['is_satellite']:
                         if self.DEBUG:
@@ -5515,76 +5040,43 @@ class VocoAdapter(Adapter):
             
             if self.try_updating_things():
                 
-                my_thing_titles_list = []
-                full_thing_titles_list = []
-                
-                # Add things from this controller
                 for thing in self.things:
                     if 'title' in thing:
-                        full_thing_titles_list.append(clean_up_string_for_speaking(str(thing['title'])))
+                        #thing_name = clean_up_string_for_speaking(str(thing['title']).lower()).strip()
+                        thing_name = clean_up_string_for_speaking(str(thing['title'])) #.strip()
+                    
+                        if len(thing_name) > 1:
+                            #if self.DEBUG:
+                            #    print("thing title:" + thing_name + ".")
+                            fresh_thing_titles.add(thing_name)
+                            #self.my_thing_title_list.append(thing_name)
                         
-                    for thing_property_key in thing['properties']:
-                        if 'type' in thing['properties'][thing_property_key] and 'enum' in thing['properties'][thing_property_key]:
-                            if thing['properties'][thing_property_key]['type'] == 'string':
-                                for word in thing['properties'][thing_property_key]['enum']:
-                                    #property_string_name = clean_up_string_for_speaking(str(word).lower()).strip()
-                                    property_string_name = clean_up_string_for_speaking(str(word)) #.strip()
-                                    if len(property_string_name) > 1:
-                                        fresh_property_strings.add(property_string_name)
-                        if 'title' in thing['properties'][thing_property_key]:
-                            #property_title = clean_up_string_for_speaking(str(thing['properties'][thing_property_key]['title']).lower()).strip()
-                            property_title = clean_up_string_for_speaking(str(thing['properties'][thing_property_key]['title'])) #.strip()
-                            if len(property_title) > 1:
-                                fresh_property_titles.add(property_title)
-                        
-                # Add things from satellites (if this is not itself a satellite)
-                #if self.persistent_data['is_satellite'] == False:
-                # TODO: actually, satellite should be able to understand titles on main controller well? Maybe?
-                my_thing_titles_list = full_thing_titles_list.copy()
-                
-                
-                for sat in self.satellite_thing_titles:
-                    if self.DEBUG:
-                        print("adding thing titles from satellite: " + str(sat))
-                    for sat_thing_title in self.satellite_thing_titles[sat]:
-                        if self.DEBUG:
-                            print("-- " + str(sat_thing_title))
-                        full_thing_titles_list.append(sat_thing_title)   
-                    
-                if self.DEBUG:
-                    print("Inject: full_thing_titles_list: " + str(full_thing_titles_list))
-                
-                #for thing in self.things:
-                #    if 'title' in thing:
-                for thing_name in full_thing_titles_list:
-                    if self.DEBUG:
-                        print("thing_name: " + str(thing_name))
-                    #thing_name = clean_up_string_for_speaking(str(thing['title']).lower()).strip()
-                    thing_name = clean_up_string_for_speaking(thing_name) #.strip() # TODO: removing .lower here has cause issues in the thing scanner.. But at least the sentences in matrix now look nice I guess?
-                
-                    if len(thing_name) > 1:
-                        #if self.DEBUG:
-                        #    print("thing title:" + thing_name + ".")
-                        fresh_thing_titles.add(thing_name)
-                        #self.my_thing_title_list.append(thing_name)
-                    
-                    
+                        for thing_property_key in thing['properties']:
+                            if 'type' in thing['properties'][thing_property_key] and 'enum' in thing['properties'][thing_property_key]:
+                                if thing['properties'][thing_property_key]['type'] == 'string':
+                                    for word in thing['properties'][thing_property_key]['enum']:
+                                        #property_string_name = clean_up_string_for_speaking(str(word).lower()).strip()
+                                        property_string_name = clean_up_string_for_speaking(str(word)) #.strip()
+                                        if len(property_string_name) > 1:
+                                            fresh_property_strings.add(property_string_name)
+                            if 'title' in thing['properties'][thing_property_key]:
+                                #property_title = clean_up_string_for_speaking(str(thing['properties'][thing_property_key]['title']).lower()).strip()
+                                property_title = clean_up_string_for_speaking(str(thing['properties'][thing_property_key]['title'])) #.strip()
+                                if len(property_title) > 1:
+                                    fresh_property_titles.add(property_title)
             
-            
-                        
-                                    
             
                 operations = []
             
-                if self.DEBUG:
-                    print("fresh_thing_titles = " + str(fresh_thing_titles))
-                    print("fresh_prop_titles = " + str(fresh_property_titles))
-                    print("fresh_prop_strings = " + str(fresh_property_strings))
+                #if self.DEBUG:
+                    #print("fresh_thing_titles = " + str(fresh_thing_titles))
+                    #print("fresh_prop_titles = " + str(fresh_property_titles))
+                    #print("fresh_prop_strings = " + str(fresh_property_strings))
             
                 try:
                     thing_titles = set(self.persistent_data['thing_titles'])
                 except:
-                    print("Error, Couldn't load previous thing titles from persistence. If Voco was just installed this is normal.")
+                    print("Couldn't load previous thing titles from persistence. If Voco was just installed this is normal.")
                     thing_titles = set()
                     self.persistent_data['thing_titles'] = []
                     self.save_persistent_data()
@@ -5592,7 +5084,7 @@ class VocoAdapter(Adapter):
                 try:
                     property_titles = set(self.persistent_data['property_titles'])
                 except:
-                    print("Error, Couldn't load previous property titles from persistence. If Voco was just installed this is normal.")
+                    print("Couldn't load previous property titles from persistence. If Voco was just installed this is normal.")
                     property_titles = set()
                     self.persistent_data['property_titles'] = []
                     self.save_persistent_data()
@@ -5600,7 +5092,7 @@ class VocoAdapter(Adapter):
                 try:
                     property_strings = set(self.persistent_data['property_strings'])
                 except:
-                    print("Error, Couldn't load previous property strings from persistence. If Voco was just installed this is normal.")
+                    print("Couldn't load previous property strings from persistence. If Voco was just installed this is normal.")
                     property_strings = set()
                     self.persistent_data['property_strings'] = []
                     self.save_persistent_data()
@@ -5625,15 +5117,11 @@ class VocoAdapter(Adapter):
                     #    AddFromVanillaInjectionRequest({"Thing" : list(fresh_thing_titles) })
                     #)
                     # small hack to make mass-switching of lights easier.
-                    #self.persistent_data['thing_titles'] = list(fresh_thing_titles)
+                    self.persistent_data['thing_titles'] = list(fresh_thing_titles)
                     
-                    # remember the things titles list for the next injection comparision
-                    self.persistent_data['thing_titles'] = my_thing_titles_list
-                    
-                    #if not self.persistent_data['is_satellite']:
-                    fresh_thing_titles.add('lights')
-                    fresh_thing_titles.add('curtains')
-                        
+                    if not self.persistent_data['is_satellite']:
+                        fresh_thing_titles.add('lights')
+                        fresh_thing_titles.add('curtains')
                     operation = ('addFromVanilla',{"Thing" : list(fresh_thing_titles) })
                     operations.append(operation)
                 
@@ -5646,9 +5134,8 @@ class VocoAdapter(Adapter):
                     #)
                     self.persistent_data['property_titles'] = list(fresh_property_titles)
                     
-                    #if not self.persistent_data['is_satellite']:
-                    fresh_property_titles.add('all')
-                    
+                    if not self.persistent_data['is_satellite']:
+                        fresh_property_titles.add('all')
                     operation = ('addFromVanilla',{"Property" : list(fresh_property_titles) })
                     operations.append(operation)
 
@@ -5661,15 +5148,13 @@ class VocoAdapter(Adapter):
                     #)
                     self.persistent_data['property_strings'] = list(fresh_property_strings)
                     
-                    fresh_property_strings.add('raise')
-                    fresh_property_strings.add('lower')
-                    fresh_property_strings.add('higher')
-                    fresh_property_strings.add('lower')
-                    fresh_property_strings.add('increase')
-                    fresh_property_strings.add('decrease')
-                    
-                    #if not self.persistent_data['is_satellite']:
-                        
+                    if not self.persistent_data['is_satellite']:
+                        fresh_property_strings.add('raise')
+                        fresh_property_strings.add('lower')
+                        fresh_property_strings.add('higher')
+                        fresh_property_strings.add('lower')
+                        fresh_property_strings.add('increase')
+                        fresh_property_strings.add('decrease')
                     
                     operation = ('addFromVanilla',{"string" : list(fresh_property_strings) })
                     operations.append(operation)
@@ -5696,38 +5181,18 @@ class VocoAdapter(Adapter):
                          print("Error saving thing details to persistence: " + str(ex))
                 
                     try:
-                        if self.mqtt_second_client != None:
-                            if self.DEBUG:
-                                print("                                                                    [===]---")
-                                print("Injection: self.mqtt_client exists, so will try to inject:")
-                                print(str(json.dumps(operations)))
-                            self.mqtt_second_client.publish('hermes/injection/perform', json.dumps(update_request))
-                            self.last_injection_time = time.time()
-                            self.force_injection = False
-                            
-                            
-                            #if self.mqtt_client != None:
-                            # TODO here we allow the satellite to directly do an injection on the main controller (which apparently works)
-                            # But won;'t that override the thing names since 'addfromVanilla' is used? Ideally the main controller decides when to re-inject based on satellite data
-                            #    self.mqtt_client.publish('hermes/injection/perform', json.dumps(update_request))
-                            
-                            """
-                            if self.persistent_data['is_satellite'] == False:
+                        if self.mqtt_client != None:
+                            if not self.persistent_data['is_satellite']:
                                 if self.DEBUG:
-                                    print("[===]---")
                                     print("Injection: self.mqtt_client exists, and not satellite, so will try to inject")
                                     print(str(json.dumps(operations)))
-                                ###self.mqtt_client.publish('hermes/injection/perform', json.dumps(update_request))
-                                ###self.last_injection_time = time.time()
-                                ###self.force_injection = False
-                            else:
-                                if self.DEBUG:
-                                    print("NOT INJECTING - I am a satellite")
-                            """
+                                self.mqtt_client.publish('hermes/injection/perform', json.dumps(update_request))
+                                self.last_injection_time = time.time()
+                                self.force_injection = False
+                            
 
                         if self.persistent_data['is_satellite']:
-                            if self.mqtt_client != None:
-                                self.send_mqtt_ping() # inform main controller of updated things list that this device manages
+                            self.send_mqtt_ping() # inform main controller of updated things list that this device manages
 
                         #with Hermes("localhost:1883") as herm:
                         #    herm.request_injection(update_request)
@@ -5740,7 +5205,6 @@ class VocoAdapter(Adapter):
                 else:
                     if self.DEBUG:
                         print("\/ \/ \/ No need for injection")
-                
                 
             
             
@@ -6088,8 +5552,8 @@ class VocoAdapter(Adapter):
                     #if self.DEBUG:
                         #print("")
                         #print("___" + current_thing_title)
-                    #if self.DEBUG:
-                    #    print(str(current_thing_title) + " =??= " + str(target_thing_title))
+                    if self.DEBUG:
+                        print(str(current_thing_title) + " =??= " + str(target_thing_title))
                         
                     probable_thing_title_confidence = 0
                     
@@ -6159,8 +5623,8 @@ class VocoAdapter(Adapter):
                                     print("titles started the same, but length was too diferent")
                                 continue
                         else:
-                            #if self.DEBUG:
-                            #    print("Failed to match thing title: " + str(current_thing_title) )
+                            if self.DEBUG:
+                                print("Failed to match thing title: " + str(current_thing_title) )
                             # A title was provided, but we were not able to match it to the current things. Perhaps we can get a property-based match.
                             continue
                             
@@ -7142,62 +6606,16 @@ class VocoAdapter(Adapter):
 
 
 
-    def parse_text(self, origin=None,site_id=None):
-        if self.DEBUG:
-            print("in parse_text")
-        
-        if site_id == None:
-            site_id = str(self.persistent_data['site_id'])
-            
+    def parse_text(self, return_channel="text"):
         # messages can be returned to the web interface (text), or to the matrix chat room (matrix)
         if self.last_text_command != "":
             if self.DEBUG:
-                print("in parse_text (to sending text input to snips: " + str(self.last_text_command))
+                print("in parse_text (sending text input to snips)")
             if self.mqtt_connected:
-                
-                modified_site_id = str(site_id)
-                if origin != None:
-                    if origin != 'voice':
-                        modified_site_id = origin + "-" + modified_site_id
-                
-                #self.mqtt_client.publish("hermes/dialogueManager/startSession",json.dumps({"init":{"type":"action","canBeEnqueued": True},"siteId":modified_site_id, "customData":{'origin':origin} }))
-                
-                
-                # TODO: this is ugly routing. text/matrix input should be router cleaner.
-                if site_id == str(self.persistent_data['site_id']):
-                    
-                    if self.persistent_data['is_satellite'] == True:
-                        
-                        if origin == 'text' or origin == 'matrix':
-                            if self.DEBUG:
-                                print("satellite, but allowing parse_text to start a local dialogue session (exceptional)")
-                            self.mqtt_client.publish("hermes/dialogueManager/startSession",json.dumps({"init":{"type":"action","canBeEnqueued": True},"siteId":modified_site_id }))
-                            
-                        else:
-                            if self.DEBUG:
-                                print("satelite, and not a text/matrix origin, so not calling start_session that is targeted to the local site. Satellites should start voice control sessions on the main controller.")    
-                        
-                    else:
-                        if self.DEBUG:
-                            print("parse_text called with this device's ID, and an not a satellit. So this is a normal parse_text command probably from text/matrix input.")
-                        self.mqtt_client.publish("hermes/dialogueManager/startSession",json.dumps({"init":{"type":"action","canBeEnqueued": True},"siteId":modified_site_id }))
-                            
-                else:
-                    if self.persistent_data['is_satellite'] == False:
-                        if self.DEBUG:
-                            print("handling a parse_text with a remote site_id, and I am not a satellite, so it must be a satellite asking me to parse text. Starting faux local session...")
-                        self.mqtt_client.publish("hermes/dialogueManager/startSession",json.dumps({"init":{"type":"action","canBeEnqueued": True},"siteId":modified_site_id }))
-                    else:
-                        if self.DEBUG:
-                            print("handling parse_text with a remote site_id. I am a satellite. Doing nothing for now.")
-                
-                            
-            else:
-                if self.DEBUG:
-                    print("parse_text: MQTT not connected! Not parsing text, because impossible to start session on dialogue manager")
+                self.mqtt_client.publish("hermes/dialogueManager/startSession",json.dumps({"init":{"type":"action","canBeEnqueued": True},"siteId":return_channel + "-" + str(self.persistent_data['site_id']) }))
         else:
             if self.DEBUG:
-                print("Error, ignoring parse_text run: text command is empty")
+                print("ignoring parse_text run: text command is empty")
 
 
     def string_to_utc_timestamp(self,date_string,ignore_timezone=True):
@@ -7344,28 +6762,23 @@ class VocoAdapter(Adapter):
         try:
             if self.DEBUG:
                 print("------------------ in look_for_mqtt_server")
-            #if self.currently_scanning_for_missing_mqtt_server == False and self.persistent_data['is_satellite']: # and self.persistent_data['main_site_id'] != self.persistent_data['site_id']
-            if self.persistent_data['is_satellite']:
+            if self.currently_scanning_for_missing_mqtt_server == False and self.persistent_data['is_satellite']: # and self.persistent_data['main_site_id'] != self.persistent_data['site_id']
                 if self.DEBUG:
-                    print("------------------ This satellite wasn't already searching for missing main MQTT server, so the search process is starting now.")
+                    print("------------------ This satellite wasn't already searching for missing main MQTT server, so the search process is starting now. Doing ARP scan.")
                 
                 self.currently_scanning_for_missing_mqtt_server = True
                 
-                possible_controllers = avahi_detect_gateways()
-                if self.DEBUG:
-                    print("------------------ look_for_mqtt_server: avahi_detect result: " + str(possible_controllers))
+                possible_controllers = avahi_detect_gateways(True)
                 
                 for controller_ip in possible_controllers:
-                    if self.DEBUG:
-                        print("controller_ip: " + str(controller_ip))
                     if possible_controllers[controller_ip] == self.persistent_data['main_controller_hostname']:
                         if self.DEBUG:
                             print("found new ip address of disappeared main controller: " + str(controller_ip))
                         
-                        self.persistent_data['mqtt_server'] = str(controller_ip)
-                        self.should_restart_mqtt = True
-                        #self.run_snips()
-                        #self.force_injection = True
+                        self.adapter.persistent_data['mqtt_server'] = controller_ip
+                        self.adapter.should_restart_mqtt = True
+                        self.run_snips()
+                        self.force_injection = True
                         
                 self.currently_scanning_for_missing_mqtt_server = False # setting this back to false will allow for a new round of searching.
                         
@@ -8549,7 +7962,7 @@ class VocoAdapter(Adapter):
                                 self.matrix_messages_queue.put({'title':'Your things','message':things_list ,'level':'Normal'})
                             else:
                                 self.last_text_command = str(event.body)
-                                self.parse_text(site_id=self.persistent_data['site_id'],origin='matrix') # return channel is matrix
+                                self.parse_text('matrix') # return channel is matrix
                             
                             
                     else:
@@ -9005,43 +8418,35 @@ class VocoAdapter(Adapter):
     def is_snips_running(self):
         if self.DEBUG:
             print("In is_snips_running")
-        
+            
         p1 = subprocess.Popen(["ps", "-A"], stdout=subprocess.PIPE)
         p2 = subprocess.Popen(['grep', 'snips'], stdin=p1.stdout, stdout=subprocess.PIPE)
 
         snips_actual_processes_count = 0
         for s in (str(p2.communicate())[2:-10]).split('\\n'):
-            if self.DEBUG:
-                print(" -- " + str(s))
+            #if self.DEBUG:
+            #    print(" -- " + str(s))
             if s != "" and 'defunct' not in s:
                 snips_actual_processes_count += 1
-                
-        try:
+        
+
+        if self.DEBUG:
+            print(" -- sub processes count: " + str(len(self.external_processes)))
+            print(" -- snips_actual_processes_count = " + str(snips_actual_processes_count))
+        
+        if self.persistent_data['is_satellite'] and len(self.external_processes) == 4:
             if self.DEBUG:
-                print(" -- is_snips_running: sub processes count: " + str(len(self.external_processes)))
-                print(" -- is_snips_running: snips_actual_processes_count = " + str(snips_actual_processes_count))
+                print("too many orphaned snips satellite processes.. something is wrong. Setting should_restart_snips to True")
+            self.should_restart_snips = True
         
-        
-            if snips_actual_processes_count != len(self.snips_parts):
-                if self.DEBUG:
-                    print("Snips actual process count mismatch. Setting should_restart_snips to True")
-                self.should_restart_snips = True
-        
-            if self.persistent_data['is_satellite'] and len(self.external_processes) == 4:
-                if self.DEBUG:
-                    print("too many orphaned snips satellite processes.. something is wrong. Setting should_restart_snips to True")
-                self.should_restart_snips = True
-        
-            if len(self.external_processes) == 14:
-                if self.DEBUG:
-                    print("too many orphaned snips processes.. something is wrong. Setting should_restart_snips to True")
-                self.should_restart_snips = True
+        if len(self.external_processes) == 14:
+            if self.DEBUG:
+                print("too many orphaned snips processes.. something is wrong. Setting should_restart_snips to True")
+            self.should_restart_snips = True
             
-            if len(self.external_processes) == 28:
-                print("ERROR. Voco seems to be stuck in a loop where it is unable to start properly. Will try to restart the addon.")
-                self.close_proxy() #restart the addon
-        except Exception as ex:
-            print("Error in is_snips_running: " + str(ex))
+        if len(self.external_processes) == 28:
+            print("ERROR. Voco seems to be stuck in a loop where it is unable to start properly. Will try to restart the addon.")
+            self.close_proxy() #restart the addon
             
         #return bool(len(self.external_processes))
         return snips_actual_processes_count

@@ -554,7 +554,7 @@ class VocoAPIHandler(APIHandler):
                                 if self.DEBUG:
                                     print("handling /parse. Incoming text: " + str(request.body['text']))
                                 self.adapter.last_text_command = str(request.body['text'])
-                                self.adapter.parse_text()
+                                self.adapter.parse_text(site_id=self.adapter.persistent_data['site_id'],origin="text")
                                 return APIResponse(
                                     status=200,
                                     content_type='application/json',
