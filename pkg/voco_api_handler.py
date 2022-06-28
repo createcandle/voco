@@ -588,32 +588,7 @@ class VocoAPIHandler(APIHandler):
                                     item_to_delete = None
                                     
                                     try:
-                                    
-                                        moment = int(request.body['moment'])
-                                        sentence = str(request.body['sentence'])
-                                
-                                        if self.DEBUG:
-                                            print("deleting timer")
-                                        update = 'Unable to get detailed information'
-                                    
-                                        action_count = len( self.adapter.persistent_data['action_times'] )
-                                        for i in range(action_count):
-                                            if self.adapter.persistent_data['action_times'][i]['moment'] == moment and self.adapter.persistent_data['action_times'][i]['slots']['sentence'] == sentence:
-                                                item_to_delete = i
-                                
-                                        if item_to_delete != None:
-                                            del self.adapter.persistent_data['action_times'][item_to_delete]
-                                            if self.DEBUG:
-                                                print("deleted #" + str(item_to_delete))
-                                            
-                                            state = True
-                                        else:
-                                            if self.DEBUG:
-                                                print("Error, could not find element to delete")
-                                            state = False
-                                                
-                                        
-                                                
+                                        state = self.adapter.broadcast_remove_action_time(request.body)
                                     except Exception as ex:
                                         print("error /update -> deleting: " + str(ex))
                                                 

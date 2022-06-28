@@ -445,7 +445,9 @@ class VocoAdapter(Adapter):
         #self.my_thing_title_list = []
         self.satellite_thing_titles = {}
         self.connected_satellites = {}
-        self.satellite_asr_payload = None # temporarily holds the ASR payload that the satellite passes on to the main controller
+        #self.satellite_asr_payload = None # temporarily holds the ASR payload that the satellite passes on to the main controller
+        self.last_spoken_sentence = ""      # Used to avoid speaking the same sentence twice in quick succession
+        self.last_spoken_sentence_time = 0  # Used to avoid speaking the same sentence twice in quick succession
         
         # MQTT client
         self.mqtt_client = None
@@ -798,19 +800,7 @@ class VocoAdapter(Adapter):
             print("error setting initial audio_output settings: " + str(ex))
         
             
-        # Get the initial speaker settings
-        for option in self.audio_controls:
-            try:
-                if str(option['human_device_name']) == str(self.persistent_data['audio_output']):
-                    self.current_simple_card_name = option['simple_card_name']
-                    self.current_card_id = option['card_id']
-                    self.current_device_id = option['device_id']
-                    self.current_control_name = option['control_name']
-            except Exception as ex:
-                print("error getting initial audio settings: " + str(ex))
-                self.current_simple_card_name = "ALSA"
-                self.current_card_id = 0
-                self.current_device_id = 0
+        self.update_speaker_variables()
         
         
         # Set the correct speaker volume
@@ -954,6 +944,35 @@ class VocoAdapter(Adapter):
         
 
 
+
+    def update_speaker_variables(self):
+        if self.DEBUG:
+            print("in update_speaker_variables")
+            
+        # Get the initial speaker settings
+        for option in self.audio_controls:
+            try:
+                
+                if self.DEBUG:
+                    print("matching audio controll?" + str(option['human_device_name']) + " =???= " + str(self.persistent_data['audio_output']))
+                
+                
+                if str(option['human_device_name']) == str(self.persistent_data['audio_output']):
+                    if self.DEBUG:
+                        print("found matching audio control. option: " + str(option))
+                    self.current_simple_card_name = option['simple_card_name']
+                    self.current_card_id = option['card_id']
+                    self.current_device_id = option['device_id']
+                    self.current_control_name = option['control_name']
+            except Exception as ex:
+                print("error getting initial audio settings: " + str(ex))
+                self.current_simple_card_name = "ALSA"
+                self.current_card_id = 0
+                self.current_device_id = 0
+                self.current_control_name = ""
+        
+        if self.DEBUG:
+            print("speaker variable self.current_control_name is now: " + str(self.current_control_name ))
 
 
     def bluetooth_device_check(self):
@@ -1425,6 +1444,12 @@ class VocoAdapter(Adapter):
             
             self.bluetooth_device_check()
             
+            # TODO: experimental: check if
+            self.current_simple_card_name = "ALSA"
+            self.current_card_id = 0
+            self.current_device_id = 0
+            self.current_control_name = ""
+            
             self.persistent_data['audio_output'] = str(selection)
             self.save_persistent_data()
             
@@ -1443,7 +1468,8 @@ class VocoAdapter(Adapter):
                         self.current_simple_card_name = option['simple_card_name']
                         self.current_card_id = option['card_id']
                         self.current_device_id = option['device_id']
-                    
+                        self.current_control_name = option['control_name']
+                        
                         # Set selection in persistence data
                         self.persistent_data['audio_output'] = str(selection)
                         self.save_persistent_data()
@@ -1495,7 +1521,7 @@ class VocoAdapter(Adapter):
             
             if site_id != 'default' and not site_id.endswith(self.persistent_data['site_id']):
                 if self.DEBUG:
-                    print("Play_sound is forwaring playing a sound to site_id: " + str(site_id))
+                    print("Play_sound is forwarding playing a sound to site_id: " + str(site_id))
                 self.mqtt_client.publish("hermes/voco/" + str(site_id) + "/play",json.dumps({"sound_file":str(sound_file)}))
             
             if site_id == 'everywhere' or site_id.endswith(self.persistent_data['site_id']):
@@ -1517,11 +1543,13 @@ class VocoAdapter(Adapter):
                     if self.DEBUG:
                         print("bluetooth_amixer_test: " + str(bluetooth_amixer_test))
                     if len(bluetooth_amixer_test) > 10:
+                        if self.DEBUG:
+                            print('bluetooth speaker seems to be connected')
                         output_to_bluetooth = True
                         
                 
                 # HDMI output on the Raspad can act a little weird. In those cases using OMXPLayer works better
-                if output_to_bluetooth == False and self.prefer_aplay == False and self.persistent_data['audio_output'] != 'Built-in headphone jack':
+                if output_to_bluetooth == False and self.prefer_aplay == False and self.persistent_data['audio_output'] != 'Built-in headphone jack' and self.persistent_data['audio_output'] != 'Bluetooth speaker':
                     self.omxplay(sound_file,output_to_bluetooth)
                 else:
                     self.aplay(sound_file,output_to_bluetooth)
@@ -1659,6 +1687,19 @@ class VocoAdapter(Adapter):
                 print("[...] speak: " + str(voice_message))
                 #print("[...] intent: " + str(json.dumps(intent, indent=4)))
                 
+            if voice_message.endswith('.'):
+                voice_message = voice_message[:-1]
+                
+            # A very brute-force way to avoid speaking the same sentence twice, which might occur if a satellite and main controller have a thing with the same name 
+            dont_speak = False
+            if self.last_spoken_sentence == str(voice_message) and self.last_spoken_sentence_time > (time.time() - 7):
+                if self.DEBUG:
+                    print("\n\nSTOPPED A SENTENCE FROM BEING SPOKEN TWICE\n\n")
+                dont_speak = True
+                
+            self.last_spoken_sentence_time = time.time()
+            self.last_spoken_sentence = str(voice_message)
+                
                 
             if site_id != None:
                 if site_id.startswith("text-") or site_id.startswith("matrix-") or site_id.startswith("voice-"):
@@ -1755,7 +1796,8 @@ class VocoAdapter(Adapter):
                 #FNULL = open(os.devnull, 'w')
             
                 # unmute if the audio output was muted.
-                self.unmute()
+                if str(self.persistent_data['audio_output']) != 'Bluetooth speaker':
+                    self.unmute()
     
                 # filter out characters that cause weird pronounciation.
                 voice_message = clean_up_string_for_speaking(voice_message)
@@ -1771,9 +1813,10 @@ class VocoAdapter(Adapter):
                                 if self.DEBUG:
                                     print("terminiating old nanotts")
                                 self.nanotts_process.terminate()
-                        except:
+                        except Exception as ex:
                             if self.DEBUG:
-                                print("nanotts_process did not exist yet")
+                                print("nanotts_process did not exist yet: " + str(ex))
+                        
     
                         nanotts_volume = int(self.persistent_data['speaker_volume']) / 100
     
@@ -1791,6 +1834,16 @@ class VocoAdapter(Adapter):
                         self.echo_process = subprocess.Popen(('echo', str(voice_message)), stdout=subprocess.PIPE)
                         self.nanotts_process = subprocess.run((nanotts_path,'-l',str(os.path.join(self.snips_path,'lang')),'-v',str(self.voice_accent),'--volume',str(nanotts_volume),'--speed',str(self.voice_speed),'--pitch',str(self.voice_pitch),'-w','-o',self.response_wav), capture_output=True, stdin=self.echo_process.stdout, env=environment)
 
+                        """
+                        try:
+                            if self.nanotts_process != None:
+                                if self.DEBUG:
+                                    print("terminiating old nanotts again")
+                                self.nanotts_process.terminate()
+                        except Exception as ex:
+                            if self.DEBUG:
+                                print("nanotts_process did not exist yet again: " + str(ex))
+                        """
                     
                         # play wave file
                         try:
@@ -1853,29 +1906,34 @@ class VocoAdapter(Adapter):
     def mute(self):
         if self.DEBUG:
             print("In mute. current_control_name: " + str(self.current_control_name))
-        if self.currently_muted == False:
             
-            run_command("amixer sset " + str(self.current_control_name) + " mute")
-            self.currently_muted = True
-            if self.DEBUG:
-                print("actually muted")
-        else:
-            if self.DEBUG:
-                print("not actually muted: was already muted!")
+        if str(self.current_control_name) != "" and str(self.persistent_data['audio_output']) != 'Bluetooth speaker':
+            if self.currently_muted == False:
+            
+                run_command("amixer sset " + str(self.current_control_name) + " mute")
+                self.currently_muted = True
+                if self.DEBUG:
+                    print("actually muted")
+            else:
+                if self.DEBUG:
+                    print("not actually muted: was already muted!")
+        
         
         
     def unmute(self):
         if self.DEBUG:
             print("In unmute. current_control_name: " + str(self.current_control_name))
-        if self.currently_muted:
-            unmute_command = "amixer sset " + str(self.current_control_name) + " unmute"
-            if self.DEBUG:
-                print("actually unmuting. Command: " + str(unmute_command))
-            run_command(unmute_command)
-            self.currently_muted = False
-        else:
-            if self.DEBUG:
-                print("not unmuting, since mute doesn't actually seem to be active")
+            
+        if str(self.current_control_name) != "" and str(self.persistent_data['audio_output']) != 'Bluetooth speaker':
+            if self.currently_muted:
+                unmute_command = "amixer sset " + str(self.current_control_name) + " unmute"
+                if self.DEBUG:
+                    print("actually unmuting. Command: " + str(unmute_command))
+                run_command(unmute_command)
+                self.currently_muted = False
+            else:
+                if self.DEBUG:
+                    print("not unmuting, since mute doesn't actually seem to be active")
 
 
 
@@ -2294,7 +2352,7 @@ class VocoAdapter(Adapter):
                                 
                             if time.time() - self.addon_start_time > 120:
                                 self.still_busy_booting = False
-                                if self.initial_injection_completed == False and self.persistent_data['is_satellite'] == False:
+                                if self.initial_injection_completed == False: # and self.persistent_data['is_satellite'] == False:
                                     self.possible_injection_failure = True
                                 
                             if time.time() - self.addon_start_time > 240 and self.initial_injection_completed == False and self.persistent_data['is_satellite'] == False:
@@ -2353,14 +2411,6 @@ class VocoAdapter(Adapter):
                                         if self.voco_connected == False:
                                             if self.DEBUG:
                                                 print("MQTT seems to be up, but main voco server is not responding")
-                            
-                            
-                                        # TODO: is this extra broadcast ping really necessary?
-                                        #if bool(self.mqtt_others) == False:
-                                        #    if self.DEBUG:
-                                        #        print("self.mqtt_others was still empty")
-                                        #    self.send_mqtt_ping(broadcast=True) # broadcast ping
-                                    
                                         
                                         
                                         if self.persistent_data['main_site_id'] != self.persistent_data['site_id']: # Once the main controller has been connected to (received pong), these values are no longer the same
@@ -2377,7 +2427,7 @@ class VocoAdapter(Adapter):
                                 
                                     if self.persistent_data['is_satellite'] == False:
                                         if self.DEBUG:
-                                            print("Clock: Not a satellite, so calling normal inject_updated_things_into_snip")
+                                            print("Clock: Not a satellite, so calling normal inject_updated_things_into_snips")
                                         self.inject_updated_things_into_snips() # this will figure out if there are any changes necessitating an actual injection
                                         
                                     elif self.satellite_should_act_on_intent:
@@ -2386,18 +2436,6 @@ class VocoAdapter(Adapter):
                                         self.inject_updated_things_into_snips()
                                 
                                 
-                                
-                                    #elif self.persistent_data['mqtt_server'] in self.mqtt_others:
-                                    #    if self.DEBUG:
-                                    #        print("controller IP was in self.mqtt_others")
-                                    #    self.persistent_data['main_site_id'] = self.mqtt_others[controller_ip]
-                                    #    if target_site_id != None:
-                                    #        self.update_network_info()
-
-                                                #print("///")
-                                                #self.mqtt_client.publish("hermes/voco/thuis/ping",json.dumps({'ip':self.ip_address,'site_id':self.hostname}))
-                                    #else:
-                                    #    print("I did not yet know what the site_id is for IP: " + str(controller_ip))
                                 
                                     if self.DEBUG:
                                         print("self.periodic_voco_attempts = " + str(self.periodic_voco_attempts))
@@ -2420,17 +2458,6 @@ class VocoAdapter(Adapter):
                                 
                     
                             
-                                #if self.DEBUG:
-                                #    print("Periodic check. MQTT is connected.")
-                                
-
-                        
-                                #for key,value in self.mqtt_others.items():
-                                #    # TODO check if the last time we heard from them was some time ago. No need to spam..
-                                #    print(key,value)
-                                #    self.update_network_info()
-                                #    if self.ip_address != None:
-                                #        print("- - - sending ping to " + str(value))
                              
                             else:
                                 if self.DEBUG:
@@ -2470,169 +2497,185 @@ class VocoAdapter(Adapter):
                     for index, item in enumerate(self.persistent_data['action_times']):
                         #print("timer item = " + str(item))
 
-                        try:
-                            if 'intent_message' in item:
-                                intent_message = item['intent_message']
-                            else:
+                        if 'cosmetic' in item:
+                            if item['cosmetic'] == True:
+                                if self.DEBUG:
+                                    print("clock:skipping cosmetic item")
+                                continue
+                        
+                        if (self.current_utc_time >= int(item['moment']) and self.current_utc_time < int(item['moment']) + 60) or item['type'] == 'countdown':
+                            if self.DEBUG:
+                                print("\nclock: time has come for action item (or is countdown)")
+                            try:
+                            
+                            
+                                if 'intent_message' in item:
+                                    intent_message = item['intent_message']
+                                else:
+                                    intent_message = {'siteId':self.persistent_data['site_id']}
+                                    item['intent_message'] = {'siteId':self.persistent_data['site_id']}
+                                
+                                # Some action items should be spoken too, no matter the origin (e.g. if the origin is Matrix)
+                                if 'origin' in intent_message:
+                                    #if self.DEBUG:
+                                    #    print("origin check. item['type']: " + str(item['type']))
+                                    if item['type'] == 'timer' or item['type'] == 'wake' or item['type'] == 'alarm' or item['type'] == 'reminder':
+                                        if intent_message['origin'] == 'text' or intent_message['origin'] == 'matrix':
+                                            intent_message['origin'] = 'both'
+                                            item['origin'] = 'both'
+                                            if self.DEBUG:
+                                                print("changed item origin to both")
+                                #    if intent_message['origin'] == 'text':
+                                #        if 'matrix_server' in self.persistent_data:
+                                #            intent_message['origin'] = 'matrix'
+                                #        else:
+                                #            intent_message['origin'] = 'voice'
+                                #intent_message['origin'] = 'voice'
+                            
+                                # Doing timers in the chat would create wayyy to many messages
+                                if item['type'] == 'countdown':
+                                    #if self.DEBUG:
+                                    #    print("Fixing countdown to voice only")
+                                    intent_message['origin'] = 'voice'
+                                    item['origin'] = 'voice'
+                                
+                            except Exception as ex:
+                                if self.DEBUG:
+                                    print("clock: intent message error: " + str(ex))
                                 intent_message = {'siteId':self.persistent_data['site_id']}
-                                item['intent_message'] = {'siteId':self.persistent_data['site_id']}
-                                
-                            # Some action items should be spoken too, no matter the origin (e.g. if the origin is Matrix)
-                            if 'origin' in intent_message:
-                                #if self.DEBUG:
-                                #    print("origin check. item['type']: " + str(item['type']))
-                                if item['type'] == 'timer' or item['type'] == 'wake' or item['type'] == 'alarm' or item['type'] == 'reminder':
-                                    if intent_message['origin'] == 'text' or intent_message['origin'] == 'matrix':
-                                        intent_message['origin'] = 'both'
-                                        item['origin'] = 'both'
-                                        if self.DEBUG:
-                                            print("changed item origin to both")
-                            #    if intent_message['origin'] == 'text':
-                            #        if 'matrix_server' in self.persistent_data:
-                            #            intent_message['origin'] = 'matrix'
-                            #        else:
-                            #            intent_message['origin'] = 'voice'
-                            #intent_message['origin'] = 'voice'
-                            
-                            # Doing timers in the chat would create wayyy to many messages
-                            if item['type'] == 'countdown':
-                                #if self.DEBUG:
-                                #    print("Fixing countdown to voice only")
-                                intent_message['origin'] = 'voice'
-                                item['origin'] = 'voice'
-                                
-                        except Exception as ex:
-                            if self.DEBUG:
-                                print("clock: intent message error: " + str(ex))
-                            intent_message = {'siteId':self.persistent_data['site_id']}
                             
 
-                        try:
-                            # Wake up alarm
-                            if item['type'] == 'wake' and self.current_utc_time >= int(item['moment']) and self.current_utc_time < int(item['moment']) + 60:
-                                if self.DEBUG:
-                                    print("(...) WAKE UP")
-                                #timer_removed = True
-                                self.play_sound(self.alarm_sound,intent=intent_message)
-                                self.speak("Good morning, it's time to wake up.",intent=intent_message)
+                            try:
+                                # Wake up alarm
+                                if item['type'] == 'wake' and self.current_utc_time >= int(item['moment']) and self.current_utc_time < int(item['moment']) + 60:
+                                    if self.DEBUG:
+                                        print("(...) WAKE UP")
+                                    #timer_removed = True
+                                    self.play_sound(self.alarm_sound,intent=intent_message)
+                                    self.speak("Good morning, it's time to wake up.",intent=intent_message)
 
-                            # Normal alarm
-                            elif item['type'] == 'alarm' and self.current_utc_time >= int(item['moment']) and self.current_utc_time < int(item['moment']) + 60:
-                                if self.DEBUG:
-                                    print("(...) ALARM")
-                                self.play_sound(self.alarm_sound,intent=intent_message)
-                                self.speak("This is your alarm notification",intent=intent_message)
+                                # Normal alarm
+                                elif item['type'] == 'alarm' and self.current_utc_time >= int(item['moment']) and self.current_utc_time < int(item['moment']) + 60:
+                                    if self.DEBUG:
+                                        print("(...) ALARM")
+                                    self.play_sound(self.alarm_sound,intent=intent_message)
+                                    self.speak("This is your alarm notification",intent=intent_message)
 
-                            # Reminder
-                            elif item['type'] == 'reminder' and self.current_utc_time >= int(item['moment']) and self.current_utc_time < int(item['moment']) + 60:
-                                if self.DEBUG:
-                                    print("(...) REMINDER")
-                                self.play_sound(self.end_of_input_sound,intent=intent_message)
-                                voice_message = "This is a reminder to " + str(item['reminder_text'])
-                                self.speak(voice_message,intent=intent_message)
+                                # Reminder
+                                elif item['type'] == 'reminder' and self.current_utc_time >= int(item['moment']) and self.current_utc_time < int(item['moment']) + 60:
+                                    if self.DEBUG:
+                                        print("(...) REMINDER")
+                                    self.play_sound(self.end_of_input_sound,intent=intent_message)
+                                    voice_message = "This is a reminder to " + str(item['reminder_text'])
+                                    self.speak(voice_message,intent=intent_message)
 
-                            # Delayed setting of a boolean state
-                            elif item['type'] == 'boolean_related' and self.current_utc_time >= int(item['moment']) and self.current_utc_time < int(item['moment']) + 60:
-                                if self.DEBUG:
-                                    print("origval:" + str(item['original_value']))
-                                    print("(...) TIMED boolean_related SWITCHING")
-                                #delayed_action = True
-                                #slots = self.extract_slots(intent_message)
+                                # Delayed setting of a boolean state
+                                elif item['type'] == 'boolean_related' and self.current_utc_time >= int(item['moment']) and self.current_utc_time < int(item['moment']) + 60:
+                                    if self.DEBUG:
+                                        print("origval:" + str(item['original_value']))
+                                        print("(...) TIMED boolean_related SWITCHING")
+                                    #delayed_action = True
+                                    #slots = self.extract_slots(intent_message)
                                 
-                                self.delayed_intent_player(item)
-                                #found_properties = self.check_things('set_state',item['slots'], item['intent_message'], item['original_value'])
-                                #intent_set_state(self, item['slots'],item['intent_message'],found_properties, item['original_value'])
+                                    self.delayed_intent_player(item)
+                                    #found_properties = self.check_things('set_state',item['slots'], item['intent_message'], item['original_value'])
+                                    #intent_set_state(self, item['slots'],item['intent_message'],found_properties, item['original_value'])
 
-                            # Delayed setting of a value
-                            elif item['type'] == 'value' and self.current_utc_time >= int(item['moment']) and self.current_utc_time < int(item['moment']) + 60:
-                                if self.DEBUG:
-                                    print("origval:" + str(item['original_value']))
-                                    print("(...) TIMED SETTING OF A VALUE")
-                                #slots = self.extract_slots(intent_message)
-                                self.delayed_intent_player(item)
-                                #found_properties = self.check_things('set_value',item['slots'])
-                                #intent_set_value(self, item['slots'],item['intent_message'],found_properties, item['original_value'])
+                                # Delayed setting of a value
+                                elif item['type'] == 'value' and self.current_utc_time >= int(item['moment']) and self.current_utc_time < int(item['moment']) + 60:
+                                    if self.DEBUG:
+                                        print("origval:" + str(item['original_value']))
+                                        print("(...) TIMED SETTING OF A VALUE")
+                                    #slots = self.extract_slots(intent_message)
+                                    self.delayed_intent_player(item)
+                                    #found_properties = self.check_things('set_value',item['slots'])
+                                    #intent_set_value(self, item['slots'],item['intent_message'],found_properties, item['original_value'])
 
-                            # Countdown
-                            elif item['type'] == 'countdown':
-                                #print("in countdown type")
-                                try:
-                                    if int(item['moment']) >= int(self.current_utc_time): # This one is reversed - it's only trigger as long as it hasn't reached the target time.
+                                # Countdown
+                                elif item['type'] == 'countdown':
+                                    #print("in countdown type")
+                                    try:
+                                        if int(item['moment']) >= int(self.current_utc_time): # This one is reversed - it's only trigger as long as it hasn't reached the target time.
                                         
-                                        #countdown_delta = self.countdown - self.current_utc_time
-                                        countdown_delta = int(item['moment']) - self.current_utc_time
+                                            #countdown_delta = self.countdown - self.current_utc_time
+                                            countdown_delta = int(item['moment']) - self.current_utc_time
                                         
-                                        # Update the countdown on the voco thing
-                                        if countdown_delta > 0:
-                                            self.devices['voco'].properties[ 'countdown' ].set_cached_value_and_notify( int(countdown_delta) )
-                                        else:    
-                                            self.devices['voco'].properties[ 'countdown' ].set_cached_value_and_notify( 0 )
+                                            # Update the countdown on the voco thing
+                                            if countdown_delta > 0:
+                                                self.devices['voco'].properties[ 'countdown' ].set_cached_value_and_notify( int(countdown_delta) )
+                                            else:    
+                                                self.devices['voco'].properties[ 'countdown' ].set_cached_value_and_notify( 0 )
                                         
-                                        # Create speakable countdown message
-                                        if countdown_delta > 86400:
-                                            if countdown_delta % 86400 == 0:
+                                            # Create speakable countdown message
+                                            if countdown_delta > 86400:
+                                                if countdown_delta % 86400 == 0:
 
-                                                days_to_go = countdown_delta//86400
-                                                if days_to_go > 1:
-                                                    voice_message = "countdown has " + str(days_to_go) + " days to go"
-                                                else:
-                                                    voice_message = "countdown has " + str(days_to_go) + " day to go"
+                                                    days_to_go = countdown_delta//86400
+                                                    if days_to_go > 1:
+                                                        voice_message = "countdown has " + str(days_to_go) + " days to go"
+                                                    else:
+                                                        voice_message = "countdown has " + str(days_to_go) + " day to go"
 
-                                        elif countdown_delta > 3599:
-                                            if countdown_delta % 3600 == 0:
+                                            elif countdown_delta > 3599:
+                                                if countdown_delta % 3600 == 0:
 
-                                                hours_to_go = countdown_delta//3600
-                                                if hours_to_go > 1:
-                                                    voice_message = "countdown has " + str(hours_to_go) + " hours to go"
-                                                else:
-                                                    voice_message = "countdown has " + str(hours_to_go) + " hour to go"
+                                                    hours_to_go = countdown_delta//3600
+                                                    if hours_to_go > 1:
+                                                        voice_message = "countdown has " + str(hours_to_go) + " hours to go"
+                                                    else:
+                                                        voice_message = "countdown has " + str(hours_to_go) + " hour to go"
 
-                                        elif countdown_delta > 59:
-                                            if countdown_delta % 60 == 0:
+                                            elif countdown_delta > 59:
+                                                if countdown_delta % 60 == 0:
 
-                                                minutes_to_go = countdown_delta//60
-                                                if minutes_to_go > 1:
-                                                    if minutes_to_go < 11 or minutes_to_go % 5 == 0: # speak every 5 minutes. Once below 10 minutes, speak every minute.
-                                                        voice_message = "countdown has " + str(minutes_to_go) + " minutes to go"
+                                                    minutes_to_go = countdown_delta//60
+                                                    if minutes_to_go > 1:
+                                                        if minutes_to_go < 11 or minutes_to_go % 5 == 0: # speak every 5 minutes. Once below 10 minutes, speak every minute.
+                                                            voice_message = "countdown has " + str(minutes_to_go) + " minutes to go"
                                                         
-                                                else:
-                                                    voice_message = "countdown has " + str(minutes_to_go) + " minute to go"
+                                                    else:
+                                                        voice_message = "countdown has " + str(minutes_to_go) + " minute to go"
 
-                                        elif countdown_delta == 30:
-                                            voice_message = "Counting down 30 seconds"
+                                            elif countdown_delta == 30:
+                                                voice_message = "Counting down 30 seconds"
 
-                                        elif countdown_delta > 0 and countdown_delta < 11:
-                                            voice_message = str(int(countdown_delta))
+                                            elif countdown_delta > 0 and countdown_delta < 11:
+                                                voice_message = str(int(countdown_delta))
 
-                                        elif countdown_delta < 0:
-                                            if self.DEBUG:
-                                                print("countdown delta was negative, strange.")
-                                            del self.persistent_data['action_times'][index]
-                                            self.save_persistent_data()
+                                            elif countdown_delta < 0:
+                                                if self.DEBUG:
+                                                    print("countdown delta was negative, strange.")
+                                                del self.persistent_data['action_times'][index]
+                                                self.save_persistent_data()
                                         
-                                        if voice_message != "":
+                                            if voice_message != "":
+                                                if self.DEBUG:
+                                                    print("(...) " + str(voice_message))
+                                                self.speak(voice_message,intent=intent_message)
+                                        else:
                                             if self.DEBUG:
-                                                print("(...) " + str(voice_message))
-                                            self.speak(voice_message,intent=intent_message)
-                                    else:
-                                        if self.DEBUG:
-                                            print("removing countdown item")
-                                        del self.persistent_data['action_times'][index]
-                                except Exception as ex:
-                                    print("Error updating countdown: " + str(ex))
+                                                print("removing countdown item")
+                                            del self.persistent_data['action_times'][index]
+                                    except Exception as ex:
+                                        print("Error updating countdown: " + str(ex))
 
-                            # Anything without a type will be treated as a normal timer.
-                            elif self.current_utc_time >= int(item['moment']) and self.current_utc_time < int(item['moment']) + 60:
-                                self.play_sound(self.end_of_input_sound,intent=intent_message)
+                                # Anything without a type will be treated as a normal timer.
+                                elif self.current_utc_time >= int(item['moment']) and self.current_utc_time < int(item['moment']) + 60:
+                                    self.play_sound(self.end_of_input_sound,intent=intent_message)
+                                    if self.DEBUG:
+                                        print("(...) Your timer is finished")
+                                    self.speak("Your timer is finished",intent=intent_message)
+
+                            except Exception as ex:
                                 if self.DEBUG:
-                                    print("(...) Your timer is finished")
-                                self.speak("Your timer is finished",intent=intent_message)
-
-                        except Exception as ex:
+                                    print("Clock: error recreating event from timer: " + str(ex))
+                                # TODO: currently if this fails it seems the timer item will stay in the list indefinately. If it fails, it should still be removed.
+                        
+                        else:
                             if self.DEBUG:
-                                print("Clock: error recreating event from timer: " + str(ex))
-                            # TODO: currently if this fails it seems the timer item will stay in the list indefinately. If it fails, it should still be removed.
-
+                                print("nope " + str(self.current_utc_time))
+                        
+                        
                     # Remove timers whose time has come 
                     try:
                         timer_removed = 0
@@ -3447,7 +3490,7 @@ class VocoAdapter(Adapter):
             self.mqtt_second_client.subscribe("hermes/asr/textCaptured/#")
             #self.mqtt_second_client.subscribe("hermes/dialogueManager/sessionStarted/#")
             
-            #self.mqtt_second_client.subscribe("hermes/injection/#")
+            self.mqtt_second_client.subscribe("hermes/injection/#")
             
             if self.sound_detection:
                 self.mqtt_second_client.subscribe("hermes/voiceActivity/#")
@@ -3498,9 +3541,9 @@ class VocoAdapter(Adapter):
         if msg.topic == 'hermes/asr/textCaptured':
             
             if self.persistent_data['is_satellite']:
-                if self.DEBUG:
-                    print("stored asr payload")
-                self.satellite_asr_payload = payload
+                #if self.DEBUG:
+                #    print("stored asr payload")
+                #self.satellite_asr_payload = payload
                 #self.mqtt_client.publish("hermes/dialogueManager/startSession",json.dumps({"init":{"type":"action","canBeEnqueued": True},"siteId":str(self.persistent_data['site_id'])}) ) #, "customData":{'origin':'voice','from_satellite':True,'from_satellite_id':str(self.persistent_data['site_id'])} }))
                 #self.mqtt_client.publish("hermes/dialogueManager/startSession",json.dumps({"init":{"type":"action","canBeEnqueued": True},"siteId":str(self.persistent_data['site_id'])}) ) #, "customData":{'origin':'voice','from_satellite':True,'from_satellite_id':str(self.persistent_data['site_id'])} }))
                 
@@ -3637,8 +3680,8 @@ class VocoAdapter(Adapter):
                 if 'siteId' in payload:
                     if payload['siteId'] == self.persistent_data['site_id']:
                         self.mute()
-                    elif self.persistent_data['is_satellite'] == False:
-                        self.mqtt_client.publish("hermes/voco/" + str(payload['siteId']) + "/mute",json.dumps({"mute":True}))
+                    ###elif self.persistent_data['is_satellite'] == False:
+                    ###    self.mqtt_client.publish("hermes/voco/" + str(payload['siteId']) + "/mute",json.dumps({"mute":True}))
 
 
         
@@ -3938,7 +3981,7 @@ class VocoAdapter(Adapter):
                     self.mqtt_busy_connecting = True
                     self.mqtt_client.connect(str(self.persistent_data['mqtt_server']), int(self.mqtt_port), keepalive=60)
                 else:
-                    print("MQTT is already connected or busy connecting.")
+                    print("MQTT is already connected or busy connecting. self.mqtt_connected: " + str(self.mqtt_connected))
             
             else:
                 if self.mqtt_connected == False and self.mqtt_busy_connecting == False:
@@ -4077,7 +4120,7 @@ class VocoAdapter(Adapter):
                 #self.mqtt_client.subscribe("hermes/asr/textCaptured/#") # now handled by the second local mqtt client
                 self.mqtt_client.subscribe("hermes/dialogueManager/sessionStarted/#")
             
-                self.mqtt_client.subscribe("hermes/injection/#")
+                #self.mqtt_client.subscribe("hermes/injection/#")
             
                 #if self.sound_detection:
                 #    self.mqtt_client.subscribe("hermes/voiceActivity/#")
@@ -4088,6 +4131,10 @@ class VocoAdapter(Adapter):
                 
                 #if self.persistent_data['is_satellite'] == False:
                 self.mqtt_client.subscribe("hermes/voco/parse")
+                
+                self.mqtt_client.subscribe("hermes/voco/add_action")
+                self.mqtt_client.subscribe("hermes/voco/remove_action")
+                
                 
                 self.mqtt_client.subscribe("hermes/voco/" + self.persistent_data['site_id'] + "/#")
                 
@@ -4335,148 +4382,31 @@ class VocoAdapter(Adapter):
         #  Handling VOCO messages that are also sent over MQTT
         #
         
-        
+        # deprecated
         if msg.topic.startswith("hermes/voco/gettime"):
             if not self.persistent_data['is_satellite']:
                 if self.DEBUG:
                     print("returning time to AtomEcho")
                 self.mqtt_client.publish("hermes/voco/time", int(round(time.time() * 1000)))    
         
+        
         # Handle broadcast ping and pong messages
         if msg.topic.startswith("hermes/voco/ping"):
             #self.update_network_info()
-            if self.ip_address != None:
-                if 'siteId' in payload:
-                    if self.DEBUG:
-                        print("voco/ping: payload['siteId']: " + str(payload['siteId']))
-                    if 'site_id' in self.persistent_data:
-                        if self.DEBUG:
-                            print("voco/ping: own site_id in persistent_data: " + str(self.persistent_data['site_id']))
-                        if payload['siteId'] != self.persistent_data['site_id']:
-                            if self.DEBUG:
-                                print("Received broadcast ping.")
-                            if 'hostname' in payload:
-                                if 'satellite' in payload:
-                                    if payload['satellite'] == False:
-                                        self.mqtt_others[payload['ip']] = payload['hostname']
-                                        
-                                        # If we receive a broadcast ping while the server is missing, check if this is the missing server coming back online.
-                                        if self.periodic_voco_attempts > 3 and payload['siteId'] == self.persistent_data['main_site_id']:
-                                            print("Voco addon on the main server sent a broadcast ping after being missing for a while.")
-                                            
-                                # TODO this may be removed in a few more versions of voco, when 'satellite' value is in all broadbast pings.
-                                else:
-                                    self.mqtt_others[payload['ip']] = payload['hostname']
-                                        
-                            
-                            if not self.persistent_data['is_satellite']: # don't send a pong if this device is a satellite, since we don't want devices to connect to this device.
-                                if self.DEBUG:
-                                    print("Responding with broadcast pong, in which I pronounce my IP to be: " + str(self.ip_address))
-                                self.mqtt_client.publish("hermes/voco/pong",json.dumps({'ip':self.ip_address,
-                                                                                        'siteId':self.persistent_data['site_id'],
-                                                                                        'hostname':self.hostname, 
-                                                                                        'satellite':self.persistent_data['is_satellite'],
-                                                                                        'main_controller': self.persistent_data['main_site_id']
-                                                                                        }))
-                            else:
-                                if self.DEBUG:
-                                    print("not responding to broadcast ping because I am a satellite")
-                        else:
-                            if self.DEBUG:
-                                print("ignoring ping from self")
-                    else:
-                        print("while receiving ping: no site_id in persistent data?")
+            self.parse_ping(payload,ping_type="ping")
+            # Send back a broadcast pong message
+            self.send_mqtt_ping(broadcast=True, ping_type="pong")
+            
                 
-        if msg.topic.startswith("hermes/voco/pong"):
-            if self.DEBUG:
-                print("Got a broadcast pong message from: " + str(payload['siteId']) + " with IP address: " + str(payload['ip']) + " and hostname: " + str(payload['hostname']) )
-                print("self.persistent_data['mqtt_server'] = " + str(self.persistent_data['mqtt_server']))
-                if 'satellite' in payload:
-                    if self.DEBUG:
-                        print("pong declares satellite: " + str(payload['satellite']))
-                    
-            if payload['siteId'] == self.persistent_data['main_site_id'] and self.periodic_voco_attempts > 3 and self.persistent_data['is_satellite']:
-                if self.DEBUG:
-                    print("\n))))))))) received broadcast ping from missing main server")
-            #    self.periodic_voco_attempts = 0
-            #    self.run_snips()
-                    
-            if payload['siteId'] != self.persistent_data['site_id']:
-                if 'satellite' in payload:
-                    if payload['satellite'] == False:
-                        self.mqtt_others[payload['ip']] = payload['hostname']    
-                else: # TODO this may be removed in a few more versions of voco.
-                    self.mqtt_others[payload['ip']] = payload['hostname']
-                
-                if self.DEBUG:
-                    print("after receiving broadcast ping, self.mqtt_other list is now: " + str(self.mqtt_others))
-                
-                if self.currently_scanning_for_missing_mqtt_server:
-                    if self.DEBUG:
-                        print("Looking for main_site_id: " + str(self.persistent_data['main_site_id']))
-                    if payload['siteId'] == self.persistent_data['main_site_id']: # Found the main server again.
-                        self.currently_scanning_for_missing_mqtt_server = False
-                        if self.DEBUG:
-                            print("Found the main voco server again, at IP: " + str(payload['ip']))
-                        self.persistent_data['mqtt_server'] = str(payload['ip'])
-                        self.save_persistent_data()
+        elif msg.topic.startswith("hermes/voco/pong"):
+            self.parse_ping(payload,ping_type="pong")
+                        
+        elif msg.topic.startswith("hermes/voco/add_action"):
+            self.add_action_time(payload)
         
-                        if self.persistent_data['listening']:
-                            self.set_status_on_thing("Listening")
-                        else:
-                            self.set_status_on_thing("Not listening")
-                        
-                    else: # The site_id didn't belong to the main server.
-                        if self.DEBUG:
-                            print("The MQTT server that was connected to wasn't the main server")
-                    
-                #elif self.periodic_voco_attempts > 3: # not really necessary if the mqtt connection never stopped.
-                #    self.run_snips()
-                    
-            else:
-                if self.DEBUG:
-                    print("got my own broadcast pong message - ignoring")
+        elif msg.topic.startswith("hermes/voco/remove_action"):
+            self.remove_action_time(payload)
             
-            
-            # If this device is a satellite...
-            if self.persistent_data['is_satellite']:
-            
-                self.connected_satellites = {}
-            
-                #... but the main_site_id hasn't changed to the actual main_side_id yet (this is the first broadcast pong message to supply it), then set the main_site_id now.
-                
-                #if payload['ip'] != self.ip_address and payload['ip'] == self.persistent_data['mqtt_server'] and self.persistent_data['main_site_id'] == self.persistent_data['site_id']:
-                if payload['ip'] != self.ip_address and payload['hostname'] == self.persistent_data['main_controller_hostname']: # and self.persistent_data['main_site_id'] == self.persistent_data['site_id']:
-                    if self.DEBUG:
-                        print("broadcast pong was from intented main MQTT server. This has supplied the intended main_site_id: " + str(payload['siteId']) )
-                    self.persistent_data['main_site_id'] = payload['siteId']
-                    self.save_persistent_data()
-                #    self.periodic_voco_attempts = 0
-                #    self.voco_connected = True
-                #    
-            
-                # If this pong message is coming from the main site, then voco is happily connected.
-                if payload['siteId'] == self.persistent_data['main_site_id'] and payload['siteId'] != self.persistent_data['site_id']: # we got a pong message from the main voco server we should be connected to
-                    if self.DEBUG:
-                        print("pong was from main controller, so we're connected")
-                    self.periodic_voco_attempts = 0
-                    self.voco_connected = True
-                    #self.orphaned = False # seems to be connected to an outside server again.
-                    
-                    # If the main controller has a different hostname, remember that new name
-                    if self.persistent_data['main_controller_hostname'] != payload['hostname']:
-                        if self.DEBUG:
-                            print("hostname of main controller seems to have changed from: " + str(self.persistent_data['main_controller_hostname']) + ", to: " + str(payload['hostname']))
-                        self.persistent_data['main_controller_hostname'] = payload['hostname']
-                        self.save_persistent_data()
-                    
-                    if self.persistent_data['mqtt_server'] != payload['ip']:
-                        # can this even happen? If we don't have the IP of the main MQTT server, then we will never receive this update message?
-                        if self.DEBUG:
-                            print("The IP adress of the main Voco server has changed to " + str(payload['ip'])) 
-                        self.persistent_data['mqtt_server'] = payload['ip']
-                        self.save_persistent_data()
-                        
                         
         # If this is a Voco message targetted at this specific device...
         if msg.topic.startswith("hermes/voco/" + self.persistent_data['site_id']):
@@ -4517,126 +4447,35 @@ class VocoAdapter(Adapter):
                         print("Should speak, but no message to be spoken and/or no intent data provided?")
                         
                 elif msg.topic.endswith('/ping'):
-                    if 'siteId' in payload:
-                        if self.DEBUG:
-                            print("- - - message ends in /ping. A Voco server (" + str(payload['hostname']) + "," + str(payload['ip']) + ") is asking for our ip and hostname")
-                            print("- - - payload: " + str(payload))
-                        if 'satellite' in payload:
-                            if payload['satellite'] == False:
-                                if str(payload['hostname']) != self.hostname:
-                                    if self.DEBUG:
-                                        print("adding to mqtt_others")
-                                    self.mqtt_others[payload['ip']] = str(payload['hostname']) #{'hostId':payload['siteId'],
-                                else:
-                                    if self.DEBUG:
-                                        print("not adding to mqtt_others, because message came from self")
-                            else:
-                                if 'main_controller' in payload:
-                                    if payload['siteId'] != self.persistent_data['site_id'] and payload['main_controller'] == self.persistent_data['site_id']:
-                                        if self.DEBUG:
-                                            print("SPOTTED A CONNECTED SATELLITE")
-                                        if self.persistent_data['is_satellite'] == False:
-                                            self.connected_satellites[ str(payload['hostname']) ] = int(time.time())
-                                        else:
-                                            if self.DEBUG:
-                                                print("Error. Well this is awkward. A satellite is connected to this controller, but this controller is already itself a satellite")
-                        else: # TODO this may be removed in a few versions
-                            if self.DEBUG:
-                                print("Error, no satellite state in payload") #self.mqtt_others[payload['ip']] = str(payload['hostname'])
                         
-                        # Update the list of thing titles that satellites may want to handle themselves.
-                        if 'thing_titles' in payload and 'satellite_intent_handling' in payload:
-                            if payload['siteId'] not in self.satellite_thing_titles:
-                                if self.DEBUG:
-                                    print("creating a set to hold thing titles from satellite " + str(payload['siteId']))
-                                self.satellite_thing_titles[payload['siteId']] = set()
-                            
-                            if self.DEBUG:
-                                print('clearing list of things titles from satellite: ' + str(payload['siteId']))
-                            self.satellite_thing_titles[payload['siteId']].clear()
-                            
-                            if payload['satellite_intent_handling']:
-                                #if self.DEBUG:
-                                #    print("this satellite says it will handle intents")
-                                for thing_title in payload['thing_titles']:
-                                    #if self.DEBUG:
-                                    #    print("adding thing_title to list of things that satellite will handle: " + str(thing_title))
-                                    self.satellite_thing_titles[payload['siteId']].add(thing_title)
-                            #else:
-                            #    if self.DEBUG:
-                            #        print('clearing list of things that satellite will handle')
-                            #    self.satellite_thing_titles[payload['siteId']].clear()
-                            if self.DEBUG:
-                                print("self.satellite_thing_titles['" + payload['siteId']  + "'] is now this length: " + str(len(self.satellite_thing_titles[payload['siteId']])) )
-                                
-                        self.update_network_info()
-                        if self.ip_address != None:
-                            if self.DEBUG:
-                                print("responding to ping, sending a pong to: " + str(payload['siteId']))
-
-                            #thing_aiofiles.os.path_list = []
-                            #if self.satellite_should_act_on_intent:
-                            #    thing_titles_list = self.persistent_data['thing_titles']
-                            self.mqtt_client.publish("hermes/voco/" + str(payload['siteId']) + "/pong",json.dumps({
-                                            'ip':self.ip_address,
-                                            'hostname':self.hostname,
-                                            'siteId':self.persistent_data['site_id'],
-                                            'satellite': self.persistent_data['is_satellite'],
-                                            'main_controller': self.persistent_data['main_site_id'],
-                                            #'thing_titles':thing_titles_list
-                                            })
-                                        ) 
-                    
-
-                    else:
-                        if self.DEBUG:
-                            print("Error: no siteId in payload")
+                    self.parse_ping(payload,ping_type="ping")
+                        
+                    # Send back a pong message
+                    self.send_mqtt_ping(broadcast=False, ping_type="pong", target_site_id=payload['siteId'])
+                        
                 
                 elif msg.topic.endswith('/pong'):
                     if self.DEBUG:
                         print("- - - message ends in /pong. A voco server is responding with IP and site_id combination")
                     
-                    if 'ip' in payload and 'siteId' in payload:
-                        if self.DEBUG:
-                            print("Got a pong message from: " + payload['siteId'] + " with IP address: " + payload['ip'] + " and hostname: " + payload['hostname'])
+                    self.parse_ping(payload,ping_type="pong")
                     
-                        if payload['siteId'] == self.persistent_data['main_site_id'] and self.persistent_data['main_site_id'] != self.persistent_data['site_id']:
-                            if self.DEBUG:
-                                print("good response from main controller")
-                            self.periodic_voco_attempts = 0 # we got a good response, so set the (unsuccesful) attempts counter back to zero.  
-                            
-                            # If the main controller has a different hostname, remember that new name
-                            if self.persistent_data['main_controller_hostname'] != payload['hostname']:
-                                if self.DEBUG:
-                                    print("hostname of main controller seems to have changed from: " + str(self.persistent_data['main_controller_hostname']) + ", to: " + str(payload['hostname']))
-                                self.persistent_data['main_controller_hostname'] = payload['hostname']
-                                self.save_persistent_data()
-                            
-                        else:
-                            if self.DEBUG:
-                                print("unhelpful pong")
-                        
-                        if 'satellite' in payload and 'siteId' in payload and 'main_controller' in payload:
-                            if payload['satellite'] == True and payload['siteId'] != self.persistent_data['site_id'] and payload['main_controller'] == self.persistent_data['site_id']:
-                                if self.persistent_data['is_satellite'] == False:
-                                    if self.DEBUG:
-                                        print("SATELLITE SENT A PONG")
-                                    self.connected_satellites[ str(payload['hostname']) ] = int(time.time())
-                                
-                        #set Should add/update this in self.mqtt_others
-                        self.mqtt_others[payload['ip']] = payload['hostname']
-                        #print("self.mqtt_others:")
-                        #print(str(self.mqtt_others))
-                        
-                    #self.voco_connected = True
-                    #self.orphaned = False
+                
+                elif msg.topic.endswith('/delayed_action'):
+                    if self.DEBUG:
+                        print("- - - message ends in /delayed_action. A satellite must be asking the main controller to show this item in its list of action items")
+                    
+                    self.parse_ping(payload,ping_type="pong")
+                
+                
                             
 
+                """
                 elif msg.topic.endswith('/mute'):
                     if self.DEBUG:
                         print("(---) Received mute command")
                     self.mute()
-                        
+                """
 
 
             except Exception as ex:
@@ -4655,49 +4494,193 @@ class VocoAdapter(Adapter):
 
 
 
-    def send_mqtt_ping(self, broadcast=False):
+    def send_mqtt_ping(self, broadcast=False, ping_type="ping",target_site_id=None):
         if self.DEBUG:
-            print("- - - About to ping. Broadcast flag = " + str(broadcast))
+            print("- - - About to ping or pong. Broadcast flag = " + str(broadcast))
+            
+    
         self.update_network_info()
         if self.mqtt_connected and self.ip_address != None:
             try:
                 if broadcast:
+                    mqtt_ping_path = "hermes/voco/" + str(ping_type)
+                    #if self.DEBUG:
+                    #    print("- - -  sending broadcast " + str(ping_type) + " to: " + str(self.persistent_data['mqtt_server']) + ", announcing my IP as: " + str(self.ip_address))
+                elif target_site_id != None:
+                    mqtt_ping_path = "hermes/voco/" + str(target_site_id) + "/" + str(ping_type)
+                
+                elif self.persistent_data['is_satellite']:
+                    mqtt_ping_path = "hermes/voco/" + str(self.persistent_data['main_site_id']) + "/" + str(ping_type)
                     if self.DEBUG:
-                        print("- - -  sending broadcast ping to: " + str(self.persistent_data['mqtt_server']) + ", announcing my IP as: " + str(self.ip_address))
-                    self.mqtt_client.publish("hermes/voco/ping",json.dumps({
-                                'ip':str(self.ip_address),
-                                'hostname':str(self.hostname),
-                                'siteId':self.persistent_data['site_id'],
-                                'satellite':self.persistent_data['is_satellite'],
-                                'main_controller': self.persistent_data['main_site_id']
-                                }))
-                elif 'main_site_id' in self.persistent_data:
-                    if self.DEBUG:
-                        print("- - -  sending connection check ping to: " + str(self.persistent_data['main_site_id']) + " at: " + str(self.persistent_data['mqtt_server']) )
+                        print("- - -  sending connection check: " + str(ping_type) + " to: " + str(self.persistent_data['main_site_id']) + " at: " + str(self.persistent_data['mqtt_server']) )
                         
-                    #thing_titles_list = [] # only tell the main controller about thing titles if the satellite handles them
-                    #if self.satellite_should_act_on_intent:
-                    #    thing_titles_list = self.persistent_data['thing_titles']
-                    self.mqtt_client.publish("hermes/voco/" + self.persistent_data['main_site_id'] + "/ping",json.dumps({
-                                'ip':str(self.ip_address),
-                                'hostname':str(self.hostname),
-                                'siteId':self.persistent_data['site_id'],
-                                'satellite':self.persistent_data['is_satellite'],
-                                'main_controller': self.persistent_data['main_site_id'],
-                                'satellite_intent_handling':self.satellite_should_act_on_intent,
-                                'thing_titles':self.persistent_data['thing_titles']
-                                }))
+                self.mqtt_client.publish(mqtt_ping_path,json.dumps({
+                            'ip':str(self.ip_address),
+                            'siteId':self.persistent_data['site_id'],
+                            'hostname':str(self.hostname),
+                            'satellite':self.persistent_data['is_satellite'],
+                            'main_controller': self.persistent_data['main_site_id'],
+                            'satellite_intent_handling':self.satellite_should_act_on_intent,
+                            'thing_titles':self.persistent_data['thing_titles']
+                            }))
+                
                 if self.DEBUG:
-                    print("Ping sent")
+                    print(str(ping_type) + " sent")
                         
             except Exception as ex:
                 if self.DEBUG:
-                    print("Error sending MQTT ping: " + str(ex))
+                    print("Error in send_mqtt_ping: " + str(ex))
         else:
             if self.DEBUG:
                 print("self.mqtt_connected was likely false")
 
 
+
+
+    def parse_ping(self,payload,ping_type="ping"):
+        if self.DEBUG:
+            print("\n ) - - - - . . . . . . .  - - - - (\n")
+            print('in parse_ping. ping_type: ' + str(ping_type))
+            print("(own site_id: " + str(self.persistent_data['site_id']) + ")")
+            print("- - - payload: " + str(payload))
+            
+            #print("- - - message ends in /ping. A Voco server (" + str(payload['hostname']) + "," + str(payload['ip']) + ") is asking for our ip and hostname")
+            
+        # TODO: there is a lot of partitioning into ping vs pong route here, but in many cases that doesn't matter. As long as it comes from another controller, it can be useful, no matter if its ping or pong
+        # Could also technicallyt disable satellite mode if the main controller reports that it's itself a satellite    
+        
+        save_to_persistent_data = False
+            
+        if 'ip' in payload and 'siteId' in payload and 'hostname' in payload and 'satellite' in payload and 'main_controller' in payload and 'thing_titles' in payload:
+            
+            
+            # If the message came from another controller
+            if payload['siteId'] != self.persistent_data['site_id']:
+            
+            
+                #
+                # Learning the main_site_id of the main controller
+                #
+            
+                if self.persistent_data['is_satellite']:
+            
+                    #self.connected_satellites = {} # TODO: just to make sure this is empty, since a satellite doesn't have other connected satellites... right? No need?
+            
+                    #... but the main_site_id hasn't changed to the actual main_site_id yet (this is the first broadcast pong message to supply it), then set the main_site_id now.
+                
+                    #if payload['ip'] != self.ip_address and payload['ip'] == self.persistent_data['mqtt_server'] and self.persistent_data['main_site_id'] == self.persistent_data['site_id']:
+                    if payload['ip'] != self.ip_address and payload['hostname'] == self.persistent_data['main_controller_hostname']: # and self.persistent_data['main_site_id'] == self.persistent_data['site_id']: # and self.persistent_data['main_site_id'] == self.persistent_data['site_id']:
+                        if self.DEBUG:
+                            print("broadcast pong was from intented main MQTT server. This has supplied the intended main_site_id: " + str(payload['siteId']) )
+                    
+                        if self.persistent_data['main_site_id'] != payload['siteId']:
+                            save_to_persistent_data = True
+                            if self.DEBUG:
+                                print("received the new main_site_id. Saving it.")
+                                
+                        self.persistent_data['main_site_id'] = payload['siteId']
+            
+            
+            
+            
+                #
+                # Message from the main controller
+                #
+                
+                if payload['siteId'] == self.persistent_data['main_site_id'] and self.persistent_data['main_site_id'] != self.persistent_data['site_id']:
+                    if self.DEBUG:
+                        print("good response from main controller")
+                    self.periodic_voco_attempts = 0 # we got a good response, so set the (unsuccesful) attempts counter back to zero.  
+                    self.voco_connected = True
+                    
+                    # If the main controller has a different hostname, remember that new name
+                    if self.persistent_data['main_controller_hostname'] != payload['hostname']:
+                        if self.DEBUG:
+                            print("hostname of main controller seems to have changed from: " + str(self.persistent_data['main_controller_hostname']) + ", to: " + str(payload['hostname']))
+                        self.persistent_data['main_controller_hostname'] = payload['hostname']
+                        save_to_persistent_data = True
+            
+                    if self.persistent_data['mqtt_server'] != payload['ip']:
+                        # can this even happen? If we don't have the IP of the main MQTT server, then we will never receive this update message? Maybe if both wifi and ethernet are connected?
+                        if self.DEBUG:
+                            print("The IP adress of the main Voco server has changed to " + str(payload['ip'])) 
+                        self.persistent_data['mqtt_server'] = payload['ip']
+                        save_to_persistent_data = True
+            
+            
+                    # Main server was missing for a while
+                    if self.periodic_voco_attempts > 3:
+                        if self.DEBUG:
+                            print("Voco addon on the main server sent a ping/pong after being missing for a while.")
+            
+                    # Main server was missing for a LONG while
+                    if self.currently_scanning_for_missing_mqtt_server:
+                        self.currently_scanning_for_missing_mqtt_server = False
+                        self.persistent_data['mqtt_server'] = str(payload['ip'])
+                        save_to_persistent_data = True
+                            
+                        # set the status back to something normal
+                        if self.persistent_data['listening']:
+                            self.set_status_on_thing("Listening")
+                        else:
+                            self.set_status_on_thing("Not listening")
+                            
+                            
+                #
+                # Message from a connected satellite
+                #
+                
+                if payload['siteId'] != self.persistent_data['site_id'] and payload['main_controller'] == self.persistent_data['site_id']:
+                    if self.DEBUG:
+                        print("SPOTTED A SATELLITE THAT IS USING THIS CONTROLLER AS ITS MAIN CONTROLLER")
+                    
+                    if self.persistent_data['is_satellite'] == False:
+                        self.connected_satellites[ str(payload['hostname']) ] = int(time.time())
+                    else:
+                        # TODO: explain this better in the UI? Edge case..
+                        if self.DEBUG:
+                            print("Error. Well this is awkward. A satellite is connected to this controller, but this controller is already itself a satellite")
+            
+            
+                #
+                # Message from any other controller
+                #
+                
+                # save to others list, to show main controllers that can be connected to in the UI
+                if payload['satellite'] == False: # TODO: why this check? Not needed anymore? Satellites should also have all the information up to date now. 
+                # Ah, I guess to avoid showing controllers to connect to in the UI that are already in satellite mode. That's useful.. Messy, since in some places this check doesn't exist at the moment
+                    self.mqtt_others[payload['ip']] = payload['hostname']
+                
+                
+                # Save other controller's thing titles
+                
+                # create empty set if it did not exist in the list yet
+                if payload['siteId'] not in self.satellite_thing_titles:
+                    if self.DEBUG:
+                        print("creating a set to hold thing titles from satellite " + str(payload['siteId']))
+                    self.satellite_thing_titles[payload['siteId']] = set()
+        
+                if self.DEBUG:
+                    print('clearing list of things titles from satellite: ' + str(payload['siteId']))
+                self.satellite_thing_titles[payload['siteId']].clear() # clear the set
+
+                #if payload['satellite_intent_handling']:
+                for thing_title in payload['thing_titles']:
+                    #if self.DEBUG:
+                    #    print("adding thing_title to list of things that satellite will handle: " + str(thing_title))
+                    self.satellite_thing_titles[payload['siteId']].add(thing_title)
+                    
+                if self.DEBUG:
+                    print("self.satellite_thing_titles['" + payload['siteId']  + "'] is now this length: " + str(len(self.satellite_thing_titles[payload['siteId']])) )
+
+            if save_to_persistent_data:
+                self.save_persistent_data()
+
+            # TODO: trigger the injection mechanism here, so that new names are learnt as quickly as possible? Maybe turn of the timed injection from the clock in that case (if is_satellite or if at lest one satellites is connected in case of being a main controller)
+        else:
+            print("ping message was missing parts")
+    
+    
     
 #
 # ROUTING
@@ -5412,7 +5395,117 @@ class VocoAdapter(Adapter):
                 print("\n(...) " + str(voice_message))
             self.speak(voice_message,intent=intent_message)
 
+     
+     
+     
+     
         
+    #
+    #  ADD AND REMOVE ACTION TIMES
+    #  Also synchronises them with other satellites (although will only be executed on the main controller)
+    #
+
+
+    # Adds a delayed intent (timers, alarsm, delayed thing changes, etc) to the list of action times
+    def add_action_time(self,delayed_action):
+        if self.DEBUG:
+            print('in add_action_time. Item: ' + str(delayed_action))
+        
+        already_exists = False
+        try:
+            if 'moment' in delayed_action and 'slots' in delayed_action:
+                if self.DEBUG:
+                    print('provided action time has a moment and slots (likely with sentence) in it, so will check if it already exists in the list')
+                moment = int(delayed_action['moment'])
+                sentence = str(delayed_action['slots']['sentence'])
+            
+                action_count = len( self.persistent_data['action_times'] )
+                for i in range(action_count):
+                    if self.persistent_data['action_times'][i]['moment'] == moment and self.persistent_data['action_times'][i]['slots']['sentence'] == sentence:
+                        if self.DEBUG:
+                            print("add_action_time: action already existed")
+                        already_exists = True
+        
+            else:
+                if self.DEBUG:
+                    print("Error: add_action_time: moment and/or sentence was missing from delayed_action, so could not check if it already existed")
+        except Exception as ex:
+            print("Error: add_action_time: checking if new delayed action already exists failed: " + str(ex))
+        
+        if already_exists:
+            if self.DEBUG:
+                print("-not adding delayed action to action items list (already exists)")
+        else:
+            if 'cosmetic' not in delayed_action:
+                if self.DEBUG:
+                    print('\nadding delayed intent to the action times list (did not already exist). Setting cosmetic to False')
+                
+                delayed_action['cosmetic'] = False # Whether to actually execute the delayed action
+                self.persistent_data['action_times'].append(delayed_action)
+                
+                delayed_action2 = delayed_action.copy()
+                #if self.persistent_data['is_satellite']: # If this is a satellite, share this intent with the other controller (read: main controller), so that it will be shown in the list of delayed actions there too. Receipients won't act on it.
+                delayed_action2['cosmetic'] = True
+                #self.mqtt_client.publish("hermes/voco/" + str(self.persistent_data['main_site_id']) + "/delayed_action",json.dumps(delayed_action))
+                self.mqtt_client.publish("hermes/voco/add_action",json.dumps(delayed_action2))
+                
+            else:
+                if delayed_action['cosmetic'] == True:
+                    # TODO: check if an exact duplicate action already exists in the action list
+                    if self.DEBUG:
+                        print("add_action_time: that intent already had cosmetic attribute defined as true. adding it purely for cosmetic reasons.")
+                    self.persistent_data['action_times'].append(delayed_action)
+            
+    
+    # This broadcasts to delete this action item over MQTT to all Voco devices. All of the, including the originating device, then call remove_action_time when they receive that message
+    def broadcast_remove_action_time(self,delayed_action):
+        if self.DEBUG:
+            print("\nin broadcast_remove_action_time. delayed_action: " + str(delayed_action))
+            print("")
+        self.mqtt_client.publish("hermes/voco/remove_action",json.dumps(delayed_action))
+        self.remove_action_time(delayed_action)
+        return True
+    
+    def remove_action_time(self,delayed_action): # returns True of False, which is useful for the API handler, which calls this
+        if self.DEBUG:
+            print("in remove_action_time, item: " + str(delayed_action))
+        
+        moment = None
+        sentence = None
+        if 'moment' in delayed_action and 'sentence' in delayed_action: # this is for when it's called from the Api Handler, where the UI provided these two values in a flat dictionary
+            moment = int(delayed_action['moment'])
+            sentence = str(delayed_action['sentence'])
+        elif 'moment' in delayed_action and 'slots' in delayed_action: # we can also feed this method a full action item object
+            moment = int(delayed_action['moment'])
+            sentence = str(delayed_action['slots']['sentence'])
+
+        if moment != None and sentence != None:
+            if self.DEBUG:
+                print("deleting timer")
+            update = 'Unable to get detailed information'
+    
+            item_to_delete = None
+            action_count = len( self.persistent_data['action_times'] )
+            for i in range(action_count):
+                if self.persistent_data['action_times'][i]['moment'] == moment and self.persistent_data['action_times'][i]['slots']['sentence'] == sentence:
+                    item_to_delete = i
+
+            if item_to_delete != None:
+                del self.persistent_data['action_times'][item_to_delete]
+                if self.DEBUG:
+                    print("deleted #" + str(item_to_delete))
+                return True
+            
+            else:
+                if self.DEBUG:
+                    print("Error, could not find element to delete in action times list")
+        else:
+            if self.DEBUG:
+                print("Error: add_action_time: moment and/or sentence was missing from delayed_action, so cannot detete it")
+            
+        return False
+
+
 
 #
 #  YOU SET A TIMER - RUN TIME DELAYED COMMANDS
@@ -5421,38 +5514,48 @@ class VocoAdapter(Adapter):
         
         try:
             if self.DEBUG:
-                print("\n\n(>) in delayed_intent_player. Item: \n" + str(item))
-                print("ORIGIN?: " + str(item['intent_message']['origin']))
+                print("\n\n(>)\nin delayed_intent_player. Item: \n" + str(item))
+                #print("ORIGIN?: " + str(item['intent_message']['origin']))
             voice_message = ""
         
-        
-         
-            if item['type'] == 'boolean_related':
-                if self.DEBUG:
-                    print("(>) origval:" + str(item['original_value']))
-                    print("(>) TIMED boolean_related SWITCHING")
-                #delayed_action = True
-                #slots = self.extract_slots(intent_message)
+            play = True
+            if 'cosmetic' in item:
+                if item['cosmetic']:
+                    play = False
+                    if self.DEBUG:
+                        print('not actually playing the delayed intent, it is just here to look pretty in the main controller UI\n')
             
-                found_properties = self.check_things('set_state',item['slots'])
-                voice_message = intent_set_state(self,item['slots'],item['intent_message'],found_properties, item['original_value'])
-
-            # Delayed setting of a value
-            elif item['type'] == 'value':
+                
+            if play:
                 if self.DEBUG:
-                    print("(>) origval:" + str(item['original_value']))
-                    print("(>) TIMED SETTING OF A VALUE")
-                #slots = self.extract_slots(intent_message)
-                found_properties = self.check_things('set_value',item['slots'])
-                voice_message = intent_set_value(self,item['slots'],item['intent_message'],found_properties, item['original_value'])
-        
-        
-            if voice_message == "":
-                voice_message = "Sorry, you set a timer, but I could not handle it"
-            else:
-                voice_message = "You set a timer. " + voice_message
+                    print('delayed_intent_player: not cosmetic, so playing the delayed intent')
+                
+                if item['type'] == 'boolean_related':
+                    if self.DEBUG:
+                        print("(>) origval:" + str(item['original_value']))
+                        print("(>) TIMED boolean_related SWITCHING")
+                    #delayed_action = True
+                    #slots = self.extract_slots(intent_message)
+            
+                    found_properties = self.check_things('set_state',item['slots'])
+                    voice_message = intent_set_state(self,item['slots'],item['intent_message'],found_properties, item['original_value'])
 
-            self.speak(voice_message, item['intent_message'])
+                # Delayed setting of a value
+                elif item['type'] == 'value':
+                    if self.DEBUG:
+                        print("(>) origval:" + str(item['original_value']))
+                        print("(>) TIMED SETTING OF A VALUE")
+                    #slots = self.extract_slots(intent_message)
+                    found_properties = self.check_things('set_value',item['slots'])
+                    voice_message = intent_set_value(self,item['slots'],item['intent_message'],found_properties, item['original_value'])
+        
+        
+                if voice_message == "":
+                    voice_message = "Sorry, you set a timer, but I could not handle it"
+                else:
+                    voice_message = "You set a timer. " + voice_message
+            
+                self.speak(voice_message, item['intent_message'])
 
             
 
@@ -5545,20 +5648,20 @@ class VocoAdapter(Adapter):
                 
                 for sat in self.satellite_thing_titles:
                     if self.DEBUG:
-                        print("adding thing titles from satellite: " + str(sat))
+                        print("adding: " + str(len(self.satellite_thing_titles[sat])) + " ,thing titles from satellite: " + str(sat))
                     for sat_thing_title in self.satellite_thing_titles[sat]:
-                        if self.DEBUG:
-                            print("-- " + str(sat_thing_title))
+                        #if self.DEBUG:
+                        #    print("-- " + str(sat_thing_title))
                         full_thing_titles_list.append(sat_thing_title)   
                     
-                if self.DEBUG:
-                    print("Inject: full_thing_titles_list: " + str(full_thing_titles_list))
+                #if self.DEBUG:
+                #    print("Inject: full_thing_titles_list: " + str(full_thing_titles_list))
                 
                 #for thing in self.things:
                 #    if 'title' in thing:
                 for thing_name in full_thing_titles_list:
-                    if self.DEBUG:
-                        print("thing_name: " + str(thing_name))
+                    #if self.DEBUG:
+                    #    print("thing_name: " + str(thing_name))
                     #thing_name = clean_up_string_for_speaking(str(thing['title']).lower()).strip()
                     thing_name = clean_up_string_for_speaking(thing_name) #.strip() # TODO: removing .lower here has cause issues in the thing scanner.. But at least the sentences in matrix now look nice I guess?
                 
@@ -5576,11 +5679,11 @@ class VocoAdapter(Adapter):
             
                 operations = []
             
-                if self.DEBUG:
-                    print("fresh_thing_titles = " + str(fresh_thing_titles))
-                    print("fresh_prop_titles = " + str(fresh_property_titles))
-                    print("fresh_prop_strings = " + str(fresh_property_strings))
-            
+                #if self.DEBUG:
+                #    print("fresh_thing_titles = " + str(fresh_thing_titles))
+                #    print("fresh_prop_titles = " + str(fresh_property_titles))
+                #    print("fresh_prop_strings = " + str(fresh_property_strings))
+                
                 try:
                     thing_titles = set(self.persistent_data['thing_titles'])
                 except:
@@ -5698,7 +5801,7 @@ class VocoAdapter(Adapter):
                     try:
                         if self.mqtt_second_client != None:
                             if self.DEBUG:
-                                print("                                                                    [===]---")
+                                print("\n[===]---")
                                 print("Injection: self.mqtt_client exists, so will try to inject:")
                                 print(str(json.dumps(operations)))
                             self.mqtt_second_client.publish('hermes/injection/perform', json.dumps(update_request))
@@ -6544,9 +6647,9 @@ class VocoAdapter(Adapter):
                             # if a target number is set, skip boolean properties
                             try:
                             
-                                if self.DEBUG:
-                                    print("\n\nSANITY CHECKING. property type: " + str( thing['properties'][thing_property_key]['type'] ))
-                                    print("slots: " + str(slots))
+                                #if self.DEBUG:
+                                #    print("\n\nSANITY CHECKING. property type: " + str( thing['properties'][thing_property_key]['type'] ))
+                                #    print("slots: " + str(slots))
                                 
                                 if (slots['number'] != None or slots['percentage'] != None) and thing['properties'][thing_property_key]['type'] == 'boolean':
                                     if self.DEBUG:
@@ -7368,70 +7471,7 @@ class VocoAdapter(Adapter):
                         #self.force_injection = True
                         
                 self.currently_scanning_for_missing_mqtt_server = False # setting this back to false will allow for a new round of searching.
-                        
-                """
-                self.gateways_ip_list = avahi_detect_gateways(True)
-                if self.DEBUG:
-                    print("------------------ self.gateways_ip_list length: " + str(len(self.gateways_ip_list)))
-                    
-                #if len(self.gateways_ip_list) == 0 or self.periodic_voco_attempts > 40:
-                #    if self.DEBUG:
-                #        print("------------------ Quick scan for gateways did not have any results, or didn't get any results in the past. Will try the slow full scan.")
-                #    self.gateways_ip_list = arpa_detect_gateways(False) # disables the quickscan option.
-                   
-                    
-                for ip_address in self.gateways_ip_list:
-                    
-                    if ip_address == self.ip_address:
-                        if self.DEBUG:
-                            print("scan is skipping device's own ip address")
-                        continue
-                        
-                    
-                    if self.DEBUG:
-                        print("------------------ ip_address: " + str(ip_address))
-                    if self.currently_scanning_for_missing_mqtt_server:
-                        if self.DEBUG:
-                            print("------------------ Let's (continue to) try to connect to MQTT server with this IP address")
-                        self.persistent_data['mqtt_server'] = ip_address # test all the IP addresses one by one
-                        #self.persistent_data['main_site_id'] = 
-                        self.run_mqtt()
-                        sleep(5) # wait a bit, then send a broadcast ping. Hopefully the missing main server will respond.
-                        self.send_mqtt_ping(broadcast=True)
-                        sleep(3)
-                        #if self.mqtt_connected:
-                        #    if self.DEBUG:
-                        #        print("------------------ MQTT was connected")
-                        #    self.send_mqtt_ping(broadcast=True) # send a broadcast ping to the current IP address in order to find out its site_id
-                        #    sleep(3) # wait a bit
-                            #if payload['siteId'] == self.persistent_data['main_site_id']:
-                        #else:
-                        #    print("------------------ MQTT connection failed")
-                        
                 
-                if self.currently_scanning_for_missing_mqtt_server: # Check if the server is now still reported as being missing.
-                    if self.DEBUG:
-                        print("--------------------- Was unable to find the missing MQTT server after doing a full network scan")
-                        
-                        # Turn off the satelitte function? Or just update the voco thing to show an error?
-                        #self.persistent_data['is_satellite'] = False
-                        #self.save_persistent_data()
-                    
-                        #if ip_address in self.mqtt_others:
-            
-                        #if self.persistent_data['is_satellite']:
-                        #    if not in self.gateways_ip_list:
-
-                        #self.periodic_voco_attempts
-                else:
-                    if self.DEBUG:
-                        print("")
-                        print("")
-                        print("--------------------- Found the correct main MQTT server! (Re)starting snips now.")
-
-                    
-				"""
-                        
                 
 
         except Exception as ex:
@@ -9011,8 +9051,8 @@ class VocoAdapter(Adapter):
 
         snips_actual_processes_count = 0
         for s in (str(p2.communicate())[2:-10]).split('\\n'):
-            if self.DEBUG:
-                print(" -- " + str(s))
+            #if self.DEBUG:
+            #    print(" -- " + str(s))
             if s != "" and 'defunct' not in s:
                 snips_actual_processes_count += 1
                 

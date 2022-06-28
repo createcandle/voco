@@ -10,6 +10,7 @@
             
 			this.attempts = 0;
             this.busy_polling = false;
+            this.busy_polling_count = 0;
 
 	      	this.content = '';
 			this.item_elements = []; //['thing1','property1'];
@@ -197,12 +198,20 @@
 				//console.log("send button clicked");
 				send_input_text();
 			});
-				
 			
+            // Reset poll attempts if the user clicks on "voco not available" warning.
 			document.getElementById('extension-voco-unavailable').addEventListener('click', (event) => {
-				this.attempts = 0;
+                this.busy_polling = false;
+                this.attempts = 0;
+			});
+				
+			document.getElementById('extension-voco-main-controller-not-responding').addEventListener('click', (event) => {
+                this.busy_polling = false;
+                this.attempts = 0;
 			});
             
+                
+                
 				
 			
 			try{
@@ -486,6 +495,14 @@
                         
                         if(this.busy_polling){
                             console.log("voco: was still polling, aborting new poll");
+                            this.busy_polling_count++;
+                            
+                            if(this.busy_polling_count > 10){
+                                console.log("Busy polling for over 20 seconds");
+                                document.getElementById('extension-voco-main-controller-not-responding').style.display = 'block';
+                                document.getElementById('extension-voco-text-commands-container').style.display = 'none';
+                            }
+                            
                             return;
                         }
                         else{
@@ -599,9 +616,6 @@
                                 
                                 // Show satellites that are connected to this controller (if any)
                                 if(typeof body['connected_satellites'] != 'undefined' && typeof body['is_satellite'] != 'undefined'){
-                                    if(this.debug){
-                                        console.log("showing connected satellites");
-                                    }
                                     this.show_connected_satellites( body['connected_satellites'], body['is_satellite'] );
                                 }
                                 
@@ -674,6 +688,7 @@
 							}
                             
                             this.busy_polling = false;
+                            this.busy_polling_count = 0;
                             document.getElementById('extension-voco-unavailable').style.display = 'none';
                             document.getElementById('extension-voco-text-commands-container').style.display = 'block';
                             
@@ -686,6 +701,7 @@
 							//pre.innerText = "Loading items failed - connection error";
 							this.attempts = 0;
                             this.busy_polling = false;
+                            this.busy_polling_count = 0;
 				        });	
                         
 				  		// Get list of items
@@ -1160,7 +1176,7 @@
         
 	
 		//
-		//  REGENERATE ITEMS
+		//  REGENERATE ACTION TIME ITEMS
 		//
 	
 		regenerate_items(){
@@ -1322,10 +1338,6 @@
                 var recent_sats_count = 0;
             
                 for( var sat in connected_satellites ){
-                    if(this.debug){
-                        console.log("sat: ", sat, connected_satellites[sat] );
-                    }
-            
                     if(connected_satellites[sat] > (this.current_time - 60)){
             			var l = document.createElement("li");
             			var t = document.createTextNode(sat);

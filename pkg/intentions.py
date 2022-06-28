@@ -123,10 +123,11 @@ def intent_set_timer(self, slots, intent_message):
         if self.DEBUG:
             print("Countdown in seconds: " + str(time_delta_seconds))
         
-        if time_delta_seconds > 110 and time_delta_seconds % 60 != 0 and (time_delta_seconds + 1) % 60 == 0:
+        # ugly fix for the time delta being delayed for a second sometimes.
+        if time_delta_seconds > 90 and time_delta_seconds % 60 != 0 and (time_delta_seconds + 1) % 60 == 0:
             if self.DEBUG:
                 print("APPLYING TIME HACK")
-            time_delta_seconds += 1 # ugly fix for the time delta being delayed for a second sometimes.
+            time_delta_seconds += 1 
         
         weeks_left = time_delta_seconds // 604800
         #print("weeks left: " + str(weeks_left))
@@ -176,7 +177,9 @@ def intent_set_timer(self, slots, intent_message):
                                 print("countdown already existed. Removing the old one.")
                             item['moment'] = moment
                             #countdown_existed = True
-                            del self.persistent_data['action_times'][index]
+                            
+                            ###del self.persistent_data['action_times'][index]
+                            self.broadcast_remove_action_time(self.persistent_data['action_times'][index])
                             voice_message += "The previous countdown has been removed. "
             except Exception as ex:
                 print("Error removing previous countdown: " + str(ex))
@@ -186,7 +189,7 @@ def intent_set_timer(self, slots, intent_message):
                 
             if time_delta_seconds < 24192001: # Countdown can be four weeks at maximum
                 self.countdown = moment
-                self.persistent_data['action_times'].append({"intent_message":intent_message,"moment":moment,"type":"countdown","slots":slots})
+                self.add_action_time({"intent_message":intent_message,"moment":moment,"type":"countdown","slots":slots})
                 # Only tell the user the countdown details if there is enough time.
                 if len(voice_message) > 0:
                     voice_message += "Starting a new countdown for " + time_delta_voice_message
@@ -197,11 +200,11 @@ def intent_set_timer(self, slots, intent_message):
                 voice_message = "A countdown can not last longer than 4 weeks"
             
         elif str(slots['timer_type']) == "wake":
-            self.persistent_data['action_times'].append({"intent_message":intent_message,"moment":moment,"type":"wake","slots":slots})
+            self.add_action_time({"intent_message":intent_message,"moment":moment,"type":"wake","slots":slots})
             voice_message = "OK, I will wake you up in " + time_delta_voice_message
             
         elif str(slots['timer_type']) == "alarm":
-            self.persistent_data['action_times'].append({"intent_message":intent_message,"moment":moment,"type":"alarm","slots":slots})
+            self.add_action_time({"intent_message":intent_message,"moment":moment,"type":"alarm","slots":slots})
             voice_message = "OK, I have set an alarm for " + time_delta_voice_message
             
         # REMINDER
@@ -235,16 +238,16 @@ def intent_set_timer(self, slots, intent_message):
                     matched_sentence = matches.group(2)
                     if matched_sentence.endswith(" at"):
                         matched_sentence = matched_sentence[:-3]
-                    self.persistent_data['action_times'].append({"intent_message":intent_message,"moment":moment,"type":"reminder","reminder_text":matched_sentence,"slots":slots})
+                    self.add_action_time({"intent_message":intent_message,"moment":moment,"type":"reminder","reminder_text":matched_sentence,"slots":slots})
                     voice_message = "Ok, I have set a reminder to " + str(matches.group(2))
                 #else:
                     # TODO this could be a spot to start a dialogue and ask the user what the reminder is for.
-                #    self.persistent_data['action_times'].append({"intent_message":intent_message,"moment":moment,"type":"timer","slots":slots})
+                #    self.add_action_time({"intent_message":intent_message,"moment":moment,"type":"timer","slots":slots})
                 #    voice_message = "A timer has been set for " + time_delta_voice_message
                 #    print(str(self.persistent_data['action_times']))
         else:
             # TIMER
-            self.persistent_data['action_times'].append({"intent_message":intent_message,"moment":moment,"type":"timer","slots":slots})
+            self.add_action_time({"intent_message":intent_message,"moment":moment,"type":"timer","slots":slots})
             if self.DEBUG:
                 print("timer was appended to the list")
             voice_message = "OK, a timer has been set for " + str(time_delta_voice_message)
@@ -313,7 +316,8 @@ def intent_get_timer_count(self, slots, intent_message):
         
     except Exception as ex:
         print("Error while dealing with get_timer_count intent: " + str(ex))
-
+    
+    return "Sorry, an error occured. "
 
 
 
@@ -430,7 +434,8 @@ def intent_list_timers(self, slots, intent_message):
         
     except Exception as ex:
         print("Error while dealing with list_timers intent: " + str(ex))
-
+    
+    return "Sorry, an error occured. "
 
 
 
@@ -453,6 +458,12 @@ def intent_stop_timer(self, slots, intent_message):
             #return
             voice_message = "Sorry, I did not understand which timer you wanted to stop. "
         
+        elif str(slots['timer_type']) not in ['timer','alarm','reminder','wake','countdown']:
+            if self.DEBUG:
+                print("Unkown timer type")
+            #self.play_sound(self.error_sound,intent=intent_message)
+            #return
+            voice_message = "Sorry, I did not understand the timer type. "
         
         
         # The countdown is a separate case
@@ -464,7 +475,7 @@ def intent_stop_timer(self, slots, intent_message):
                 if str(item['type']) == 'countdown':
                     #print("removing countdown from list")
                     #removed_timer_count += 1
-                    del self.persistent_data['action_times'][index]
+                    self.broadcast_remove_action_time(self.persistent_data['action_times'][index])
             voice_message = "the countdown has been disabled."
         
         
@@ -494,7 +505,7 @@ def intent_stop_timer(self, slots, intent_message):
                         print("Removing " + str(item['type']) + " item from list")
                     removed_timer_count += 1
                     timers_to_remove.append(index)
-                    #del self.persistent_data['action_times'][index]
+                    #self.broadcast_remove_action_time(self.persistent_data['action_times'][index])
                   
             if self.DEBUG:
                 print("timers_to_remove = " + str(timers_to_remove))
@@ -503,7 +514,7 @@ def intent_stop_timer(self, slots, intent_message):
                 #for index in timers_to_remove:
                     if self.DEBUG:
                         print("deleting item")
-                    del self.persistent_data['action_times'][index]
+                    self.broadcast_remove_action_time(self.persistent_data['action_times'][index])
             except Exception as ex:
                 print("error deleting timers: " + str(ex))
                     
@@ -537,7 +548,8 @@ def intent_stop_timer(self, slots, intent_message):
                                 
                             if current_type == str(slots['timer_type']):
                                 removed_timer_count += 1
-                                del self.persistent_data['action_times'][i]
+                                #del self.persistent_data['action_times'][i]
+                                self.broadcast_remove_action_time(self.persistent_data['action_times'][i])
                                 break
                                 
                         if removed_timer_count == 1:
@@ -560,7 +572,8 @@ def intent_stop_timer(self, slots, intent_message):
                             if current_type == str(slots['timer_type']):
                                 #timers_count += 1 # count how many of this type we encountered
                                 if removed_timer_count < int(slots['number']):
-                                    del self.persistent_data['action_times'][i]
+                                    #del self.persistent_data['action_times'][i]
+                                    self.broadcast_remove_action_time(self.persistent_data['action_times'][i])
                                     removed_timer_count += 1
                                     
                         if removed_timer_count == self.timer_counts[str(slots['timer_type'])]:
@@ -568,7 +581,13 @@ def intent_stop_timer(self, slots, intent_message):
                             
                         voice_message = removed_count_message + " " + str(slots['timer_type']) + "s have been removed."
                 except Exception as ex:
-                    print("Error removing timer(s)." + str(ex))
+                    print("Error removing timer(s): " + str(ex))
+        
+        else:
+            voice_message = "Sorry, I did not understand. "
+            if self.DEBUG:
+                print("Error, reached else in stop_timer")
+                  
                   
         return voice_message
                     
@@ -579,7 +598,8 @@ def intent_stop_timer(self, slots, intent_message):
         
     except Exception as ex:
         print("Error in stop_timer: " + str(ex))
-
+    
+    return "Sorry, an error occured. "
 
 
 
@@ -590,141 +610,148 @@ def intent_get_boolean(self, slots, intent_message, found_properties):
     
     voice_message = ""
         
-    #boolean_related = True
-    #found_properties = self.check_things(boolean_related,slots['thing'],slots['property'],slots['space'])
-    if len(found_properties) > 0:
+    try:
+        #boolean_related = True
+        #found_properties = self.check_things(boolean_related,slots['thing'],slots['property'],slots['space'])
+        if len(found_properties) > 0:
         
-        perfect_property_match_spotted = False
-        for found_property in found_properties:
-            if slots['property'] == found_property['property'] and found_property['type'] == "boolean":
-                if self.DEBUG:
-                    print("There is a perfectly matching property called: " + str(found_property['property']))
-                perfect_property_match_spotted = True # There is a property that perfectly matches the name of the one we're looking for.
+            perfect_property_match_spotted = False
+            for found_property in found_properties:
+                if slots['property'] == found_property['property'] and found_property['type'] == "boolean":
+                    if self.DEBUG:
+                        print("There is a perfectly matching property called: " + str(found_property['property']))
+                    perfect_property_match_spotted = True # There is a property that perfectly matches the name of the one we're looking for.
         
-        loop_counter = 0
-        for found_property in found_properties:
+            loop_counter = 0
+            for found_property in found_properties:
             
-            if perfect_property_match_spotted and slots['property'] != found_property['property']: 
+                if perfect_property_match_spotted and slots['property'] != found_property['property']: 
+                    if self.DEBUG:
+                        print("Found a perfect match for the property name, so will skip properties that are not it")
+                    continue # if there is a perfect match, skip over items unless we're at the perfect match
+            
+            
                 if self.DEBUG:
-                    print("Found a perfect match for the property name, so will skip properties that are not it")
-                continue # if there is a perfect match, skip over items unless we're at the perfect match
+                    print("found_property " + str(loop_counter) + " = " + str(found_property))
+                loop_counter += 1
             
-            
-            if self.DEBUG:
-                print("found_property " + str(loop_counter) + " = " + str(found_property))
-            loop_counter += 1
-            
-            if found_property['property_url'] == None or found_property['property'] == None:
+                if found_property['property_url'] == None or found_property['property'] == None:
+                    if self.DEBUG:
+                        print("Skipping property: missing property name and/or property url")
+                    continue
+                
+                if found_property['type'] == "boolean" or found_property['enum'] != None:
+                    pass
+                else:
+                    if self.DEBUG:
+                        print("intent_get_boolean: property is not a boolean or enum, skipping")
+                    continue
+                
                 if self.DEBUG:
-                    print("Skipping property: missing property name and/or property url")
-                continue
-                
-            if found_property['type'] == "boolean" or found_property['enum'] != None:
-                pass
-            else:
-                if self.DEBUG:
-                    print("intent_get_boolean: property is not a boolean or enum, skipping")
-                continue
-                
-            if self.DEBUG:
-                print("Found a boolean: " + str(found_property))
+                    print("Found a boolean: " + str(found_property))
             
-            api_path = str(found_property['property_url'])
-            #print("api path = " + str(api_path))
-            api_result = self.api_get(api_path, intent=intent_message)
-            if self.DEBUG:
-                print("intent_get_boolean: called api for data, it gave:" + str(api_result))
-                
-            try:
-                key = list(api_result.keys())[0]
-            except Exception as ex:
-                print("get boolean: error parsing the returned json: " + str(ex))
-                continue
-                
-            if self.DEBUG:
-                print("key: " + str(key))
-                print("api_result[key]: " + str(api_result[key]))
-                
-            if key == "error":
+                api_path = str(found_property['property_url'])
+                #print("api path = " + str(api_path))
+                api_result = self.api_get(api_path, intent=intent_message)
                 if self.DEBUG:
-                    print("get boolean: api_get returned an error")
-                if api_result[key] == 500:
+                    print("intent_get_boolean: called api for data, it gave:" + str(api_result))
+                
+                try:
+                    key = list(api_result.keys())[0]
+                except Exception as ex:
+                    if self.DEBUG:
+                        print("get boolean: error parsing the returned json: " + str(ex))
+                    continue
+                
+                if self.DEBUG:
+                    print("key: " + str(key))
+                    print("api_result[key]: " + str(api_result[key]))
+                
+                if key == "error":
+                    if self.DEBUG:
+                        print("get boolean: api_get returned an error")
+                    if api_result[key] == 500:
+                        if len(found_properties) == 1 or (loop_counter == len(found_properties) and voice_message == ""):
+                            #voice_message = "Sorry, " + str(found_property['thing']) + " seems to be disconnected. "
+                            voice_message = "I could not get the value for " + str(found_property['thing'])
+                            break
+                        else:
+                            continue # maybe better luck with the next found_property
+            
+                if api_result[key] == None:
                     if len(found_properties) == 1 or (loop_counter == len(found_properties) and voice_message == ""):
-                        #voice_message = "Sorry, " + str(found_property['thing']) + " seems to be disconnected. "
-                        voice_message = "I could not get the value for " + str(found_property['thing'])
+                        voice_message = "Sorry, " + str(found_property['property']) + " had no value. "
                         break
                     else:
-                        continue # maybe better luck with the next found_property
+                        continue
+                    
             
-            if api_result[key] == None:
-                if len(found_properties) == 1 or (loop_counter == len(found_properties) and voice_message == ""):
-                    voice_message = "Sorry, " + str(found_property['property']) + " had no value. "
-                    break
+                #if len(found_properties) == 1 or perfect_property_match_spotted == True:
+                if perfect_property_match_spotted == True:
+                    voice_message = "it"
+            
+                #elif len(found_properties) > 1:
                 else:
-                    continue
+                    added_property_to_voice_message = False
+                    if str(found_property['property']) != 'state' or found_property['thing'] == None:
+                        voice_message += str(found_property['property'])
+                        added_property_to_voice_message = True
+                
+                
+                    if found_property['thing'] != None:
+                        if str(found_property['thing']) not in str(found_property['property']):
+                            if added_property_to_voice_message:
+                                voice_message += " of "
+                            voice_message += str(found_property['thing'])
                     
+                voice_message += " is "
             
-            #if len(found_properties) == 1 or perfect_property_match_spotted == True:
-            if perfect_property_match_spotted == True:
-                voice_message = "it"
+                if found_property['enum'] != None:
+                    voice_message += str(api_result[key])
+                
+                elif found_property['type'] == 'boolean':
+                
+                    if bool(api_result[key]) == True:
+                        if found_property['@type'] == 'OpenProperty': # In the future a smart lock capability should be added here.
+                            voice_message += 'open'
+                        elif found_property['@type'] == 'LockedProperty':
+                            voice_message += 'locked'
+                        elif found_property['@type'] == 'OnOffProperty':
+                            voice_message += 'on'
+                        else:
+                            voice_message += 'on'
+                    elif bool(api_result[key]) == False:
+                        if found_property['@type'] == 'OpenProperty':
+                            voice_message += 'closed'
+                        elif found_property['@type'] == 'LockedProperty':
+                            voice_message += 'unlocked'
+                        elif found_property['@type'] == 'OnOffProperty':
+                            voice_message += 'off'
+                        else:
+                            voice_message += 'off'
             
-            #elif len(found_properties) > 1:
+                voice_message += " . "
+                
+        else:
+            if voice_message == "":
+                voice_message = "Sorry, "
+            if slots['thing'] != None and slots['thing'] != 'all':
+                voice_message += "I couldn't find a match for your request. "
             else:
-                added_property_to_voice_message = False
-                if str(found_property['property']) != 'state' or found_property['thing'] == None:
-                    voice_message += str(found_property['property'])
-                    added_property_to_voice_message = True
-                
-                
-                if found_property['thing'] != None:
-                    if str(found_property['thing']) not in str(found_property['property']):
-                        if added_property_to_voice_message:
-                            voice_message += " of "
-                        voice_message += str(found_property['thing'])
-                    
-            voice_message += " is "
-            
-            if found_property['enum'] != None:
-                voice_message += str(api_result[key])
-                
-            elif found_property['type'] == 'boolean':
-                
-                if bool(api_result[key]) == True:
-                    if found_property['@type'] == 'OpenProperty': # In the future a smart lock capability should be added here.
-                        voice_message += 'open'
-                    elif found_property['@type'] == 'LockedProperty':
-                        voice_message += 'locked'
-                    elif found_property['@type'] == 'OnOffProperty':
-                        voice_message += 'on'
-                    else:
-                        voice_message += 'on'
-                elif bool(api_result[key]) == False:
-                    if found_property['@type'] == 'OpenProperty':
-                        voice_message += 'closed'
-                    elif found_property['@type'] == 'LockedProperty':
-                        voice_message += 'unlocked'
-                    elif found_property['@type'] == 'OnOffProperty':
-                        voice_message += 'off'
-                    else:
-                        voice_message += 'off'
-            
-            voice_message += " . "
-                
-    else:
-        if voice_message == "":
-            voice_message = "Sorry, "
-        if slots['thing'] != None and slots['thing'] != 'all':
-            voice_message += "I couldn't find a match for your request. "
-        else:
-            voice_message = "I couldn't find a matching device. "
+                voice_message = "I couldn't find a matching device. "
     
-    if voice_message == "":
-        if slots['property'] != None:
-            voice_message = "Sorry, this property cannot be toggled. "
-        else:
-            voice_message = "Sorry, this device cannot be toggled. "
+        if voice_message == "":
+            if slots['property'] != None:
+                voice_message = "Sorry, this property cannot be toggled. "
+            else:
+                voice_message = "Sorry, this device cannot be toggled. "
             
-    return voice_message
+        return voice_message
+            
+    except Exception as ex:
+        print("Error in intent_get_boolean: " + str(ex))
+    
+    return "Sorry, an error occured. "
             
     #voice_message = clean_up_string_for_speaking(voice_message)
     #if self.DEBUG:
@@ -774,7 +801,8 @@ def intent_get_value(self, slots, intent_message,found_properties):
                 try:
                     key = list(api_result.keys())[0]
                 except exception as ex:
-                    print("get_value: error parsing the returned json: " + str(ex))
+                    if self.DEBUG:
+                        print("get_value: error parsing the returned json: " + str(ex))
                     continue
                     
                 if self.DEBUG:
@@ -850,11 +878,13 @@ def intent_get_value(self, slots, intent_message,found_properties):
                         voice_message += str(api_value)
                 
                 else:
-                    print("handling a number/integer")
+                    if self.DEBUG:
+                        print("handling a number/integer")
                     api_value = get_int_or_float(api_value)
                     #print("api_value of number: " + str(api_value))
                     # fahrenheit to celcius conversion
-                    print("found_property['unit']: " + str(found_property['unit']))
+                    if self.DEBUG:
+                        print("found_property['unit']: " + str(found_property['unit']))
                     if found_property['unit'] != None:
                         
                         if found_property['unit'] == 'degree celsius':
@@ -907,8 +937,7 @@ def intent_get_value(self, slots, intent_message,found_properties):
     except Exception as ex:
         print("Error in intent_get_value: " + str(ex))
 
-
-
+    return "Sorry, an error occured. "
 
 
 
@@ -959,8 +988,7 @@ def intent_set_state(self, slots, intent_message, found_properties, delayed_acti
             property_loop_counter = 0
             for found_property in found_properties:
                 
-                if self.DEBUG:
-                    print("\n\nfound_property: " + str(found_property) + "\n\n")
+                print("\n\nfound_property: " + str(found_property) + "\n\n")
                 
                 # Figure out the intended state first
                 human_readable_desired_state = str(slots['boolean'])
@@ -1079,8 +1107,8 @@ def intent_set_state(self, slots, intent_message, found_properties, delayed_acti
                                     
                                 
                                 
-                                self.persistent_data['action_times'].append({"intent_message":intent_message,"moment":slots['end_time'],"type":"boolean_related","original_value":slots['boolean'],"slots":slots})
-                                self.persistent_data['action_times'].append({"intent_message":intent_message,"moment":slots['end_time'] + duration_delta,"type":"boolean_related","original_value":opposite,"slots":slots})
+                                self.add_action_time({"intent_message":intent_message,"moment":slots['end_time'],"type":"boolean_related","original_value":slots['boolean'],"slots":slots})
+                                self.add_action_time({"intent_message":intent_message,"moment":slots['end_time'] + duration_delta,"type":"boolean_related","original_value":opposite,"slots":slots})
                                 
                                 more_than_12_hours_away = False
                                 if slots['end_time'] > (time.time() + 43200):
@@ -1111,7 +1139,7 @@ def intent_set_state(self, slots, intent_message, found_properties, delayed_acti
                                     if slots['property'] == 'all':
                                         if property_loop_counter == 0:
                                             voice_message = "OK, I will let you know when everything switches back "
-                                            self.persistent_data['action_times'].append({"intent_message":intent_message,"moment":slots['duration'],"type":"boolean_related","original_value": opposite,"slots":slots})
+                                            self.add_action_time({"intent_message":intent_message,"moment":slots['duration'],"type":"boolean_related","original_value": opposite,"slots":slots})
                                     
                                     elif bool(api_result[key]) != desired_state:
                                         if self.DEBUG:
@@ -1120,9 +1148,9 @@ def intent_set_state(self, slots, intent_message, found_properties, delayed_acti
                                         #if property_loop_counter == 0:
                                         
                                         #else:
-                                        #    self.persistent_data['action_times'].append({"intent_message":intent_message,"moment":slots['duration'],"type":"boolean_related","original_value": opposite,"slots":slots})
+                                        #    self.add_action_time({"intent_message":intent_message,"moment":slots['duration'],"type":"boolean_related","original_value": opposite,"slots":slots})
                                         if len(found_properties) == 1:
-                                            self.persistent_data['action_times'].append({"intent_message":intent_message,"moment":slots['duration'],"type":"boolean_related","original_value": opposite,"slots":slots})
+                                            self.add_action_time({"intent_message":intent_message,"moment":slots['duration'],"type":"boolean_related","original_value": opposite,"slots":slots})
                                             voice_message = "OK, I will let you know when it switches back to " + str(opposite) + " "
                                         
                                     elif bool(api_result[key]) == desired_state:
@@ -1136,7 +1164,7 @@ def intent_set_state(self, slots, intent_message, found_properties, delayed_acti
                                         #if slots['property'] == 'all' and property_loop_counter > 0:
                                         #    pass
                                         #else:
-                                        #self.persistent_data['action_times'].append({"intent_message":intent_message,"moment":slots['duration'],"type":"boolean_related","original_value": opposite,"slots":slots})
+                                        #self.add_action_time({"intent_message":intent_message,"moment":slots['duration'],"type":"boolean_related","original_value": opposite,"slots":slots})
                                             #if slots['property'] != 'all' and len(found_properties) == 1:
                                         voice_message = "It was already " + str(slots['boolean']) + ". " #I will let you know when it switches to " + opposite
                                         #self.speak(voice_message,intent=intent_message)
@@ -1146,7 +1174,7 @@ def intent_set_state(self, slots, intent_message, found_properties, delayed_acti
                                 else:
                                     # not a "for x minutes" type of intent. Could be "in 5 minutes". Which means nothing has to be toggled now.
                                     if property_loop_counter == 0:
-                                        self.persistent_data['action_times'].append({"intent_message":intent_message,"moment":slots['duration'],"type":"boolean_related","original_value":slots['boolean'],"slots":slots})
+                                        self.add_action_time({"intent_message":intent_message,"moment":slots['duration'],"type":"boolean_related","original_value":slots['boolean'],"slots":slots})
                                         
                                         optional_to = "to "
                                         if str(slots['boolean']).lower() == 'on' or str(slots['boolean']).lower() == 'off':
@@ -1187,8 +1215,8 @@ def intent_set_state(self, slots, intent_message, found_properties, delayed_acti
                                     if self.DEBUG:
                                         print("ender: " + str(ender))
                                 
-                                    self.persistent_data['action_times'].append({"intent_message":intent_message,"moment":slots['start_time'],"type":"boolean_related","original_value":str(slots['boolean']),"slots":slots})
-                                    self.persistent_data['action_times'].append({"intent_message":intent_message,"moment":slots['end_time'],"type":"boolean_related","original_value":opposite,"slots":slots})
+                                    self.add_action_time({"intent_message":intent_message,"moment":slots['start_time'],"type":"boolean_related","original_value":str(slots['boolean']),"slots":slots})
+                                    self.add_action_time({"intent_message":intent_message,"moment":slots['end_time'],"type":"boolean_related","original_value":opposite,"slots":slots})
                                     if self.DEBUG:
                                         print("ACTION TIMES: ")
                                         print(str(self.persistent_data['action_times']))
@@ -1207,14 +1235,14 @@ def intent_set_state(self, slots, intent_message, found_properties, delayed_acti
                                         if bool(api_result[key]) != desired_state:
                                             #print("until in sentence and not already in desired state -> creating timer")
                                             slots['period'] = 'for' # TODO is this experiment useful?
-                                            self.persistent_data['action_times'].append({"intent_message":intent_message,"moment":slots['end_time'],"type":"boolean_related","original_value":opposite,"slots":slots})
+                                            self.add_action_time({"intent_message":intent_message,"moment":slots['end_time'],"type":"boolean_related","original_value":opposite,"slots":slots})
                                             if voice_message == "":
                                                 voice_message = "OK, "
                                             voice_message += "I will let you know when it switches back to " + opposite
                                             #print("until message until now: " + str(voice_message))
                                     else:
                                         #print("Only one end_time, and no 'until' in sentence.")
-                                        self.persistent_data['action_times'].append({"intent_message":intent_message,"moment":slots['end_time'],"type":"boolean_related","original_value":str(slots['boolean']),"slots":slots})
+                                        self.add_action_time({"intent_message":intent_message,"moment":slots['end_time'],"type":"boolean_related","original_value":str(slots['boolean']),"slots":slots})
                                         if voice_message == "":
                                             voice_message = "OK, "
                                         voice_message += "switching to " + str(slots['boolean'])
@@ -1343,7 +1371,7 @@ def intent_set_state(self, slots, intent_message, found_properties, delayed_acti
     except Exception as ex:
         print("Error in intent_set_state: " + str(ex))
 
-
+    return "Sorry, an error occured. "
 
 
 def intent_set_value(self, slots, intent_message, found_properties, original_value=None):
@@ -1354,7 +1382,9 @@ def intent_set_value(self, slots, intent_message, found_properties, original_val
     # Also, looping over the found properties should not be done in two parts, but should encapsulate the 'now or later' logic mentioned above.
     
     if self.DEBUG:
-        print("in intent_set_value")
+        print("\nin intent_set_value")
+        print("slots: " + str(slots))
+        print("")
         
     sentence = slots['sentence']
     voice_message = ""
@@ -1495,14 +1525,19 @@ def intent_set_value(self, slots, intent_message, found_properties, original_val
                                         #continue # TODO But could also use Break here.
                                         # "it's allready " + str(original_value)
                                         #self.speak("it's already " + str(original_value),intent=intent_message)
+                                        if self.DEBUG:
+                                            print("it is already that value, so stopping")
                                         return "it's already " + str(original_value)
+                                        
                                     else:
-                                        self.persistent_data['action_times'].append({"intent_message":intent_message,"moment":slots['duration'],"type":"value","original_value":original_value,"slots":slots})
+                                        if self.DEBUG:
+                                            print("adding delayed action with 'for'")
+                                        self.add_action_time({"intent_message":intent_message,"moment":slots['duration'],"type":"value","original_value":original_value,"slots":slots})
                                         extra_message = " I will let you know when it changes back to " + str(original_value)
                                 else:
                                     if self.DEBUG:
                                         print("In a moment -> " + str(desired_value))
-                                    self.persistent_data['action_times'].append({"intent_message":intent_message,"moment":slots['duration'],"type":"value","original_value":desired_value,"slots":slots})
+                                    self.add_action_time({"intent_message":intent_message,"moment":slots['duration'],"type":"value","original_value":desired_value,"slots":slots})
                                     voice_message = " I will let you know when it changes to " + str(desired_value)
                             
                                 if slots['period'] != "for": # If this is a 'for' type of duration (e.g. for 5 minutes), then we should also continue and change the value now.
@@ -1526,7 +1561,7 @@ def intent_set_value(self, slots, intent_message, found_properties, original_val
                                     if self.DEV:
                                         print("has a start time too")
                                     # Both the from and to times are set.
-                                    self.persistent_data['action_times'].append({"intent_message":intent_message,"moment":slots['start_time'],"type":"value","original_value":desired_value,"slots":slots})
+                                    self.add_action_time({"intent_message":intent_message,"moment":slots['start_time'],"type":"value","original_value":desired_value,"slots":slots})
                                     #desired_value = original_value
                                 
                                     
@@ -1535,10 +1570,64 @@ def intent_set_value(self, slots, intent_message, found_properties, original_val
                                     voice_message += " at " + self.human_readable_time(slots['start_time'], True) + ", and "
                                     back = " back "
                                     voice_message += "it will switch " + back + " to " + str(original_value) + str(addendum)
-                                    self.persistent_data['action_times'].append({"intent_message":intent_message,"moment":slots['end_time'],"type":"value","original_value":original_value,"slots":slots})
+                                    self.add_action_time({"intent_message":intent_message,"moment":slots['end_time'],"type":"value","original_value":original_value,"slots":slots})
+                                
                                 else:
-                                    voice_message += "it will switch to " + str(desired_value) + str(addendum)
-                                    self.persistent_data['action_times'].append({"intent_message":intent_message,"moment":slots['end_time'],"type":"value","original_value":desired_value,"slots":slots})
+                                    
+                                    # Only a single end time value was provided
+                                    
+                                    # UNTIL
+                                    if 'until' in sentence: # E.g. turn on the heater until 4 o'clock. Basically a 'duration' toggle (bit of code overlap here..)
+                                        if self.DEBUG:
+                                            print("until in sentence.")
+                                        
+                                        
+                                        if desired_value != original_value:
+                                        
+                                            slots['period'] = 'for' # TODO is this experiment useful?
+                                        
+                                            self.add_action_time({"intent_message":intent_message,"moment":slots['end_time'],"type":"value","original_value":original_value,"slots":slots})
+                                            
+                                            if voice_message == "":
+                                                voice_message = "OK, "
+                                            voice_message += "I will let you know when it changes back to " + str(original_value)
+                                            
+                                        """
+                                        # example from boolean version
+                                        if bool(api_result[key]) != desired_state:
+                                            #print("until in sentence and not already in desired state -> creating timer")
+                                            slots['period'] = 'for' # TODO is this experiment useful?
+                                            self.add_action_time({"intent_message":intent_message,"moment":slots['end_time'],"type":"boolean_related","original_value":opposite,"slots":slots})
+                                            if voice_message == "":
+                                                voice_message = "OK, "
+                                            voice_message += "I will let you know when it switches back to " + opposite
+                                            #print("until message until now: " + str(voice_message))
+                                        """
+                                    
+                                    else:
+                                        if self.DEBUG:
+                                            print("Only one end_time, and no 'until' in sentence. Basic delayed value change.")
+                                        
+                                        voice_message += "it will switch to " + str(desired_value) + str(addendum)
+                                        self.add_action_time({"intent_message":intent_message,"moment":slots['end_time'],"type":"value","original_value":desired_value,"slots":slots})
+                                        
+                                        if self.DEBUG:
+                                            print("(...) " + str(voice_message))
+                                        #self.speak(voice_message,intent=intent_message)
+                                        #time.sleep(.3) # TODO DEBUG, self.add_action_time
+                                        return voice_message
+                                    
+                                    
+                                    
+                                    
+                                    
+                                    
+                                    
+                                    
+                                    
+                                    
+                                    #voice_message += "it will switch to " + str(desired_value) + str(addendum)
+                                    #self.add_action_time({"intent_message":intent_message,"moment":slots['end_time'],"type":"value","original_value":desired_value,"slots":slots})
                                    
                                 voice_message += " at " + self.human_readable_time(slots['end_time'], True)
                                 
@@ -1722,8 +1811,8 @@ def intent_set_value(self, slots, intent_message, found_properties, original_val
         
     except Exception as ex:
         print("Error in intent_set_value: " + str(ex))
-
-
+    
+    return "Sorry, an error occured. "
 
 # this works on the basis of a capability only.
 #def mass_set_state(self, slots):
