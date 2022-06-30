@@ -1079,7 +1079,7 @@ def intent_set_state(self, slots, intent_message, found_properties, delayed_acti
                     
                         elif api_result[key] == 204: # the api returned an empty string
                             if self.DEBUG:
-                                print("TODO: temporarily allowing this weird situation")
+                                print("TODO: temporarily allowing this weird 204 response, which means 'no content'")
                             pass
                         
                         else:
