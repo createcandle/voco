@@ -2075,7 +2075,7 @@ class VocoAdapter(Adapter):
             
             
             extra_dialogue_manager_command = []
-            
+            clear_injections_command = []
             
             # Start the snips parts
             for unique_command in commands:
@@ -2119,6 +2119,14 @@ class VocoAdapter(Adapter):
                     # "--alsa_playback","default:CARD=ALSA",
                     
                 if unique_command == 'snips-injection':
+                    
+                    try:
+                        clear_injections_command = command + ["clean","--all"]
+                        Popen(clear_injections_command, env=my_env, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
+                    except Exception as ex:
+                        if self.DEBUG:
+                            print("error cleaning injection work dir: " + str(ex))
+                    
                     command = command + ["-g",self.g2p_models_path]
                     
                 if unique_command == 'snips-hotword' or unique_command == 'snips-satellite':
@@ -2518,7 +2526,8 @@ class VocoAdapter(Adapter):
                             if self.DEBUG:
                                 print("WARNING: clock: still no mqtt client?")
                     except Exception as ex:
-                        print("clock: error in periodic ping to main Voco controller" + str(ex))            
+                        if self.DEBUG:
+                            print("clock: error in periodic ping to main Voco controller" + str(ex))            
                     
                     #if self.mqtt_connected:
 
@@ -2732,7 +2741,8 @@ class VocoAdapter(Adapter):
                                 print("Amount of timers removed: " + str(timer_removed))
                                 #self.save_persistent_data()
                     except Exception as ex:
-                        print("Error while removing old timers: " + str(ex))
+                        if self.DEBUG:
+                            print("Error while removing old timers: " + str(ex))
 
                 except Exception as ex:
                     if self.DEBUG:
@@ -2759,7 +2769,8 @@ class VocoAdapter(Adapter):
                         #self.persistent_data['action_times'] = self.persistent_data['action_times']
                         self.save_persistent_data()
                 except Exception as ex:
-                    print("Error updating timer counts from clock: " + str(ex))
+                    if self.DEBUG:
+                        print("Error updating timer counts from clock: " + str(ex))
 
                 
                 # Check if the microphone has been plugged in or unplugged.
@@ -3153,8 +3164,14 @@ class VocoAdapter(Adapter):
                     #process.terminate()
                     #process.wait()
                     #process.close()
+                    
+                    
+                    
+                    snips-injection clean --all
+                    
                 except Exception as ex:
-                    print("stop_snips function was unable to close external process: " + str(ex))
+                    if self.DEBUG:
+                        print("stop_snips function was unable to close external process: " + str(ex))
                     pass
                 #print("Terminated Snips process")
         except Exception as ex:
