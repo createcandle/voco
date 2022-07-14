@@ -5752,21 +5752,22 @@ class VocoAdapter(Adapter):
                 # Add things from this controller
                 for thing in self.things:
                     if 'title' in thing:
-                        full_thing_titles_list.append(clean_up_string_for_speaking(str(thing['title'])))
+                        full_thing_titles_list.append(clean_up_thing_string(str(thing['title'])))
                         
                     for thing_property_key in thing['properties']:
                         if 'type' in thing['properties'][thing_property_key] and 'enum' in thing['properties'][thing_property_key]:
                             if thing['properties'][thing_property_key]['type'] == 'string':
                                 for word in thing['properties'][thing_property_key]['enum']:
                                     #property_string_name = clean_up_string_for_speaking(str(word).lower()).strip()
-                                    property_string_name = clean_up_string_for_speaking(str(word)) #.strip()
+                                    property_string_name = clean_up_thing_string(str(word)) #.strip()
                                     if len(property_string_name) > 1:
-                                        fresh_property_strings.add(property_string_name)
+                                        fresh_property_strings.add(clean_up_thing_string(property_string_name))
                         if 'title' in thing['properties'][thing_property_key]:
                             #property_title = clean_up_string_for_speaking(str(thing['properties'][thing_property_key]['title']).lower()).strip()
-                            property_title = clean_up_string_for_speaking(str(thing['properties'][thing_property_key]['title'])) #.strip()
+                            property_title = clean_up_thing_string(str(thing['properties'][thing_property_key]['title'])) #.strip()
                             if len(property_title) > 1:
-                                fresh_property_titles.add(property_title)
+                                if property_title.startswith("Unknown ") == False:
+                                    fresh_property_titles.add(property_title)
                         
                 # Add things from satellites (if this is not itself a satellite)
                 #if self.persistent_data['is_satellite'] == False:
@@ -5798,13 +5799,13 @@ class VocoAdapter(Adapter):
                 # turn the list into a cleaned set
                 for thing_name in full_thing_titles_list:
                     #if self.DEBUG:
-                    #    print("thing_name: " + str(thing_name))
+                    #    print("thing title before cleaning: " + str(thing_name))
                     #thing_name = clean_up_string_for_speaking(str(thing['title']).lower()).strip()
-                    thing_name = clean_up_string_for_speaking(thing_name) # This does not create lowercase, it only removes odd characters. #.strip() # TODO: removing .lower here has cause issues in the thing scanner.. But at least the sentences in matrix now look nice I guess?
+                    #thing_name = clean_up_thing_string(thing_name) # This does not create lowercase, it only removes odd characters. #.strip() # TODO: removing .lower here has cause issues in the thing scanner.. But at least the sentences in matrix now look nice I guess?
                 
                     if len(thing_name) > 1:
                         #if self.DEBUG:
-                        #    print("thing title:" + thing_name + ".")
+                        #    print(" thing title after cleaning:" + thing_name)
                         fresh_thing_titles.add(thing_name)
                         #self.my_thing_title_list.append(thing_name)
                     
@@ -5866,6 +5867,7 @@ class VocoAdapter(Adapter):
                             print("FORCED:")
                         print("Teaching Snips the updated thing titles:")
                         print(str(list(fresh_thing_titles)))
+                        print("\nDIFFERENT THING TITLES: " + str(thing_titles^fresh_thing_titles) )
                     #operations.append(
                     #    AddFromVanillaInjectionRequest({"Thing" : list(fresh_thing_titles) })
                     #)
@@ -5885,8 +5887,11 @@ class VocoAdapter(Adapter):
                 
                 if len(property_titles^fresh_property_titles) > 0 or self.force_injection == True:
                     if self.DEBUG:
+                        if self.force_injection:
+                            print("FORCED:")
                         print("Teaching Snips the updated property titles:")
                         print(str(list(fresh_property_titles)))
+                        print("\nDIFFERENT PROPERTY TITLES: " + str(property_titles^fresh_property_titles) )
                     #operations.append(
                     #    AddFromVanillaInjectionRequest({"Property" : list(fresh_property_titles) + self.extra_properties + self.capabilities + self.generic_properties + self.numeric_property_names})
                     #)
@@ -5900,8 +5905,11 @@ class VocoAdapter(Adapter):
 
                 if len(property_strings^fresh_property_strings) > 0 or self.force_injection == True:
                     if self.DEBUG:
+                        if self.force_injection:
+                            print("FORCED:")
                         print("Teaching Snips the updated property strings:")
                         print(str(list(fresh_property_strings)))
+                        print("\nDIFFERENT PROPERTY STRINGS: " + str(property_strings^fresh_property_strings) )
                     #operations.append(
                     #    AddFromVanillaInjectionRequest({"string" : list(fresh_property_strings) })
                     #)
@@ -5925,17 +5933,13 @@ class VocoAdapter(Adapter):
                 
                     
                 # Check if Snips should be updated with fresh data
-                if len(operations) > 0 or self.force_injection:
+                if len(operations) > 0 or self.force_injection: # len(operations) has a maximum value of 3 (when things, properties and string all have at least one different value)
                     self.force_injection = False
                     update_request = {"operations":operations}
             
                     self.save_to_persistent_data = True
             
-                    if self.DEBUG:
-                        print("\n/\ /\ /\ Injecting names into Snips!")
-                        print("\/ len(operations): " + str(len(operations)))
-                        print("\/ self.force_injection: " + str(self.force_injection))
-                        print("\/ update_request json: " + str(json.dumps(update_request)))
+                    
                 
                     #try:
                     #    self.save_persistent_data()
@@ -5947,8 +5951,14 @@ class VocoAdapter(Adapter):
                         if self.mqtt_second_client != None:
                             if self.DEBUG:
                                 print("\n[===]---")
-                                print("Injection: self.mqtt_client exists, so will try to inject:")
-                                print(str(json.dumps(operations)))
+                                print("\/ self.force_injection: " + str(self.force_injection))
+                                print("\/ len(operations): " + str(len(operations)))
+                                print("\/")
+                                print("\/ operations: " + str(json.dumps(operations, indent=4)))
+                                print("\/")
+                                #print("\n\/ update_request json: " + str(json.dumps(update_request)))
+                                
+                                #print(str(json.dumps(operations)))
                             self.mqtt_second_client.publish('hermes/injection/perform', json.dumps(update_request))
                             self.last_injection_time = time.time()
                             self.force_injection = False
@@ -6017,8 +6027,7 @@ class VocoAdapter(Adapter):
         try:
             for thing in self.things:
                 if 'title' in thing:
-                    #thing_name = clean_up_string_for_speaking(str(thing['title']).lower()).strip()
-                    thing_name = clean_up_string_for_speaking(str(thing['title'])).strip()
+                    thing_name = clean_up_for_comparison(str(thing['title'])).strip()
         
                     if len(thing_name) > 1:
                         if self.DEBUG:
@@ -6030,13 +6039,12 @@ class VocoAdapter(Adapter):
                         if 'type' in thing['properties'][thing_property_key] and 'enum' in thing['properties'][thing_property_key]:
                             if thing['properties'][thing_property_key]['type'] == 'string':
                                 for word in thing['properties'][thing_property_key]['enum']:
-                                    #property_string_name = clean_up_string_for_speaking(str(word).lower()).strip()
-                                    property_string_name = clean_up_string_for_speaking(str(word)).strip()
+                                    property_string_name = clean_up_for_comparison(str(word)).strip()
                                     if len(property_string_name) > 1:
                                         fresh_property_strings.add(property_string_name)
                         if 'title' in thing['properties'][thing_property_key]:
                             #property_title = clean_up_string_for_speaking(str(thing['properties'][thing_property_key]['title']).lower()).strip()
-                            property_title = clean_up_string_for_speaking(str(thing['properties'][thing_property_key]['title'])).strip()
+                            property_title = clean_up_for_comparison(str(thing['properties'][thing_property_key]['title'])).strip()
                             if len(property_title) > 1:
                                 fresh_property_titles.add(property_title)
 
@@ -6162,7 +6170,7 @@ class VocoAdapter(Adapter):
                                     print("word: " + str(word))
                 
                                 for thing in self.things:
-                                    if word == clean_up_string_for_speaking(thing['title']):
+                                    if word == clean_up_for_comparison(thing['title']):
                                         if self.DEBUG:
                                             print("THING TITLE MATCH: " + str(word))
                                             print("thing['properties']: " + json.dumps(thing['properties'], indent=4))
@@ -6172,8 +6180,8 @@ class VocoAdapter(Adapter):
                                                     print(" -word2: " + str(word2))
                                                 for thing_property_key in thing['properties']:
                                                     if self.DEBUG:
-                                                        print(" - > ? : " + str( clean_up_string_for_speaking( thing['properties'][thing_property_key]['title'] ) ))
-                                                    if word2 == clean_up_string_for_speaking( thing['properties'][thing_property_key]['title'] ):
+                                                        print(" - > ? : " + str( clean_up_for_comparison( thing['properties'][thing_property_key]['title'] ) ))
+                                                    if word2 == clean_up_for_comparison( thing['properties'][thing_property_key]['title'] ):
                                         
                                                         slots['thing'] = word
                                                         slots['property'] = word2

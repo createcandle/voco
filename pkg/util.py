@@ -257,11 +257,14 @@ def clean_up_string_for_speaking(sentence): # Also used in thing scanner!
         sentence = sentence.replace('\\', ' ')
         sentence = sentence.replace('+', ' plus ')
         sentence = sentence.replace('#', ' number ')
-        sentence = sentence.replace('-', ' ')
         sentence = sentence.replace('&', ' and ')
-        sentence = sentence.replace('  ', ' ')
-        sentence = sentence.replace('  ', ' ').replace('[', '').replace(']', '')
         sentence = sentence.replace('weather (','weather in ')
+        sentence = sentence.replace('  ', ' ')
+        sentence = sentence.replace('  ', ' ')
+        sentence = sentence.replace('-', ' ')
+        sentence = sentence.replace('_', ' ')
+        sentence = sentence.replace('[', '')
+        sentence = sentence.replace(']', '')
         sentence = sentence.replace('(', ' ')
         sentence = sentence.replace(')', ' ')
         sentence = sentence.replace('  ', ' ')
@@ -273,11 +276,27 @@ def clean_up_string_for_speaking(sentence): # Also used in thing scanner!
         #print("cleaned  up: " + str(sentence))
     return sentence
 
+
 def clean_up_thing_string(sentence):
     if len(sentence):
         sentence = clean_up_string_for_speaking(sentence)
         sentence = sentence.replace(',', ' ')
-        sentence = sentence.lower()
+        sentence = sentence.replace('  ', ' ')
+        
+        ips = re.findall(r'(?:\d{1,3}\.)+(?:\d{1,3})', sentence.rstrip())
+        #print("ips: " + str(ips))
+        if len(ips) > 0:
+            #print("REMOVING IP from: " + str(sentence))
+            sentence = sentence.replace(ips[0], '')
+        
+        sentence = sentence.rstrip()
+    return sentence
+    
+    
+def clean_up_for_comparison(sentence):
+    #sentence = clean_up_thing_string(sentence) # TODO: in dubio. Might work just as well to strip IP addresses? Is there a risk that multiple names would start to collide?
+    sentence = clean_up_string_for_speaking(sentence) 
+    sentence = sentence.lower()
     return sentence
 
 
