@@ -59,7 +59,7 @@ class VocoAPIHandler(APIHandler):
                 print("Created new API HANDLER: " + str(manifest['id']))
         
         except Exception as e:
-            print("Failed to init UX extension API handler: " + str(e))
+            print("Error, failed to init UX extension API handler: " + str(e))
 
         
                         
@@ -452,7 +452,8 @@ class VocoAPIHandler(APIHandler):
                                                         }),
                                 )
                             except Exception as ex:
-                                print("Error getting init data: " + str(ex))
+                                if self.DEBUG:
+                                    print("Error getting init data: " + str(ex))
                                 return APIResponse(
                                     status=500,
                                     content_type='application/json',

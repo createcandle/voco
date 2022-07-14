@@ -178,10 +178,34 @@ class VocoAdapter(Adapter):
         
         self.bluetooth_persistence_file_path = os.path.join(self.user_profile['dataDir'], 'bluetoothpairing', 'persistence.json')
         
+         # Get network info
+        self.previous_hostname = "candle"
+        self.hostname = "candle"
+        self.ip_address = None
+       
+        try:
+            self.update_network_info()
+            self.previous_hostname = self.hostname
+                
+            # TODO: is this this necessary? Is was done to avoid mqtt connection issue (possibly a race condition)
+            #if self.persistent_data['mqtt_server'] == 'localhost':
+            #self.persistent_data['mqtt_server'] = self.ip_address
+            
+            #try:
+            #    ip_last_part = self.ip_address.rsplit('/', 1)[-1]
+            #    self.sideId = self.hostname + "." + str(ip_last_part)
+            #except Exception as ex:
+            #    print("Error adding last part of IP address to hostname: " + str(ex))
+        except Exception as ex:
+            if self.DEBUG:
+                print("Error getting ip address: " + str(ex))
         
         
         
         # Get persistent data
+        self.save_to_persistent_data = False
+        self.persistent_data = {}
+        
         try:
             self.persistence_file_path = os.path.join(self.user_profile['dataDir'], self.addon_name, 'persistence.json')
             self.matrix_data_store_path = os.path.join(self.user_profile['dataDir'], self.addon_name)
@@ -210,25 +234,25 @@ class VocoAdapter(Adapter):
         self.first_run = False
         try:
             with open(self.persistence_file_path) as f:
-                self.persistent_data = json.load(f)
-                if self.DEBUG:
-                    print("Persistence data was loaded succesfully.")
+                try:
+                    self.persistent_data = json.load(f)
+                    if self.DEBUG:
+                        print("Persistence data was loaded succesfully.")
+                except Exception as ex:
+                    print("ERROR parsing loaded persistent data: " + str(ex))
+                    
                         
-        except:
+        except Exception as ex:
             self.first_run = True
-            print("Could not load persistent data (if you just installed the add-on then this is normal)")
-            try:
-                random_site_id = generate_random_string(8)
-                self.persistent_data = {'site_id':random_site_id, 'action_times':[], 'mqtt_server':'localhost', 'is_satellite':False, 'listening':True, 'feedback_sounds':True, 'speaker_volume':70}
-            except Exception as ex:
-                print("Error creating initial persistence variable: " + str(ex))
+            print("Error, could not load persistent data (if you just installed the add-on then this is normal): " + str(ex))
+            self.persistent_data = {}
  
         
         # Add some things to the persistent data if they aren't in there already.
 
         # If debug is enabled, on a reboot, listening is set to true.
-        if self.DEBUG:
-            self.persistent_data['listening'] = True
+        #if self.DEBUG:
+        #    self.persistent_data['listening'] = True
         
 
         
@@ -258,41 +282,84 @@ class VocoAdapter(Adapter):
         
         
         try:
+            
+            
+            if 'site_id' not in self.persistent_data:
+                random_site_id = generate_random_string(8)
+                print("site_id was not in persistent data, adding random one now: " + str(random_site_id))
+                self.persistent_data['site_id'] = str(random_site_id)
+                self.save_to_persistent_data = True
+            
+            if 'listening' not in self.persistent_data:
+                print("listening was not in persistent data, adding it now.")
+                self.persistent_data['listening'] = True
+                self.save_to_persistent_data = True
+            
+            if 'feedback_sounds' not in self.persistent_data:
+                print("lfeedback_sounds was not in persistent data, adding it now.")
+                self.persistent_data['feedback_sounds'] = True
+                self.save_to_persistent_data = True
+            
             if 'action_times' not in self.persistent_data:
                 print("action_times was not in persistent data, adding it now.")
                 self.persistent_data['action_times'] = []
+                self.save_to_persistent_data = True
+
+            if 'speaker_volume' not in self.persistent_data:
+                print("speaker_volume was not in persistent data, adding it now (70).")
+                self.persistent_data['speaker_volume'] = 70
+                self.save_to_persistent_data = True
 
             if 'is_satellite' not in self.persistent_data:
                 print("action_times was not in persistent data, adding it now.")
                 self.persistent_data['is_satellite'] = False
+                self.save_to_persistent_data = True
                 
             if 'bluetooth_device_mac' not in self.persistent_data:
                 self.persistent_data['bluetooth_device_mac'] = None
+                self.save_to_persistent_data = True
                 
             if 'mqtt_server' not in self.persistent_data:
                 print("action_times was not in persistent data, adding it now.")
                 self.persistent_data['mqtt_server'] = 'localhost'
-
-            if 'site_id' not in self.persistent_data:
-                print("site_id was not in persistent data, generating a random one now.")
-                self.persistent_data['site_id'] = generate_random_string(8)
+                self.save_to_persistent_data = True
 
             if 'main_site_id' not in self.persistent_data: # to remember what the main voco server is, for satellites.
                 print("main_site_id was not in persistent data, adding it now.")
                 self.persistent_data['main_site_id'] = self.persistent_data['site_id']
+                self.save_to_persistent_data = True
                 
             if 'main_controller_hostname' not in self.persistent_data: # to remember what the main voco server is, for satellites.
                 print("main_controller_hostname was not in persistent data, adding it now.")
                 self.persistent_data['main_controller_hostname'] = self.hostname
+                self.save_to_persistent_data = True
                 
-            if 'main_controller_ip' not in self.persistent_data: # to remember what the main voco server is, for satellites.
-                print("main_controller_ip was not in persistent data, adding it now.")
-                self.persistent_data['main_controller_ip'] = '192.168.2.198'
+            #if 'main_controller_ip' not in self.persistent_data: # to remember what the main voco server is, for satellites. # TODO: still used?
+            #    print("main_controller_ip was not in persistent data, adding it now.")
+            #    self.persistent_data['main_controller_ip'] = 'localhost'
+            
+            if 'satellite_thing_titles' not in self.persistent_data:
+                print("satellite_thing_titles was not in persistent data, adding it now.")
+                self.persistent_data['satellite_thing_titles'] = {} # a dictionary with per-satellite lists of thing titles received from those satellites
+                self.save_to_persistent_data = True
+                
+            if 'local_thing_titles' not in self.persistent_data: # the previously known thing titles in the entire local network (including satellites)
+                print("local_thing_titles was not in persistent data, adding it now.")
+                self.persistent_data['local_thing_titles'] = []
+                self.save_to_persistent_data = True
+                
+            if 'all_thing_titles' not in self.persistent_data: # the previously known thing titles in the entire local network (including satellites)
+                print("all_thing_titles was not in persistent data, adding it now.")
+                self.persistent_data['all_thing_titles'] = []
+                self.save_to_persistent_data = True
+            
+            
             
             # TODO TEMPORARY!    
             #self.persistent_data['main_controller_ip'] = '192.168.2.198'
             #self.save_persistent_data()
             
+                
         except Exception as ex:
             print("Error adding variables to persistent data: " + str(ex))
             
@@ -443,7 +510,6 @@ class VocoAdapter(Adapter):
         self.satellite_should_act_on_intent = True # Usually only the main server handles the parsing of intents, to avoid weird doubling or actions.
         #self.satellite_thing_list = []
         #self.my_thing_title_list = []
-        self.satellite_thing_titles = {}
         self.connected_satellites = {}
         #self.satellite_asr_payload = None # temporarily holds the ASR payload that the satellite passes on to the main controller
         self.last_spoken_sentence = ""      # Used to avoid speaking the same sentence twice in quick succession
@@ -455,9 +521,6 @@ class VocoAdapter(Adapter):
         self.mqtt_connected = False
         self.voco_connected = True
         self.mqtt_others = {}
-        self.previous_hostname = "candle"
-        self.hostname = "candle"
-        self.ip_address = None
         self.should_restart_mqtt = True
         self.mqtt_busy_connecting = False
         self.mqtt_connected_succesfully_at_least_once = False
@@ -639,8 +702,8 @@ class VocoAdapter(Adapter):
         # Stop Snips until the init is complete (if it is installed).
         try:
             #os.system("pkill -f snips") # Avoid snips running paralel
-            self.devices['voco'].connected = False
-            self.devices['voco'].connected_notify(False)
+            self.devices['voco'].connected = True
+            self.devices['voco'].connected_notify(True)
         except Exception as ex:
             if self.DEBUG:
                 print("Could not stop Snips: " + str(ex))
@@ -677,23 +740,7 @@ class VocoAdapter(Adapter):
         #if not self.DEBUG:
         
         
-        # Get network info
-        try:
-            self.update_network_info()
-            self.previous_hostname = self.hostname
-                
-            # TODO: is this this necessary? Is was done to avoid mqtt connection issue (possibly a race condition)
-            #if self.persistent_data['mqtt_server'] == 'localhost':
-            #self.persistent_data['mqtt_server'] = self.ip_address
-            
-            #try:
-            #    ip_last_part = self.ip_address.rsplit('/', 1)[-1]
-            #    self.sideId = self.hostname + "." + str(ip_last_part)
-            #except Exception as ex:
-            #    print("Error adding last part of IP address to hostname: " + str(ex))
-        except Exception as ex:
-            if self.DEBUG:
-                print("Error getting ip address: " + str(ex)) 
+        
         
         
         # If this device is a satellite, it should check if the MQTT server IP mentioned in the persistent data is still valid.
@@ -907,7 +954,8 @@ class VocoAdapter(Adapter):
             self.devices['voco'].connected = True # not really necessary?
             self.devices['voco'].connected_notify(True)
         except Exception as ex:
-            print("Error setting device details: " + str(ex))
+            if self.DEBUG:
+                print("Error setting thing connected state: " + str(ex))
             
         # Let's try again.
         try:
@@ -929,16 +977,23 @@ class VocoAdapter(Adapter):
         # START MATRIX
         if 'matrix_candle_username' not in self.persistent_data:
              self.persistent_data['matrix_candle_username'] = "candle_" + randomWord(6)
+             self.save_to_persistent_data = True
+             
         if 'matrix_candle_password' not in self.persistent_data:
             self.persistent_data['matrix_candle_password'] = randomPassword(16)
+            self.save_to_persistent_data = True
+            
         if 'matrix_device_name' not in self.persistent_data:
             if self.matrix_display_name != 'Candle':
                 self.persistent_data['matrix_device_name'] = self.matrix_display_name
             else:
                 self.persistent_data['matrix_device_name'] = "candle_" + randomWord()
+            self.save_to_persistent_data = True
+            
         if 'matrix_device_id' not in self.persistent_data:
             self.persistent_data['matrix_device_id'] = generate_matrix_device_id() # 10 uppercase characters
-        
+            self.save_to_persistent_data = True
+            
         self.candle_user_id = ""
         
             
@@ -949,7 +1004,7 @@ class VocoAdapter(Adapter):
         
         self.unmute()
         
-        self.save_persistent_data()
+        #self.save_persistent_data()
         self.start_matrix()
         
 
@@ -1024,7 +1079,7 @@ class VocoAdapter(Adapter):
                                         if self.DEBUG:
                                             print("bluetooth device is audio card")
                                         self.persistent_data['bluetooth_device_mac'] = bluetooth_device['address']
-                                        self.save_persistent_data()
+                                        self.save_to_persistent_data = True #self.save_persistent_data()
                                         return True
                         else:
                             if self.DEBUG:
@@ -1448,7 +1503,7 @@ class VocoAdapter(Adapter):
             print("in set_speaker_volume with " + str(volume))
         if volume != self.persistent_data['speaker_volume']:
             self.persistent_data['speaker_volume'] = int(volume)
-            self.save_persistent_data()
+            self.save_to_persistent_data = True #self.save_persistent_data()
         try:
             self.devices['voco'].properties['volume'].update(int(volume))
             
@@ -1476,7 +1531,7 @@ class VocoAdapter(Adapter):
             self.current_control_name = ""
             
             self.persistent_data['audio_output'] = str(selection)
-            self.save_persistent_data()
+            self.save_to_persistent_data = True #self.save_persistent_data()
             
             self.devices['voco'].properties['audio_output'].update( str(selection) )
             
@@ -1497,7 +1552,7 @@ class VocoAdapter(Adapter):
                         
                         # Set selection in persistence data
                         self.persistent_data['audio_output'] = str(selection)
-                        self.save_persistent_data()
+                        self.save_to_persistent_data = True #self.save_persistent_data()
                     
                         if self.DEBUG:
                             print("new output selection on thing: " + str(selection))
@@ -1719,14 +1774,19 @@ class VocoAdapter(Adapter):
                 voice_message = voice_message[:-1]
                 
             # A very brute-force way to avoid speaking the same sentence twice, which might occur if a satellite and main controller have a thing with the same name 
-            dont_speak = False
-            if self.last_spoken_sentence == str(voice_message) and self.last_spoken_sentence_time > (time.time() - 7):
+            dont_speak_twice = False
+            if self.last_spoken_sentence == str(voice_message) and self.last_spoken_sentence_time > (time.time() - 10):
                 if self.DEBUG:
-                    print("\n\nSTOPPED A SENTENCE FROM BEING SPOKEN TWICE\n\n")
-                dont_speak = True
+                    print("\n\nSTOPPING A SENTENCE FROM BEING SPOKEN TWICE\n\n")
+                dont_speak_twice = True
                 
             self.last_spoken_sentence_time = time.time()
             self.last_spoken_sentence = str(voice_message)
+                
+            if dont_speak_twice:
+                if str(self.persistent_data['audio_output']) != 'Bluetooth speaker':
+                    self.unmute()
+                return
                 
                 
             if site_id != None:
@@ -2359,6 +2419,13 @@ class VocoAdapter(Adapter):
             if time.time() > self.current_utc_time + 1:
                 self.current_utc_time = int(time.time())
                 
+                # Once a second save the persistent data, if need be
+                if self.save_to_persistent_data:
+                    if self.DEBUG:
+                        print("clock: save_to_persistent_data was True")
+                    self.save_to_persistent_data = False
+                    self.save_persistent_data()
+                    
                 
                 # Inject new thing names into snips if necessary
                 if time.time() - self.slow_loop_interval > self.last_slow_loop_time: # + self.minimum_injection_interval > datetime.utcnow().timestamp():
@@ -2690,7 +2757,7 @@ class VocoAdapter(Adapter):
                                                 if self.DEBUG:
                                                     print("countdown delta was negative, strange.")
                                                 del self.persistent_data['action_times'][index]
-                                                self.save_persistent_data()
+                                                self.save_to_persistent_data = True #self.save_persistent_data()
                                         
                                             if voice_message != "":
                                                 if self.DEBUG:
@@ -2767,7 +2834,7 @@ class VocoAdapter(Adapter):
                         previous_action_times_count = len(self.persistent_data['action_times'])
                         self.update_timer_counts()
                         #self.persistent_data['action_times'] = self.persistent_data['action_times']
-                        self.save_persistent_data()
+                        self.save_to_persistent_data = True #self.save_persistent_data()
                 except Exception as ex:
                     if self.DEBUG:
                         print("Error updating timer counts from clock: " + str(ex))
@@ -2956,7 +3023,7 @@ class VocoAdapter(Adapter):
             if self.DEBUG:
                 print("Changing listening state to: " + str(active))
             self.persistent_data['listening'] = active
-            self.save_persistent_data()
+            self.save_to_persistent_data = True #self.save_persistent_data()
             if self.devices['voco'] != None:
                 self.devices['voco'].properties['listening'].update( bool(active) )
         
@@ -2979,7 +3046,7 @@ class VocoAdapter(Adapter):
             self.devices['voco'].properties['feedback-sounds'].update( bool(state) )
             if bool(self.persistent_data['feedback_sounds']) != bool(state):
                 self.persistent_data['feedback_sounds'] = bool(state)
-                self.save_persistent_data()
+                self.save_to_persistent_data = True #self.save_persistent_data()
         except Exception as ex:
             if self.DEBUG:
                 print("Error settings Snips feedback sounds preference: " + str(ex))
@@ -3167,7 +3234,7 @@ class VocoAdapter(Adapter):
                     
                     
                     
-                    snips-injection clean --all
+                    #snips-injection clean --all
                     
                 except Exception as ex:
                     if self.DEBUG:
@@ -3444,6 +3511,10 @@ class VocoAdapter(Adapter):
             else:
                 if self.DEBUG:
                     print("Persistence file existed. Will try to save to it.")
+                    print("self.persistent_data: " + str(self.persistent_data))
+                
+
+            test = json.dumps(self.persistent_data) # if this fails, then bad data won't be written to the persistent data file
 
             with open(self.persistence_file_path) as f:
                 #if self.DEBUG:
@@ -3500,28 +3571,32 @@ class VocoAdapter(Adapter):
     def run_second_mqtt(self):
         if self.DEBUG:
             print("in run_second_mqtt")
-        if self.persistent_data['main_controller_ip'] != None:
+            
+        if self.DEBUG:
+            print("starting second client")
+    
+        try:
+            client_name = "voco_satellite_" + self.persistent_data['site_id']
+            self.mqtt_second_client = client.Client(client_id=client_name)
+            
+            self.mqtt_second_client.on_connect = self.on_second_connect
+            self.mqtt_second_client.on_disconnect = self.on_second_disconnect
+            self.mqtt_second_client.on_message = self.on_second_message
+            self.mqtt_second_client.on_publish = self.on_second_publish
+            
+            if self.disable_security == False:
+                self.mqtt_second_client.username_pw_set(username=self.mqtt_username, password=self.mqtt_password)
+            
+            self.mqtt_second_client.connect("localhost", int(self.mqtt_port), keepalive=60)
+            
+            self.mqtt_second_client.loop_start()
+            
+        except Exception as ex:
             if self.DEBUG:
-                print("starting second client")
-        
-            try:
-                client_name = "voco_satellite_" + self.persistent_data['site_id']
-                self.mqtt_second_client = client.Client(client_id=client_name)
-                
-                self.mqtt_second_client.on_connect = self.on_second_connect
-                self.mqtt_second_client.on_disconnect = self.on_second_disconnect
-                self.mqtt_second_client.on_message = self.on_second_message
-                self.mqtt_second_client.on_publish = self.on_second_publish
-                
-                if self.disable_security == False:
-                    self.mqtt_second_client.username_pw_set(username=self.mqtt_username, password=self.mqtt_password)
-                
-                self.mqtt_second_client.connect("localhost", int(self.mqtt_port), keepalive=60)
-                
-                self.mqtt_second_client.loop_start()
-                
-            except Exception as ex:
                 print("Error creating second MQTT client: " + str(ex))
+                
+        #if self.persistent_data['main_controller_ip'] != None:
+            
 
             #HOST = "localhost"
             #PORT = 1883
@@ -4574,7 +4649,7 @@ class VocoAdapter(Adapter):
                             'satellite':self.persistent_data['is_satellite'],
                             'main_controller': self.persistent_data['main_site_id'],
                             'satellite_intent_handling':self.satellite_should_act_on_intent,
-                            'thing_titles':self.persistent_data['thing_titles']
+                            'thing_titles':self.persistent_data['local_thing_titles']
                             }))
                 
                 if self.DEBUG:
@@ -4602,7 +4677,7 @@ class VocoAdapter(Adapter):
         # TODO: there is a lot of partitioning into ping vs pong route here, but in many cases that doesn't matter. As long as it comes from another controller, it can be useful, no matter if its ping or pong
         # Could also technicallyt disable satellite mode if the main controller reports that it's itself a satellite    
         
-        save_to_persistent_data = False
+        self.save_to_persistent_data = False
             
         if 'ip' in payload and 'siteId' in payload and 'hostname' in payload and 'satellite' in payload and 'main_controller' in payload and 'thing_titles' in payload:
             
@@ -4627,7 +4702,7 @@ class VocoAdapter(Adapter):
                             print("broadcast pong was from intented main MQTT server. This has supplied the intended main_site_id: " + str(payload['siteId']) )
                     
                         if self.persistent_data['main_site_id'] != payload['siteId']:
-                            save_to_persistent_data = True
+                            self.save_to_persistent_data = True
                             if self.DEBUG:
                                 print("received the new main_site_id. Saving it.")
                                 
@@ -4651,14 +4726,14 @@ class VocoAdapter(Adapter):
                         if self.DEBUG:
                             print("hostname of main controller seems to have changed from: " + str(self.persistent_data['main_controller_hostname']) + ", to: " + str(payload['hostname']))
                         self.persistent_data['main_controller_hostname'] = payload['hostname']
-                        save_to_persistent_data = True
+                        self.save_to_persistent_data = True
             
                     if self.persistent_data['mqtt_server'] != payload['ip']:
                         # can this even happen? If we don't have the IP of the main MQTT server, then we will never receive this update message? Maybe if both wifi and ethernet are connected?
                         if self.DEBUG:
                             print("The IP adress of the main Voco server has changed to " + str(payload['ip'])) 
                         self.persistent_data['mqtt_server'] = payload['ip']
-                        save_to_persistent_data = True
+                        self.save_to_persistent_data = True
             
             
                     # Main server was missing for a while
@@ -4670,7 +4745,7 @@ class VocoAdapter(Adapter):
                     if self.currently_scanning_for_missing_mqtt_server:
                         self.currently_scanning_for_missing_mqtt_server = False
                         self.persistent_data['mqtt_server'] = str(payload['ip'])
-                        save_to_persistent_data = True
+                        self.save_to_persistent_data = True
                             
                         # set the status back to something normal
                         if self.persistent_data['listening']:
@@ -4708,26 +4783,26 @@ class VocoAdapter(Adapter):
                 # Save other controller's thing titles
                 
                 # create empty set if it did not exist in the list yet
-                if payload['siteId'] not in self.satellite_thing_titles:
-                    if self.DEBUG:
-                        print("creating a set to hold thing titles from satellite " + str(payload['siteId']))
-                    self.satellite_thing_titles[payload['siteId']] = set()
+                #if payload['siteId'] not in self.persistent_data['satellite_thing_titles']:
+                #    if self.DEBUG:
+                #        print("creating a set to hold thing titles from satellite " + str(payload['siteId']))
+                #    self.persistent_data['satellite_thing_titles'][payload['siteId']] = []
         
                 if self.DEBUG:
                     print('clearing list of things titles from satellite: ' + str(payload['siteId']))
-                self.satellite_thing_titles[payload['siteId']].clear() # clear the set
+                self.persistent_data['satellite_thing_titles'][payload['siteId']] = [] # clear the set
 
                 #if payload['satellite_intent_handling']:
                 for thing_title in payload['thing_titles']:
                     #if self.DEBUG:
                     #    print("adding thing_title to list of things that satellite will handle: " + str(thing_title))
-                    self.satellite_thing_titles[payload['siteId']].add(thing_title)
+                    self.persistent_data['satellite_thing_titles'][payload['siteId']].append(thing_title)
                     
                 if self.DEBUG:
-                    print("self.satellite_thing_titles['" + payload['siteId']  + "'] is now this length: " + str(len(self.satellite_thing_titles[payload['siteId']])) )
+                    print("self.persistent_data['satellite_thing_titles']['" + payload['siteId']  + "'] is now this length: " + str(len(self.persistent_data['satellite_thing_titles'][payload['siteId']])) )
 
-            if save_to_persistent_data:
-                self.save_persistent_data()
+            #if self.save_to_persistent_data:
+            #    self.save_persistent_data()
 
             # TODO: trigger the injection mechanism here, so that new names are learnt as quickly as possible? Maybe turn of the timed injection from the clock in that case (if is_satellite or if at lest one satellites is connected in case of being a main controller)
         else:
@@ -4994,7 +5069,7 @@ class VocoAdapter(Adapter):
         
         
             # If the thing title is on a satellite, stop processing here.
-            #if slots['thing'] in self.satellite_thing_titles and not self.persistent_data['is_satellite']:
+            #if slots['thing'] in self.persistent_data['satellite_thing_titles'] and not self.persistent_data['is_satellite']:
             #    return
         
         
@@ -5291,12 +5366,12 @@ class VocoAdapter(Adapter):
                                     target_thing_title = slots['space'] + " " + target_thing_title
                             if self.DEBUG:
                                 print("target_thing_title = " + str(target_thing_title))
-                                print("self.satellite_thing_titles = " + str(self.satellite_thing_titles))
+                                print("self.persistent_data['satellite_thing_titles'] = " + str(self.persistent_data['satellite_thing_titles']))
                         
-                            # loop over the satellite thing data in self.satellite_thing_titles
-                            for satellite_id in self.satellite_thing_titles:
-                                #if target_thing_title in self.satellite_thing_titles[satellite_id]:
-                                for satellite_thing_title in self.satellite_thing_titles[satellite_id]:
+                            # loop over the satellite thing data in self.persistent_data['satellite_thing_titles']
+                            for satellite_id in self.persistent_data['satellite_thing_titles']:
+                                #if target_thing_title in self.persistent_data['satellite_thing_titles'][satellite_id]:
+                                for satellite_thing_title in self.persistent_data['satellite_thing_titles'][satellite_id]:
                                     if target_thing_title != None:
                                         if satellite_thing_title.lower() == target_thing_title.lower():
                                             if self.DEBUG:
@@ -5671,7 +5746,7 @@ class VocoAdapter(Adapter):
             
             if self.try_updating_things():
                 
-                my_thing_titles_list = []
+                local_thing_titles_list = []
                 full_thing_titles_list = []
                 
                 # Add things from this controller
@@ -5696,27 +5771,36 @@ class VocoAdapter(Adapter):
                 # Add things from satellites (if this is not itself a satellite)
                 #if self.persistent_data['is_satellite'] == False:
                 # TODO: actually, satellite should be able to understand titles on main controller well? Maybe?
-                my_thing_titles_list = full_thing_titles_list.copy()
                 
+                # keep a copy of the local-only thing titles list
+                local_thing_titles_list = full_thing_titles_list.copy()
+
+                #satellites_thing_titles = [] # holds a list of only the titles of things on satellites. Used later to create a full list of local + satellite things
                 
-                for sat in self.satellite_thing_titles:
+                # add the thing titles on satellites
+                for sat in self.persistent_data['satellite_thing_titles']:
                     if self.DEBUG:
-                        print("adding: " + str(len(self.satellite_thing_titles[sat])) + " ,thing titles from satellite: " + str(sat))
-                    for sat_thing_title in self.satellite_thing_titles[sat]:
+                        print("adding: " + str(len(self.persistent_data['satellite_thing_titles'][sat])) + " , thing titles from satellite: " + str(sat))
+                    for sat_thing_title in self.persistent_data['satellite_thing_titles'][sat]:
                         #if self.DEBUG:
                         #    print("-- " + str(sat_thing_title))
-                        full_thing_titles_list.append(sat_thing_title)   
+                        full_thing_titles_list.append(sat_thing_title) # this will contain any new local thing titles too
+                        #satellites_thing_titles.append(sat_thing_title) # this will contain any new satellite thing titles too
                     
                 #if self.DEBUG:
                 #    print("Inject: full_thing_titles_list: " + str(full_thing_titles_list))
                 
+                
+                #TODO: the satellite things are now lowercase, but local things are not?
                 #for thing in self.things:
                 #    if 'title' in thing:
+                
+                # turn the list into a cleaned set
                 for thing_name in full_thing_titles_list:
                     #if self.DEBUG:
                     #    print("thing_name: " + str(thing_name))
                     #thing_name = clean_up_string_for_speaking(str(thing['title']).lower()).strip()
-                    thing_name = clean_up_string_for_speaking(thing_name) #.strip() # TODO: removing .lower here has cause issues in the thing scanner.. But at least the sentences in matrix now look nice I guess?
+                    thing_name = clean_up_string_for_speaking(thing_name) # This does not create lowercase, it only removes odd characters. #.strip() # TODO: removing .lower here has cause issues in the thing scanner.. But at least the sentences in matrix now look nice I guess?
                 
                     if len(thing_name) > 1:
                         #if self.DEBUG:
@@ -5728,7 +5812,12 @@ class VocoAdapter(Adapter):
             
             
                         
-                                    
+                # At this point:
+                # - fresh_thing_titles has both local and satellite thing titles, not made into lowercase. Capital letters are important to detection.      
+                # - local_thing_titles_list has only the current local thing titles. It's the list that will be shared in persistent data later, and shared with other controllers
+                
+                
+                
             
                 operations = []
             
@@ -5738,12 +5827,12 @@ class VocoAdapter(Adapter):
                 #    print("fresh_prop_strings = " + str(fresh_property_strings))
                 
                 try:
-                    thing_titles = set(self.persistent_data['thing_titles'])
+                    thing_titles = set(self.persistent_data['all_thing_titles']) # all_thing_titles includes the previously known satellite thing titles (which might have changed)
                 except:
                     print("Error, Couldn't load previous thing titles from persistence. If Voco was just installed this is normal.")
                     thing_titles = set()
-                    self.persistent_data['thing_titles'] = []
-                    self.save_persistent_data()
+                    self.persistent_data['local_thing_titles'] = []
+                    self.save_to_persistent_data = True #self.save_persistent_data()
 
                 try:
                     property_titles = set(self.persistent_data['property_titles'])
@@ -5751,7 +5840,7 @@ class VocoAdapter(Adapter):
                     print("Error, Couldn't load previous property titles from persistence. If Voco was just installed this is normal.")
                     property_titles = set()
                     self.persistent_data['property_titles'] = []
-                    self.save_persistent_data()
+                    self.save_to_persistent_data = True #self.save_persistent_data()
 
                 try:
                     property_strings = set(self.persistent_data['property_strings'])
@@ -5759,7 +5848,7 @@ class VocoAdapter(Adapter):
                     print("Error, Couldn't load previous property strings from persistence. If Voco was just installed this is normal.")
                     property_strings = set()
                     self.persistent_data['property_strings'] = []
-                    self.save_persistent_data()
+                    self.save_to_persistent_data = True #self.save_persistent_data()
 
 
                 #print("stale: " + str(thing_titles))
@@ -5767,11 +5856,11 @@ class VocoAdapter(Adapter):
                 
                 if self.DEBUG:
                     print("self.force_injection: " + str(self.force_injection))
-                    print("len(thing_titles): " + str(len(thing_titles)))
-                    print("len(fresh_thing_titles): " + str(len(fresh_thing_titles)))
+                    print("previous: len(thing_titles): " + str(len(thing_titles)))
+                    print("current:  len(fresh_thing_titles): " + str(len(fresh_thing_titles)))
                     print("diff: " + str(thing_titles^fresh_thing_titles))
                 
-                if len(thing_titles^fresh_thing_titles) > 0 or self.force_injection == True:                           # comparing sets to detect changes in thing titles
+                if len(thing_titles^fresh_thing_titles) > 0 or self.force_injection == True: # comparing sets to detect changes in thing titles
                     if self.DEBUG:
                         if self.force_injection:
                             print("FORCED:")
@@ -5781,10 +5870,11 @@ class VocoAdapter(Adapter):
                     #    AddFromVanillaInjectionRequest({"Thing" : list(fresh_thing_titles) })
                     #)
                     # small hack to make mass-switching of lights easier.
-                    #self.persistent_data['thing_titles'] = list(fresh_thing_titles)
+                    #self.persistent_data['local_thing_titles'] = list(fresh_thing_titles)
                     
                     # remember the things titles list for the next injection comparision
-                    self.persistent_data['thing_titles'] = my_thing_titles_list
+                    self.persistent_data['local_thing_titles'] = list(local_thing_titles_list) #local_thing_titles_list
+                    self.persistent_data['all_thing_titles'] = list(fresh_thing_titles)
                     
                     #if not self.persistent_data['is_satellite']:
                     fresh_thing_titles.add('lights')
@@ -5832,27 +5922,26 @@ class VocoAdapter(Adapter):
                 
                 #if self.DEBUG:
                 #    print("operations: " + str(operations))
-                    
                 
-                    
-                if self.DEBUG:
-                    print("operations length: " + str(len(operations)))
-                    if len(operations) > 0:
-                        print("\noperations: " + str(operations))
-                        print("")
                     
                 # Check if Snips should be updated with fresh data
                 if len(operations) > 0 or self.force_injection:
                     self.force_injection = False
                     update_request = {"operations":operations}
             
+                    self.save_to_persistent_data = True
+            
                     if self.DEBUG:
-                        print("/\ /\ /\ Injecting names into Snips! update_request json: " + str(json.dumps(update_request)))
+                        print("\n/\ /\ /\ Injecting names into Snips!")
+                        print("\/ len(operations): " + str(len(operations)))
+                        print("\/ self.force_injection: " + str(self.force_injection))
+                        print("\/ update_request json: " + str(json.dumps(update_request)))
                 
-                    try:
-                        self.save_persistent_data()
-                    except Exception as ex:
-                         print("Error saving thing details to persistence: " + str(ex))
+                    #try:
+                    #    self.save_persistent_data()
+                    #except Exception as ex:
+                    #     if self.DEBUG:
+                    #         print("Error saving thing details to persistence: " + str(ex))
                 
                     try:
                         if self.mqtt_second_client != None:
@@ -5894,11 +5983,12 @@ class VocoAdapter(Adapter):
                         #self.last_injection_time = time.time() #datetime.utcnow().timestamp()
                 
                     except Exception as ex:
-                         print("Error during injection: " + str(ex))
+                         if self.DEBUG:
+                             print("Error during injection: " + str(ex))
             
                 else:
                     if self.DEBUG:
-                        print("\/ \/ \/ No need for injection")
+                        print("\n\/ \/ \/ No need for injection\n")
                 
                 
             
@@ -6004,7 +6094,7 @@ class VocoAdapter(Adapter):
         
         
         all_thing_titles_list_lowercase = [] # all existing property titles in a list, all lowercase for easy comparison
-        for thing_titlex in self.persistent_data['thing_titles']:
+        for thing_titlex in self.persistent_data['local_thing_titles']:
             all_thing_titles_list_lowercase.append(thing_titlex.lower())
             
         all_property_titles_list_lowercase = [] # all existing property titles in a list, all lowercase for easy comparison
@@ -6025,13 +6115,13 @@ class VocoAdapter(Adapter):
                 thing_is_known_as_property = True
         
         # If there is a thing title provided, but not property title, let's check if there is a more optimal configuration. 
-        if slots['property'] == None and slots['thing'] != None: # and not slots['thing'] in self.persistent_data['thing_titles']:
+        if slots['property'] == None and slots['thing'] != None: # and not slots['thing'] in self.persistent_data['local_thing_titles']:
 
             if thing_is_known == False:
                 if self.DEBUG:
                     print(" *  *  *   *")
                     print("property was none, and thing title exists, but was not directly found in things titles list")
-                    print("self.persistent_data['thing_titles']: " + str(self.persistent_data['thing_titles']))
+                    print("self.persistent_data['local_thing_titles']: " + str(self.persistent_data['local_thing_titles']))
                     print("self.persistent_data['property_titles']: " + str(self.persistent_data['property_titles']))
                     print("self.get_all_properties_allowed_list: " + str(self.get_all_properties_allowed_list))
                     print(" *  *  *  *")
@@ -6095,7 +6185,7 @@ class VocoAdapter(Adapter):
             """        
                     if len(property_title_detected) == 0 and word in self.persistent_data['property_titles']:
                         property_title_detected = word
-                    elif len(thing_title_detected) == 0 and word in self.persistent_data['thing_titles']:
+                    elif len(thing_title_detected) == 0 and word in self.persistent_data['local_thing_titles']:
                         thing_title_detected = word
                 else:
                     print("skipping short word: " + str(word))
@@ -7476,7 +7566,7 @@ class VocoAdapter(Adapter):
             return ""
 
 
-
+    # gets own ip and hostname
     def update_network_info(self):
         try:
             possible_ip = get_ip()
@@ -7660,7 +7750,7 @@ class VocoAdapter(Adapter):
                                     self.persistent_data['matrix_device_id'] = register_response.device_id
                                     self.persistent_data['matrix_token'] = register_response.access_token
                                     self.persistent_data['chatting'] = True
-                                    self.save_persistent_data() # this will also save the home server URL, and the main user account / main invite username
+                                    self.save_to_persistent_data = True #self.save_persistent_data() # this will also save the home server URL, and the main user account / main invite username
             
                                     #self.matrix_messages_queue.put({'title':'Welcome','message':'This is the Candle room. You can chat with Voco here. \n\n You can also ask Voco to speak a message out loud by starting you message with "speak:". Try sending this message: "speak: hello world".','level':'Normal'})
                 
@@ -8639,7 +8729,7 @@ class VocoAdapter(Adapter):
                             elif event.body.lower() == 'goodbye':
                                 self.matrix_messages_queue.put({'title':'','message':'Goodbye','level':'Normal'})
                             elif event.body.lower() == 'things?' or event.body.lower() == 'devices?':
-                                things_list = str(self.persistent_data['thing_titles'])
+                                things_list = str(self.persistent_data['local_thing_titles'])
                                 things_list = things_list.replace('[','').replace(']','')
                                 self.matrix_messages_queue.put({'title':'Your things','message':things_list ,'level':'Normal'})
                             else:
