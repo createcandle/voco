@@ -317,7 +317,7 @@ def intent_get_timer_count(self, slots, intent_message):
     except Exception as ex:
         print("Error while dealing with get_timer_count intent: " + str(ex))
     
-    return "Sorry, an error occured. "
+    return "Sorry, there was an error. "
 
 
 
@@ -435,7 +435,7 @@ def intent_list_timers(self, slots, intent_message):
     except Exception as ex:
         print("Error while dealing with list_timers intent: " + str(ex))
     
-    return "Sorry, an error occured. "
+    return "Sorry, there was an error. "
 
 
 
@@ -599,7 +599,7 @@ def intent_stop_timer(self, slots, intent_message):
     except Exception as ex:
         print("Error in stop_timer: " + str(ex))
     
-    return "Sorry, an error occured. "
+    return "Sorry, there was an error. "
 
 
 
@@ -751,7 +751,7 @@ def intent_get_boolean(self, slots, intent_message, found_properties):
     except Exception as ex:
         print("Error in intent_get_boolean: " + str(ex))
     
-    return "Sorry, an error occured. "
+    return "Sorry, there was an error. "
             
     #voice_message = clean_up_string_for_speaking(voice_message)
     #if self.DEBUG:
@@ -937,7 +937,7 @@ def intent_get_value(self, slots, intent_message,found_properties):
     except Exception as ex:
         print("Error in intent_get_value: " + str(ex))
 
-    return "Sorry, an error occured. "
+    return "Sorry, there was an error. "
 
 
 
@@ -1371,7 +1371,7 @@ def intent_set_state(self, slots, intent_message, found_properties, delayed_acti
     except Exception as ex:
         print("Error in intent_set_state: " + str(ex))
 
-    return "Sorry, an error occured. "
+    return "Sorry, there was an error. "
 
 
 def intent_set_value(self, slots, intent_message, found_properties, original_value=None):
@@ -1812,7 +1812,7 @@ def intent_set_value(self, slots, intent_message, found_properties, original_val
     except Exception as ex:
         print("Error in intent_set_value: " + str(ex))
     
-    return "Sorry, an error occured. "
+    return "Sorry, there was an error. "
 
 # this works on the basis of a capability only.
 #def mass_set_state(self, slots):
