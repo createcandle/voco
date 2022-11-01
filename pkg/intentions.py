@@ -841,105 +841,106 @@ def intent_get_value(self, slots, intent_message,found_properties):
                 
                     api_value = api_result[key]
                 
-                    if self.DEBUG:
-                        print("api_result[key] = " + str(api_result[key]))
+                    if str(api_value) != "": 
                 
-                    if api_value == None:
                         if self.DEBUG:
-                            print("API returned a None value. Perhaps device is disconnected?")
-                            disconnect_count += 1
-                        continue
+                            print("api_result[key] = " + str(api_result[key]))
                 
-                    if len(found_properties) == 1:
-                        if found_property['confidence'] > 50:
-                            voice_message += "it is "
-                        else:
-                            #voice_message += str(found_property['property']) + " is set to "
+                        if api_value == None:
+                            if self.DEBUG:
+                                print("API returned a None value. Perhaps device is disconnected?")
+                                disconnect_count += 1
+                            continue
+                
+                        if len(found_properties) == 1:
+                            if found_property['confidence'] > 50:
+                                voice_message += "it is "
+                            else:
+                                #voice_message += str(found_property['property']) + " is set to "
+                                if found_property['property'] != None:
+                                    if found_property['property'] not in str(found_property['thing']):
+                                        voice_message += str(found_property['property'])
+                                if found_property['thing'] != None:
+                                    if voice_message != "" and str(found_property['thing']) not in str(found_property['property']): # not str(found_property['property']).endswith( str(found_property['thing']) ) 
+                                        voice_message += " of "
+                                        voice_message += str(found_property['thing'])
+                                voice_message += " is " 
+                
+                        elif len(found_properties) > 3:
+                            voice_message += " "
                             if found_property['property'] != None:
-                                if found_property['property'] not in str(found_property['thing']):
-                                    voice_message += str(found_property['property'])
-                            if found_property['thing'] != None:
-                                if voice_message != "" and str(found_property['thing']) not in str(found_property['property']): # not str(found_property['property']).endswith( str(found_property['thing']) ) 
-                                    voice_message += " of "
-                                    voice_message += str(found_property['thing'])
-                            voice_message += " is " 
-                
-                    elif len(found_properties) > 3:
-                        voice_message += " "
-                        if found_property['property'] != None:
-                            if str(api_value) != "": 
                                 #if found_property['property'] not in str(found_property['thing']):
                                 voice_message += str(found_property['property'])
                                 voice_message += " is " 
                     
-                    else:
-                        voice_message += " "
-                        if found_property['property'] not in str(found_property['thing']):
-                            voice_message += str(found_property['property']) + " of "
-                        voice_message += str(found_property['thing']) + " is "
-                        #voice_message += " " + str(found_property['property']) + " of " + str(found_property['thing']) + " is " 
-                    
-                
-                
-                    #print("found_property['type']: " + str(found_property['type']))
-                
-                    if found_property['type'] == 'boolean':
-                        # Boolean should not really be handled here, but it's the only matching property we found. # TODO create boolean to human readable boolean function which can be reused?
-                        if bool(api_result[key]) == True:
-                            if found_property['@type'] == 'OpenProperty':
-                                voice_message += 'open'
-                            elif found_property['@type'] == 'OnOffProperty':
-                                voice_message += 'on'
-                            else:
-                                voice_message += 'on'
-                        elif bool(api_result[key]) == False:
-                            if found_property['@type'] == 'OpenProperty':
-                                voice_message += 'closed'
-                            elif found_property['@type'] == 'OnOffProperty':
-                                voice_message += 'off'
-                            else:
-                                voice_message += 'off'
-                    
-                    elif found_property['type'] == 'string':
-                        if self.DEBUG:
-                            print("string len(api_result[key]) = " + str(len(api_value)))
-                        if len(api_value) == 7 and api_value.startswith('#'): # hex color value
-                            voice_message = "The color is " + str(hex_to_color_name(api_value))
                         else:
-                            voice_message += str(api_value)
+                            voice_message += " "
+                            if found_property['property'] not in str(found_property['thing']):
+                                voice_message += str(found_property['property']) + " of "
+                            voice_message += str(found_property['thing']) + " is "
+                            #voice_message += " " + str(found_property['property']) + " of " + str(found_property['thing']) + " is " 
+                    
                 
-                    else:
-                        if self.DEBUG:
-                            print("handling a number/integer")
-                        api_value = get_int_or_float(api_value)
-                        #print("api_value of number: " + str(api_value))
-                        # fahrenheit to celcius conversion
-                        if self.DEBUG:
-                            print("found_property['unit']: " + str(found_property['unit']))
-                        if found_property['unit'] != None:
+                
+                        #print("found_property['type']: " + str(found_property['type']))
+                
+                        if found_property['type'] == 'boolean':
+                            # Boolean should not really be handled here, but it's the only matching property we found. # TODO create boolean to human readable boolean function which can be reused?
+                            if bool(api_result[key]) == True:
+                                if found_property['@type'] == 'OpenProperty':
+                                    voice_message += 'open'
+                                elif found_property['@type'] == 'OnOffProperty':
+                                    voice_message += 'on'
+                                else:
+                                    voice_message += 'on'
+                            elif bool(api_result[key]) == False:
+                                if found_property['@type'] == 'OpenProperty':
+                                    voice_message += 'closed'
+                                elif found_property['@type'] == 'OnOffProperty':
+                                    voice_message += 'off'
+                                else:
+                                    voice_message += 'off'
+                    
+                        elif found_property['type'] == 'string':
+                            if self.DEBUG:
+                                print("string len(api_result[key]) = " + str(len(api_value)))
+                            if len(api_value) == 7 and api_value.startswith('#'): # hex color value
+                                voice_message = "The color is " + str(hex_to_color_name(api_value))
+                            else:
+                                voice_message += str(api_value)
+                
+                        else:
+                            if self.DEBUG:
+                                print("handling a number/integer")
+                            api_value = get_int_or_float(api_value)
+                            #print("api_value of number: " + str(api_value))
+                            # fahrenheit to celcius conversion
+                            if self.DEBUG:
+                                print("found_property['unit']: " + str(found_property['unit']))
+                            if found_property['unit'] != None:
                         
-                            if found_property['unit'] == 'degree celsius':
-                                unit_message = "degrees"
-                            if self.metric == True and 'fahrenheit' in found_property['unit']:
-                                #print("converting fahrenheit to celcius")
-                                api_value = round((api_value - 32) / 1.8 ,1)
-                                unit_message = "degrees"
-                            elif self.metric == False and 'celcius' in found_property['unit']:
-                                #print("converting celcius to fahrenheit")
-                                api_value = round((api_value * 1.8) + 32 ,1)
-                                unit_message = "degrees"
+                                if found_property['unit'] == 'degree celsius':
+                                    unit_message = "degrees"
+                                if self.metric == True and 'fahrenheit' in found_property['unit']:
+                                    #print("converting fahrenheit to celcius")
+                                    api_value = round((api_value - 32) / 1.8 ,1)
+                                    unit_message = "degrees"
+                                elif self.metric == False and 'celcius' in found_property['unit']:
+                                    #print("converting celcius to fahrenheit")
+                                    api_value = round((api_value * 1.8) + 32 ,1)
+                                    unit_message = "degrees"
                         
                             
-                            if found_property['unit'] == 'percent':
-                                unit_message = 'percent'
-                            elif found_property['unit'] == 'percentage':
-                                unit_message = 'percent'
-                            elif found_property['unit'] == '%':
-                                unit_message = 'percent'
+                                if found_property['unit'] == 'percent':
+                                    unit_message = 'percent'
+                                elif found_property['unit'] == 'percentage':
+                                    unit_message = 'percent'
+                                elif found_property['unit'] == '%':
+                                    unit_message = 'percent'
                         
-                        voice_message += str(api_value) + " " + unit_message
+                            voice_message += str(api_value) + " " + unit_message
                 
-                    voice_message += " . "
+                        voice_message += " . "
                 
                 
             if disconnect_count == len(found_properties) and slots['thing'] != None: # It seems every attempt to get a property value resulted in a 'None' value being returned
