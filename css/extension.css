@@ -907,11 +907,8 @@ body #extension-voco-view .extension-voco-tab-selected{
     .extension-voco-item-setter{
         border-right:none;
     }
-    
-    .extension-candleappstore-basic-info + div{
-        width:100%;
-    }
 }
+
 
 @media screen and (min-width: 641px) {
 	.extension-voco-line2{

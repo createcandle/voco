@@ -494,11 +494,15 @@
                         
                         
                         if(this.busy_polling){
-                            console.log("voco: was still polling, aborting new poll");
+                            if(this.debug){
+                                console.log("voco: was still polling, aborting new poll");
+                            }
                             this.busy_polling_count++;
                             
                             if(this.busy_polling_count > 10){
-                                console.log("Busy polling for over 20 seconds");
+                                if(this.debug){
+                                    console.log("Busy polling for over 20 seconds");
+                                }
                                 document.getElementById('extension-voco-main-controller-not-responding').style.display = 'block';
                                 document.getElementById('extension-voco-text-commands-container').style.display = 'none';
                             }
@@ -644,7 +648,9 @@
                                 }
                                 
                                 if( body['matrix_busy_registering'] ){
-                                    console.log('matrix is busy registering accounts and starting');
+                                    if(this.debug){
+                                        console.log('matrix is busy registering accounts and starting');
+                                    }
                                 }
                                 else{
                                     document.getElementById('extension-voco-chat-busy-registering').classList.add('extension-voco-hidden');
