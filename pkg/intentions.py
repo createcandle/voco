@@ -778,12 +778,22 @@ def intent_get_value(self, slots, intent_message,found_properties):
         if len(found_properties) > 0:
             disconnect_count = 0
             for found_property in found_properties:
+                
                    
+                print("str(found_property['property']).lower(): " + str(found_property['property']).lower() )
+                
+                
+                
                 # avoid returning too many details for the Candle weather addon
-                if len(found_properties) > 3 && (str(found_property['property']).lower() == "sunrise hour"  
-                            || str(found_property['property']).lower() == "sunrise minute" 
-                            || str(found_property['property']).lower() == "sunset hour" 
-                            || str(found_property['property']).lower() == "sunset minute" ):
+                #sun_prop = False
+                #if str(found_property['property']).lower() == "sunrise hour" or str(found_property['property']).lower() == "sunrise minute" or str(found_property['property']).lower() == "sunset hour" or str(found_property['property']).lower() == "sunset minute":
+                #    sun_prop = True   
+                
+                    
+                if len(found_properties) > 3 and (str(found_property['property']).lower() == "sunrise hour" 
+                                or str(found_property['property']).lower() == "sunrise minute" 
+                                or str(found_property['property']).lower() == "sunset hour" 
+                                or str(found_property['property']).lower() == "sunset minute"):
                     if self.DEBUG:
                         print("Skipping sunrise and sunset values")
                     
