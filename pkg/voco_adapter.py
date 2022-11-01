@@ -2465,9 +2465,11 @@ class VocoAdapter(Adapter):
                                 if self.initial_injection_completed == False: # and self.persistent_data['is_satellite'] == False:
                                     self.possible_injection_failure = True
                                 
+                            # TODO: this doesn't work on satellites. Maybe it now should?
                             if time.time() - self.addon_start_time > 240 and self.initial_injection_completed == False and self.persistent_data['is_satellite'] == False:
-                                print("Error. Voco failed to load properly. Attempting complete reboot of addon")
+                                print("Error. Voco failed to load properly (initial_injection_completed was false). Attempting complete reboot of addon with sys.exit()")
                                 self.close_proxy()
+                                sys.exit()
                                 
                             if self.still_busy_booting == False:
                                 
@@ -6007,7 +6009,8 @@ class VocoAdapter(Adapter):
             #self.attempting_injection = False
 
         except Exception as ex:
-            print("Error during analysis and injection of your things into Snips: " + str(ex))
+            if self.DEBUG:
+                print("Error during analysis and injection of your things into Snips: " + str(ex))
 
 
 
@@ -7997,7 +8000,8 @@ class VocoAdapter(Adapter):
                                         #os.makedirs(self.external_picture_drop_dir)
                                         
                                 except Exception as ex:
-                                    print("Error while checking if image dropoff dir existed: " + str(ex))
+                                    if self.DEBUG:
+                                        print("Error while checking if image dropoff dir existed: " + str(ex))
                                     if not os.path.isdir(self.external_picture_drop_dir):
                                         os.mkdir(self.external_picture_drop_dir)
                                         if self.DEBUG:

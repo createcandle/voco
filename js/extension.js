@@ -941,7 +941,7 @@
                   	//pre.innerText = e.toString();
           			//console.log("voco: error in calling save via API handler");
           			//console.log(e.toString());
-                    //console.log('error connecting while trying to save provided Matrix account: ', e);
+                    console.log('error connecting while trying to save provided Matrix account: ', e);
                     alert("Saving Matrix account failed - connection error");
         			//pre.innerText = "creating Matrix account failed - connection error";
                 });	
@@ -975,7 +975,7 @@
                       	//pre.innerText = e.toString();
               			//console.log("voco: error in calling save via API handler");
               			//console.log(e.toString());
-                        //console.log('error connecting while trying to invite new user: ', e);
+                        console.log('error connecting while trying to invite new user: ', e);
                         document.getElementById('extension-voco-matrix-invite-management-output').innerText = "Error while inviting user, sorry";
             			//pre.innerText = "creating Matrix account failed - connection error";
                     });	
