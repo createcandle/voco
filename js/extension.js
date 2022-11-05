@@ -177,7 +177,9 @@
 					{'text':text}
 
 		        ).then((body) => {
-					//console.log(body);
+					if(this.debug){
+                        console.log("parsing text command response: ", body);
+                    }
 					text_input_field.placeholder = text;
 					text_input_field.value = "";
 
@@ -189,13 +191,17 @@
 
 			document.getElementById('extension-voco-text-input-field').addEventListener('keyup', function onEvent(e) {
 			    if (e.keyCode === 13) {
-			        //console.log('Enter pressed');
+			        if(this.debug){
+                        console.log('Enter pressed in text command input');
+                    }
 					send_input_text();
 			    }
 			});
 
 			document.getElementById('extension-voco-text-input-send-button').addEventListener('click', (event) => {
-				//console.log("send button clicked");
+				if(this.debug){
+                    console.log("send text command button clicked");
+                }
 				send_input_text();
 			});
 			

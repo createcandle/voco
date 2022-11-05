@@ -463,7 +463,7 @@ class VocoAdapter(Adapter):
         self.current_card_id = 0
         self.current_device_id = 0
         self.sample_rate = 16000 # 48000
-        self.prefer_aplay = False
+        self.prefer_aplay = True
         self.currently_muted = True
         
         # Bluetooth
@@ -3206,9 +3206,8 @@ class VocoAdapter(Adapter):
                     
                     try:    
                         process.kill()
-                        print('close finished with return code %d' % process.returncode)
                         if self.DEBUG:
-                            print("did process.kill")
+                            print('did process.kill. It finished with return code: %d' % process.returncode)
                     except Exception as ex:
                         if self.DEBUG:
                             print("Stop_snips: error doing process.kill on subprocess? This could be ok. Error message: " + str(ex))
