@@ -10,13 +10,13 @@ jobs:
     steps:
     - name: Get Release
       id: get_release
-      uses: bruceadams/get-release@v1.2.2
+      uses: bruceadams/get-release@v1.3.2
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     - name: Dump upload url to file
       run: echo '${{ steps.get_release.outputs.upload_url }}' > upload_url
     - name: Upload upload_url
-      uses: actions/upload-artifact@v1
+      uses: actions/upload-artifact@v3
       with:
         name: upload_url
         path: upload_url
@@ -27,13 +27,23 @@ jobs:
       matrix:
         platform: [
           'linux-arm',
+#          'linux-arm64',
+#          'linux-x64',
         ]
         pair: [
+#          'python:3.7',
           'python:3.9',
         ]
         include:
           - platform: 'linux-arm'
             host-os: 'ubuntu-latest'
+#          - platform: 'linux-arm64'
+#            host-os: 'ubuntu-latest'
+#          - platform: 'linux-x64'
+#            host-os: 'ubuntu-latest'
+#          - pair: 'python:3.7'
+#            language: 'python'
+#            version: '3.7'
           - pair: 'python:3.9'
             language: 'python'
             version: '3.9'
@@ -45,35 +55,47 @@ jobs:
       uses: actions/download-artifact@v1
       with:
         name: upload_url
+        path: upload_url
     - name: Set upload_url
       run: echo "UPLOAD_URL=$(cat upload_url/upload_url)" >> $GITHUB_ENV
     - name: Set release version
       run: echo "RELEASE_VERSION=${GITHUB_REF:10}" >> $GITHUB_ENV
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
     - name: Use Python ${{ matrix.version }}
-      uses: actions/setup-python@v2
+      uses: actions/setup-python@v4
       with:
         python-version: ${{ matrix.version }}
+    - name: Make build script executable
+      run: chmod +x ./build.sh
+    - name: Make packaging script executable
+      run: chmod +x ./package.sh
     - name: Build adapter
       run: |
         ./build.sh "${{ matrix.platform }}" "${{ matrix.language }}" "${{ matrix.version }}"
     - name: Upload Release Asset
       id: upload-release-asset
-      uses: actions/upload-release-asset@v1.0.1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      #uses: actions/upload-release-asset@v1.0.1
+      uses: softprops/action-gh-release@v1
+#      env:
+#        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       with:
+        token: ${{ github.token }}
         upload_url: ${{ env.UPLOAD_URL }}
-        asset_path: voco-${{ env.RELEASE_VERSION }}-${{ matrix.platform }}-v${{ matrix.version }}.tgz
-        asset_name: voco-${{ env.RELEASE_VERSION }}-${{ matrix.platform }}-v${{ matrix.version }}.tgz
-        asset_content_type: application/zip
-    - name: Upload Release Asset Checksum
-      id: upload-release-asset-checksum
-      uses: actions/upload-release-asset@v1.0.1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ env.UPLOAD_URL }}
-        asset_path: voco-${{ env.RELEASE_VERSION }}-${{ matrix.platform }}-v${{ matrix.version }}.tgz.sha256sum
-        asset_name: voco-${{ env.RELEASE_VERSION }}-${{ matrix.platform }}-v${{ matrix.version }}.tgz.sha256sum
-        asset_content_type: text/plain
+        files: |
+          voco-${{ env.RELEASE_VERSION }}-${{ matrix.platform }}-v${{ matrix.version }}.tgz
+          voco-${{ env.RELEASE_VERSION }}-${{ matrix.platform }}-v${{ matrix.version }}.tgz.sha256sum
+        #upload_url: ${{ env.UPLOAD_URL }}
+        #asset_path: voco-${{ env.RELEASE_VERSION }}-${{ matrix.platform }}-v${{ matrix.version }}.tgz
+        #asset_name: voco-${{ env.RELEASE_VERSION }}-${{ matrix.platform }}-v${{ matrix.version }}.tgz
+        #asset_content_type: application/zip
+#    - name: Upload Release Asset Checksum
+#      id: upload-release-asset-checksum
+#      uses: actions/upload-release-asset@v1.0.1
+#      env:
+#        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+#      with:
+#        upload_url: ${{ env.UPLOAD_URL }}
+#        asset_path: voco-${{ env.RELEASE_VERSION }}-${{ matrix.platform }}-v${{ matrix.version }}.tgz.sha256sum
+#        asset_name: voco-${{ env.RELEASE_VERSION }}-${{ matrix.platform }}-v${{ matrix.version }}.tgz.sha256sum
+#        asset_content_type: text/plain
