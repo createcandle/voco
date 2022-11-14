@@ -530,7 +530,7 @@ class VocoAdapter(Adapter):
         
         # SECOND MQTT CLIENT
         self.mqtt_second_client = None
-        
+        self.last_on_second_disconnect_time = 0 # attempt to avoid snips restart loops
         
         # Things
         self.got_good_things_list = False # will be true after the first sucesful call to the API
@@ -1773,11 +1773,14 @@ class VocoAdapter(Adapter):
             if voice_message.endswith('.'):
                 voice_message = voice_message[:-1]
                 
+            voice_message = voice_message.replace(" OFF", " off") # TODO: maybe add a period to these strings, to avoid damaging actual abbrevations starting with with OFF or ON?
+            voice_message = voice_message.replace(" ON", " on")
+                
             # A very brute-force way to avoid speaking the same sentence twice, which might occur if a satellite and main controller have a thing with the same name 
             dont_speak_twice = False
             if self.last_spoken_sentence == str(voice_message) and self.last_spoken_sentence_time > (time.time() - 10):
                 if self.DEBUG:
-                    print("\n\nSTOPPING A SENTENCE FROM BEING SPOKEN TWICE\n\n")
+                    print("\n\nSTOPPING A SENTENCE FROM BEING SPOKEN TWICE\n\n") # TODO: very crude solution...
                 dont_speak_twice = True
                 
             self.last_spoken_sentence_time = time.time()
@@ -2039,7 +2042,7 @@ class VocoAdapter(Adapter):
         if self.busy_starting_snips:
             if self.DEBUG:
                 print("Error: run_snips called while snips was already in the process of being started")
-            #return
+            return
         
         if self.mqtt_connected == False and self.still_busy_booting:
             if self.DEBUG:
@@ -2074,7 +2077,7 @@ class VocoAdapter(Adapter):
             if self.DEBUG:
                 print("commands: " + str(commands))
             
-            snips_processes_count = self.is_snips_running()
+            snips_processes_count = self.is_snips_running_count()
             if self.DEBUG:
                 print("run_snips: initial snips_processes_count: " + str(snips_processes_count))
             
@@ -2094,6 +2097,8 @@ class VocoAdapter(Adapter):
             else:
                 if self.DEBUG:
                     print("snips was already stopped")
+                self.should_restart_snips = False # since we are already doing that
+                    
             #if snips_processes_count > 0:
             #    self.stop_snips()
             #os.system("pkill -f snips")
@@ -2183,6 +2188,8 @@ class VocoAdapter(Adapter):
                     try:
                         clear_injections_command = command + ["clean","--all"]
                         Popen(clear_injections_command, env=my_env, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
+                        if self.DEBUG:
+                            print("old snips-injection data should be cleaned from work dir")
                     except Exception as ex:
                         if self.DEBUG:
                             print("error cleaning injection work dir: " + str(ex))
@@ -2191,7 +2198,7 @@ class VocoAdapter(Adapter):
                     
                 if unique_command == 'snips-hotword' or unique_command == 'snips-satellite':
                     #if self.hey_candle:
-                    command = command + ["-t",str(self.hotword_sensitivity),"--hotword-id",str(self.persistent_data['site_id'])] #,"--model",self.hey_candle_path + "=.5" ]
+                    command = command + ["-t",str(self.hotword_sensitivity),"--hotword-id",str(self.persistent_data['site_id']) ] #,"--model",self.hey_candle_path + "=.5" ]
                     #command = command + ["--mqtt",mqtt_ip]
                     #command = command + ["--mqtt",mqtt_ip]
                     #command = command + ["--audio",str(self.persistent_data['site_id']) + "localhost:" + str(self.mqtt_port)]
@@ -2225,9 +2232,9 @@ class VocoAdapter(Adapter):
                 except Exception as ex:
                     if self.DEBUG:
                         print("Error starting a snips process: " + str(ex))
-                time.sleep(.1)
-                if self.DEBUG:
-                    print("-- waiting a bit in Snips startup loop")
+                #time.sleep(.1)
+                #if self.DEBUG:
+                #    print("-- waiting a bit in Snips startup loop")
             
             
             #if self.persistent_data['is_satellite']:
@@ -2240,6 +2247,27 @@ class VocoAdapter(Adapter):
             #    print("hotword_command = " + str(hotword_command))
             #self.hotword_process = Popen(hotword_command, env=my_env, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
             #self.external_processes.append( Popen(hotword_command, env=my_env, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT) )
+
+            
+            time.sleep(.1)
+            if self.is_snips_running():
+                if self.DEBUG:
+                    print("SNIPS SEEMS TO HAVE STARTED OK")
+                self.should_restart_snips = False
+                
+            process_count = self.is_snips_running_count()
+            
+            
+            #if self.DEBUG:
+            #    try:
+            #        print("did starting snips work?:")
+            #        for line in subprocess.check_output('ps -A | grep snips', shell=True).decode("utf-8").split("\n"):
+            #            print(str(line))
+            #            
+            #    except Exception as ex:
+            #        print("Error checking if run_snips created enough processes: " + str(ex))
+                
+                
 
             # Reflect the state of Snips on the thing
             try:
@@ -2432,8 +2460,9 @@ class VocoAdapter(Adapter):
                     self.last_slow_loop_time = time.time()
                     
                     if self.DEBUG:
-                        print("___\n\n   15 seconds have passed. Time: " + str(int(time.time()) % 60))
-                        print("   self.periodic_voco_attempts: " + str(self.periodic_voco_attempts))
+                        #print("___\n\n   15 seconds have passed. Time: " + str(int(time.time()) % 60))
+                        #print("   self.periodic_voco_attempts: " + str(self.periodic_voco_attempts))
+                        pass
                     
                     if self.persistent_data['is_satellite'] and self.persistent_data['main_site_id'] == self.persistent_data['site_id']:
                         if self.DEBUG:
@@ -2444,7 +2473,8 @@ class VocoAdapter(Adapter):
                         #print("self.mqtt_client: " + str(self.mqtt_client))
                         if self.mqtt_client != None:
                             if self.DEBUG:
-                                print("MQTT client object exists. mqtt_connected_succesfully_at_least_once: " + str(self.mqtt_connected_succesfully_at_least_once))
+                                #print("MQTT client object exists. mqtt_connected_succesfully_at_least_once: " + str(self.mqtt_connected_succesfully_at_least_once))
+                                pass
                         else:
                             if self.DEBUG:
                                 print("MQTT client object doesn't exist yet.")
@@ -2539,7 +2569,8 @@ class VocoAdapter(Adapter):
                                 
                                     if self.persistent_data['is_satellite'] == False:
                                         if self.DEBUG:
-                                            print("Clock: Not a satellite, so calling normal inject_updated_things_into_snips")
+                                            #print("Clock: Not a satellite, so calling normal inject_updated_things_into_snips")
+                                            pass
                                         self.inject_updated_things_into_snips() # this will figure out if there are any changes necessitating an actual injection
                                         
                                     elif self.satellite_should_act_on_intent:
@@ -2550,7 +2581,8 @@ class VocoAdapter(Adapter):
                                 
                                 
                                     if self.DEBUG:
-                                        print("self.periodic_voco_attempts = " + str(self.periodic_voco_attempts))
+                                        #print("self.periodic_voco_attempts = " + str(self.periodic_voco_attempts))
+                                        pass
                                     if self.periodic_voco_attempts > 5:
                                         if self.DEBUG:
                                             print("main Voco controller has not responded. It may be down permanently.")
@@ -2562,7 +2594,8 @@ class VocoAdapter(Adapter):
                                         self.look_for_mqtt_server()
                                 
                                     if self.DEBUG:
-                                        print("self.periodic_mqtt_attempts = " + str(self.periodic_mqtt_attempts))
+                                        #print("self.periodic_mqtt_attempts = " + str(self.periodic_mqtt_attempts))
+                                        pass
                                     if self.periodic_mqtt_attempts > 5:
                                         if self.DEBUG:
                                             print("MQTT broker has not responded. It may be down permanently.")
@@ -2926,47 +2959,64 @@ class VocoAdapter(Adapter):
                         #    print("will not restart snips since snips should be disabled while microphone is missing.")
                     
                     else:
-                        #subprocess_running_ok = True
-                        poll_error_count = 0
-                        for process in self.external_processes:
-                            try:
-                                poll_result = process.poll()
+                        
+                        if self.initial_injection_completed == True:
+                        
+                            #if self.DEBUG:
+                            #    print("\n\n\nself.current_utc_time: ", self.current_utc_time)
+                            if self.current_utc_time % 3 == 0:
                                 #if self.DEBUG:
-                                #    print("subprocess poll_result: " + str(poll_result) )
-                                if poll_result != None:
-                                    if self.DEBUG:
-                                        print("clock poll_result was not None. A subprocess stopped? It was: " + str(poll_result))
-                                    poll_error_count += 1
-                        #            process.terminate()
-                        #            subprocess_running_ok = False
-                                #else:
-                                #    if self.DEBUG:
-                                #        print("doing process.communicate")
-                                #        process.communicate(timeout=1)
+                                #    print("DOING SNIPS CHECK")
+                                #subprocess_running_ok = True
+                                poll_error_count = 0
+                                for process in self.external_processes:
+                                    try:
+                                        poll_result = process.poll()
+                                        #if self.DEBUG:
+                                        #    print("subprocess poll_result: " + str(poll_result) )
+                                        if poll_result != None:
+                                            if self.DEBUG:
+                                                print("clock poll_result was not None. A subprocess stopped? It was: " + str(poll_result))
+                                                print("process.stdout: " + str(process.stdout))
+                                                print("process.stderr: " + str(process.stderr))
+                                            poll_error_count += 1
+                                            
+                                            
+                                            
+                                #            process.terminate()
+                                #            subprocess_running_ok = False
+                                        #else:
+                                        #    if self.DEBUG:
+                                        #        print("doing process.communicate")
+                                        #        process.communicate(timeout=1)
                                 
-                            except Exception as ex:
-                                if self.DEBUG:
-                                    print("subprocess poll error: " + str(ex))
-                        #if subprocess_running_ok == False:
-                        #    self.run_snips() # restart snips if any of its processes have ended/crashed
-
-                        if poll_error_count > 0:
-                            if self.DEBUG:
-                                print("clock: poll error count was: " + str(poll_error_count))
-                                alternative_process_counter = self.is_snips_running()
-                                if self.DEBUG:
-                                    print("clock: second opinion on Snips being down: self.is_snips_running() count: " + str(alternative_process_counter))
-                            
-                                if self.persistent_data['is_satellite']:
-                                    if alternative_process_counter < len(self.snips_satellite_parts): # == 0:
+                                    except Exception as ex:
                                         if self.DEBUG:
-                                            print("conclusion: snips satellite should be restarted")
-                                        self.should_restart_snips = True
-                                elif alternative_process_counter < len(self.snips_parts):
-                                    self.should_restart_snips = True
-                                    if self.DEBUG:
-                                        print("conclusion: snips coordinator should be restarted")
+                                            print("subprocess poll error: " + str(ex))
+                                #if subprocess_running_ok == False:
+                                #    self.run_snips() # restart snips if any of its processes have ended/crashed
 
+                                if poll_error_count > 0:
+                                    if self.DEBUG:
+                                        print("clock: poll error count was: " + str(poll_error_count))
+                                        alternative_process_counter = self.is_snips_running_count()
+                                        if self.DEBUG:
+                                            print("clock: second opinion on Snips being down: self.is_snips_running_count() count: " + str(alternative_process_counter))
+                            
+                                        if self.persistent_data['is_satellite']:
+                                            if alternative_process_counter < len(self.snips_satellite_parts): # == 0:
+                                                if self.DEBUG:
+                                                    print("conclusion: snips satellite should be restarted")
+                                                self.should_restart_snips = True
+                                        elif alternative_process_counter < len(self.snips_parts):
+                                            self.should_restart_snips = True
+                                            if self.DEBUG:
+                                                print("conclusion: snips coordinator should be restarted")
+                            else:
+                                pass
+                                #if self.DEBUG:
+                                #    print("only checking if snips is running once every 3 seconds")
+                            
             
 
 
@@ -3154,7 +3204,13 @@ class VocoAdapter(Adapter):
         if self.DEBUG:
             print("")
             print("in stop_snips")
-        process_count = self.is_snips_running()
+            
+        if self.busy_starting_snips:
+            if self.DEBUG:
+                print("snips is in the process of starting, so stopping it now is a bad idea")
+            return
+            
+        process_count = self.is_snips_running_count()
             
 
             #snips_check_result = subprocess.run(['ps', '-A','|','grep','snips'], stdout=subprocess.PIPE)
@@ -3252,14 +3308,14 @@ class VocoAdapter(Adapter):
             print("")
             
         # Make sure Snips is disabled
-        process_count = self.is_snips_running()
+        process_count = self.is_snips_running_count()
         if process_count > 0:
             if self.DEBUG:
                 print("it was necessary to kill snips using pkill")
             
             os.system("pkill -f snips")
             
-            process_count = self.is_snips_running()
+            process_count = self.is_snips_running_count()
         else:
             if self.DEBUG:
                 print("stop_snips: snips seems to have indeed been stopped")
@@ -3432,7 +3488,8 @@ class VocoAdapter(Adapter):
 
     def try_updating_things(self):
         if self.DEBUG:
-            print("in try_updating_things")
+            #print("in try_updating_things")
+            pass
         #print("fresh things: " + str(fresh_things)) # outputs HUGE amount of data
         
         if self.last_things_update_time < (time.time() - 60) or self.still_busy_booting == True:
@@ -3624,13 +3681,14 @@ class VocoAdapter(Adapter):
             if self.sound_detection:
                 self.mqtt_second_client.subscribe("hermes/voiceActivity/#")
                 
-                
-            self.run_snips()
+            if self.is_snips_running() == False:
+                self.run_snips()
 
         else:
             if self.DEBUG:
                 print("Error: on_second_connect: connection rc was not 0! It was: " + str(rc))
                 print("- NOT STARTING SNIPS!")
+
 
     def on_second_disconnect(self, client, userdata, rc):
         if self.DEBUG:
@@ -3642,9 +3700,20 @@ class VocoAdapter(Adapter):
         else:
             if self.DEBUG:
                 print("Error, bad disconnect by second mqtt client. rc: " + str(rc))
+            if rc == 7:
+                if self.DEBUG:
+                    print("\nVoco is likely running twice\nAttemping to self-terminate\n")
+                os.system("pkill -f 'voco/main.py'")
                 
-        self.stop_snips()
-
+                    
+            else:
+                if time.time() > self.last_on_second_disconnect_time + 10:
+                    self.last_on_second_disconnect_time = time.time()
+                    self.stop_snips()
+                else:
+                    if self.DEBUG:
+                        print("\nmqtt disconnected, but skipping calling stop_snips too often in a row\n")
+        
 
         
     def on_second_message(self, client, userdata, msg):
@@ -4220,7 +4289,7 @@ class VocoAdapter(Adapter):
                 
             # if this is a satellite, then connecting to MQTT could just be a test of going over multiple controllers in an attempt to find the main one
             """
-            snips_processes_count = self.is_snips_running()
+            snips_processes_count = self.is_snips_running_count()
             if snips_processes_count < 7 and self.currently_scanning_for_missing_mqtt_server == False: # and self.persistent_data['is_satellite'] == False:
                 if self.DEBUG:
                     print("not a satellite, so (re)starting snips in on_connect from MQTT")
@@ -5722,7 +5791,8 @@ class VocoAdapter(Adapter):
                 self.force_injection = True
             
             if self.DEBUG:
-                print("/\ /\ /\ inject_updated_things_into_snips: starting an attempt")
+                #print("/\ /\ /\ inject_updated_things_into_snips: starting an attempt")
+                pass
             
             
             # Check if any new things have been created by the user.
@@ -9199,8 +9269,18 @@ class VocoAdapter(Adapter):
     
     
     def is_snips_running(self):
+        return self.is_snips_running_count() == len(self.snips_parts)
+    
+    
+    def is_snips_running_count(self):
         if self.DEBUG:
-            print("In is_snips_running")
+            print("In is_snips_running_count")
+        
+        
+        if self.busy_starting_snips:
+            if self.DEBUG:
+                print("is snips running was called while snips was busy starting.. which is a bad idea. aborting and pretending everything is ok...")
+            return len(self.snips_parts)
         
         p1 = subprocess.Popen(["ps", "-A"], stdout=subprocess.PIPE)
         p2 = subprocess.Popen(['grep', 'snips'], stdin=p1.stdout, stdout=subprocess.PIPE)
@@ -9209,13 +9289,15 @@ class VocoAdapter(Adapter):
         for s in (str(p2.communicate())[2:-10]).split('\\n'):
             #if self.DEBUG:
             #    print(" -- " + str(s))
-            if s != "" and 'defunct' not in s:
+            if s != "" and 'defunct' not in s and 'snips-watch' not in s:
+                if self.DEBUG:
+                    print(" -- real snips process: " + str(s))
                 snips_actual_processes_count += 1
                 
         try:
             if self.DEBUG:
-                print(" -- is_snips_running: sub processes count: " + str(len(self.external_processes)))
-                print(" -- is_snips_running: snips_actual_processes_count = " + str(snips_actual_processes_count))
+                print(" -- is_snips_running_count: sub processes count: " + str(len(self.external_processes)))
+                print(" -- is_snips_running_count: snips_actual_processes_count = " + str(snips_actual_processes_count))
         
         
             if snips_actual_processes_count != len(self.snips_parts):
@@ -9237,7 +9319,7 @@ class VocoAdapter(Adapter):
                 print("ERROR. Voco seems to be stuck in a loop where it is unable to start properly. Will try to restart the addon.")
                 self.close_proxy() #restart the addon
         except Exception as ex:
-            print("Error in is_snips_running: " + str(ex))
+            print("Error in is_snips_running_count: " + str(ex))
             
         #return bool(len(self.external_processes))
         return snips_actual_processes_count

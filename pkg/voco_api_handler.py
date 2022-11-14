@@ -624,6 +624,7 @@ class VocoAPIHandler(APIHandler):
                                         if self.DEBUG:
                                             print("error updating token: " + str(ex))
                                         state = False
+                                        
 
                                 # SATELLITE
                                 # called when the user switches satellite mode on or off, or selects a different satellite in the list.
