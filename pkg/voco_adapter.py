@@ -201,7 +201,6 @@ class VocoAdapter(Adapter):
                 print("Error getting ip address: " + str(ex))
         
         
-        
         # Get persistent data
         self.save_to_persistent_data = False
         self.persistent_data = {}
