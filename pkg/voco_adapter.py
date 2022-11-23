@@ -739,9 +739,6 @@ class VocoAdapter(Adapter):
         #if not self.DEBUG:
         
         
-        
-        
-        
         # If this device is a satellite, it should check if the MQTT server IP mentioned in the persistent data is still valid.
         # Perhaps it should store the unique ID of the main controller, and check against that.
         #
@@ -2585,18 +2582,7 @@ class VocoAdapter(Adapter):
                                 
                                 
                                 
-                                    if self.DEBUG:
-                                        #print("self.periodic_voco_attempts = " + str(self.periodic_voco_attempts))
-                                        pass
-                                    if self.periodic_voco_attempts > 5:
-                                        if self.DEBUG:
-                                            print("main Voco controller has not responded. It may be down permanently.")
-                                        self.voco_connected = False
-                                
-                                    if self.periodic_voco_attempts%5 == 4:
-                                        if self.DEBUG:
-                                            print("Should attempt to find correct MQTT server IP address")
-                                        self.look_for_mqtt_server()
+                                    
                                 
                                     if self.DEBUG:
                                         #print("self.periodic_mqtt_attempts = " + str(self.periodic_mqtt_attempts))
@@ -2605,8 +2591,28 @@ class VocoAdapter(Adapter):
                                         if self.DEBUG:
                                             print("MQTT broker has not responded. It may be down permanently.")
                                         self.mqtt_connected = False
+                                        self.set_status_on_thing("Main controller is not responding")
                                 
+                                    if self.periodic_mqtt_attempts%5 == 4:
+                                        if self.DEBUG:
+                                            print("Should attempt to find correct MQTT server IP address")
+                                        self.look_for_mqtt_server()
+                                        time.sleep(1)
                     
+                            
+                                    if self.DEBUG:
+                                        if self.periodic_voco_attempts > 2:
+                                            print("self.periodic_voco_attempts = " + str(self.periodic_voco_attempts))
+                                        #pass
+                                    if self.periodic_voco_attempts > 5:
+                                        if self.DEBUG:
+                                            print("main Voco controller has not responded. It may be down permanently.")
+                                        self.voco_connected = False
+                                
+                                    if self.periodic_voco_attempts%5 == 4:
+                                        if self.DEBUG:
+                                            print("Should attempt to reconnect to main voco controller")
+                                        #self.look_for_mqtt_server()
                             
                              
                             else:
@@ -3484,7 +3490,7 @@ class VocoAdapter(Adapter):
             if self.DEBUG:
                 print("Error doing http request/loading returned json: " + str(ex))
             if self.DEBUG:
-                self.speak("I could not connect. ", intent=intent)
+                self.speak("Error connecting with api put. ", intent=intent)
             #return {"error": "I could not connect to the web things gateway"}
             #return [] # or should this be {} ? Depends on the call perhaps.
             return {"error": 500}
@@ -3754,6 +3760,8 @@ class VocoAdapter(Adapter):
                     print("sending captured text to main controller: " + str(payload['text']))
                 self.mqtt_client.publish("hermes/voco/parse",json.dumps({ "siteId":str(self.persistent_data['site_id']),"text": payload['text'],'origin':'voice' }))
                 
+                if self.periodic_voco_attempts > 5:
+                    self.speak('Sorry, the main Voco controller is not responding')
                 
                 #'message' in payload and 'intent' in payload:
                 #self.mqtt_client.publish("hermes/voco/" + str(self.persistent_data['main_site_id']) + "/speak",json.dumps({'message':'What the fuck!', 'intent':'default', }))
@@ -3843,7 +3851,7 @@ class VocoAdapter(Adapter):
         elif msg.topic.startswith('hermes/hotword/' + self.persistent_data['site_id']):
             
             if msg.topic.endswith('/detected'):
-                self.intent_received = False
+                self.intent_received = False # Used to create a 'no voice input received' sound effect if no intent was heard.
                 if self.DEBUG:
                     print("(...) Hotword detected")
                 
@@ -3898,7 +3906,7 @@ class VocoAdapter(Adapter):
                         print("ignoring hermes/hotword/toggleOn")
                     return
         
-                elif self.intent_received == False:
+                elif self.intent_received == False: # Used to create a 'no voice input received' sound effect if no intent was heard.
                     if self.DEBUG:
                         print("No intent received")
                         
@@ -3941,7 +3949,7 @@ class VocoAdapter(Adapter):
             
                     #self.intent_received = True
 
-                self.intent_received = False
+                self.intent_received = False # Used to create a 'no voice input received' sound effect if no intent was heard.
         
                 # TODO: To support satellites it might be necessary to 'throw the voice' via the Snips audio server:
                 #binaryFile = open(self.listening_sound, mode='rb')
@@ -4433,12 +4441,14 @@ class VocoAdapter(Adapter):
             
             if self.persistent_data['is_satellite']:
                 if self.DEBUG:
-                    print("detected session start on main controller")
+                    print("detected a session start from satellite")
                 
             if 'siteId' in payload and 'sessionId' in payload:
                 if payload['siteId'] == None:
                     if self.DEBUG:
-                        print("\nError, siteId was None\n")
+                        print("\nError, siteId was None. Aborting.\n")
+                    return
+                        
                 elif payload['siteId'].endswith(self.persistent_data['site_id']):
                     
                     if self.DEBUG:
@@ -4449,7 +4459,6 @@ class VocoAdapter(Adapter):
                             print("Creating faux textcaptured. self.last_text_command: " + str(self.last_text_command))
                 
                         # Split manually inputted text string into array of words
-                
                         text_words = self.last_text_command.split()
                         fake_tokens = []
                         at_word = 0
@@ -4492,7 +4501,7 @@ class VocoAdapter(Adapter):
                 #        print("Satellite is skipping intent handling")
                 #    return
                     
-                self.intent_received = True
+                self.intent_received = True # Used to create a 'no voice input received' sound effect if no intent was heard.
                 if self.DEBUG:
                     print("-----------------------------------")
                     print(">> Received intent message.")
@@ -4508,9 +4517,10 @@ class VocoAdapter(Adapter):
                 # remove the 'hack' that indicated the voice analysis actually started from a text input.
                 if 'siteid' in intent_message:
                     if intent_message['siteId'] != None:
+                        
                         if intent_message['siteId'].startswith('text-'):
                             if self.DEBUG:
-                                print("stripping 'site-' from siteId")
+                                print("stripping 'text-' from siteId")
                             intent_message['siteId'] = intent_message['siteId'][5:]
                             intent_message['origin'] = 'text'
                         elif intent_message['siteId'].startswith('matrix-'):
@@ -4522,32 +4532,42 @@ class VocoAdapter(Adapter):
                             if self.DEBUG:
                                 print("mqtt /hermes/intent: setting origin to voice")
                             intent_message['origin'] = 'voice'
-                    else:
-                        if self.DEBUG:
-                            print("siteId was in intent_message, but it was None?")
-
-                # Brute-force end the existing session
-                try:
-                    self.mqtt_client.publish('hermes/dialogueManager/endSession', json.dumps({"text": "", "sessionId": intent_message['sessionId']}))
-                except Exception as ex:
-                    print("error ending session: " + str(ex))
-                
-                
-                
-                # If a voice activation was picked up on this device, but it shouldn't be listening, then stop handling this intent. If it's a textual command or the voice command came from another site, then continue.
-                if 'siteid' in intent_message:
-                    if intent_message['siteId'] != None:
+                    
+                    
+                        
+                        if intent_message['siteId'] == self.persistent_data['site_id']: # and self.persistent_data['is_satellite']
+                            # Brute-force end the existing session
+                            try:
+                                self.mqtt_client.publish('hermes/dialogueManager/endSession', json.dumps({"text": "", "sessionId": intent_message['sessionId']}))
+                                if self.DEBUG:
+                                    print("ending Snips session")
+                            except Exception as ex:
+                                print("error ending session: " + str(ex))
+                                
+                    
+                    
+                        # If a voice activation was picked up on this device, but it shouldn't be listening, then stop handling this intent. If it's a textual command or the voice command came from another site, then continue.
                         if intent_message['siteId'] == self.persistent_data['site_id'] and self.persistent_data['listening'] == False and intent_message['origin'] == 'voice':
                             if self.DEBUG:
                                 print("not handling intent that originated on this device by voice because listening is set to false.")
                             return
+                    
+                    
                     else:
                         if self.DEBUG:
-                            print("siteId was in intent_message... but it was None?")
+                            print("siteId was in intent_message, but it was None?")
+                
+                else:
+                    if self.DEBUG:
+                        print("warning, siteId not in intent_message?")
+                    # abort here?
+
+
                         
                 # Deal with the user's command
                 self.alternatives_counter = -1
                 self.master_intent_callback(intent_message)
+                
                 
                 
             # Voice activity
@@ -4744,7 +4764,7 @@ class VocoAdapter(Adapter):
 
     def parse_ping(self,payload,ping_type="ping"):
         if self.DEBUG:
-            print("\n ) - - - - . . . . . . .  - - - - (\n")
+            print("\n    ---( . . . . . . . )\n")
             print('in parse_ping. ping_type: ' + str(ping_type))
             print("(own site_id: " + str(self.persistent_data['site_id']) + ")")
             print("- - - payload: " + str(payload))
@@ -4795,6 +4815,16 @@ class VocoAdapter(Adapter):
                 if payload['siteId'] == self.persistent_data['main_site_id'] and self.persistent_data['main_site_id'] != self.persistent_data['site_id']:
                     if self.DEBUG:
                         print("good response from main controller")
+                    
+                    if self.periodic_voco_attempts > 4:
+                        #self.set_status_on_thing("Reconnected to main controller")
+                        #time.sleep(2)
+                        # set the status back to something normal
+                        if self.persistent_data['listening']:
+                            self.set_status_on_thing("Listening")
+                        else:
+                            self.set_status_on_thing("Not listening")
+                        
                     self.periodic_voco_attempts = 0 # we got a good response, so set the (unsuccesful) attempts counter back to zero.  
                     self.voco_connected = True
                     
@@ -4991,6 +5021,7 @@ class VocoAdapter(Adapter):
                 
                 print(">> intent_message    : " + str(intent_message))
                 #print(">> incoming intent   : " + str(incoming_intent))
+                print(">>")
                 print(">> sentence          : " + str(sentence))
                 print(">>")
                 print(">> site ID           : " + str(intent_message['siteId']))
@@ -5010,8 +5041,8 @@ class VocoAdapter(Adapter):
             for i in sentence: 
                 if i == ' ': 
                     word_count += 1
-                if self.DEBUG:
-                    print("word count: " + str(word_count))
+            if self.DEBUG:
+                print("word count: " + str(word_count))
                     
             if word_count == 1:
                 if sentence == 'hello' or sentence == 'allow' or sentence == 'alarm':
@@ -5036,7 +5067,7 @@ class VocoAdapter(Adapter):
                 
             elif word_count < 3 and 'unknownword' in sentence:
                 if self.DEBUG:
-                    print("heard short unclear snippet of text. Aborting. Text was: " + str(sentence))
+                    print("heard short unclear snippet of text. Aborting. Heard sentence was: " + str(sentence))
                 return
                 
             else:
@@ -5245,16 +5276,13 @@ class VocoAdapter(Adapter):
                     
                     # Specially for "what is the livingroom temperature", which gets recognised as a "set state" intent without a property slot
                     elif slots['thing'] != None and slots['property'] == None:
-                        print("boom2")
                         if "temperature" in sentence and ("temperature" not in slots['thing'] or slots['thing'].endswith(' temperature') ):
-                            print("boom3")
                             if self.DEBUG:
                                 print("Hackily setting 'temperature' as slots property")
                             slots['property'] = 'temperature'
                             slots['thing'] = slots['thing'].replace(' temperature','')
                    
                         if "humidity" in sentence and ("humidity" not in slots['thing'] or slots['thing'].endswith(' humidity') ):
-                            print("boom3 humid")
                             if self.DEBUG:
                                 print("Hackily setting 'humidity' as slots property")
                             slots['property'] = 'humidity'
@@ -5274,7 +5302,7 @@ class VocoAdapter(Adapter):
                                 slots['boolean'] = 'off'
                             else:
                                 slots['boolean'] = 'on'
-                                
+                        
                         elif incoming_intent == 'set_value' and (sentence.startswith('increase ') or sentence.startswith('decrease ') or sentence.startswith('degrees ') or sentence.startswith('lower ')  or sentence.startswith('load ') or sentence.startswith('raise ')):
                             relative_change_word = sentence.split()[0]
                             if self.DEBUG:
@@ -5370,11 +5398,12 @@ class VocoAdapter(Adapter):
             
                 
             
-
+                
                 # Normal timer routing. Satellites delegate this to the central server. 
-                # TODO: it might make sense to let things like wake-up alarms be handled on the satellite. Then it still works if the connection to the main controller is down. But how to show this in the UI...
-                if self.persistent_data['is_satellite'] == False:
-                    
+                # TODO: it might make sense to let things like wake-up alarms be handled on the satellite. Then it still works if the connection to the main controller is down. 
+                # Update: Attempted it, but it's complex. both voco and mqtt could be down. In those cases it's probably best to essentially switch off the satallite function, and in the background keep looking for the main controller to return. That might need a third MQTT client...
+                #handle_timers_on_satellite = True
+                if self.persistent_data['is_satellite'] == False: # or handle_timers_on_satellite == True:
                     
                     # Skip some impossible timers
                     if incoming_intent == 'list_timers' and slots['timer_type'] == None and self.persistent_data['is_satellite'] == False:
@@ -5449,17 +5478,22 @@ class VocoAdapter(Adapter):
                     found_properties = self.check_things(incoming_intent,slots)
                     if self.DEBUG:
                         print("Found properties: " + str(found_properties))
-                    if self.persistent_data['is_satellite'] and len(found_properties) > 0:
+                    if self.persistent_data['is_satellite'] and len(found_properties) > 0 and slots['thing'] != None:
                         if self.DEBUG:
-                            print('found at least one property on a satellite with an intent that was about changing things. Setting found_thing_on_satellite to True')
+                            print('found at least one property on a satellite with an intent that was about changing things, and slots[thing] was not None (so not a vague request). Setting found_thing_on_satellite to True')
                         found_thing_on_satellite = True
-                        
+                    else:
+                        if self.DEBUG:
+                            print("Vague match, so NOT setting found_thing_on_satellite to True (so voice_message will NOT be spoken on main controller)")
                 
                     # Check if the satellite should handle this thing.
                     if self.DEBUG:
                         print("======+++++========++++======+++========++++======")
                     target_thing_title = ""
                     found_on_satellite = False
+                    
+                    #if self.persistent_data['is_satellite'] == False: # no harm in a satellite checking if another satellite should handle it?
+                    
                     try:
                         if slots['thing'] != None:
                             if self.DEBUG:
@@ -5473,7 +5507,7 @@ class VocoAdapter(Adapter):
                             if self.DEBUG:
                                 print("target_thing_title = " + str(target_thing_title))
                                 print("self.persistent_data['satellite_thing_titles'] = " + str(self.persistent_data['satellite_thing_titles']))
-                        
+                            
                             # loop over the satellite thing data in self.persistent_data['satellite_thing_titles']
                             for satellite_id in self.persistent_data['satellite_thing_titles']:
                                 #if target_thing_title in self.persistent_data['satellite_thing_titles'][satellite_id]:
@@ -5499,11 +5533,12 @@ class VocoAdapter(Adapter):
                 
                         
                         
-                    # TODO: add the reverse too, where a satellite stops if the main controller (or even another satellite) has a better thing title match
+                    # TODO: add the reverse too, where a satellite stops if the main controller (or even another satellite) has a better thing title match. DONE?
                 
-                    if found_on_satellite and not self.persistent_data['is_satellite']:
+                    #if found_on_satellite and not self.persistent_data['is_satellite']:
+                    if found_on_satellite and (self.persistent_data['is_satellite'] or self.is_this_main_controller() == True):
                         if self.DEBUG:
-                             print("This thing title exists on a satellite. It should handle it. Stopping.")
+                             print("This thing title exists on a satellite / another controller. It should handle it. Stopping.")
                         return
                         #voice_message = "Sorry, that device is available on a satellite"
                         #break
@@ -7261,26 +7296,19 @@ class VocoAdapter(Adapter):
                                     if self.DEBUG:
                                         print('both boolean types exists. Will remove non-@type properties')
                                 
-                                    #index = 0
-                                
                                     for i in range(len(result) - 1, -1, -1):
                                    
                                         found_property = result[i]
                                         if self.DEBUG:
                                             print("looking at: " + str(found_property))
-                                    #for found_property in result:
+
                                         if self.DEBUG:
                                             print(str(i))
                                         if found_property['type'] == 'boolean' and boolean_related == True and found_property['@type'] == None: # Remove boolean property if it's not an @type
                                             if self.DEBUG:
                                                 print("pruning boolean property without @type")
                                             del result[i]
-                                            #index -= 1
-                                        
-                                        #index += 1
-                            
-                            
-                            #if len(result) > 1:
+                                            
                                 
                         if boolean_related and slots['thing'] != None and slots['thing'] != 'lights' and slots['property'] == None:
                             if self.DEBUG:
@@ -7718,8 +7746,19 @@ class VocoAdapter(Adapter):
         
     
     
+    def is_this_main_controller(self):
+        if self.DEBUG:
+            print("in is_this_main_controller()")
+        acting_as_main_controller = False
+        current_time = time.time()
+        for sat in self.connected_satellites:
+            if self.DEBUG:
+                print("checking if recently connected: " + str(sat))
+            if self.connected_satellites[sat] > current_time - 300: # did the satellite connect in the last 5 minutes?
+                acting_as_main_controller = True
+                break
     
-    
+        return acting_as_main_controller
     
     
     
