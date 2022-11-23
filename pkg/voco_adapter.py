@@ -5000,6 +5000,8 @@ class VocoAdapter(Adapter):
 
             # check if there are multiple words in the sentence
             
+            
+            
             if intent_message['siteId'] == self.persistent_data['site_id']:
                 if self.DEBUG:
                     print("handling intent at the site where it was spoken")
@@ -5008,8 +5010,10 @@ class VocoAdapter(Adapter):
             for i in sentence: 
                 if i == ' ': 
                     word_count += 1
+                if self.DEBUG:
+                    print("word count: " + str(word_count))
                     
-            if word_count < 2:
+            if word_count == 1:
                 if sentence == 'hello' or sentence == 'allow' or sentence == 'alarm':
                     #print("hello intent_message: " + str(intent_message))
                     if this_is_origin_site:
@@ -5029,6 +5033,11 @@ class VocoAdapter(Adapter):
                 
                 return
                 
+                
+            elif word_count < 3 and 'unknownword' in sentence:
+                if self.DEBUG:
+                    print("heard short unclear snippet of text. Aborting. Text was: " + str(sentence))
+                return
                 
             else:
                 # Show the heard sentence in a popup
