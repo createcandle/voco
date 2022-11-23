@@ -49,6 +49,7 @@ from .util import *
 
 
 def intent_get_time(self, slots, intent_message):
+    voice_message = ""
     if self.DEBUG:
         print("__intent_get_time")
     try:
@@ -73,13 +74,16 @@ def intent_get_time(self, slots, intent_message):
     except Exception as ex:
         print("Error dealing with get_time intent: " + str(ex))
 
+    return voice_message
 
 
 
 def intent_set_timer(self, slots, intent_message):
-    
     if self.DEBUG:
         print("__intent_set_timer")
+        
+    voice_message = ""
+        
     try:
         sentence = slots['sentence']
 
@@ -100,7 +104,7 @@ def intent_set_timer(self, slots, intent_message):
                 if self.DEBUG:
                     print("error replacing space in time string")
         
-        voice_message = ""
+        
         time_delta_voice_message = ""
         time_slot_snippet = "" # A snippet from the original sentence that described the time slot.
     
@@ -267,17 +271,20 @@ def intent_set_timer(self, slots, intent_message):
     except Exception as ex:
         print("Error while dealing with timer intent: " + str(ex))
 
+    return voice_message
 
 
 
 def intent_get_timer_count(self, slots, intent_message):
     """ Tells the user how many timers have been set"""    
     
+    voice_message = ""
+    
     try:
         if self.DEBUG:
             print("Getting the count for: " + str(slots['timer_type']))
         
-        voice_message = ""
+        
         
         if slots['timer_type'] == None:
             if self.DEBUG:
@@ -321,19 +328,22 @@ def intent_get_timer_count(self, slots, intent_message):
     except Exception as ex:
         print("Error while dealing with get_timer_count intent: " + str(ex))
     
-    return "Sorry, there was an error. "
+    return voice_message
+    #return "Sorry, there was an error. "
 
 
 
 def intent_list_timers(self, slots, intent_message):
     """ Tells the user details about their timers/reminders"""
     
+    voice_message = ""
+    
     try:
 
         if self.DEBUG:
             print("Listing all timers for timer type: " + str(slots['timer_type']))
         
-        voice_message = ""
+        
         
         if slots['timer_type'] == None:
             if self.DEBUG:
@@ -439,13 +449,14 @@ def intent_list_timers(self, slots, intent_message):
     except Exception as ex:
         print("Error while dealing with list_timers intent: " + str(ex))
     
-    return "Sorry, there was an error. "
+    return voice_message
+    #return "Sorry, there was an error. "
 
 
 
 def intent_stop_timer(self, slots, intent_message):
     """Remove all, the last, or a specific number of timers"""
-    
+    voice_message = ""
     try:
         
         if slots['number'] == 0: # If the user mentions 'zero' in the command, it most likely means he/she wants to remove all timers
@@ -453,7 +464,7 @@ def intent_stop_timer(self, slots, intent_message):
         
         removed_timer_count = 0
         
-        voice_message = ""
+        
         
         if slots['timer_type'] == None:
             if self.DEBUG:
@@ -603,7 +614,8 @@ def intent_stop_timer(self, slots, intent_message):
     except Exception as ex:
         print("Error in stop_timer: " + str(ex))
     
-    return "Sorry, there was an error. "
+    return voice_message
+    #return "Sorry, there was an error. "
 
 
 
@@ -755,7 +767,8 @@ def intent_get_boolean(self, slots, intent_message, found_properties):
     except Exception as ex:
         print("Error in intent_get_boolean: " + str(ex))
     
-    return "Sorry, there was an error. "
+    return voice_message
+    #return "Sorry, there was an error. "
             
     #voice_message = clean_up_string_for_speaking(voice_message)
     #if self.DEBUG:
@@ -780,7 +793,8 @@ def intent_get_value(self, slots, intent_message,found_properties):
             for found_property in found_properties:
                 
                    
-                print("str(found_property['property']).lower(): " + str(found_property['property']).lower() )
+                if self.DEBUG:
+                    print("str(found_property['property']).lower(): " + str(found_property['property']).lower() )
                 
                 
                 
@@ -804,6 +818,8 @@ def intent_get_value(self, slots, intent_message,found_properties):
                     #print("get_value is looping over property: " + str(found_property))
                     
                     if found_property['type'] == 'boolean' and len(found_properties) > 1:  # Skip booleans if we can.
+                        if self.DEBUG:
+                            print("intent_get_value: skipping boolean (how did this even end up in the list?)")
                         continue
             
                     api_path = str(found_property['property_url'])
@@ -819,7 +835,8 @@ def intent_get_value(self, slots, intent_message,found_properties):
                             continue
                         
                     except:
-                        print("get_value: could not compare returned json to {}")
+                        if self.DEBUG:
+                            print("get_value: error, skipping. Could not compare returned json to {}")
                         continue
                     
                     try:
@@ -841,10 +858,20 @@ def intent_get_value(self, slots, intent_message,found_properties):
                 
                     api_value = api_result[key]
                 
+                    if str(api_value) == "" or api_value == 204: 
+                        if self.DEBUG:
+                            print("WARNING, api_value is empty string or 204 error code.")
+                        if len(found_properties) > 1:
+                            continue
+                        else:
+                            api_value = "unknown"
+                            
+                        
+                
                     if str(api_value) != "": 
                 
                         if self.DEBUG:
-                            print("api_result[key] = " + str(api_result[key]))
+                            print("got api_result[key] = " + str(api_result[key]))
                 
                         if api_value == None:
                             if self.DEBUG:
@@ -861,9 +888,14 @@ def intent_get_value(self, slots, intent_message,found_properties):
                                     if found_property['property'] not in str(found_property['thing']):
                                         voice_message += str(found_property['property'])
                                 if found_property['thing'] != None:
-                                    if voice_message != "" and str(found_property['thing']) not in str(found_property['property']): # not str(found_property['property']).endswith( str(found_property['thing']) ) 
+                                    if voice_message != "" and str(found_property['thing']) not in str(found_property['property']): # not str(found_property['property']).endswith( str(found_property['thing']) )  # TODO: isn't this the other way around? That the property title should not be in the thing title?
                                         voice_message += " of "
                                         voice_message += str(found_property['thing'])
+                                    else:
+                                        if self.DEBUG:
+                                            print("Not adding thing title to voice message. Reason: voice message was not empty (" + str(voice_message) + ") or property title was in thing title.")
+                                        if voice_message == "":
+                                            voice_message += "It" 
                                 voice_message += " is " 
                 
                         elif len(found_properties) > 3:
@@ -906,6 +938,10 @@ def intent_get_value(self, slots, intent_message,found_properties):
                                 print("string len(api_result[key]) = " + str(len(api_value)))
                             if len(api_value) == 7 and api_value.startswith('#'): # hex color value
                                 voice_message = "The color is " + str(hex_to_color_name(api_value))
+                            elif api_value == 'ON':
+                                voice_message += "on"
+                            elif api_value == 'OFF':
+                                voice_message += "off"
                             else:
                                 voice_message += str(api_value)
                 
@@ -969,7 +1005,8 @@ def intent_get_value(self, slots, intent_message,found_properties):
     except Exception as ex:
         print("Error in intent_get_value: " + str(ex))
 
-    return "Sorry, there was an error. "
+    return voice_message
+    #return "Sorry, there was an error. "
 
 
 
@@ -989,10 +1026,13 @@ def intent_set_state(self, slots, intent_message, found_properties, delayed_acti
         intent_message['origin'] = 'voice'
     """
             
-    sentence = slots['sentence']
+    
     double_time = False
-
+    voice_message = ""
+    
     try:
+        
+        sentence = slots['sentence']
         
         if slots['boolean'] is None:
             if self.DEBUG:
@@ -1011,7 +1051,7 @@ def intent_set_state(self, slots, intent_message, found_properties, delayed_acti
         if delayed_action != None:
             slots['boolean'] = delayed_action
 
-        voice_message = ""
+        
         back = "" # used when the voice message should be 'back to', as in "switching back to off.
 
         
@@ -1403,7 +1443,8 @@ def intent_set_state(self, slots, intent_message, found_properties, delayed_acti
     except Exception as ex:
         print("Error in intent_set_state: " + str(ex))
 
-    return "Sorry, there was an error. "
+    return voice_message
+    #return "Sorry, there was an error. "
 
 
 def intent_set_value(self, slots, intent_message, found_properties, original_value=None):
@@ -1418,7 +1459,7 @@ def intent_set_value(self, slots, intent_message, found_properties, original_val
         print("slots: " + str(slots))
         print("")
         
-    sentence = slots['sentence']
+    
     voice_message = ""
     desired_value = None
     back = ""
@@ -1427,6 +1468,9 @@ def intent_set_value(self, slots, intent_message, found_properties, original_val
 
 
     try:
+        
+        sentence = slots['sentence']
+        
         # Select the desired value from the intent data
             
         if slots['color'] != None:
@@ -1844,8 +1888,8 @@ def intent_set_value(self, slots, intent_message, found_properties, original_val
     except Exception as ex:
         print("Error in intent_set_value: " + str(ex))
     
-    return "Sorry, there was an error. "
-
+    #return "Sorry, there was an error. "
+    return voice_message
 # this works on the basis of a capability only.
 #def mass_set_state(self, slots):
     

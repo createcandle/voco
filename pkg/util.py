@@ -265,6 +265,8 @@ def clean_up_string_for_speaking(sentence): # Also used in thing scanner!
     #print("cleaning up: " + str(sentence))
     if len(sentence):
         sentence = re.sub(r"(\s\-[0-9]+)", replace_dash_with_minus, sentence)
+        sentence = sentence.replace('color temp ', 'color temperature ')
+        
         sentence = sentence.replace('/', ' ')
         sentence = sentence.replace('\\', ' ')
         sentence = sentence.replace('+', ' plus ')

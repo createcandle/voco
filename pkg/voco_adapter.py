@@ -1763,9 +1763,15 @@ class VocoAdapter(Adapter):
             #if site_id == 'default':
             #    site_id = self.persistent_data['site_id']
 
+            
+
             # Make the voice detection ignore Voco speaking for the next few seconds:
             self.last_sound_activity = time.time() - 1
             if self.DEBUG:
+                
+                if voice_message == '':
+                    print("ERROR, voice message was empty string")
+                    voice_message = 'Error in speak: message was empty string'
                 print("[...] speak: " + str(voice_message))
                 #print("[...] intent: " + str(json.dumps(intent, indent=4)))
                 
@@ -4164,7 +4170,7 @@ class VocoAdapter(Adapter):
             if self.persistent_data['is_satellite']:
                 if str(self.persistent_data['mqtt_server']) == self.ip_address:
                     if self.DEBUG:
-                        print("the MQTT server IP address was the device's own IP address. Because this is a satellite, this shouldn't be the case. Requesting a network scan for the correct server.")
+                        print("The MQTT server IP address was the device's own IP address. Because this is a satellite, this shouldn't be the case. Requesting a network scan for the correct server.")
                     if not self.currently_scanning_for_missing_mqtt_server: #and not self.orphaned:
                         if self.DEBUG:
                             print("requesting scan for missing MQTT server.")
@@ -4222,7 +4228,9 @@ class VocoAdapter(Adapter):
             
             elif '113' in str(ex):
                 if self.persistent_data['is_satellite']:
-                    self.set_status_on_thing("Error connecting to main Voco device")
+                    if self.DEBUG:
+                        print("- Error 113 - failed to connect to main voco controller")
+                    self.set_status_on_thing("Error connecting to main Voco controller")
                     self.periodic_voco_attempts += 1
                     if self.currently_scanning_for_missing_mqtt_server == False and self.persistent_data['site_id'] != self.persistent_data['main_site_id']:
                         # Satellites may attempt to find the new IP address of the MQTT server
@@ -4366,9 +4374,9 @@ class VocoAdapter(Adapter):
         
         if self.DEBUG:
             if self.persistent_data['is_satellite']:
-                print('\n\n\n------------MESSAGE ON MAIN CONTROLLER--------------')
+                print('\n\n\n------------SATELLITE: IN ON_MESSAGE (LISTENING ON MAIN MQTT CONTROLLER) --------------')
             else:
-                print('\n\n\n------------FIRST MESSAGE--------------')
+                print('\n\n\n------------MAIN CONTROLLER: IN ON_MESSAGE (FIRST MESSAGE)--------------')
         
         payload = {}
         try:
@@ -4729,7 +4737,7 @@ class VocoAdapter(Adapter):
                     print("Error in send_mqtt_ping: " + str(ex))
         else:
             if self.DEBUG:
-                print("self.mqtt_connected was likely false")
+                print("Warning, not sending broadcast ping. self.mqtt_connected was likely false")
 
 
 
@@ -4878,7 +4886,10 @@ class VocoAdapter(Adapter):
             print("ping message was missing parts")
     
     
-    
+
+
+
+
 #
 # ROUTING
 #
@@ -5071,6 +5082,14 @@ class VocoAdapter(Adapter):
             #    print("\n\n\n__LOOP " + str(x))
             #    print("intent: " + str(all_possible_intents[x]))
             
+            
+            if x > 0:
+                first_test = False
+                
+            if x == all_possible_intents_count:
+                final_test = True
+            
+            
             if self.DEBUG:
                 print("\n\n\n.")
                 print("..")
@@ -5080,22 +5099,13 @@ class VocoAdapter(Adapter):
                 print("intent: " + str(all_possible_intents[x]))
                 print("all_possible_intents: " + str(all_possible_intents))
             
-            if x > 0:
-                first_test = False
-                
-            if x == all_possible_intents_count:
-                final_test = True
-            
-            
-            
-            
             
             
             
             
             if stop_looping:
                 if self.DEBUG:
-                    print("aborting loop")
+                    print("top_looping was true. Aborting loop")
                 break
             
             alternatives_counter = x - 1
@@ -5223,6 +5233,24 @@ class VocoAdapter(Adapter):
                                     first_voice_message = "I did not understand what you wanted to change. "
                             continue
                             #self.master_intent_callback(intent_message, True) # let's try an alternative intent, if there is one.
+                    
+                    # Specially for "what is the livingroom temperature", which gets recognised as a "set state" intent without a property slot
+                    elif slots['thing'] != None and slots['property'] == None:
+                        print("boom2")
+                        if "temperature" in sentence and ("temperature" not in slots['thing'] or slots['thing'].endswith(' temperature') ):
+                            print("boom3")
+                            if self.DEBUG:
+                                print("Hackily setting 'temperature' as slots property")
+                            slots['property'] = 'temperature'
+                            slots['thing'] = slots['thing'].replace(' temperature','')
+                   
+                        if "humidity" in sentence and ("humidity" not in slots['thing'] or slots['thing'].endswith(' humidity') ):
+                            print("boom3 humid")
+                            if self.DEBUG:
+                                print("Hackily setting 'humidity' as slots property")
+                            slots['property'] = 'humidity'
+                            slots['thing'] = slots['thing'].replace(' humidity','')
+                   
                    
                         
                     # no desired value
@@ -5497,7 +5525,7 @@ class VocoAdapter(Adapter):
                             voice_message = intent_get_boolean(self, slots, intent_message,found_properties)
 
                         if self.DEBUG:
-                            print("thing manipulation intent handler returned voice message: " + str(voice_message))
+                            print("intention parser returned voice message: " + str(voice_message))
 
                 #elif self.token != "":
                 #    if self.DEBUG:
@@ -5704,6 +5732,8 @@ class VocoAdapter(Adapter):
 
 
 
+
+
 #
 #  YOU SET A TIMER - RUN TIME DELAYED COMMANDS
 #
@@ -5900,7 +5930,7 @@ class VocoAdapter(Adapter):
                 try:
                     thing_titles = set(self.persistent_data['all_thing_titles']) # all_thing_titles includes the previously known satellite thing titles (which might have changed)
                 except:
-                    print("Error, Couldn't load previous thing titles from persistence. If Voco was just installed this is normal.")
+                    print("Error, Couldn't load previous thing titles from persistence. If Voco was just installed then this is normal.")
                     thing_titles = set()
                     self.persistent_data['local_thing_titles'] = []
                     self.save_to_persistent_data = True #self.save_persistent_data()
@@ -5908,7 +5938,7 @@ class VocoAdapter(Adapter):
                 try:
                     property_titles = set(self.persistent_data['property_titles'])
                 except:
-                    print("Error, Couldn't load previous property titles from persistence. If Voco was just installed this is normal.")
+                    print("Error, Couldn't load previous property titles from persistence. If Voco was just installed then this is normal.")
                     property_titles = set()
                     self.persistent_data['property_titles'] = []
                     self.save_to_persistent_data = True #self.save_persistent_data()
@@ -5916,7 +5946,7 @@ class VocoAdapter(Adapter):
                 try:
                     property_strings = set(self.persistent_data['property_strings'])
                 except:
-                    print("Error, Couldn't load previous property strings from persistence. If Voco was just installed this is normal.")
+                    print("Error, Couldn't load previous property strings from persistence. If Voco was just installed then this is normal.")
                     property_strings = set()
                     self.persistent_data['property_strings'] = []
                     self.save_to_persistent_data = True #self.save_persistent_data()
@@ -6085,43 +6115,6 @@ class VocoAdapter(Adapter):
 
 
 
-#
-# Create comparison lists to help check validity of intents
-#
-# TODO: seems unused?
-
-    def create_intent_comparison_lists(self):
-        if self.DEBUG:
-            print("[ >  >  > ] creating intent comparison lists")
-            print("[ >  >  > ] things: \n" + str(json.dumps(self.things, indent=4)))
-        
-        try:
-            for thing in self.things:
-                if 'title' in thing:
-                    thing_name = clean_up_for_comparison(str(thing['title'])).strip()
-        
-                    if len(thing_name) > 1:
-                        if self.DEBUG:
-                            print("thing title:" + thing_name + ".")
-                        fresh_thing_titles.add(thing_name)
-                        #self.my_thing_title_list.append(thing_name)
-            
-                    for thing_property_key in thing['properties']:
-                        if 'type' in thing['properties'][thing_property_key] and 'enum' in thing['properties'][thing_property_key]:
-                            if thing['properties'][thing_property_key]['type'] == 'string':
-                                for word in thing['properties'][thing_property_key]['enum']:
-                                    property_string_name = clean_up_for_comparison(str(word)).strip()
-                                    if len(property_string_name) > 1:
-                                        fresh_property_strings.add(property_string_name)
-                        if 'title' in thing['properties'][thing_property_key]:
-                            #property_title = clean_up_string_for_speaking(str(thing['properties'][thing_property_key]['title']).lower()).strip()
-                            property_title = clean_up_for_comparison(str(thing['properties'][thing_property_key]['title'])).strip()
-                            if len(property_title) > 1:
-                                fresh_property_titles.add(property_title)
-
-        
-        except Exception as ex:
-            print("error in create_intent_comparison_lists: " + str(ex))
 
 
 
@@ -6438,6 +6431,11 @@ class VocoAdapter(Adapter):
                         else:
                             if self.DEBUG:
                                 print('no target_thing_title, so will look at all properties')
+                        
+                            if self.hostname.lower() in str(current_thing_title).lower():
+                                if self.DEBUG:
+                                    print('Found hostname in current thing title, giving it a confidence of 1: ' + str(current_thing_title))
+                                probable_thing_title_confidence = 1 # could be the kicker to prefer a found property over others in case of a very generic query like "what is the temperature". If the hostname is "bedroom", then a device with 'bedroom' in the title will get an edge.
                             pass
                     
                     elif target_thing_title == current_thing_title:   # If the thing title is a perfect match
@@ -6480,12 +6478,16 @@ class VocoAdapter(Adapter):
                                 print("partial starts-with match:" + str(len(current_thing_title) / len(target_thing_title)))
                             if len(current_thing_title) / len(target_thing_title) < 2:
                                 # The strings mostly start the same, so this might be a match.
+                                if self.DEBUG:
+                                    print("titles started the same, and length wasn't too diferent. Setting confidence for this thing to 25")
                                 probable_thing_title = current_thing_title
                                 probable_thing_title_confidence = 25
                             else:
                                 if self.DEBUG:
-                                    print("titles started the same, but length was too diferent")
-                                continue
+                                    print("titles started the same, but length was very diferent. Setting confidence for this thing to 11")
+                                probable_thing_title = current_thing_title
+                                probable_thing_title_confidence = 11
+                                #continue
                         else:
                             #if self.DEBUG:
                             #    print("Failed to match thing title: " + str(current_thing_title) )
@@ -7099,8 +7101,8 @@ class VocoAdapter(Adapter):
 
             try:
                 if result != None:
-                    #if self.DEBUG:
-                    #    print("full thing scan result: " + str(json.dumps(result, indent=4)))
+                    if self.DEBUG:
+                        print("full thing scan result: " + str(json.dumps(result, indent=4)))
                     # If the thing title matches and we found at least one property, then we're done.
                     #if probable_thing_title != None and probable_thing_title_confidence > 80 and len(result.keys()) == 1:
                     
@@ -7140,6 +7142,8 @@ class VocoAdapter(Adapter):
                         #index = 0
                         #new_result = []
                         #for found_property in result:
+                                                
+                        
                         for i in range(len(result) - 1, -1, -1):
                            
                             found_property = result[i]
