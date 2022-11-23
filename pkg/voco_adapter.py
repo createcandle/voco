@@ -4738,6 +4738,7 @@ class VocoAdapter(Adapter):
                     mqtt_ping_path = "hermes/voco/" + str(self.persistent_data['main_site_id']) + "/" + str(ping_type)
                     if self.DEBUG:
                         print("- - -  sending connection check: " + str(ping_type) + " to: " + str(self.persistent_data['main_site_id']) + " at: " + str(self.persistent_data['mqtt_server']) )
+                        print("\n    ---( . . . ping . . . )\n")
                         
                 self.mqtt_client.publish(mqtt_ping_path,json.dumps({
                             'ip':str(self.ip_address),
@@ -4764,7 +4765,7 @@ class VocoAdapter(Adapter):
 
     def parse_ping(self,payload,ping_type="ping"):
         if self.DEBUG:
-            print("\n    ---( . . . . . . . )\n")
+            print("\n    ( . . . pong . . . )---\n")
             print('in parse_ping. ping_type: ' + str(ping_type))
             print("(own site_id: " + str(self.persistent_data['site_id']) + ")")
             print("- - - payload: " + str(payload))
