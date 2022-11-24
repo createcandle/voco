@@ -6219,6 +6219,11 @@ class VocoAdapter(Adapter):
             all_property_titles_list_lowercase.append(property_titlex.lower())
         
         
+        if self.DEBUG:
+            print("# all_thing_titles_list_lowercase: " + str(all_thing_titles_list_lowercase))
+            print("# all_property_titles_list_lowercase: " + str(all_property_titles_list_lowercase))
+        
+        
         # do a pre-check that may split up long thing titles into a thing and property, but only if there is a perfect match, and only works for one-word titles and properties. #TODO could be improved by actually looking inside things to see if the property is present.
         #separationHints = [ "in" ]
         #two_parts = re.split('|'.join(r'(?:\b\w*'+re.escape(w)+r'\w*\b)' for w in meetingStrings), text, 1)[-1] # looks for parts of separator words.
@@ -6333,9 +6338,10 @@ class VocoAdapter(Adapter):
             elif not slots['property'].lower() in all_property_titles_list_lowercase:  #self.persistent_data['property_titles']:
                 if slots['property'].lower() in self.generic_properties and slots['thing'] != None: # "what are the levels of the climate sensor" should still return multiple properties
                     pass
-                elif slots['thing'] != None:
+                elif slots['thing'] != None and self.persistent_data['is_satellite'] == False:
                     if self.DEBUG:
                         print("setting invalid property name to None: " + str(slots['property']))
+                        print("  ...because it was not in all_property_titles_list_lowercase: " + str(all_property_titles_list_lowercase))
                     slots['property'] = None
                     dubious_property_title = True
             
