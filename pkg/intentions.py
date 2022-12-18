@@ -301,9 +301,23 @@ def intent_get_timer_count(self, slots, intent_message):
             for index, item in enumerate(self.persistent_data['action_times']):
                 if str(item['type']) == 'countdown':
                     countdown_active = True
+                    if self.DEBUG:
+                        print("countdown item: " + str(item))
             if countdown_active:
                 voice_message = "The countdown is running."
                 #self.speak("The countdown is running.",intent=intent_message)
+                
+                countdown_delta = self.countdown - self.current_utc_time
+                if countdown_delta > 7200:
+                    hours_count = math.floor(countdown_delta / 3600)
+                    countdown_delta = countdown_delta - (hours_count * 3600)
+                    voice_message += "The countdown has " + str(hours_count) + " hours and " + str(math.floor(countdown_delta / 60)) + " minutes to go."
+                elif countdown_delta > 120:
+                    voice_message += "The countdown has " + str(math.floor(countdown_delta / 60)) + " minutes and " + str(countdown_delta % 60) + " seconds to go."
+                else:
+                    voice_message += "The countdown has " + str(countdown_delta) + " seconds to go."
+                
+                
             else:
                 voice_message = "There is no active countdown."
                 #self.speak("There is no active countdown.",intent=intent_message)
@@ -860,7 +874,7 @@ def intent_get_value(self, slots, intent_message,found_properties):
                 
                     if str(api_value) == "" or api_value == 204: 
                         if self.DEBUG:
-                            print("WARNING, api_value is empty string or 204 error code.")
+                            print("WARNING, api_value is empty string or 204 code.")
                         if len(found_properties) > 1:
                             continue
                         else:
@@ -1060,7 +1074,7 @@ def intent_set_state(self, slots, intent_message, found_properties, delayed_acti
             property_loop_counter = 0
             for found_property in found_properties:
                 
-                print("\n\nfound_property: " + str(found_property) + "\n\n")
+                #print("\n\nfound_property: " + str(found_property) + "\n\n")
                 
                 # Figure out the intended state first
                 human_readable_desired_state = str(slots['boolean'])
@@ -1151,7 +1165,7 @@ def intent_set_state(self, slots, intent_message, found_properties, delayed_acti
                     
                         elif api_result[key] == 204: # the api returned an empty string
                             if self.DEBUG:
-                                print("TODO: temporarily allowing this weird 204 response, which means 'no content'")
+                                print("204 (no content) response, OK")
                             pass
                         
                         else:

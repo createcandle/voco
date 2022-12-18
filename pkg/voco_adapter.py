@@ -413,7 +413,12 @@ class VocoAdapter(Adapter):
                 "PAUSE":"PLAY",
                 "PLAYING":"PAUSED",
                 "PAUSED":"PLAYING",
+                
         }
+
+
+        # property names that, if no exact property is specified for the thing scanner, will be deemed as likely to be what the user cares about.
+        self.unimportant_properties = ['data blur', 'data mute', 'battery', 'signal strength', 'child lock']
 
         # Create a process group.
         #os.setpgrp()
@@ -1767,10 +1772,14 @@ class VocoAdapter(Adapter):
             if self.DEBUG:
                 
                 if voice_message == '':
-                    print("ERROR, voice message was empty string")
+                    print("[...] ERROR, voice message was empty string")
                     voice_message = 'Error in speak: message was empty string'
-                print("[...] speak: " + str(voice_message))
+                else:
+                    print("[...] speak: " + str(voice_message))
                 #print("[...] intent: " + str(json.dumps(intent, indent=4)))
+            
+            if not self.DEBUG and voice_message == '':
+                return
                 
             if voice_message.endswith('.'):
                 voice_message = voice_message[:-1]
@@ -3365,9 +3374,9 @@ class VocoAdapter(Adapter):
             if self.DEBUG:
                 print("API GET: " + str(r.status_code) + ", " + str(r.reason))
 
-            if r.status_code != 200:
+            if r.status_code < 200 or r.status_code > 208:
                 if self.DEBUG:
-                    print("API returned a status code that was not 200. It was: " + str(r.status_code))
+                    print("API returned a status code that was not 200-208. It was: " + str(r.status_code))
                 return {"error": str(r.status_code)}
                 
             else:
@@ -3381,10 +3390,10 @@ class VocoAdapter(Adapter):
                     #for prop_name in r:
                     #    print(" -> " + str(prop_name))
                     
-                    if len(r.text) == 0:
-                        if self.DEBUG:
-                            print("an empty string was returned. Creating 204 error.")
-                        return {"error": 204}
+                    #if len(r.text) == 0:
+                    #    if self.DEBUG:
+                    #        print("an empty string was returned.")
+                    #    #return {"error": 204}
                     
                     if not '{' in r.text:
                         #if self.DEBUG:
@@ -3397,7 +3406,10 @@ class VocoAdapter(Adapter):
                             #if self.DEBUG:
                             #    print("likely_property_name: " + str(likely_property_name))
                             to_return = {}
-                            to_return[ likely_property_name ] = json.loads(r.text)
+                            if len(r.text) == 0:
+                                to_return[ likely_property_name ] = r.text
+                            else:
+                                to_return[ likely_property_name ] = json.loads(r.text)
                             #if self.DEBUG:
                             #    print("returning fixed: " + str(to_return))
                             return to_return
@@ -3441,9 +3453,9 @@ class VocoAdapter(Adapter):
                 if 'things/' in api_path and '/properties/' in api_path:
                     if self.DEBUG:
                         print("PUT: properties was in api path: " + str(api_path))
-                    for bla in json_dict:
-                        property_was = bla
-                        simpler_value = json_dict[bla]
+                    for key in json_dict:
+                        property_was = key
+                        simpler_value = json_dict[key]
                         json_dict = simpler_value
                     #simpler_value = [elem[0] for elem in json_dict.values()]
                     if self.DEBUG:
@@ -3470,18 +3482,28 @@ class VocoAdapter(Adapter):
                 timeout=5
             )
             if self.DEBUG:
-                print("API PUT: " + str(r.status_code) + ", " + str(r.reason))
+                print("API PUT: " + str(r.status_code) + ", reason:" + str(r.reason))
                 print("PUT returned: " + str(r.text))
 
-            if r.status_code != 200:
+            if r.status_code < 200 or r.status_code > 208:
                 if self.DEBUG:
                     print("Error communicating: " + str(r.status_code))
                 return {"error": str(r.status_code)}
             else:
-                if simplified:
-                    return_value = {property_was:json.loads(r.text)} # json.loads('{"' + property_was + '":' + r.text + '}')
-                else:
-                    return_value = json.loads(r.text)
+                return_value = {}
+                try:
+                    if len(r.text) != 0:
+                        if simplified:
+                            if property_was != None:
+                                if not '{' in r.text:
+                                    return_value[property_was] = r.text
+                                else:
+                                    return_value[property_was] = json.loads(r.text) # json.loads('{"' + property_was + '":' + r.text + '}')
+                        else:
+                            return_value = json.loads(r.text)
+                except Exception as ex:
+                    if self.DEBUG:
+                        print("Error reconstructing put response: " + str(ex))
                 
                 return_value['succes'] = True
                 return return_value
@@ -4469,9 +4491,10 @@ class VocoAdapter(Adapter):
                             range_start += len(word) + 1
                         if self.DEBUG:
                             print("fake ASR tokens: " + str(fake_tokens))
-                
-                        self.mqtt_client.publish("hermes/asr/textCaptured",json.dumps( {"text":self.last_text_command,"likelihood":1.0,"tokens":fake_tokens,"seconds":float(at_word),"siteId":payload['siteId'],"sessionId":str(payload['sessionId'])} ))
-                        #mosquitto_pub -t 'hermes/asr/textCaptured' -m '{"text":"what time is it","likelihood":1.0,"tokens":[{"value":"what","confidence":1.0,"rangeStart":0,"rangeEnd":4,"time":{"start":0.0,"end":1.0799999}},{"value":"time","confidence":1.0,"rangeStart":5,"rangeEnd":9,"time":{"start":1.0799999,"end":1.14}},{"value":"is","confidence":1.0,"rangeStart":10,"rangeEnd":12,"time":{"start":1.14,"end":1.29}},{"value":"it","confidence":1.0,"rangeStart":13,"rangeEnd":15,"time":{"start":1.29,"end":2.1}}],"seconds":2.0,"siteId":"nfhnlpva","sessionId":"c79b1488-167b-45f1-8005-b6bd22a31bfa"}'
+                            
+                        if self.last_text_command != "":
+                            self.mqtt_client.publish("hermes/asr/textCaptured",json.dumps( {"text":self.last_text_command,"likelihood":1.0,"tokens":fake_tokens,"seconds":float(at_word),"siteId":payload['siteId'],"sessionId":str(payload['sessionId'])} ))
+                            #mosquitto_pub -t 'hermes/asr/textCaptured' -m '{"text":"what time is it","likelihood":1.0,"tokens":[{"value":"what","confidence":1.0,"rangeStart":0,"rangeEnd":4,"time":{"start":0.0,"end":1.0799999}},{"value":"time","confidence":1.0,"rangeStart":5,"rangeEnd":9,"time":{"start":1.0799999,"end":1.14}},{"value":"is","confidence":1.0,"rangeStart":10,"rangeEnd":12,"time":{"start":1.14,"end":1.29}},{"value":"it","confidence":1.0,"rangeStart":13,"rangeEnd":15,"time":{"start":1.29,"end":2.1}}],"seconds":2.0,"siteId":"nfhnlpva","sessionId":"c79b1488-167b-45f1-8005-b6bd22a31bfa"}'
                 
                         self.last_text_command = ""
                     
@@ -4544,7 +4567,6 @@ class VocoAdapter(Adapter):
                             except Exception as ex:
                                 print("error ending session: " + str(ex))
                                 
-                    
                     
                         # If a voice activation was picked up on this device, but it shouldn't be listening, then stop handling this intent. If it's a textual command or the voice command came from another site, then continue.
                         if intent_message['siteId'] == self.persistent_data['site_id'] and self.persistent_data['listening'] == False and intent_message['origin'] == 'voice':
@@ -6397,6 +6419,7 @@ class VocoAdapter(Adapter):
                 slots['property'] = 'all'
                 target_property_title = 'state'
                 thing_must_have_capability = 'Light'
+                thing_must_have_selected_capability = 'Light'
                 property_must_have_capability = 'OnOffProperty'
                 dubious_property_title = False
             
@@ -6433,13 +6456,14 @@ class VocoAdapter(Adapter):
                 try:
                     current_thing_title = str(thing['title']).lower()
                     
+                    """
                     if self.see_switches_as_lights:
                         if thing_must_have_capability == 'Light':
                             if len(current_thing_title) > 9 and (current_thing_title.endswith(' light') or current_thing_title.endswith(' lamp')):
                                 if '@type' in thing:
-                                    if 'OnOffSwitch' in thing['@type'] and not 'Light' in thing['@type']:
+                                    if ('OnOffSwitch' in thing['@type'] or 'SmartPlug' in thing['@type']) and not 'Light' in thing['@type']:
                                         thing['@type'].append('Light')
-                                
+                    """
                             
                     
                     probable_thing_title = None    # Used later, by the back-up way of finding the correct thing.
@@ -6466,28 +6490,67 @@ class VocoAdapter(Adapter):
                     probable_thing_title_confidence = 0
                     
                     if target_thing_title == None:  # If no thing title provided, we go over every thing and let the property be leading in finding a match.
-                        if thing_must_have_capability != None:
-                            if '@type' in thing:
-                                if not thing_must_have_capability in thing['@type']:
-                                    if self.DEBUG:
-                                        print("skipping thing without desired capability: " + str(current_thing_title))
-                                    continue # skip things without the desired capability.
+                        
+                        
+                        # Check if there is a desired capability or selectedCapability
+                        try:
+                            if thing_must_have_capability != None:
+                                if '@type' in thing:
+                                    if not thing_must_have_capability in thing['@type']:
+                                        if self.DEBUG:
+                                            print("skipping thing without desired capability: " + str(current_thing_title))
+                                        continue # skip things without the desired capability.
+                                    else:
+                                        if self.DEBUG:
+                                            print("thing has needed capability: " + str(thing_must_have_capability) + ", all thing's @types: " + str(thing['@type']))
+                                            print("full thing: " + str(json.dumps(thing,indent=4)))
+                                        
+                                        if thing_must_have_capability == 'Light' and 'SmartPlug' in thing['@type']:
+                                            if not 'light' in current_thing_title and not 'lamp' in current_thing_title:
+                                                if self.DEBUG:
+                                                    print("thing had required capability (" + str(thing_must_have_capability) + "), but is a smart plug too, and no hints were found in the thing title that it should be seen as a light either (" + current_thing_title + "). Skipping.")
+                                                continue
+                                            
+                                        try:
+                                            if hasattr( thing, 'selectedCapability' ):
+                                            #if 'selectedCapability' in thing:
+                                                if self.DEBUG:
+                                                    print("thing.selectedCapability: " + str(thing.selectedCapability) )
+                                                if thing.selectedCapability is not thing_must_have_capability:
+                                                    if thing_must_have_capability == 'light':
+                                                        if not 'light' in current_thing_title and not 'lamp' in current_thing_title:
+                                                            if self.DEBUG:
+                                                                print("thing had required capability (" + str(thing_must_have_capability) + "), but it was not selected (" + str(thing.selectedCapability) + "), and no hints were found in the thing title either (" + current_thing_title + "). Skipping.")
+                                                            continue
+                                                else:
+                                                    if self.DEBUG:
+                                                        print("Thing did not have a selectedCapability: " + str(thing))
+                                        except Exception as ex:
+                                            print("Error checking selectedCapability: " + str(ex))
+                                
+                                        
+                                        if self.DEBUG:
+                                            print("allowing thing with capability: " + str(current_thing_title) )
+                                        
+                                        
+                                        
                                 else:
                                     if self.DEBUG:
-                                        print("allowing thing with capability: " + str(current_thing_title) )
+                                        print('thing must have capability, but this one has none, so skipping')
+                                    continue
                             else:
                                 if self.DEBUG:
-                                    print('thing must have capability, but this one has none, so skipping')
-                                continue
-                        else:
-                            if self.DEBUG:
-                                print('no target_thing_title, so will look at all properties')
+                                    print('no target_thing_title, so will look at all properties')
                         
-                            if self.hostname.lower() in str(current_thing_title).lower():
-                                if self.DEBUG:
-                                    print('Found hostname in current thing title, giving it a confidence of 1: ' + str(current_thing_title))
-                                probable_thing_title_confidence = 1 # could be the kicker to prefer a found property over others in case of a very generic query like "what is the temperature". If the hostname is "bedroom", then a device with 'bedroom' in the title will get an edge.
-                            pass
+                                if self.hostname.lower() in str(current_thing_title).lower():
+                                    if self.DEBUG:
+                                        print('Found hostname in current thing title, giving it a confidence of 1: ' + str(current_thing_title))
+                                    probable_thing_title_confidence = 1 # could be the kicker to prefer a found property over others in case of a very generic query like "what is the temperature". If the hostname is "bedroom", then a device with 'bedroom' in the title will get an edge.
+                                pass
+                    
+                        except Exception as ex:
+                            if self.DEBUG:
+                                print("Error checking selectedCapability: ", ex)
                     
                     elif target_thing_title == current_thing_title:   # If the thing title is a perfect match
                         probable_thing_title = current_thing_title
@@ -7008,10 +7071,18 @@ class VocoAdapter(Adapter):
                             
                             # No target property title set
                             if match_dict['thing'] != None and (target_property_title in self.generic_properties or target_property_title == None):
-                                if self.DEBUG:
-                                    print("Property title was not or abstractly supplied, so adding with low confidence: " + str(match_dict['property']))
                                 
-                                match_dict['property_confidence'] += 10
+                                if current_property_title in self.unimportant_properties:
+                                    if self.DEBUG:
+                                        print("Property title was not or abstractly supplied, and was in the unimportant_properties list, so adding with very low confidence: " + str(match_dict['property']))
+                                    match_dict['property_confidence'] += 5
+                                else:
+                                    if self.DEBUG:
+                                        print("Property title was not or abstractly supplied, so adding with low confidence: " + str(match_dict['property']))
+                                    if likely_readOnly:
+                                        match_dict['property_confidence'] += 9
+                                    else:
+                                        match_dict['property_confidence'] += 10
                                 result.append(match_dict.copy())
                                 continue
                         
