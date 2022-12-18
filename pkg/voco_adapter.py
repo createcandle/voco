@@ -1714,6 +1714,7 @@ class VocoAdapter(Adapter):
             #output_device_string = "plughw:" + str(self.current_card_id) + "," + str(self.current_device_id)
 
             environment = os.environ.copy()
+            environment["LD_LIBRARY_PATH"] = '{}:{}'.format(self.snips_path,self.arm_libs_path)
 			
             bt_connected = False
         
@@ -1895,6 +1896,7 @@ class VocoAdapter(Adapter):
                 if self.DEBUG:
                     print("-(...) Speaking locally: '" + voice_message + "' at: " + str(site_id))
                 environment = os.environ.copy()
+                environment["LD_LIBRARY_PATH"] = '{}:{}'.format(self.snips_path,self.arm_libs_path)
                 #FNULL = open(os.devnull, 'w')
             
                 # unmute if the audio output was muted.
@@ -1934,7 +1936,12 @@ class VocoAdapter(Adapter):
                     
                         # generate wave file
                         self.echo_process = subprocess.Popen(('echo', str(voice_message)), stdout=subprocess.PIPE)
+                        nanotts_start_command_array = [nanotts_path,'-l',str(os.path.join(self.snips_path,'lang')),'-v',str(self.voice_accent),'--volume',str(nanotts_volume),'--speed',str(self.voice_speed),'--pitch',str(self.voice_pitch),'-w','-o',self.response_wav]
                         self.nanotts_process = subprocess.run((nanotts_path,'-l',str(os.path.join(self.snips_path,'lang')),'-v',str(self.voice_accent),'--volume',str(nanotts_volume),'--speed',str(self.voice_speed),'--pitch',str(self.voice_pitch),'-w','-o',self.response_wav), capture_output=True, stdin=self.echo_process.stdout, env=environment)
+                        if self.DEBUG:
+                            print("NanoTTS start command: ")
+                            print("export LD_LIBRARY_PATH=" + '{}:{}'.format(self.snips_path,self.arm_libs_path) + ";echo " + str(voice_message) + " | " + str( ' '.join(nanotts_start_command_array) ) + "\n")
+                        
 
                         """
                         try:
@@ -2232,7 +2239,8 @@ class VocoAdapter(Adapter):
                 
                 if self.DEBUG:
                     print("--generated command = " + str(command))
-                    print("-- aka:\n " + str( ' '.join(command) ) + "\n")
+                    #print("-- aka:\n " + str( ' '.join(command) ) + "\n")
+                    print("-- aka:\nLD_LIBRARY_PATH=" +str(my_env["LD_LIBRARY_PATH"]) + " " + str( ' '.join(command) ) + "\n")
                     
                 try:
                     #if self.DEBUG:
