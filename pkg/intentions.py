@@ -112,7 +112,8 @@ def intent_set_timer(self, slots, intent_message):
         moment = None
     except Exception as ex:
         print("__intent_set_timer error: " + str(ex))
-
+        voice_message = "Sorry, an error occured"
+        
     try:
         # Get the target moment
         if slots['duration'] != None:
@@ -239,15 +240,20 @@ def intent_set_timer(self, slots, intent_message):
                 if matches != None:
                     if self.DEBUG:
                         print("set_timer: matches.group(1): " + str(matches.group(1)))
-                        print("set_timer: matches.group(1) len: " + str(len(matches.group(1))))
+                        if matches.group(1) != None:
+                            print("set_timer: matches.group(1) len: " + str(len(matches.group(1))))
                         print("set_timer: matches.group(2): " + str(matches.group(2)))
-                        print("set_timer: matches.group(2) len: " + str(len(matches.group(2))))
+                        if matches.group(2) != None:
+                            print("set_timer: matches.group(2) len: " + str(len(matches.group(2))))
                     #my_string.split("world",1)[1]
-                    matched_sentence = matches.group(2)
-                    if matched_sentence.endswith(" at"):
-                        matched_sentence = matched_sentence[:-3]
-                    self.add_action_time({"intent_message":intent_message,"moment":moment,"type":"reminder","reminder_text":matched_sentence,"slots":slots})
-                    voice_message = "Ok, I have set a reminder to " + str(matches.group(2))
+                    if matches.group(2) != None:
+                        matched_sentence = matches.group(2)
+                        if matched_sentence.endswith(" at"):
+                            matched_sentence = matched_sentence[:-3]
+                        self.add_action_time({"intent_message":intent_message,"moment":moment,"type":"reminder","reminder_text":matched_sentence,"slots":slots})
+                        voice_message = "Ok, I have set a reminder to " + str(matches.group(2))
+                    else:
+                        voice_message = "Sorry, I don't understand"
                 #else:
                     # TODO this could be a spot to start a dialogue and ask the user what the reminder is for.
                 #    self.add_action_time({"intent_message":intent_message,"moment":moment,"type":"timer","slots":slots})
@@ -270,7 +276,8 @@ def intent_set_timer(self, slots, intent_message):
         
     except Exception as ex:
         print("Error while dealing with timer intent: " + str(ex))
-
+        voice_message = "Sorry, an error occured"
+        
     return voice_message
 
 
@@ -341,7 +348,8 @@ def intent_get_timer_count(self, slots, intent_message):
         
     except Exception as ex:
         print("Error while dealing with get_timer_count intent: " + str(ex))
-    
+        voice_message = "Sorry, an error occured"
+        
     return voice_message
     #return "Sorry, there was an error. "
 
@@ -462,7 +470,8 @@ def intent_list_timers(self, slots, intent_message):
         
     except Exception as ex:
         print("Error while dealing with list_timers intent: " + str(ex))
-    
+        voice_message = "Sorry, an error occured"
+        
     return voice_message
     #return "Sorry, there was an error. "
 
@@ -627,6 +636,7 @@ def intent_stop_timer(self, slots, intent_message):
         
     except Exception as ex:
         print("Error in stop_timer: " + str(ex))
+        voice_message = "Sorry, an error occured"
     
     return voice_message
     #return "Sorry, there was an error. "
@@ -780,6 +790,7 @@ def intent_get_boolean(self, slots, intent_message, found_properties):
             
     except Exception as ex:
         print("Error in intent_get_boolean: " + str(ex))
+        voice_message = "Sorry, an error occured"
     
     return voice_message
     #return "Sorry, there was an error. "
@@ -1018,6 +1029,7 @@ def intent_get_value(self, slots, intent_message,found_properties):
     
     except Exception as ex:
         print("Error in intent_get_value: " + str(ex))
+        voice_message = "Sorry, an error occured"
 
     return voice_message
     #return "Sorry, there was an error. "
@@ -1359,6 +1371,8 @@ def intent_set_state(self, slots, intent_message, found_properties, delayed_acti
                             print("Checking if not already in desired state. " + str(bool(api_result[key])) + " =?= " + str(bool(desired_state)))
                         
                         if not double_time: # if this is a case where the user wants to change two things in the future, then don't toggle now. E.g. turn on the light from 5 until 6pm.
+                            if self.DEBUG:
+                                print("not double time")
                             # It's already in the desired state
                             if bool(api_result[key]) == desired_state:
                                 if self.DEBUG:
@@ -1456,6 +1470,7 @@ def intent_set_state(self, slots, intent_message, found_properties, delayed_acti
         
     except Exception as ex:
         print("Error in intent_set_state: " + str(ex))
+        voice_message = "Sorry, an error occured"
 
     return voice_message
     #return "Sorry, there was an error. "
@@ -1901,6 +1916,7 @@ def intent_set_value(self, slots, intent_message, found_properties, original_val
         
     except Exception as ex:
         print("Error in intent_set_value: " + str(ex))
+        voice_message = "Sorry, an error occured"
     
     #return "Sorry, there was an error. "
     return voice_message

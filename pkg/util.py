@@ -273,6 +273,7 @@ def clean_up_string_for_speaking(sentence): # Also used in thing scanner!
         sentence = sentence.replace('#', ' number ')
         sentence = sentence.replace('&', ' and ')
         sentence = sentence.replace('weather (','weather in ')
+        sentence = sentence.replace('co2 ','CO 2 ')
         sentence = sentence.replace('  ', ' ')
         sentence = sentence.replace('  ', ' ')
         sentence = sentence.replace('-', ' ')
