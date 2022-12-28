@@ -4,6 +4,5 @@ paho-mqtt
 requests
 aiofiles
 pycryptodome
-pycryptodomex
 python-olm
 matrix-nio[e2e]
