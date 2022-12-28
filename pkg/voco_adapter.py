@@ -154,12 +154,15 @@ class VocoAdapter(Adapter):
         self.allow_notifications_when_chat_is_disabled = False
         self.last_matrix_room_load_time = 0
         self.matrix_busy_registering = False
-        self.matrix_config = AsyncClientConfig(
-                max_limit_exceeded=0,
-                max_timeouts=0,
-                store_sync_tokens=True,
-                encryption_enabled=True,
-            )
+        try:
+            self.matrix_config = AsyncClientConfig(
+                    max_limit_exceeded=0,
+                    max_timeouts=0,
+                    store_sync_tokens=True,
+                    encryption_enabled=True,
+                )
+        except Exception as ex:
+            print("ERROR. Possibly ecnrpytion did not load: " + str(ex))
         self.send_chat_access_messages = False
             
         try:
