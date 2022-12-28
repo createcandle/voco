@@ -31,7 +31,7 @@ jobs:
 #          'linux-x64',
         ]
         pair: [
-          'python:3.7',
+#          'python:3.7',
           'python:3.9',
 #          'python:3.11',
         ]
@@ -42,9 +42,9 @@ jobs:
             host-os: 'ubuntu-latest'
 #          - platform: 'linux-x64'
 #            host-os: 'ubuntu-latest'
-          - pair: 'python:3.7'
-            language: 'python'
-            version: '3.7'
+#          - pair: 'python:3.7'
+#            language: 'python'
+#            version: '3.7'
           - pair: 'python:3.9'
             language: 'python'
             version: '3.9'
