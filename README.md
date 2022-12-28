@@ -1,5 +1,5 @@
 # Voco
-Privacy friendly voice control for the WebThings Gateway smart home control software.
+Privacy friendly, 100% local voice control in your home. For the Candle Controller / WebThings Gateway.
 
 For more details, visit:
 
