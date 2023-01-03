@@ -2198,7 +2198,7 @@ class VocoAdapter(Adapter):
                         print("This part of snips seems to already be runing? It was in snips_check_output: " + str(unique_command))
                     #continue
                     if unique_command not in unique_command_counts:
-                        unique_command_counts.push(unique_command)
+                        unique_command_counts.append(unique_command)
                     else:
                         if self.DEBUG:
                             print("Error: found a snips process running more than once")
