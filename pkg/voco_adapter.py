@@ -614,7 +614,7 @@ class VocoAdapter(Adapter):
         self.tts_path = os.path.join(self.addon_path,"tts")
         self.snips_path = os.path.join(self.addon_path,"snips" + self.bit_extension)
         self.models_path = os.path.join(self.addon_path,"models")
-        self.arm_libs_path = os.path.join(self.snips_path,"arm-linux-gnueabihf")
+        self.arm_libs_path = os.path.join(self.addon_path,"snips","arm-linux-gnueabihf")
         self.assistant_path = os.path.join(self.models_path,"assistant")
         self.work_path = os.path.join(self.user_profile['dataDir'],'voco','work')
         self.toml_path = os.path.join(self.models_path,"snips.toml")
@@ -1323,7 +1323,7 @@ class VocoAdapter(Adapter):
         try:
             if 'Hey Candle' in config:
                 if bool(config['Hey Candle']) == True:
-                    self.toml_path = os.path.join(self.snips_path,"candle.toml")
+                    self.toml_path = os.path.join(self.models_path,"candle.toml")
                     if self.DEBUG:
                         print("-Hey Candle is enabled")
                         
@@ -1969,7 +1969,7 @@ class VocoAdapter(Adapter):
                         self.nanotts_process = subprocess.run(nanotts_start_command_array, capture_output=True, stdin=self.echo_process.stdout, env=environment)
                         if self.DEBUG:
                             print("NanoTTS start command: ")
-                            print("export LD_LIBRARY_PATH=" + '{}:{}'.format(self.snips_path,self.arm_libs_path) + ";echo " + str(voice_message) + " | " + str( ' '.join(nanotts_start_command_array) ) + "\n")
+                            print("export LD_LIBRARY_PATH=" + '{}:{}'.format(self.tts_path,self.arm_libs_path) + ";echo " + str(voice_message) + " | " + str( ' '.join(nanotts_start_command_array) ) + "\n")
                         
 
                         """
@@ -2160,7 +2160,8 @@ class VocoAdapter(Adapter):
             #time.sleep(1.11)
         
             my_env = os.environ.copy()
-            my_env["LD_LIBRARY_PATH"] = '{}:{}'.format(self.snips_path,self.arm_libs_path)
+            #my_env["LD_LIBRARY_PATH"] = '{}:{}'.format(self.snips_path,self.arm_libs_path)
+            my_env["LD_LIBRARY_PATH"] = '{}'.format(self.snips_path)
 
             if self.DEBUG:
                 print("LD_LIBRARY_PATH= " + str(my_env["LD_LIBRARY_PATH"]))
