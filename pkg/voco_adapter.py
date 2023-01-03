@@ -128,12 +128,20 @@ class VocoAdapter(Adapter):
         Adapter.__init__(self, self.addon_name, self.addon_name, verbose=verbose)
         #print("Adapter ID = " + self.get_id())
 
+
+        # Check is system is 32 or 64 bit
+        self.bits = int(run_command('getconf LONG_BIT'))
+        print("system bits: " + str(self.bits))
+        
+        self.bit_extension = ""
+        if self.bits == 64:
+            self.bit_extension = "64"
+
         #print("self.manager_proxy = " + str(self.manager_proxy))
-
-
         #print("self.user_profile: " + str(self.user_profile))
 
-        os.environ["LD_LIBRARY_PATH"] = os.path.join(self.user_profile['addonsDir'],self.addon_name,'snips')
+        #os.environ["LD_LIBRARY_PATH"] = os.path.join(self.user_profile['addonsDir'],self.addon_name,'snips') + ":" + os.path.join(self.user_profile['addonsDir'],self.addon_name,'snips64')
+        os.environ["LD_LIBRARY_PATH"] = os.path.join(self.user_profile['addonsDir'],self.addon_name,'snips' + self.bit_extension)
 
 
         # MATRIX CHAT
@@ -190,7 +198,10 @@ class VocoAdapter(Adapter):
         
         self.bluetooth_persistence_file_path = os.path.join(self.user_profile['dataDir'], 'bluetoothpairing', 'persistence.json')
         
-         # Get network info
+        
+        
+        
+        # Get network info
         self.previous_hostname = "candle"
         self.hostname = "candle"
         self.ip_address = None
@@ -363,7 +374,6 @@ class VocoAdapter(Adapter):
                 print("all_thing_titles was not in persistent data, adding it now.")
                 self.persistent_data['all_thing_titles'] = []
                 self.save_to_persistent_data = True
-            
             
             
             # TODO TEMPORARY!    
@@ -601,18 +611,21 @@ class VocoAdapter(Adapter):
         
         # Some paths
         self.addon_path = os.path.join(self.user_profile['addonsDir'], self.addon_name)
-        self.snips_path = os.path.join(self.addon_path,"snips")
+        self.tts_path = os.path.join(self.addon_path,"tts")
+        self.snips_path = os.path.join(self.addon_path,"snips" + self.bit_extension)
+        self.models_path = os.path.join(self.addon_path,"models")
         self.arm_libs_path = os.path.join(self.snips_path,"arm-linux-gnueabihf")
-        self.assistant_path = os.path.join(self.snips_path,"assistant")
+        self.assistant_path = os.path.join(self.models_path,"assistant")
         self.work_path = os.path.join(self.user_profile['dataDir'],'voco','work')
-        self.toml_path = os.path.join(self.snips_path,"snips.toml")
+        self.toml_path = os.path.join(self.models_path,"snips.toml")
         self.hotword_path = os.path.join(self.snips_path,"snips-hotword")
-        self.mosquitto_path = os.path.join(self.snips_path,"mosquitto")
-        self.g2p_models_path = os.path.join(self.snips_path,"g2p-models")
-        self.hey_snips_path = os.path.join(self.snips_path,"assistant","custom_hotword")
-        self.hey_candle_path = os.path.join(self.snips_path,"hey_candle")
+        #self.mosquitto_path = os.path.join(self.snips_path,"mosquitto")
+        self.g2p_models_path = os.path.join(self.models_path,"g2p-models")
+        self.hey_snips_path = os.path.join(self.models_path,"assistant","custom_hotword")
+        self.hey_candle_path = os.path.join(self.models_path,"hey_candle")
         self.matrix_keys_store_path = os.path.join(self.matrix_data_store_path, "keys.txt")
         self.matrix_temp_ogg_file = os.path.join(os.sep, "tmp","matrix_audio_file.ogg")
+        
         self.start_of_input_sound = "start_of_input"
         self.end_of_input_sound = "end_of_input"
         self.alarm_sound = "alarm"
@@ -955,13 +968,8 @@ class VocoAdapter(Adapter):
         #    self.internal_clock_started = True
             # Start the internal clock which is used to handle timers. It also receives messages from the notifier.
 
-
-        
         time.sleep(1.14)
 
-        
-
-        
         # Set thing to connected state
         try:
             self.devices['voco'].connected = True # not really necessary?
@@ -981,8 +989,6 @@ class VocoAdapter(Adapter):
         
         #if self.persistent_data['listening'] == True:
 
-
-        
         self.matrix_display_name = "Candle"
         if self.hostname.lower() != "candle":
             self.matrix_display_name += " " + str(self.hostname)
@@ -1714,6 +1720,8 @@ class VocoAdapter(Adapter):
             output_device_string = "bluealsa:DEV=" + str(self.persistent_data['bluetooth_device_mac'])
         
         sound_command = ["aplay", str(file_path),"-D", output_device_string]
+        if self.DEBUG:
+            print("aplay command: " + str( ' '.join(sound_command) ))
         subprocess.run(sound_command, capture_output=True, shell=False, check=False, encoding=None, errors=None, text=None, env=None, universal_newlines=None)
         
         
@@ -1917,7 +1925,7 @@ class VocoAdapter(Adapter):
                 if self.DEBUG:
                     print("-(...) Speaking locally: '" + voice_message + "' at: " + str(site_id))
                 environment = os.environ.copy()
-                environment["LD_LIBRARY_PATH"] = '{}:{}'.format(self.snips_path,self.arm_libs_path)
+                environment["LD_LIBRARY_PATH"] = '{}:{}'.format(self.tts_path,self.arm_libs_path)
                 #FNULL = open(os.devnull, 'w')
             
                 # unmute if the audio output was muted.
@@ -1948,7 +1956,7 @@ class VocoAdapter(Adapter):
                         if self.DEBUG:
                             print("nanotts_volume = " + str(nanotts_volume))
     
-                        nanotts_path = str(os.path.join(self.snips_path,'nanotts'))
+                        nanotts_path = str(os.path.join(self.tts_path,'nanotts'))
     
                         #nanotts_command = [nanotts_path,'-l',str(os.path.join(self.snips_path,'lang')),'-v',str(self.voice_accent),'--volume',str(nanotts_volume),'--speed',str(self.voice_speed),'--pitch',str(self.voice_pitch),'-w','-o',self.response_wav,"-i",str(voice_message)]
                         #print(str(nanotts_command))
@@ -2111,6 +2119,7 @@ class VocoAdapter(Adapter):
         self.busy_starting_snips = True
         self.external_processes = []
         
+        self.stop_snips()
         
         try:
             
@@ -2150,8 +2159,6 @@ class VocoAdapter(Adapter):
         try:
             #time.sleep(1.11)
         
-            
-        
             my_env = os.environ.copy()
             my_env["LD_LIBRARY_PATH"] = '{}:{}'.format(self.snips_path,self.arm_libs_path)
 
@@ -2161,7 +2168,6 @@ class VocoAdapter(Adapter):
             #print("--my_env = " + str(my_env))
             
             snips_check_output = run_command('ps aux | grep snips')
-        
             
             local_mqtt_ip = "localhost:" + str(self.mqtt_port) # TODO: "localhost" is hardcoded here    
             if self.DEBUG:
@@ -2182,16 +2188,23 @@ class VocoAdapter(Adapter):
             extra_dialogue_manager_command = []
             clear_injections_command = []
             
+            unique_command_counts = []
+            
             # Start the snips parts
             for unique_command in commands:
                 
                 if unique_command in snips_check_output:
-                    pass
-                    #if self.DEBUG:
-                    #    print("This part of snips will not be (re)started since it seems to still be running ok: " + str(unique_command))
+                    if self.DEBUG:
+                        print("This part of snips seems to already be runing? It was in snips_check_output: " + str(unique_command))
                     #continue
+                    if unique_command not in unique_command_counts:
+                        unique_command_counts.push(unique_command)
+                    else:
+                        if self.DEBUG:
+                            print("Error: found a snips process running more than once")
+                    
                 
-                bin_path = os.path.join(self.snips_path,unique_command)
+                bin_path = os.path.join(self.snips_path,unique_command + self.bit_extension)
                 command = [bin_path,"-u",self.work_path,"-a",self.assistant_path,"-c",self.toml_path]
                 
                 if self.disable_security == False:
@@ -2216,8 +2229,6 @@ class VocoAdapter(Adapter):
                     ###    mqtt_ip = str(self.persistent_data['mqtt_server']) + ":" + str(self.mqtt_port)
                     ###else:
                     ###    mqtt_ip = "localhost:" + str(self.mqtt_port) # TODO: "localhost" is hardcoded here
-                    
-                    
                     
                     ###command = command + ["--mqtt",mqtt_ip,"--alsa_capture","plughw:" + str(self.capture_card_id) + "," + str(self.capture_device_id),"--disable-playback"]
                     command = command + ["--alsa_capture","plughw:" + str(self.capture_card_id) + "," + str(self.capture_device_id),"--disable-playback"]

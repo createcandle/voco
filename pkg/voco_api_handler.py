@@ -35,6 +35,7 @@ class VocoAPIHandler(APIHandler):
         self.adapter = adapter
         self.addon_name = 'voco-handler'
         self.DEBUG = self.adapter.DEBUG
+        self.DEBUG2 = self.adapter.DEBUG2
 
         if self.DEBUG:
             print("initial hostname: " + str(socket.gethostname()))
@@ -92,7 +93,7 @@ class VocoAPIHandler(APIHandler):
                 if request.path == '/init' or request.path == '/poll' or request.path == '/parse' or request.path == '/update' or request.path == '/ajax':
 
                     try:
-                        if self.DEBUG:
+                        if self.DEBUG2:
                             print("API handler is being called: " + str(request.path))
                     
                         
@@ -100,7 +101,7 @@ class VocoAPIHandler(APIHandler):
                         if request.path == '/ajax':
                             
                             action = str(request.body['action'])    
-                            if self.DEBUG:
+                            if self.DEBUG2:
                                 print("ajax action = " + str(action))
                             
                             
@@ -463,7 +464,7 @@ class VocoAPIHandler(APIHandler):
                     
                     
                         elif request.path == '/poll':
-                            if self.DEBUG:
+                            if self.DEBUG2:
                                 print("Getting the poll data")
                             
                             try:
