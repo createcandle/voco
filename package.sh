@@ -95,7 +95,7 @@ pip3 install -r requirements.txt -t lib --use-pep517 --no-binary :all: --prefix 
 rm -rf ./lib/cffi*
 
 # Put package together
-cp -r lib pkg LICENSE manifest.json *.py README.md snips sounds css js images views package/
+cp -r lib pkg LICENSE manifest.json *.py README.md snips snips64 models tts sounds css js images views package/
 find package -type f -name '*.pyc' -delete
 find package -type f -name '._*' -delete
 find package -type d -empty -delete
