@@ -33,7 +33,7 @@ sudo apt install -y cmake libasound2-dev libffi-dev
 #make test
 #make install
 
-
+rm -rf olm
 git clone "https://gitlab.matrix.org/matrix-org/olm.git"
 cd olm
  git checkout 3.2.4
