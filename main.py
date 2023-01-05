@@ -8,6 +8,9 @@ import sys
 import time
 
 sys.path.append(path.join(path.dirname(path.abspath(__file__)), 'lib'))
+if path.exists('/usr/lib/aarch64-linux-gnu'):
+    sys.path.append('/usr/lib/aarch64-linux-gnu')
+
 
 from pkg.voco_adapter import VocoAdapter  # noqa
 

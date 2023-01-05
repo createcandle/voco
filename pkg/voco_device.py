@@ -41,6 +41,19 @@ class VocoDevice(Device):
                             },
                             int(self.adapter.persistent_data['speaker_volume']) )
 
+            #volume_property = VocoProperty(self,"volume",)
+            self.properties["microphone_gain"] = VocoProperty(
+                            self,
+                            "microphone_gain",
+                            {
+                                'title': "Microphone gain",
+                                'type': 'integer',
+                                'minimum': 10,
+                                'maximum': 100,
+                                'unit':'percent'
+                            },
+                            int(self.adapter.persistent_data['microphone_gain']) )
+                            
             self.properties["status"] = VocoProperty(
                             self,
                             "status",
@@ -182,6 +195,10 @@ class VocoProperty(Property):
                 self.device.adapter.set_speaker_volume(int(value))
                 #self.update(value)
 
+            if self.title == 'microphone_gain':
+                self.device.adapter.set_microphone_gain(int(value))
+                #self.update(value)
+
             if self.title == 'feedback-sounds':
                 self.device.adapter.set_feedback_sounds(bool(value))
                 #self.update(value)
@@ -222,7 +239,7 @@ class VocoProperty(Property):
             self.set_cached_value(value)
             self.device.notify_property_changed(self)
             if self.device.adapter.DEBUG:
-                print("property updated to new value")
+                print("property updated to new value: " + str(value))
         else:
             if self.device.adapter.DEBUG:
-                print("property was already that value")
+                print("property was already that value: " + str(value))

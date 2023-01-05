@@ -377,6 +377,11 @@ class VocoAdapter(Adapter):
                 self.persistent_data['all_thing_titles'] = []
                 self.save_to_persistent_data = True
             
+            if 'microphone_gain' not in self.persistent_data: # the previously known thing titles in the entire local network (including satellites)
+                print("microphone_gain was not in persistent data, adding it now.")
+                self.persistent_data['microphone_gain'] = 80
+                self.save_to_persistent_data = True
+            
             
             # TODO TEMPORARY!    
             #self.persistent_data['main_controller_ip'] = '192.168.2.198'
@@ -483,6 +488,7 @@ class VocoAdapter(Adapter):
         self.capture_card_id = 1 # 0 is internal, 1 is usb.
         self.capture_device_id = 0 # Which channel
         self.capture_devices = []
+        self.microphone_gain = 80 # percentage
         
         # Speaker
         self.speaker = 'Auto'
@@ -883,16 +889,20 @@ class VocoAdapter(Adapter):
         except Exception as ex:
             if self.DEBUG:
                 print("error setting initial audio_output settings: " + str(ex))
-        
+            
             
         self.update_speaker_variables()
         
         
-        # Set the correct speaker volume
+        # Set the correct initial speaker and microphone gain volume
         try:
             if self.DEBUG:
                 print("Speaker volume from persistence was: " + str(self.persistent_data['speaker_volume']))
             self.set_speaker_volume(self.persistent_data['speaker_volume'])
+            
+            if self.DEBUG:
+                print("Microphone gain from persistence was: " + str(self.persistent_data['microphone_gain']))
+            self.set_microphone_gain(self.persistent_data['microphone_gain'])
         except Exception as ex:
             if self.DEBUG:
                 print("Could not set initial audio volume: " + str(ex))
@@ -1032,6 +1042,62 @@ class VocoAdapter(Adapter):
         self.start_matrix()
         
 
+    # set the microphone capture gain volume
+    def set_microphone_gain(self, volume=80):
+        
+        try:
+            
+            if self.DEBUG:
+                print("in set_microphone_gain. Volume: " + str(volume))
+            if int(volume) != self.persistent_data['microphone_gain']:
+                if self.DEBUG:
+                    print("will save changed microphone gain level to persistent data")
+                self.persistent_data['microphone_gain'] = int(volume)
+                self.save_to_persistent_data = True
+            
+            if self.missing_microphone == False:
+                if len(self.capture_devices) != 0:
+                    self.capture_card_id = 1 # 0 is internal, 1 is usb.
+                    self.capture_device_id = 0 # Which channel
+                    #os.system("sudo amixer cset numid=3 " + volume_percentage + "%")
+            
+                    microphone_controls = run_command('amixer -c ' + str(self.capture_card_id) + ' controls')
+                    for line in microphone_controls.split('\n'):
+                        if self.DEBUG:
+                            print("microphone controls line: " + str(line))
+                        if 'numid=' in line.lower() and 'capture volume' in line.lower():
+                            line = line.replace('numid=','')
+                            line_parts = line.split(',')
+                            mic_capture_volume_control = int(line_parts[0])
+                            if self.DEBUG:
+                                print("mic_capture_volume_control numid: " + str(mic_capture_volume_control))
+                            mic_gain_command = 'amixer -c ' + str(self.capture_card_id) + ' cset numid=' + str(mic_capture_volume_control) + ' ' + str(volume) + '%'
+                            if self.DEBUG:
+                                print("mic_gain_command: " + str(mic_gain_command))
+                            os.system(mic_gain_command)
+                        
+                    # TODO: set microphone capture level to a minimum
+                    #amixer -c 2 controls
+                    #amixer -c ' + self.capture_card_id + ' controls
+                
+                            
+                    """
+                    numid=2,iface=MIXER,name='Mic Capture Switch'
+                    numid=3,iface=MIXER,name='Mic Capture Volume'
+                    numid=4,iface=MIXER,name='Auto Gain Control'
+                    numid=1,iface=PCM,name='Capture Channel Map'
+                    """
+                
+                    #amixer -c ' + self.capture_card_id + ' cset numid=3 40%
+                else:
+                    if self.DEBUG:
+                        print("Warning, cannot set microphone gain, capture devices list was empty")
+            else:
+                if self.DEBUG:
+                    print("Warning, cannot set microphone gain, no microphone plugged in")
+        except Exception as ex:
+            if self.DEBUG:
+                print("Error in set_microphone_gain: " + str(ex))
 
 
     def update_speaker_variables(self):
@@ -1181,6 +1247,9 @@ class VocoAdapter(Adapter):
                 if self.DEBUG:
                     print("--Using microphone from config: " + str(config['Microphone']))
                 self.microphone = str(config['Microphone'])
+                
+                
+
                 
                 
                 """
@@ -1341,21 +1410,36 @@ class VocoAdapter(Adapter):
                 print("Error loading voice detection or radio mute preference from settings: " + str(ex))
       
       
+      
+        # Microphone gain
+        try:
+            if 'Microphone gain' in config:
+                if config['Microphone gain'] != None:
+                    if self.DEBUG:
+                        print("-Microphone gain is present in the config data.")
+                    self.microphone_gain = int(config['Microphone gain'])
+                
+        except Exception as ex:
+            print("Error while getting the microphone gain from settings: " + str(ex))
+        if self.DEBUG:
+            print("Microphone gain is now: " + str(self.microphone_gain))
+      
+      
         # System audio volume
         try:
             if 'System audio volume' in config:
                 if self.DEBUG:
                     print("Volume should be set to initial value of: " + str(int(config['System audio volume'])))
-                if int(config['System audio volume']) != None:
+                if config['System audio volume'] != None:
                     volume_percentage = int(config['System audio volume'])
-                    if volume_percentage == 0:
+                    if volume_percentage == 0: # not even possible anymore as the minimum is now set to 10 in manifest.json
                         if self.DEBUG:
                             print("Warning: volume level was set to 0. It will be changed to 90 instead.")
                         volume_percentage = 90
                     if self.DEBUG:
                         print("System audio volume percentage will be set to: " + str(volume_percentage))
                     if volume_percentage >= 0 and volume_percentage <= 100:
-                        os.system("sudo amixer cset numid=1 " + str(volume_percentage) + "%")
+                        os.system("sudo amixer cset numid=1 " + str(volume_percentage) + "%") # TODO: should this assume that the current selected mixer is the main output?
                         #os.system("sudo amixer cset numid=3 " + volume_percentage + "%")
                 if self.DEBUG:
                     print("-Raise the volume is present in the config data.")
