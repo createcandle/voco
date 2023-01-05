@@ -1,6 +1,8 @@
 #!/bin/bash -e
 
 echo "in package.sh"
+lscpu
+echo ""
 pwd
 which python3
 which pip3
