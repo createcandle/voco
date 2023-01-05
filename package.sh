@@ -104,6 +104,7 @@ find package -type d -empty -delete
 
 # set executable permissions
 chmod +x package/tts/nanotts
+chmod +x package/tts/nanotts64
 chmod +x package/tts/speak.sh
 chmod +x package/snips/snips-*
 chmod +x package/snips64/snips*64
