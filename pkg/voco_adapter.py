@@ -10,6 +10,8 @@ import os
 #from os import path
 import sys
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'lib'))
+if os.path.exists('/usr/lib/aarch64-linux-gnu'):
+    sys.path.append('/usr/lib/aarch64-linux-gnu')
 #try:
 #    sys.path.append(os.path.join(os.sep,'home','pi','.webthings','addons','voco','lib'))
 #except:
@@ -170,7 +172,7 @@ class VocoAdapter(Adapter):
                     encryption_enabled=True,
                 )
         except Exception as ex:
-            print("ERROR. Possibly ecnrpytion did not load: " + str(ex))
+            print("ERROR. Possibly encryption did not load: " + str(ex))
         self.send_chat_access_messages = False
             
         try:
@@ -611,9 +613,12 @@ class VocoAdapter(Adapter):
         
         # Some paths
         self.addon_path = os.path.join(self.user_profile['addonsDir'], self.addon_name)
-        self.tts_path = os.path.join(self.addon_path,"tts")
+        self.tts_path = os.path.join(self.addon_path,"tts" + self.bit_extension)
+        self.nanotts_path = str(os.path.join(self.tts_path,'nanotts' + self.bit_extension))
+        
         self.snips_path = os.path.join(self.addon_path,"snips" + self.bit_extension)
         self.models_path = os.path.join(self.addon_path,"models")
+        self.lang_path = os.path.join(self.models_path,"lang") # this is actually used by nanotts, so may be in a strange location at the moment.
         self.arm_libs_path = os.path.join(self.addon_path,"snips","arm-linux-gnueabihf")
         self.assistant_path = os.path.join(self.models_path,"assistant")
         self.work_path = os.path.join(self.user_profile['dataDir'],'voco','work')
@@ -1956,7 +1961,7 @@ class VocoAdapter(Adapter):
                         if self.DEBUG:
                             print("nanotts_volume = " + str(nanotts_volume))
     
-                        nanotts_path = str(os.path.join(self.tts_path,'nanotts'))
+                        
     
                         #nanotts_command = [nanotts_path,'-l',str(os.path.join(self.snips_path,'lang')),'-v',str(self.voice_accent),'--volume',str(nanotts_volume),'--speed',str(self.voice_speed),'--pitch',str(self.voice_pitch),'-w','-o',self.response_wav,"-i",str(voice_message)]
                         #print(str(nanotts_command))
@@ -1965,7 +1970,7 @@ class VocoAdapter(Adapter):
                     
                         # generate wave file
                         self.echo_process = subprocess.Popen(('echo', str(voice_message)), stdout=subprocess.PIPE)
-                        nanotts_start_command_array = [nanotts_path,'-l',str(os.path.join(self.snips_path,'lang')),'-v',str(self.voice_accent),'--volume',str(nanotts_volume),'--speed',str(self.voice_speed),'--pitch',str(self.voice_pitch),'-w','-o',self.response_wav]
+                        nanotts_start_command_array = [self.nanotts_path,'-l',str(os.path.join(self.lang_path)),'-v',str(self.voice_accent),'--volume',str(nanotts_volume),'--speed',str(self.voice_speed),'--pitch',str(self.voice_pitch),'-w','-o',self.response_wav]
                         self.nanotts_process = subprocess.run(nanotts_start_command_array, capture_output=True, stdin=self.echo_process.stdout, env=environment)
                         if self.DEBUG:
                             print("NanoTTS start command: ")
