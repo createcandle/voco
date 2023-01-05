@@ -102,6 +102,12 @@ find package -type f -name '*.pyc' -delete
 find package -type f -name '._*' -delete
 find package -type d -empty -delete
 
+# set executable permissions
+chmod +x package/tts/nanotts
+chmod +x package/tts/speak.sh
+chmod +x package/snips/snips-*
+chmod +x package/snips64/snips*64
+
 # Generate checksums
 echo "generating checksums"
 cd package
