@@ -218,15 +218,12 @@ class VocoProperty(Property):
             
             self.update(value)
                 
-            
-            
-                
         except Exception as ex:
-            print("set_value error: " + str(ex))
+            if self.device.adapter.DEBUG:
+                print("set_value error: " + str(ex))
 
 
-    def update(self, value):         
-        
+    def update(self, value):
         
         if value != self.value:
             if self.device.adapter.DEBUG:

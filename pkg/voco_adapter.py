@@ -488,7 +488,6 @@ class VocoAdapter(Adapter):
         self.capture_card_id = 1 # 0 is internal, 1 is usb.
         self.capture_device_id = 0 # Which channel
         self.capture_devices = []
-        self.microphone_gain = 80 # percentage
         
         # Speaker
         self.speaker = 'Auto'
@@ -1408,21 +1407,6 @@ class VocoAdapter(Adapter):
         except Exception as ex:
             if self.DEBUG:
                 print("Error loading voice detection or radio mute preference from settings: " + str(ex))
-      
-      
-      
-        # Microphone gain
-        try:
-            if 'Microphone gain' in config:
-                if config['Microphone gain'] != None:
-                    if self.DEBUG:
-                        print("-Microphone gain is present in the config data.")
-                    self.microphone_gain = int(config['Microphone gain'])
-                
-        except Exception as ex:
-            print("Error while getting the microphone gain from settings: " + str(ex))
-        if self.DEBUG:
-            print("Microphone gain is now: " + str(self.microphone_gain))
       
       
         # System audio volume
