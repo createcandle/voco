@@ -166,8 +166,8 @@
         "System audio volume": {
           "description": "Advanced. When provided, the system volume will be set to this volume percentage level when Voco starts. This is separate from Voco's own volume, which is relative to the system volume. Can be between 0 and 100 percent. The default is 90.",
           "type": "integer",
-		  "minimum": 10,
-		  "maximum": 100
+          "minimum": 10,
+          "maximum": 100
         },
         "Sound detection": {
           "description": "When enabled, an extra switch will be created in the voice control thing. That switch will be turned on for 10 seconds whenever speech or sound is detected.",
@@ -211,12 +211,12 @@
     }
   },
   "short_name": "Voco",
-  "version": "4.1.1",
+  "version": "4.1.2",
   "web_accessible_resources": [
     "css/*.css",
     "images/*.svg",
-	"images/*.png",
-	"images/*.gif",
+    "images/*.png",
+    "images/*.gif",
     "js/*.js",
     "views/*.html"
   ]
