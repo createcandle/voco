@@ -624,7 +624,7 @@ class VocoAdapter(Adapter):
         self.snips_path = os.path.join(self.addon_path,"snips" + self.bit_extension)
         self.models_path = os.path.join(self.addon_path,"models")
         self.lang_path = os.path.join(self.models_path,"lang") # this is actually used by nanotts, so may be in a strange location at the moment.
-        self.arm_libs_path = os.path.join(self.addon_path,"snips","arm-linux-gnueabihf")
+        self.arm_libs_path = os.path.join(self.addon_path,"snips","arm-linux-gnueabihf") # arm32 #TODO: in some places this is still loaded as an environment path in the 64 bit version. Should check if that causes issues.
         self.assistant_path = os.path.join(self.models_path,"assistant")
         self.work_path = os.path.join(self.user_profile['dataDir'],'voco','work')
         self.toml_path = os.path.join(self.models_path,"snips.toml")
@@ -4156,7 +4156,7 @@ class VocoAdapter(Adapter):
 
 
             # remove the 'hack' that indicated the voice analysis actually started from a text input.
-            if 'siteid' in intent_message:
+            if 'siteId' in intent_message:
                 if intent_message['siteId'] != None:
                     if intent_message['siteId'].startswith('text-'):
                         if self.DEBUG:
@@ -4185,7 +4185,7 @@ class VocoAdapter(Adapter):
             
             
             # If a voice activation was picked up on this device, but it shouldn't be listening, then stop handling this intent. If it's a textual command or the voice command came from another site, then continue.
-            if 'siteid' in intent_message:
+            if 'siteId' in intent_message:
                 if intent_message['siteId'] != None:
                     if intent_message['siteId'] == self.persistent_data['site_id'] and self.persistent_data['listening'] == False and intent_message['origin'] == 'voice':
                         if self.DEBUG:
@@ -4663,7 +4663,7 @@ class VocoAdapter(Adapter):
 
 
                 # remove the 'hack' that indicated the voice analysis actually started from a text input.
-                if 'siteid' in intent_message:
+                if 'siteId' in intent_message:
                     if intent_message['siteId'] != None:
                         
                         if intent_message['siteId'].startswith('text-'):
@@ -5227,13 +5227,14 @@ class VocoAdapter(Adapter):
                 if 'unknownword' in sentence:
                     if self.DEBUG:
                         print("spotted unknownword in sentence")
-                        if self.DEBUG:
-                            self.speak("spotted unknown word",intent=intent_message)
+                        self.speak("debug: spotted unknown word",intent=intent_message)
                         #if self.persistent_data['is_satellite'] == False:
                     if this_is_origin_site:
                         if not self.DEBUG:
                             self.speak("I didn't quite get that",intent=intent_message)
-                    
+                    else:
+                        if self.DEBUG:
+                            print("this is not origin site. Aborting.")
                     return
 
 
@@ -5356,8 +5357,19 @@ class VocoAdapter(Adapter):
                         print("Applying ugly heuristic to allow for value decrease ('load the' detected at start of sentence)")
                     incoming_intent = 'set_value'
                     
+                elif (sentence.startswith('turn on ') or sentence.startswith('turn off ')) and incoming_intent == 'get_value':
+                    if self.DEBUG:
+                        print("Sentence starts with 'turn on' or 'turn off', so the intent cannot be 'get_value'. Changing to 'set_value' instead... ") # TODO: this might not be a good change
+                    incoming_intent = 'set_value'
+                elif (sentence.startswith('turn on ') or sentence.startswith('turn off ')) and incoming_intent == 'get_boolean':
+                    if self.DEBUG:
+                        print("Sentence starts with 'turn on' or 'turn off', so the intent cannot be 'get_boolean'. Changing to 'set_state' instead... ") # TODO: this might not be a good change
+                    incoming_intent = 'set_state'
                     
                 if incoming_intent == 'set_timer' and word_count < 4:
+                    if self.DEBUG:
+                        print("Error, not enough words for set timer")
+                        return "Debug: Not enough words for set timer"
                     return ""
                     
                 if (incoming_intent == 'get_value' or incoming_intent == 'set_value' or incoming_intent == 'set_state' or incoming_intent == 'get_boolean') and slots['thing'] == None and slots['property'] == None and slots['boolean'] == None and slots['number'] == None and slots['percentage'] == None and slots['string'] == None:
@@ -5365,8 +5377,12 @@ class VocoAdapter(Adapter):
                         print("pretty much everything was missing.")
                     
                     if word_count < 4:
+                        if self.DEBUG:
+                            print("thing scanner sanite check: pretty much everything was missing, and not enough words")
+                            return "Debug: Not enough words"
                         return ""
                     
+                    # Very hacky way of adding "increase volume" and "decrease volume", which is often misheard since the model wasn't designed to handle it.
                     if incoming_intent == 'set_value' and (sentence.startswith('increase ') or sentence.startswith('decrease ') or sentence.startswith('degrees ') or sentence.startswith('lower ') or sentence.startswith('load ') or sentence.startswith('raise ')):
                         relative_change_word = sentence.split()[0]
                         if self.DEBUG:
@@ -5511,7 +5527,7 @@ class VocoAdapter(Adapter):
                                 print("using alternative route to set state")
                     
 
-                    if incoming_intent == 'set_value' and slots['color'] is None and slots['number'] is None and slots['percentage'] is None and slots['string'] is None:
+                    if incoming_intent == 'set_value' and slots['color'] == None and slots['number'] == None and slots['percentage'] == None and slots['string'] == None:
                         if slots['boolean'] != None:
                             if self.DEBUG:
                                 print("Error, intent was set_value but no values were present. However, a boolean value was present. trying alternative if possible.")
@@ -5635,7 +5651,7 @@ class VocoAdapter(Adapter):
                         found_thing_on_satellite = True
                     else:
                         if self.DEBUG:
-                            print("Vague match, so NOT setting found_thing_on_satellite to True (so voice_message will NOT be spoken on main controller)")
+                            print("Vague match, so NOT setting found_thing_on_satellite to True") # TODO: eh?
                 
                     # Check if the satellite should handle this thing.
                     if self.DEBUG:
@@ -6314,6 +6330,21 @@ class VocoAdapter(Adapter):
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #
 # THING SCANNER
 #
@@ -6356,8 +6387,6 @@ class VocoAdapter(Adapter):
         #
         #  PRE CHECKING AND FIXING
         #
-        
-        
         
         
         all_thing_titles_list_lowercase = [] # all existing property titles in a list, all lowercase for easy comparison
@@ -6450,7 +6479,7 @@ class VocoAdapter(Adapter):
                                                         slots['thing'] = word
                                                         slots['property'] = word2
                                                         if self.DEBUG:
-                                                            print("---> managed to split a thing string into thing and property strings * * *")
+                                                            print("---> managed to split a thing string into thing and property strings")
                                                         break
             
                     
@@ -6477,7 +6506,7 @@ class VocoAdapter(Adapter):
         
         # Check if the property name is even possible. It not, set it to None.
         # TODO: is the property title checked for validity three times?? This also leaves no room for fuzzing. And how does this work with satellites? Should voco check if a property is present on a satellite?
-        dubious_property_title = False
+        only_allow_one_thing_scanner_result = False
         if slots['property'] != None:
             if self.DEBUG:
                 print("self.persistent_data['property_titles'] all lowercase for comparison??" + str(self.persistent_data['property_titles']))
@@ -6489,14 +6518,30 @@ class VocoAdapter(Adapter):
                 if slots['property'].lower() in self.generic_properties and slots['thing'] != None: # "what are the levels of the climate sensor" should still return multiple properties
                     pass
                 elif slots['thing'] != None and self.persistent_data['is_satellite'] == False:
-                    if self.DEBUG:
-                        print("setting invalid property name to None: " + str(slots['property']))
-                        print("  ...because it was not in all_property_titles_list_lowercase: " + str(all_property_titles_list_lowercase))
-                    slots['property'] = None
-                    dubious_property_title = True
+                    
+                    found_partial_property_title_match = False
+                    if len(slots['property']) > 3:
+                        for check_prop_title in all_property_titles_list_lowercase:
+                            if slots['property'].lower() in check_prop_title:
+                                found_partial_property_title_match = True
+                                if self.DEBUG:
+                                    print("Found a partial property title match between: " + str(slots['property'].lower()) + ", and: " + str(check_prop_title))
+                                break
+                    
+                    if found_partial_property_title_match == False:
+                        if self.DEBUG:
+                            print("setting invalid property name to None: " + str(slots['property']))
+                            print("  ...because it was not in all_property_titles_list_lowercase: " + str(all_property_titles_list_lowercase))
+                        slots['property'] = None
+                        only_allow_one_thing_scanner_result = True # only allow the result to only be a single property, or bust
+                        # remember that we set the property to None. Now the outcome of the scanner is only valid if there is one result, and there is no ambiguity. No risk of toggling the wrong property.
+                    else:
+                        if intent == 'set_state' or intent == 'set_value':
+                            if self.DEBUG:
+                                print("partial property match with the intent to set a state or value, so result must be a single property")
+                            only_allow_one_thing_scanner_result = True # only allow the result to only be a single property, or bust
+                            
             
-            # remember that we set the property to None. Now the outcome of the scanner is only valid if there is one result, and there is no ambiguity. No risk of toggling the wrong property.
-
 
         target_thing_title = slots['thing'] # TODO: Snips seems to already provide lower case names, so no need to lower this in case of a valid string.. right?
         target_property_title = slots['property']
@@ -6526,14 +6571,13 @@ class VocoAdapter(Adapter):
         
         result = [] # This will hold all found matches
 
-        if target_thing_title is None:
+        if target_thing_title == None:
             if self.DEBUG:
                 print("No thing title supplied. Will try to find matching properties in all devices.")
         else:
             target_thing_title = str(target_thing_title).lower()
             if self.DEBUG:
                 print("-> target thing title is: " + str(target_thing_title))
-        
         
         
         thing_must_have_capability = None
@@ -6549,10 +6593,10 @@ class VocoAdapter(Adapter):
                 thing_must_have_capability = 'Light'
                 thing_must_have_selected_capability = 'Light'
                 property_must_have_capability = 'OnOffProperty'
-                dubious_property_title = False
+                only_allow_one_thing_scanner_result = False
             
         
-        if target_property_title is None:
+        if target_property_title == None:
             if self.DEBUG:
                 print("-> No property title provided. Will try to get relevant properties.")
         else:
@@ -6564,17 +6608,21 @@ class VocoAdapter(Adapter):
             if self.DEBUG:
                 print("-> target space is: " + str(target_space))
         
-        probable_thing_title_confidence = 0
+        #probable_thing_title_confidence = 0
         
         try:
-            if self.things == None or self.things == []:
-                print("Error, the things dictionary was empty. Please provice an API key in the add-on setting (or add some things).")
+            if self.things == None:
+                print('ERROR, things was None')
+                return []
+            
+            if  len(self.things) == 0:
+                print("ERROR, the things dictionary was empty. perhaps the API key was missing?")
                 #self.speak("You don't seem to have any things. Please make sure you have added an authorization token. ",intent={'siteId':self.persistent_data['site_id']})
-                return
+                return []
             
             for thing in self.things:
                 
-
+                probable_thing_title_confidence = 0
                 # TITLE
                 
                  #and slots['boolean'] != None
@@ -6688,7 +6736,7 @@ class VocoAdapter(Adapter):
                             
                     elif thing_is_known:
                         #if self.DEBUG:
-                        #    print('exact thing match should be possible, but this was not it')
+                        #    print("exact thing match should be possible, so skipping the current one: " + str(current_thing_title))
                         continue
                     
                     else:
@@ -6724,7 +6772,7 @@ class VocoAdapter(Adapter):
                             if len(current_thing_title) / len(target_thing_title) < 2:
                                 # The strings mostly start the same, so this might be a match.
                                 if self.DEBUG:
-                                    print("titles started the same, and length wasn't too diferent. Setting confidence for this thing to +25")
+                                    print("titles started the same, and length wasn't too different. Setting confidence for this thing to +25")
                                 probable_thing_title = current_thing_title
                                 probable_thing_title_confidence += 25
                             else:
@@ -6758,7 +6806,8 @@ class VocoAdapter(Adapter):
                             """
                         
                 except Exception as ex:
-                    print("Error while trying to match title: " + str(ex))
+                    if self.DEBUG:
+                        print("Thing scanner: ERROR while trying to match title: " + str(ex))
 
 
 
@@ -6768,14 +6817,13 @@ class VocoAdapter(Adapter):
                 # PROPERTIES
                 
                 
-                exact_property_title_match = None
+                exact_property_title_match = None # TODO: overlaps with only_allow_one_thing_scanner_result, which also indicates a no-match of only partial match with the property title
                 all_property_names_lowercase = []
                 
                 try:
-                    #if self.DEBUG:
-                    #    print("target_property_title: " + str(target_property_title))
+                    if self.DEBUG:
+                        print("target_property_title: " + str(target_property_title))
                     
-                     # holds all the properties titles of this thing
                     
                     # Pre-check if there is an exact property title match. If there is, then only get that. Also populate the list of property titles
                     
@@ -6798,9 +6846,13 @@ class VocoAdapter(Adapter):
                             # Currently the property discovery here has gotten more strict. If a property title is defined, it must be a perfect match. 
                             # In the old way of doing it (which is still in the code below), a fuzzy match was also ok. Perhaps the old way was better?
                             
-                            #if self.DEBUG:
-                            #    print("NO exact property title match spotted. Skipping thing.")
-                            continue
+                            if self.DEBUG:
+                                print("NO exact property title match spotted.")
+                                
+                            if probable_thing_title_confidence < 80:
+                                if self.DEBUG:
+                                    print("Thing title was set, as was a property title, but this thing has less than 80% confidence of being the correct thing, as contains no perfect property title match, so skipping all its properties")
+                                continue
                         
                     #if slots['property'] != None and exact_property_title_match == False:
                     #    print("NO exact property title match spotted. Skipping thing.")
@@ -6819,9 +6871,9 @@ class VocoAdapter(Adapter):
                             #    print(" ")
                             #    print(" exact property title match")
                             
-                        #if self.DEBUG:
-                        #    print("thing_property_key = " + str(thing_property_key))
-                        #print("check_things__loop__ Property details: " + str(thing['properties'][thing_property_key]))
+                        if self.DEBUG:
+                            print("thing_property_key = " + str(thing_property_key))
+                        print("check_things__loop__ Property details: " + str(thing['properties'][thing_property_key]))
 
                         #print("_")
                         if slots['number'] != None:
@@ -6881,6 +6933,7 @@ class VocoAdapter(Adapter):
                                 "readOnly": None,
                                 "@type": None,
                                 "enum": None,
+                                "enum_off_opposite": None, # Only gets filled in rare circumstances: if the property is vaguely defined, then when the user says "turn on the fireplace", it could necessitate to switch an enum to the opposite of "off". E.g. "heat". This is only allowed if the enum has only two values, and one of them is off.
                                 'unit':None,
                                 "options": None, #thing['properties'][thing_property_key],
                                 "property_url": None
@@ -6913,6 +6966,8 @@ class VocoAdapter(Adapter):
                         try:
                             if '@type' in thing['properties'][thing_property_key]:
                                 if thing['properties'][thing_property_key]['@type'] != None:
+                                    if self.DEBUG:
+                                        print("this property has a an @type, so it's probably important. Confidence +11.")
                                     match_dict['property_confidence'] += 11
                                     match_dict['@type'] = thing['properties'][thing_property_key]['@type'] # Looking for things like "OnOffProperty"
                         except Exception as ex:
@@ -7000,13 +7055,15 @@ class VocoAdapter(Adapter):
                             result.append(match_dict.copy())
                             if self.DEBUG:
                                 print("added perfect property match to results")
-                            continue
+                            continue # TODO: jumping out this early means some data is not in the match dict, such as the enum_off_opposite. This means you currently can't say "turn on the [thing title] [property title]" for an enum without also being very precise about the intended string.
                             
 
                        
                        
                        
                         try:
+                            
+                            # VAGUE PROPERTY
                             
                             # Vaguely defined property, which means each property will get a likelyhood score.
                             if target_property_title == None:
@@ -7015,9 +7072,10 @@ class VocoAdapter(Adapter):
                                     print("thing_property_key: " + str(thing_property_key))
                                     print("property title: " + str(thing['properties'][thing_property_key]['title']))
                                 # TODO: compare this to self.unimportant_properties list?
-                                if str(thing['properties'][thing_property_key]['title']) in self.unimportant_properties:
+                                if str(thing['properties'][thing_property_key]['title']).lower() in self.unimportant_properties:
                                     if self.DEBUG:
-                                        print("TODO: skip this title as property title is undefined, and the one we're looking at is umimportant")
+                                        print("skiping this unimportant property because property title is undefined, and the one we're looking at is unimportant: " + str(thing['properties'][thing_property_key]['title']).lower())
+                                    continue
                                 
                                 if thing_property_key == 'data_collection' or thing_property_key == 'data_transmission' or thing_property_key == 'data_blur' or thing_property_key == 'linkquality':
                                     # If the data collection property isn't called explicitly, ignore it. It's never the primary property people want to change through a vague command.
@@ -7032,9 +7090,15 @@ class VocoAdapter(Adapter):
                                     match_dict['property_confidence'] -= 20
                             
                             
+                            # partial property title match increases confidence score
+                            if target_property_title != None:
+                                if len(target_property_title) > 3 and target_property_title in current_property_title.lower() and target_property_title.lower() != current_property_title.lower():
+                                    if self.DEBUG:
+                                        print("the provided property title was a part of this property's title: " + str(target_property_title) + ", was in: " + str(current_property_title))
+                                    match_dict['property_confidence'] += 10
+                                    
                                 
-                            
-                            
+                            # giving enum properties a confidence score
                             if 'enum' in thing['properties'][thing_property_key]:
                                 if self.DEBUG:
                                     print("this property is an enum: " + str(thing_property_key))
@@ -7055,12 +7119,15 @@ class VocoAdapter(Adapter):
                                     comparable_enum_strings_list.append( make_comparable(enum_string) )
                                 
                                 
-                                if intent == 'get_boolean' and likely_readOnly == False and len(thing['properties'][thing_property_key]['enum']) == 2:
-                                    if self.DEBUG:
-                                        print("giving non-read-only enum with two options an extra 11 point confidence boost: " + str(thing_property_key))
-                                    if match_dict['property_confidence'] > 0:
+                                if (intent == 'get_boolean' or intent == 'set_state') and likely_readOnly == False and len(thing['properties'][thing_property_key]['enum']) == 2:
+                                    
+                                    if match_dict['property_confidence'] >= 0:
+                                        if self.DEBUG:
+                                            print("giving non-read-only enum with two options a +11 confidence boost: " + str(thing_property_key))
                                         match_dict['property_confidence'] += 11
-                                
+                                    else:
+                                        if self.DEBUG:
+                                            print("Would give non-read-only enum with two options a +11 confidence boost, but it already had a confidence below zero: " + str(thing_property_key))
                                 
                                 if slots['number'] != None:
                                     if make_comparable(slots['number']) not in comparable_enum_strings_list:
@@ -7078,9 +7145,16 @@ class VocoAdapter(Adapter):
                                             print("string slot was not spotted in the enum list: " + str(make_comparable(slots['string'])) + ", in: " + str(comparable_enum_strings_list))
                                         continue
                                     else:
-                                        match_dict['property_confidence'] += 30
-                                        if self.DEBUG:
-                                            print("Found a match of the string with enum! list: " + str(slots['string']))
+                                        if make_comparable(slots['string']) not in self.opposites:
+                                            match_dict['property_confidence'] += 50
+                                            if self.DEBUG:
+                                                print("Found a match of the string with enum! It's NOT a generic opposite word. Confidence +50. list: " + str(slots['string']))
+                                        else:
+                                            match_dict['property_confidence'] += 30
+                                            if self.DEBUG:
+                                                print("Found a match of the string with enum! It's a generic opposite word though (on,off,etc). Confidence +30. list: " + str(slots['string']))
+
+                                        
                                 
                                 if slots['boolean'] != None:
                                     if self.DEBUG:
@@ -7116,8 +7190,10 @@ class VocoAdapter(Adapter):
                                                 
                                                 if intent == 'set_state' and likely_readOnly == True:
                                                     if self.DEBUG:
-                                                        print("But wait, the intent is to set state, and this is read-only.")
+                                                        print("But wait, the intent is to set state, and this property is read-only. Skip.")
                                                 else:
+                                                    if self.DEBUG:
+                                                        print("Found correct enum string, and sanity checking did not block, so giving this a high confidence. +72")
                                                     match_dict['property_confidence'] += 72
                                                     slots['boolean'] = thing['properties'][thing_property_key]['enum'][enum_index]
                                                     result.append(match_dict.copy())
@@ -7125,11 +7201,35 @@ class VocoAdapter(Adapter):
                                                 
                                             elif boolean_related:
                                                 if self.DEBUG:
-                                                    print("looking for a vaguely defined boolean property, but this enum seems unlikely to be that boolean, since 'state' is already a property of this thing")
-                                                # TODO: not happy about this 'fix'.
+                                                    print("looking for a vaguely defined boolean property, but this enum seems unlikely to be that boolean, since 'state' is already an actual property of this thing")
+                                                # TODO: not happy about this 'fix'. Use confidence instead?
                                                 continue
                                 
-                                
+                                    else:
+                                        if target_property_title == None:
+                                            
+                                            # the boolean was not found in the enum. Doing one final check to see if the "strange" off-opposite might apply. 
+                                            # E.g. for a thermostat with an enum "off,heat", that heat value could be seen as "on"
+                                            # TODO: could also implement the same for a strange on-oppsite
+                                            
+                                            if intent == 'set_state' and comparable_boolean_slot_string == 'on' and 'off' in comparable_enum_strings_list and len(comparable_enum_strings_list) == 2:
+                                                if comparable_enum_strings_list[0] == 'off':
+                                                    match_dict['enum_off_opposite'] = str(comparable_enum_strings_list[1])
+                                                elif comparable_enum_strings_list[1] == 'off':
+                                                    match_dict['enum_off_opposite'] = str(comparable_enum_strings_list[0])
+                                                if self.DEBUG:
+                                                    print("strange off opposite was likely. enum_off_opposite is now: " + str(match_dict['enum_off_opposite']))
+                                                match_dict['property_confidence'] += 1
+                                                
+                                            elif intent == 'get_boolean' and 'off' in comparable_enum_strings_list and len(comparable_enum_strings_list) == 2:
+                                                if self.DEBUG:
+                                                    print("- confidence +1 because 'off' was spotted in enum with length 2")
+                                                match_dict['property_confidence'] += 1
+                                            else:
+                                                if self.DEBUG:
+                                                    print("this enum is probably not the intended property, since the desired value is not in the list. confidence -1")
+                                                match_dict['property_confidence'] -= 1
+                                            #match_dict['property_confidence'] -= 10
                                 
                                         
                             #else:
@@ -7245,7 +7345,7 @@ class VocoAdapter(Adapter):
                                     match_dict['property_confidence'] += 5
                                 else:
                                     if self.DEBUG:
-                                        print("Property title was not or abstractly supplied, so adding with low confidence: " + str(match_dict['property']))
+                                        print("Property title was not or abstractly supplied, so giving only +9 (read-only) or +10 (writable) confidence: " + str(match_dict['property']))
                                     if likely_readOnly:
                                         match_dict['property_confidence'] += 9
                                     else:
@@ -7393,7 +7493,7 @@ class VocoAdapter(Adapter):
             try:
                 if result != None:
                     if self.DEBUG:
-                        print("full thing scan result: " + str(json.dumps(result, indent=4)))
+                        print("will prune this full thing scan result: " + str(json.dumps(result, indent=4)))
                     # If the thing title matches and we found at least one property, then we're done.
                     #if probable_thing_title != None and probable_thing_title_confidence > 80 and len(result.keys()) == 1:
                     
@@ -7599,15 +7699,18 @@ class VocoAdapter(Adapter):
         #    print("final found properties: " + str(json.dumps(result, indent=4)))
               
         # if the originally provided property title did not exist, we may only return an outcome is the search still only resulted in a single likely property.
-        if len(result) > 1 and dubious_property_title: # one specific property was intended, so only one result is allowed.
+        if len(result) > 1 and only_allow_one_thing_scanner_result: # one specific property was intended, so only one result is allowed.
             if self.DEBUG:
-                print("dubious_property_title was spotted (exists on no thing), so only one result is allowed. Yet there were multiple results.")
+                print("only_allow_one_thing_scanner_result was spotted (property title was not a perfect match), so only one result is allowed. Yet there were multiple results.")
             
-            if self.DEBUG:
-                print("doing a hardcore reduction to property with the highest confidence match")
+            
             if best_matched_found_property != None:
+                if self.DEBUG:
+                    print("- doing a hardcore reduction to property with the highest confidence match because property title was not a perfect match")
                 result = [best_matched_found_property]
             else:
+                if self.DEBUG:
+                    print("- THERE WERE RESULTS, BUT NOT RETURNING ANY")
                 result = []
             
         elif len(result) > 1 and set_related and slots['property'] == None and thing_must_have_capability == None and property_must_have_capability == None:
@@ -7615,10 +7718,43 @@ class VocoAdapter(Adapter):
             if self.DEBUG:
                 print("more than one result, and no (valid) property name provided. Since intent is to set something, that's too dubious.")
             if best_matched_found_property != None:
+                if self.DEBUG:
+                    print("- doing a hardcore reduction to property with the highest confidence match")
                 result = [best_matched_found_property]
             else:
+                if self.DEBUG:
+                    print("- THERE WERE RESULTS, BUT NOT RETURNING ANY")
                 result = []
         
+        
+        
+        
+        if set_related == False and len(result) > 6:
+            if self.DEBUG:
+                print("- Wow, that's still a lot of results in a non set_related query. To avoid speaking them all, let's prune everything with a confidence of 10 or lower and see what the result of that is.")
+            alt_result = []
+            for i in range(len(result) - 1, -1, -1):
+               
+                found_property = result[i]
+                
+                total_confidence = int(found_property['confidence']) + int(found_property['property_confidence'])
+                
+                if self.DEBUG:
+                    print("\n>more cut?<\nfound_property: " + str(found_property))
+                    print("confidence total   : " + str(total_confidence))
+                
+                if total_confidence > 110:
+                    alt_result.append(found_property)
+            if len(alt_result) > 0:
+                
+                alt_result = sorted(alt_result, key=lambda d: d['property_confidence'], reverse=True) 
+                
+                if self.DEBUG:
+                    print("returning extra pruned alt_result:")
+                    print(str(json.dumps(alt_result, indent=4)))
+                return alt_result
+            
+                
         
         return result
 
@@ -7938,6 +8074,8 @@ class VocoAdapter(Adapter):
             
         except Exception as ex:
             print("Error making human readable time: " + str(ex))
+            if self.DEBUG:
+                return "debug: Error making human readable time"
             return ""
 
 

@@ -555,7 +555,7 @@ def intent_stop_timer(self, slots, intent_message):
                     self.broadcast_remove_action_time(self.persistent_data['action_times'][index])
             except Exception as ex:
                 print("error deleting timers: " + str(ex))
-                    
+            
             if removed_timer_count > 1:
                 voice_message = str(removed_timer_count) + " " + str(slots['timer_type']) + "s have been removed"
             elif removed_timer_count == 1:
@@ -1039,7 +1039,7 @@ def intent_get_value(self, slots, intent_message,found_properties):
 # Toggling the state of boolean properties (and sometimes enum properties)
 def intent_set_state(self, slots, intent_message, found_properties, delayed_action=None):   # If it is called from a timer, the delayed_action will be populated.
     if self.DEBUG:
-        print("in intent_set_state. Incoming boolean: " + str(slots['boolean']))
+        print("\nIn intent_set_state. Incoming boolean: " + str(slots['boolean']))
 
     # TODO: why do I even care about origin here?
     """
@@ -1095,14 +1095,23 @@ def intent_set_state(self, slots, intent_message, found_properties, delayed_acti
                 comparable_desired_state = make_comparable(slots['boolean'])
         
                 if str(found_property['type']) == "boolean":
+                    if self.DEBUG:
+                        print("found property is of type boolean")
                     true_list = ['on','enabled','enable','lock','locked','closed','close','start','play','playing']
                     false_list = ['off','disabled','disable','unlock','unlocked','opened','open','stop','pause','paused']
-        
-                    if comparable_desired_state in true_list:  #== 'on' or comparable_desired_state == 'lock' or slots['boolean'] == 'closed':
-                        desired_state = True
-                    elif comparable_desired_state in false_list: #slots['boolean'] == 'off' or slots['boolean'] == 'of' or slots['boolean'] == 'unlock' or slots['boolean'] == 'open':
-                        desired_state = False
-            
+
+                    if found_property['enum_off_opposite'] != None:
+                        if self.DEBUG:
+                            print("setting desired state to enum_off_opposite")
+                        desired_state = found_property['enum_off_opposite'] # in case the 'on' value of the enum is a bit strange. E.g. [off,heat] with a thermostat
+                        human_readable_desired_state = desired_state
+                    else:
+                        if self.DEBUG:
+                            print("checking if comparable_desired_state is in true_list or false_list")
+                        if comparable_desired_state in true_list:  #== 'on' or comparable_desired_state == 'lock' or slots['boolean'] == 'closed':
+                            desired_state = True
+                        elif comparable_desired_state in false_list: #slots['boolean'] == 'off' or slots['boolean'] == 'of' or slots['boolean'] == 'unlock' or slots['boolean'] == 'open':
+                            desired_state = False
         
                     if desired_state == None:
                         if self.DEBUG:
@@ -1115,27 +1124,83 @@ def intent_set_state(self, slots, intent_message, found_properties, delayed_acti
         
                 elif str(found_property['type']) == "string" and found_property['enum'] != None:
                     if self.DEBUG:
-                        print('intent_set_state: handling an enum. Cool. setting desired_state to: ' + str(slots['boolean']))
-                    desired_state = str(slots['boolean'])
-        
+                        print('intent_set_state: handling an enum. Cool.')
+                    if found_property['enum_off_opposite'] != None:
+                        if self.DEBUG:
+                            print("-setting desired state to enum_off_opposite")
+                        desired_state = found_property['enum_off_opposite'] # in case the 'on' value of the enum is a bit strange. E.g. [off,heat] with a thermostat
+                        human_readable_desired_state = desired_state
+                    else:
+                        if self.DEBUG:
+                            print('-Setting desired_state to string of boolean slot')
+                        desired_state = str(slots['boolean'])
         
                 if desired_state == None:
                     if self.DEBUG:
                         print("Warning, could not extract valid boolean from: " + str(slots['boolean']))
                     return "Sorry, I did not understand the intended state. "
         
+                if self.DEBUG:
+                    print("intent_set_state: desired state is now: " + str(desired_state))
+                
+        
                 # this opposite string is used both the create the sentence, and as the opposite value that is stored in a timer. 
+                # TODO: Currently an attempt to find an opposite is always made, even if not needed later.
                 # TODO: If an opposite cannot be found, this could result in an attempt to set an enum value of "the opposite" instead of the actual proper opposive value. Perhaps the real likely opposite could be extracted from the enum list.
                 # One issue here is that the opposite of "open" could be "closed" or "close". Currently the opposites list prefers "close", but this could cause issues. Webthing seems to prefer "closed" in its use, but when speaking it could be both:
                 # "Set the curtian to closed" or "close the curtain"
                 # Perhaps a fuzzy search in the enum would be useful
                 
                 opposite = "the opposite"
-                if slots['boolean'] in self.opposites:
+                
+                # if enum_off_opposite is set, then the opposite must be 'off'. 
+                if found_property['enum_off_opposite'] != None and found_property['enum'] != None: # the checking if enum is also filled is just for sanity
+                    if self.DEBUG:
+                        print("intent_set_state: enum_off_opposite was set, so the opposite must be 'off'.")
+                    # in this case the opposite must be  "off" (or "Off" or "OFF")
+                    for opposite_candidate in found_property['enum']: 
+                        if str(opposite_candidate).lower() == 'off':
+                            opposite = opposite_candidate # here the upper/lower case is respected
+                
+                # if it's a string with an enum, then try to find the opposite in the enum list
+                if str(found_property['type']) == "string" and found_property['enum'] != None:
+                    if len(found_property['enum']) == 2:
+                        # the list only has two options, so if the current desired value can be found, then the other one must be the correct opposite
+                        if str(found_property['enum'][0]).lower() == str(desired_state).lower():
+                            opposite = found_property['enum'][1]
+                        elif str(found_property['enum'][1]).lower() == str(desired_state).lower():
+                            opposite = found_property['enum'][0]
+                    else:
+                        
+                        if self.DEBUG:
+                            print("this enum had more than two options, so it's not clear which one of the 'opposite': " + str(desired_state) + " , in: "+ str(found_property['enum']))
+                        
+                        if str(desired_state).lower() in self.opposites: # TODO: could still add the fuzzy search here, for "close" vs "closed", although those are both in the opposites list. maybe just adding a "d" to the end of the string would suffice and comparing that would suffice.
+                            potential_opposite = self.opposites[ str(desired_state).lower() ] # potential opposite is in lower case, but actual enum value might not be.
+                            if self.DEBUG:
+                                print("the desired string value was spotted in the opposites list. will check enum list for potential_opposite: " + str(potential_opposite))
+                            for opposite_candidate in found_property['enum']:
+                                # TODO: could still add the fuzzy search here, for "close" vs "closed" or "enable" vs "enabled"
+                                if str(opposite_candidate).lower() == potential_opposite:
+                                    opposite = opposite_candidate # here the upper/lower case is respected
+                                
+                # If the boolean slot is filled, try getting an opposite from the opposites list.
+                elif slots['boolean'] in self.opposites:
                     opposite = self.opposites[slots['boolean']]
                     if self.DEBUG:
-                        print("managed to create an opposite: " + str(opposite))
+                        print("managed to create a boolean opposite from self.opposites list: " + str(opposite))
+                    # TODO: if enum is filled, check the opposite against that? Then again, if the enum was filled, maybe it would be better to switch from boolean slot to string slot earlier in the process?
                     #print("the oposite is : " + str(opposite))
+            
+                
+                
+            
+                # Was an opposite found?
+                if opposite == "the opposite":
+                    # TODO: abort here with "Sorry, could not figure out the opposite value" as message?
+                    if self.DEBUG:
+                        print("warning: intent_set_state: failed to find a valid opposite")
+                        
             
                 # Search for a matching thing+property
                 #boolean_related = True
@@ -1153,7 +1218,8 @@ def intent_set_state(self, slots, intent_message, found_properties, delayed_acti
                     # if we already toggled one property, that's enough. Skip others.
                     if voice_message != "":
                         pass
-                        #continue # TODO: a little experiment with mass-switching.
+                        #continue # TODO: doing a little experiment with allowing mass-switching. 
+                        # TODO: Could make sure that only one property per thing is switched, as that is the likely desired outcome.
                     
                     if self.DEBUG:
                         print("Checking found property. url:" + str(found_property['property_url']))
@@ -1204,7 +1270,10 @@ def intent_set_state(self, slots, intent_message, found_properties, delayed_acti
                                     print("duration delta (in seconds): " + str(duration_delta))
                                     
                                 
-                                
+                                # TODO: Note: if the opposite string here is literally "the opposite", then there is potentially a problem, since a valid/likely opposite wasn't found already. Which means it might not switch to the opposite later, since it won't be found then either.
+                                if opposite == 'the opposite':
+                                    if self.DEBUG:
+                                        print("Warning, the opposite is defined as 'the opposite', which is trouble...")
                                 self.add_action_time({"intent_message":intent_message,"moment":slots['end_time'],"type":"boolean_related","original_value":slots['boolean'],"slots":slots})
                                 self.add_action_time({"intent_message":intent_message,"moment":slots['end_time'] + duration_delta,"type":"boolean_related","original_value":opposite,"slots":slots})
                                 
@@ -1224,7 +1293,7 @@ def intent_set_state(self, slots, intent_message, found_properties, delayed_acti
                                     voice_message += ", and switching to " + str(opposite)
                                     voice_message += " at " + self.human_readable_time(slots['end_time'] + duration_delta, True) + ". "
                                 else:
-                                    voice_message += ", and switching to " + str(opposite) + " "
+                                    voice_message += ", and switching to " + str(opposite) + " " 
                                     voice_message += duration_delta + " seconds later. "
                                     
                                     
@@ -1237,6 +1306,12 @@ def intent_set_state(self, slots, intent_message, found_properties, delayed_acti
                                     if slots['property'] == 'all':
                                         if property_loop_counter == 0:
                                             voice_message = "OK, I will let you know when everything switches back "
+                                            
+                                            # TODO: Note: if the opposite string here is literally "the opposite", then there is potentially a problem, since a valid/likely opposite wasn't found already. Which means it might not switch to the opposite later, since it won't be found then either.
+                                            if opposite == 'the opposite':
+                                                if self.DEBUG:
+                                                    print("Warning, the opposite is defined as 'the opposite', which is trouble...")
+                                            
                                             self.add_action_time({"intent_message":intent_message,"moment":slots['duration'],"type":"boolean_related","original_value": opposite,"slots":slots})
                                     
                                     elif bool(api_result[key]) != desired_state:
@@ -1248,6 +1323,12 @@ def intent_set_state(self, slots, intent_message, found_properties, delayed_acti
                                         #else:
                                         #    self.add_action_time({"intent_message":intent_message,"moment":slots['duration'],"type":"boolean_related","original_value": opposite,"slots":slots})
                                         if len(found_properties) == 1:
+                                            
+                                            # TODO: Note: if the opposite string here is literally "the opposite", then there is potentially a problem, since a valid/likely opposite wasn't found already. Which means it might not switch to the opposite later, since it won't be found then either.
+                                            if opposite == 'the opposite':
+                                                if self.DEBUG:
+                                                    print("Warning, the opposite is defined as 'the opposite', which is trouble...")
+                                                    
                                             self.add_action_time({"intent_message":intent_message,"moment":slots['duration'],"type":"boolean_related","original_value": opposite,"slots":slots})
                                             voice_message = "OK, I will let you know when it switches back to " + str(opposite) + " "
                                         
@@ -1272,6 +1353,7 @@ def intent_set_state(self, slots, intent_message, found_properties, delayed_acti
                                 else:
                                     # not a "for x minutes" type of intent. Could be "in 5 minutes". Which means nothing has to be toggled now.
                                     if property_loop_counter == 0:
+                                        
                                         self.add_action_time({"intent_message":intent_message,"moment":slots['duration'],"type":"boolean_related","original_value":slots['boolean'],"slots":slots})
                                         
                                         optional_to = "to "
@@ -1312,6 +1394,11 @@ def intent_set_state(self, slots, intent_message, found_properties, delayed_acti
                                     ender = {"moment":slots['end_time'],"type":"boolean_related","original_value":opposite,"slots":slots}
                                     if self.DEBUG:
                                         print("ender: " + str(ender))
+                                
+                                    # TODO: Note: if the opposite string here is literally "the opposite", then there is potentially a problem, since a valid/likely opposite wasn't found already. Which means it might not switch to the opposite later, since it won't be found then either.
+                                    if opposite == 'the opposite':
+                                        if self.DEBUG:
+                                            print("Warning, the opposite is defined as 'the opposite', which is trouble...")
                                 
                                     self.add_action_time({"intent_message":intent_message,"moment":slots['start_time'],"type":"boolean_related","original_value":str(slots['boolean']),"slots":slots})
                                     self.add_action_time({"intent_message":intent_message,"moment":slots['end_time'],"type":"boolean_related","original_value":opposite,"slots":slots})
@@ -1362,7 +1449,7 @@ def intent_set_state(self, slots, intent_message, found_properties, delayed_acti
                             print("")
                             print("This is a time delayed replay")
                         if slots['period'] == 'for':
-                            back = " back " # We are switching something back after a while has passed
+                            back = " back " # We are switching something back after a while has passed. Used in voice_message creation
                     
                     
                     try:
@@ -1370,7 +1457,7 @@ def intent_set_state(self, slots, intent_message, found_properties, delayed_acti
                         if self.DEBUG:
                             print("Checking if not already in desired state. " + str(bool(api_result[key])) + " =?= " + str(bool(desired_state)))
                         
-                        if not double_time: # if this is a case where the user wants to change two things in the future, then don't toggle now. E.g. turn on the light from 5 until 6pm.
+                        if not double_time: # if this is a case where the user wants to change two things in the future, then don't toggle now. E.g. "turn on the light from 5 until 6pm".
                             if self.DEBUG:
                                 print("not double time")
                             # It's already in the desired state
@@ -1775,6 +1862,7 @@ def intent_set_value(self, slots, intent_message, found_properties, original_val
                     if str(found_property['type']) != "boolean" and found_property['readOnly'] != True: # so readOnly is allowed to be both None or False
                         #print("Can set value for " + str(found_property['property_url']))
                         
+                        
                         try:
                             api_result = self.api_get( str(found_property['property_url']), intent=intent_message )
                             if self.DEBUG:
@@ -1865,8 +1953,17 @@ def intent_set_value(self, slots, intent_message, found_properties, original_val
                                  
                                 if found_property['type'] == 'string':
                                     desired_value = str(desired_value)
-                                #if original_value
-                                 
+                                    
+                                    # for desired values in enum, make sure the upper and lower case of the string is correct
+                                    if found_property['enum'] != None:
+                                        for possible_val in found_property['enum']:
+                                            if str(possible_val).lower() == desired_value.lower():
+                                                if self.DEBUG:
+                                                    if possible_val != desired_value:
+                                                        print("Changing desired value of enum to the correct case: " + str(desired_value) + " -> " + str(possible_val))
+                                                desired_value = possible_val
+                                                break
+                                    
                                 system_property_name = str(found_property['property_url'].rsplit('/', 1)[-1])
                                 json_dict = {system_property_name:desired_value}
                                 
