@@ -81,6 +81,8 @@ fi
 
 # Prep new package
 echo "creating package"
+rm -rf lib
+rm -rf package
 mkdir -p lib package
 
 # Pull down Python dependencies
@@ -91,7 +93,7 @@ mkdir -p lib package
 #pip3 install --upgrade pip
 #/usr/local/bin/python3.9 -m pip install --upgrade pip
 
-pip3 install -r requirements.txt -t lib --no-binary :all: --prefix "" --default-timeout=100
+pip3 install -r requirements.txt -t lib --no-binary :all: --prefix "" --default-timeout=1000 --upgrade
 
 # Remove local cffi so that the globally installed version doesn't clash
 rm -rf ./lib/cffi*
