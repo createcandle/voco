@@ -30,34 +30,17 @@ sudo apt update -qq
 sudo apt install -y cmake libasound2-dev libffi-dev 
 #libolm-dev
 
-#cmake . -Bbuild
-#cmake --build build  
-#make test
-#make install
-
 rm -rf olm
 git clone "https://gitlab.matrix.org/matrix-org/olm.git"
 cd olm
- git checkout 3.2.4
- mkdir build
- make
- cd python
-  make olm-python3
-  cd ..
- PREFIX=~/.local make install
- cd ..
-#git clone https://gitlab.matrix.org/matrix-org/olm.git
-#cd olm
-
-#cmake . -Bbuild -DBUILD_SHARED_LIBS=NO
-#cmake --build build
-
-#make test
-#make install
-
-#cd python
-#make
-
+git checkout 3.2.4
+mkdir build
+make
+cd python
+make olm-python3
+cd ..
+PREFIX=~/.local make install
+cd ..
 
 
 
