@@ -123,15 +123,6 @@ echo "creating archive"
 TARFILE="voco-${version}${TARFILE_SUFFIX}.tgz"
 tar czf ${TARFILE} package
 
-# Make the tarball
-#echo "creating archive"
-#TARFILE="voco-${version}.tgz"
-#tar czf ${TARFILE} package
-
 echo "creating shasums"
 shasum --algorithm 256 ${TARFILE} > ${TARFILE}.sha256sum
 cat ${TARFILE}.sha256sum
-
-#rm -rf SHA256SUMS package
-
-exit 0
