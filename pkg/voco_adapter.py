@@ -1047,7 +1047,7 @@ class VocoAdapter(Adapter):
         try:
             
             if self.DEBUG:
-                print("in set_microphone_gain. Volume: " + str(volume))
+                print("in set_microphone_gain. Volume: " + str(volume) + ", capture_card_id: " + str(capture_card_id))
             if int(volume) != self.persistent_data['microphone_gain']:
                 if self.DEBUG:
                     print("will save changed microphone gain level to persistent data")
@@ -1056,8 +1056,8 @@ class VocoAdapter(Adapter):
             
             if self.missing_microphone == False:
                 if len(self.capture_devices) != 0:
-                    self.capture_card_id = 1 # 0 is internal, 1 is usb.
-                    self.capture_device_id = 0 # Which channel
+                    #self.capture_card_id = 1 # 0 is internal, 1 is usb.
+                    #self.capture_device_id = 0 # Which channel
                     #os.system("sudo amixer cset numid=3 " + volume_percentage + "%")
             
                     microphone_controls = run_command('amixer -c ' + str(self.capture_card_id) + ' controls')
@@ -3106,6 +3106,11 @@ class VocoAdapter(Adapter):
                                 poll_error_count = 0
                                 for process in self.external_processes:
                                     try:
+                                        
+                                        for line in process.stdout:
+                                            if self.DEBUG:
+                                                print("process stdout: line: " + str(line))
+                                        
                                         poll_result = process.poll()
                                         #if self.DEBUG:
                                         #    print("subprocess poll_result: " + str(poll_result) )
