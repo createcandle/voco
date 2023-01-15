@@ -8233,6 +8233,7 @@ class VocoAdapter(Adapter):
                 if snips_actual_processes_count > 7:
                     if self.DEBUG:
                         print("DOING EMERGENCY KILL OF SNIPS, TOO MANY REAL PROCESSES")
+                    self.set_status_on_thing("Error, too many processes")
                     os.system("pkill -f snips")
         
             if self.persistent_data['is_satellite'] and len(self.external_processes) == 4:
