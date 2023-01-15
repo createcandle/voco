@@ -130,7 +130,14 @@ def intent_set_timer(self, slots, intent_message):
         
         time_delta_seconds = moment - current_time
         if self.DEBUG:
-            print("Countdown in seconds: " + str(time_delta_seconds))
+            print("Timer type: " + str(slots['timer_type']))
+            print("Countdown/Timer in seconds: " + str(time_delta_seconds))
+        
+        if time_delta_seconds < 0:
+            if self.DEBUG:
+                print("Error, the timer was for negative seconds")
+                return "Error, the timer was for negative seconds"
+            return "Sorry, I didn't understand"
         
         # ugly fix for the time delta being delayed for a second sometimes.
         if time_delta_seconds > 90 and time_delta_seconds % 60 != 0 and (time_delta_seconds + 1) % 60 == 0:

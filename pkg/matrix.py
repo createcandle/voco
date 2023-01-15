@@ -608,8 +608,18 @@ async def start_matrix_client_async(self, should_create_candle_account=False):
 												matrix_room_members.append({'user_id':member.user_id, 'display_name':member.display_name})
 
 											self.matrix_room_members = matrix_room_members
+                                            
 									except Exception as ex:
-										print("error updating matrix room members list: " + str(ex))
+										print(str(ex))
+										if self.DEBUG:
+											print("error updating matrix room members list: " + str(ex))
+                                            
+											try:
+												if room_joined_members_response.message:
+													print("Error occured. room_joined_members_response.message: " + str(room_joined_members_response.message))
+											except Exception as ex:
+												print("Error while handling room_members_response error: " + str(ex))
+                                            
 
 								await asyncio.sleep(0.2)
 

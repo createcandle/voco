@@ -1047,7 +1047,7 @@ class VocoAdapter(Adapter):
         try:
             
             if self.DEBUG:
-                print("in set_microphone_gain. Volume: " + str(volume) + ", capture_card_id: " + str(capture_card_id))
+                print("in set_microphone_gain. Volume: " + str(volume) + ", capture_card_id: " + str(self.capture_card_id))
             if int(volume) != self.persistent_data['microphone_gain']:
                 if self.DEBUG:
                     print("will save changed microphone gain level to persistent data")
@@ -1838,8 +1838,8 @@ class VocoAdapter(Adapter):
             self.ffplayer = subprocess.Popen(my_command, 
                             env=environment,
                             stdin=subprocess.PIPE,
-                            stdout=subprocess.PIPE,
-                            stderr=subprocess.PIPE)
+                            stdout=subprocess.DEVNULL,
+                            stderr=subprocess.DEVNULL)
             
         except Exception as ex:
             if self.DEBUG:
@@ -2309,7 +2309,6 @@ class VocoAdapter(Adapter):
                     # "--alsa_playback","default:CARD=ALSA",
                     
                 if unique_command == 'snips-injection':
-                    
                     try:
                         clear_injections_command = command + ["clean","--all"]
                         Popen(clear_injections_command, env=my_env, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
@@ -2353,8 +2352,12 @@ class VocoAdapter(Adapter):
                     #if self.DEBUG:
                     #    self.external_processes.append( Popen(command, env=my_env, stdout=sys.stdout, stderr=subprocess.STDOUT) )
                     #else:
-                    self.external_processes.append( Popen(command, env=my_env, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT) )
-                    
+                    #self.external_processes.append( Popen(command, env=my_env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL) )
+                    if self.DEBUG:
+                        self.external_processes.append( Popen(command, env=my_env) )
+                    else:
+                        self.external_processes.append( Popen(command, env=my_env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL) )
+                        
                 except Exception as ex:
                     if self.DEBUG:
                         print("Error starting a snips process: " + str(ex))
@@ -3085,16 +3088,21 @@ class VocoAdapter(Adapter):
                     if int(self.last_sound_activity) == self.current_utc_time - 10:
                         self.set_sound_detected(False)
 
-                if not self.should_restart_snips:
+                if self.should_restart_snips == True:
+                    if self.DEBUG:
+                        print("clock: self.should_restart_snips is True!")
+                else:
                     # check if running subprocesses are still running ok
                     
                     if self.missing_microphone == True and self.stop_snips_on_microphone_unplug:
+                        #if self.DEBUG:
+                        #    print("missing microphone, and stop_snips_on_microphone_unplug is true")
                         pass
                         #if self.DEBUG:
                         #    print("will not restart snips since snips should be disabled while microphone is missing.")
                     
                     else:
-                        
+                            
                         if self.initial_injection_completed == True:
                         
                             #if self.DEBUG:
@@ -3107,18 +3115,32 @@ class VocoAdapter(Adapter):
                                 for process in self.external_processes:
                                     try:
                                         
-                                        for line in process.stdout:
-                                            if self.DEBUG:
-                                                print("process stdout: line: " + str(line))
+                                        """
+                                        if self.DEBUG:
+                                            try:
+                                                print("communicating with process")
+                                                try:
+                                                    process.communicate(timeout=0.01)
+                                                except Exception as ex:
+                                                    print("screwit: " + str(ex))
+                                                    pass
+                                                if process.stdout != None:
+                                                    for line in process.stdout: #.read()
+                                                        print("process stdout: line: " + str(line.decode('utf-8')))
+                                                if process.stderr != None:
+                                                    for line in process.stderr: #.read()
+                                                        print("process stderr: line: " + str(line.decode('utf-8')))
+                                            except Exception as ex:
+                                                print("error getting stdout/stderr from running snips process: " + str(ex))
+                                        """
                                         
+                                        # check if the process has exited
                                         poll_result = process.poll()
                                         #if self.DEBUG:
                                         #    print("subprocess poll_result: " + str(poll_result) )
                                         if poll_result != None:
                                             if self.DEBUG:
                                                 print("clock poll_result was not None. A subprocess stopped? It was: " + str(poll_result))
-                                                print("process.stdout: " + str(process.stdout))
-                                                print("process.stderr: " + str(process.stderr))
                                             poll_error_count += 1
                                             
                                             
@@ -5172,7 +5194,8 @@ class VocoAdapter(Adapter):
                 print(">>")
                 print("//////////////////////////////////////////////////")
                 
-                print(">> intent_message    : " + str(intent_message))
+                #print(">> intent_message    : " + str(intent_message))
+                print(">> intent_message    : " + str(json.dumps(intent_message, indent=4)))
                 #print(">> incoming intent   : " + str(incoming_intent))
                 print(">>")
                 print(">> sentence          : " + str(sentence))
@@ -7793,6 +7816,9 @@ class VocoAdapter(Adapter):
 
         #print("incoming slots: " + str(intent_message['slots']))
 
+        if self.DEBUG:
+            print("behind the time?: " + str(int(time.time()) - self.current_utc_time))
+
         try:
             #sentence = str(intent_message['input']).lower()
             slots['sentence'] = sentence
@@ -7864,6 +7890,8 @@ class VocoAdapter(Adapter):
                     slots['time_string'] = item['rawValue'] # The time as it was spoken
                     #print("creating timedelta next")
                     target_time_delta = int(item['value']['seconds']) + (int(item['value']['minutes']) * 60) + (int(item['value']['hours']) * 3600) + (int(item['value']['days']) * 86400) + (int(item['value']['weeks']) * 604800) # TODO: Could also support years, in theory..
+                    if self.DEBUG:
+                        print("extract slots: target_time_delta: " + str(target_time_delta))
                     # Turns the duration into the absolute time when the duration ends
                     if target_time_delta != 0:
                         slots['duration'] = self.current_utc_time + int(target_time_delta)
@@ -7928,7 +7956,7 @@ class VocoAdapter(Adapter):
                 #self.mqtt_client.publish("hermes/dialogueManager/startSession",json.dumps({"init":{"type":"action","canBeEnqueued": True},"siteId":modified_site_id, "customData":{'origin':origin} }))
                 
                 
-                # TODO: this is ugly routing. text/matrix input should be router cleaner.
+                # TODO: this is ugly routing. text/matrix input should be routed cleaner.
                 if site_id == str(self.persistent_data['site_id']):
                     
                     if self.persistent_data['is_satellite'] == True:
