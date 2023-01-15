@@ -2162,7 +2162,7 @@ class VocoAdapter(Adapter):
         
         if self.busy_starting_snips:
             if self.DEBUG:
-                print("Error: run_snips called while snips was already in the process of being started")
+                print("Error: run_snips: called while snips was already in the process of being started")
             return
         
         if self.mqtt_connected == False and self.still_busy_booting:
@@ -2193,7 +2193,7 @@ class VocoAdapter(Adapter):
         self.external_processes = []
         
         self.stop_snips()
-        
+        time.sleep(.2)
         try:
             
             if self.DEBUG:
@@ -3146,7 +3146,7 @@ class VocoAdapter(Adapter):
                                         elif alternative_process_counter < len(self.snips_parts):
                                             self.should_restart_snips = True
                                             if self.DEBUG:
-                                                print("conclusion: snips coordinator should be restarted")
+                                                print("conclusion: too few snips parts are up, snips coordinator should be restarted")
                             else:
                                 pass
                                 #if self.DEBUG:
@@ -8230,6 +8230,11 @@ class VocoAdapter(Adapter):
                     print("Snips actual process count mismatch. Setting should_restart_snips to True")
                 self.should_restart_snips = True
         
+                if snips_actual_processes_count > 7:
+                    if self.DEBUG:
+                        print("DOING EMERGENCY KILL OF SNIPS, TOO MANY REAL PROCESSES")
+                    os.system("pkill -f snips")
+        
             if self.persistent_data['is_satellite'] and len(self.external_processes) == 4:
                 if self.DEBUG:
                     print("too many orphaned snips satellite processes.. something is wrong. Setting should_restart_snips to True")
@@ -8240,9 +8245,10 @@ class VocoAdapter(Adapter):
                     print("too many orphaned snips processes.. something is wrong. Setting should_restart_snips to True")
                 self.should_restart_snips = True
             
-            if len(self.external_processes) == 28:
+            if len(self.external_processes) >= 28:
                 print("ERROR. Voco seems to be stuck in a loop where it is unable to start properly. Will try to restart the addon.")
                 self.close_proxy() #restart the addon
+
         except Exception as ex:
             print("Error in is_snips_running_count: " + str(ex))
             
