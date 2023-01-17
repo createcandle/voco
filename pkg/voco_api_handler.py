@@ -83,7 +83,7 @@ class VocoAPIHandler(APIHandler):
                     return APIResponse(
                         status=500,
                         content_type='application/json',
-                        content=json.dumps({'state': False, 'satellite_targets':{}, 'site_id':self.adapter.persistent_data[site_id] }),
+                        content=json.dumps({'state': False, 'satellite_targets':self.adapter.satellite_targets, 'site_id':self.adapter.persistent_data[site_id] }),
                     )
                 
                 else:

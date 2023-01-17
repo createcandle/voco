@@ -547,6 +547,7 @@ class VocoAdapter(Adapter):
         #self.satellite_asr_payload = None # temporarily holds the ASR payload that the satellite passes on to the main controller
         self.last_spoken_sentence = ""      # Used to avoid speaking the same sentence twice in quick succession
         self.last_spoken_sentence_time = 0  # Used to avoid speaking the same sentence twice in quick succession
+        self.previous_intent_callback_time = 0 # avoid "echo" problem where the main controller and a satellite both hear a command (sometimes slightly differently), which causes a command to be run twice in a row.
         
         # MQTT client
         self.mqtt_client = None
@@ -4006,8 +4007,8 @@ class VocoAdapter(Adapter):
             self.injection_in_progress = False
             # Voco is now really ready
             if self.initial_injection_completed == False:
-                self.initial_injection_completed = True
                 self.speak_welcome_message()
+            self.initial_injection_completed = True
             """
             if self.persistent_data['is_satellite']:
                 if self.DEBUG:
@@ -5100,6 +5101,15 @@ class VocoAdapter(Adapter):
 #
 
     def master_intent_callback(self, intent_message, try_alternative=False):    # Triggered everytime Snips succesfully recognizes a voice intent
+        if self.DEBUG:
+            print("in master_intent_callback")
+        
+        # This is an imperfect way of handling the situation when the main controller and a satellite both hear a voice command. Oddly, in theory this "echo" problem should already be handled by Snips.
+        if time.time() - self.previous_intent_callback_time < 5:
+            if self.DEBUG:
+                print("master_intent_callback ran less than 5 seconds ago, ignoring this one.")
+            return
+        self.previous_intent_callback_time = time.time()
         
         final_test = False # there is a main incoming intent, and potentially some alternatives that can ale be tested. If we're on the last alternative (and still haven't gotten a good match), then this will cause various failure-related voice message to be spoken.
         this_is_origin_site = False # Whether the origin site of the intent (e.g. a satellite or the main controller) is the same site as this controller.

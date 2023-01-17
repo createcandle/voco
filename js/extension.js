@@ -285,6 +285,10 @@
                         }
                     }
                     
+                    if(this.debug){
+                        console.log("Voco init response: ", body);
+                    }
+                    
                     
 					if('is_satellite' in body){
 						if(body['is_satellite']){
@@ -293,6 +297,17 @@
 							document.getElementById('extension-voco-content').classList.remove('extension-voco-show-tab-timers');
 							document.getElementById('extension-voco-content').classList.add('extension-voco-show-tab-satellites');
 						}
+                        else{
+                            // Not a satellite, so succesful injection matters
+                            if('possible_injection_failure' in body && 'mqtt_connected' in body){
+                                if(body.mqtt_connected == false){
+                                    //document.getElementById("extension-voco-mqtt-error").style.display = 'block';
+                                }
+                                else if(body.possible_injection_failure){
+                                    document.getElementById("extension-voco-injection-failure").style.display = 'block';
+                                }
+                            }
+                        }
                         
                         if('connected_satellites' in body){
                             this.show_connected_satellites( body['connected_satellites'], body['is_satellite'] );
@@ -300,15 +315,7 @@
                         
 					}
                     else{
-                        // Not a satellite, so succesful injection matters
-                        if('possible_injection_failure' in body && 'mqtt_connected' in body){
-                            if(body.mqtt_connected == false){
-                                //document.getElementById("extension-voco-mqtt-error").style.display = 'block';
-                            }
-                            else if(body.possible_injection_failure){
-                                document.getElementById("extension-voco-injection-failure").style.display = 'block';
-                            }
-                        }
+                        console.error("voco: is_satellite was not in response?");
                     }
 					
 					if('hostname' in body){
@@ -320,11 +327,15 @@
 							if('satellite_targets' in body){
 								//console.log("satellite_targets in body: " + body['satellite_targets']);
 								if(Object.keys(body['satellite_targets']).length > 0){
-									//console.log("A satellite is possible");
+									if(this.debug){
+                                        console.log("Voco: at least one potential main voco controller detected");
+                                    }
 									if('is_satellite' in body){
 										//console.log("is_satellite: " + body['is_satellite']);
 										if(body['is_satellite']){
-											//console.log("I am a satellite");
+											if(this.debug){
+                                                console.log("I am a satellite");
+                                            }
 											document.getElementById('extension-voco-select-satellite-checkbox').checked = true;
 										}
 									}
@@ -344,7 +355,9 @@
 									document.getElementById('extension-voco-server-list').innerHTML = list_html;
 								}
 								else{
-									//console.log("satellites length was 0 - no other potential satellites spotted");
+									if(this.debug){
+                                        console.log("Voco: satellites length was 0 - no other potential satellites/controllers spotted");
+                                    }
 								}
 							}
 						}
@@ -356,7 +369,6 @@
 				
 		        }).catch((e) => {
 		  			console.log("Error getting Voco init data: " , e);
-					//pre.innerText = "Error getting initial Voco data: " , e;
 		        });	
 				
                 
@@ -497,8 +509,6 @@
 				try{
 					if( main_view.classList.contains('selected') ){
 						
-                        
-                        
                         if(this.busy_polling){
                             if(this.debug){
                                 console.log("voco: was still polling, aborting new poll");
@@ -506,17 +516,22 @@
                             this.busy_polling_count++;
                             
                             if(this.busy_polling_count > 10){
+                                this.busy_polling = false;
+                                this.busy_polling_count = 0;
                                 if(this.debug){
-                                    console.log("Busy polling for over 20 seconds");
+                                    console.log("Busy polling for over 20 seconds. Resetting this.busy_polling");
                                 }
                                 document.getElementById('extension-voco-main-controller-not-responding').style.display = 'block';
                                 document.getElementById('extension-voco-text-commands-container').style.display = 'none';
                             }
+                            else{
+                                return;
+                            }
                             
-                            return;
                         }
                         else{
                             //console.log("starting poll");
+                            document.getElementById('extension-voco-main-controller-not-responding').style.display = 'none';
                         }
                         
                         var refresh_chat_members = false
