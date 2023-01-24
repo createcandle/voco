@@ -4740,6 +4740,14 @@ class VocoAdapter(Adapter):
 
                         
                 # Deal with the user's command
+                
+                # This is an imperfect way of handling the situation when the main controller and a satellite both hear a voice command. Oddly, in theory this "echo" problem should already be handled by Snips.
+                if time.time() - self.previous_intent_callback_time < 5:
+                    if self.DEBUG:
+                        print("master_intent_callback ran less than 5 seconds ago, ignoring this one.")
+                    return
+                self.previous_intent_callback_time = time.time()
+                
                 self.alternatives_counter = -1
                 self.master_intent_callback(intent_message)
                 
@@ -5103,13 +5111,6 @@ class VocoAdapter(Adapter):
     def master_intent_callback(self, intent_message, try_alternative=False):    # Triggered everytime Snips succesfully recognizes a voice intent
         if self.DEBUG:
             print("in master_intent_callback")
-        
-        # This is an imperfect way of handling the situation when the main controller and a satellite both hear a voice command. Oddly, in theory this "echo" problem should already be handled by Snips.
-        if time.time() - self.previous_intent_callback_time < 5:
-            if self.DEBUG:
-                print("master_intent_callback ran less than 5 seconds ago, ignoring this one.")
-            return
-        self.previous_intent_callback_time = time.time()
         
         final_test = False # there is a main incoming intent, and potentially some alternatives that can ale be tested. If we're on the last alternative (and still haven't gotten a good match), then this will cause various failure-related voice message to be spoken.
         this_is_origin_site = False # Whether the origin site of the intent (e.g. a satellite or the main controller) is the same site as this controller.
@@ -5639,9 +5640,13 @@ class VocoAdapter(Adapter):
                             stop_looping = True
                             break
                     elif incoming_intent == 'set_timer':
-                        voice_message = intent_set_timer(self, slots, intent_message)
-                        if not voice_message.startswith('Sorry'):
-                            stop_looping = True
+                        if "timer" in sentence or "alarm" in sentence or "countdown" in sentence or "wake" in sentence or "remind" in sentence:
+                            voice_message = intent_set_timer(self, slots, intent_message)
+                            if not voice_message.startswith('Sorry'):
+                                stop_looping = True
+                                break
+                        else:
+                            voice_message = ""
                             break
                     elif incoming_intent == 'get_timer_count': 
                         voice_message = intent_get_timer_count(self, slots, intent_message)
@@ -5713,23 +5718,33 @@ class VocoAdapter(Adapter):
                                 print("target_thing_title = " + str(target_thing_title))
                                 print("self.persistent_data['satellite_thing_titles'] = " + str(self.persistent_data['satellite_thing_titles']))
                             
-                            # loop over the satellite thing data in self.persistent_data['satellite_thing_titles']
-                            for satellite_id in self.persistent_data['satellite_thing_titles']:
-                                #if target_thing_title in self.persistent_data['satellite_thing_titles'][satellite_id]:
-                                for satellite_thing_title in self.persistent_data['satellite_thing_titles'][satellite_id]:
-                                    if target_thing_title != None:
-                                        if satellite_thing_title.lower() == target_thing_title.lower():
-                                            if self.DEBUG:
-                                                print("A satellite has this thing, it should handle it.")
-                                            found_on_satellite = True
-                                        elif len(found_properties) == 0: # if there isn't a match with a local thing, then try a little harder, and allow fuzzy matching with satellite thing titles
-                                            fuzz_ratio = simpler_fuzz(str(target_thing_title), satellite_thing_title)
-                                            if self.DEBUG:
-                                                print("satellite thing: " + str(satellite_thing_title) + ", fuzz: "+ str(fuzz_ratio))
-                                            if fuzz_ratio > 85:
+                            
+                            # TODO: this is prioritizing satellites. Ideally the thing scanner would go first.
+                            
+                            all_thing_titles_list_lowercase = [] # all existing property titles in a list, all lowercase for easy comparison
+                            for thing_titlex in self.persistent_data['local_thing_titles']:
+                                all_thing_titles_list_lowercase.append(thing_titlex.lower())
+                            if not target_thing_title.lower() in all_thing_titles_list_lowercase:
+                                
+                                # loop over the satellite thing data in self.persistent_data['satellite_thing_titles']
+                                for satellite_id in self.persistent_data['satellite_thing_titles']:
+                                    #if target_thing_title in self.persistent_data['satellite_thing_titles'][satellite_id]:
+                                    for satellite_thing_title in self.persistent_data['satellite_thing_titles'][satellite_id]:
+                                        if target_thing_title != None:
+                                            if satellite_thing_title.lower() == target_thing_title.lower():
                                                 if self.DEBUG:
-                                                    print("possible fuzzy match with satellite thing title")
+                                                    print("A satellite has this thing, it should handle it.")
                                                 found_on_satellite = True
+                                            elif len(found_properties) == 0: # if there isn't a match with a local thing, then try a little harder, and allow fuzzy matching with satellite thing titles
+                                                fuzz_ratio = simpler_fuzz(str(target_thing_title), satellite_thing_title)
+                                                if self.DEBUG:
+                                                    print("satellite thing: " + str(satellite_thing_title) + ", fuzz: "+ str(fuzz_ratio))
+                                                if fuzz_ratio > 85:
+                                                    if self.DEBUG:
+                                                        print("possible fuzzy match with satellite thing title")
+                                                    found_on_satellite = True
+                            
+                            
                                     
                                     
                         
@@ -6229,7 +6244,7 @@ class VocoAdapter(Adapter):
                     
                     #if not self.persistent_data['is_satellite']:
                     fresh_thing_titles.add('lights')
-                    fresh_thing_titles.add('curtains')
+                    fresh_thing_titles.add('curtains') # TODO: not reall used yet?
                         
                     operation = ('addFromVanilla',{"Thing" : list(fresh_thing_titles) })
                     operations.append(operation)
@@ -6629,7 +6644,7 @@ class VocoAdapter(Adapter):
                 slots['property'] = 'all'
                 target_property_title = 'state'
                 thing_must_have_capability = 'Light'
-                thing_must_have_selected_capability = 'Light'
+                #thing_must_have_selected_capability = 'Light' # not used anymore? too restrictive
                 property_must_have_capability = 'OnOffProperty'
                 only_allow_one_thing_scanner_result = False
             
@@ -6670,15 +6685,17 @@ class VocoAdapter(Adapter):
                 try:
                     current_thing_title = str(thing['title']).lower()
                     
+                    
+                    
                     """
-                    if self.see_switches_as_lights:
-                        if thing_must_have_capability == 'Light':
-                            if len(current_thing_title) > 9 and (current_thing_title.endswith(' light') or current_thing_title.endswith(' lamp')):
-                                if '@type' in thing:
-                                    if ('OnOffSwitch' in thing['@type'] or 'SmartPlug' in thing['@type']) and not 'Light' in thing['@type']:
-                                        thing['@type'].append('Light')
+                    #if self.see_switches_as_lights:
+                    #    if thing_must_have_capability == 'Light':
+                    #        if len(current_thing_title) > 9 and (current_thing_title.endswith(' light') or current_thing_title.endswith(' lamp')):
+                    #            if '@type' in thing:
+                    #                if ('OnOffSwitch' in thing['@type'] or 'SmartPlug' in thing['@type']) and not 'Light' in thing['@type']:
+                    #                    thing['@type'].append('Light')
                     """
-                            
+                    
                     
                     probable_thing_title = None    # Used later, by the back-up way of finding the correct thing.
                 except:
@@ -6705,24 +6722,34 @@ class VocoAdapter(Adapter):
                     
                     if target_thing_title == None:  # If no thing title provided, we go over every thing and let the property be leading in finding a match.
                         
+                        
+                        # slots['thing'] == 'lights' and (current_thing_title.endswith(' light') or current_thing_title.endswith(' lamp')) and ('OnOffSwitch' in thing['@type'] or 'SmartPlug' in thing['@type']):
+                        
                         # Check if there is a desired capability or selectedCapability
                         try:
                             if thing_must_have_capability != None:
                                 if '@type' in thing:
                                     if not thing_must_have_capability in thing['@type']:
-                                        if self.DEBUG:
-                                            print("skipping thing without desired capability: " + str(current_thing_title))
-                                        continue # skip things without the desired capability.
+                                        
+                                        if thing_must_have_capability == 'Light' and ('OnOffSwitch' in thing['@type'] or 'SmartPlug' in thing['@type']):
+                                            if not ' light' in current_thing_title.lower() and not ' lamp' in current_thing_title.lower():
+                                                if self.DEBUG:
+                                                    print("Looking for a thing with Light capacibility, and this OnOffSwitch/SmartPlug did not have a title with 'light' or 'lamp' (" + str(current_thing_title) + "). Skipping.")
+                                                continue
+                                            else:
+                                                if self.DEBUG:
+                                                    print("allowing a thing with OnOffSwitch or SmartPlug capability to masquerade as a Light because its title contained light or lamp: " + str(current_thing_title))
+                                        else:
+                                            if self.DEBUG:
+                                                print("skipping thing without desired capability: " + str(current_thing_title))
+                                            continue # skip things without the desired capability.
                                     else:
                                         if self.DEBUG:
                                             print("thing has needed capability: " + str(thing_must_have_capability) + ", all thing's @types: " + str(thing['@type']))
                                             print("full thing: " + str(json.dumps(thing,indent=4)))
                                         
-                                        if thing_must_have_capability == 'Light' and 'SmartPlug' in thing['@type']:
-                                            if not 'light' in current_thing_title and not 'lamp' in current_thing_title:
-                                                if self.DEBUG:
-                                                    print("thing had required capability (" + str(thing_must_have_capability) + "), but is a smart plug too, and no hints were found in the thing title that it should be seen as a light either (" + current_thing_title + "). Skipping.")
-                                                continue
+                                        
+                                        
                                             
                                         try:
                                             if hasattr( thing, 'selectedCapability' ):
@@ -6794,7 +6821,7 @@ class VocoAdapter(Adapter):
                             if simpler_fuzz(space_title, current_thing_title) > 85 and self.persistent_data['is_satellite'] == False: # Perhaps there is a title match if the room name is taken into consideration. E.g. Kitchen + radio = kitchen radio
                                 if self.DEBUG:
                                     print("using the space title (combo of space + thing title) after a fuzzy match. space_title: " + str(space_title))
-                                probable_thing_title = str(target_space) + " " + str(current_thing_title) #space_title
+                                probable_thing_title = current_thing_title #str(target_space) + " " + str(current_thing_title) #space_title
                                 probable_thing_title_confidence += 90
                                 result = [] 
                         
@@ -7703,7 +7730,7 @@ class VocoAdapter(Adapter):
                                                 del result[i]
                                             
                                 
-                        if boolean_related and slots['thing'] != None and slots['thing'] != 'lights' and slots['property'] == None:
+                        if boolean_related and slots['thing'] != None and slots['thing'] != 'lights' and slots['property'] == None: # TODO: and slots['thing'] != 'curtains'
                             if self.DEBUG:
                                 print("A singular thing was defined. Pruning back to the most likely property")
                             if best_matched_found_property != None:
@@ -8054,7 +8081,7 @@ class VocoAdapter(Adapter):
         """ moment is as UTC timestamp, timezone_offset is in seconds """
         try:
             #print("add_part_of_day?" + str(add_part_of_day))
-            localized_timestamp = int(utc_timestamp) + self.seconds_offset_from_utc
+            localized_timestamp = int(utc_timestamp) + int(self.seconds_offset_from_utc)
             hacky_datetime = datetime.utcfromtimestamp(localized_timestamp)
 
             if self.DEBUG:
@@ -8113,7 +8140,7 @@ class VocoAdapter(Adapter):
             if self.DEBUG:
                 print(str(nice_time))
                 
-            return nice_time
+            return str(nice_time)
             
         except Exception as ex:
             print("Error making human readable time: " + str(ex))

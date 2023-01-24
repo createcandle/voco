@@ -82,6 +82,11 @@ def intent_set_timer(self, slots, intent_message):
     if self.DEBUG:
         print("__intent_set_timer")
         
+    # wake
+    # alarm
+    # timer
+    # countdown
+        
     voice_message = ""
         
     try:
@@ -1766,9 +1771,9 @@ def intent_set_value(self, slots, intent_message, found_properties, original_val
                                     
                                 
                                     voice_message += "it will change to " + str(desired_value) + str(addendum)
-                                    voice_message += " at " + self.human_readable_time(slots['start_time'], True) + ", and "
+                                    voice_message += " at " + str(self.human_readable_time(slots['start_time'], True)) + ", and "
                                     back = " back "
-                                    voice_message += "it will switch " + back + " to " + str(original_value) + str(addendum)
+                                    voice_message += "it will switch " + str(back) + " to " + str(original_value) + str(addendum)
                                     self.add_action_time({"intent_message":intent_message,"moment":slots['end_time'],"type":"value","original_value":original_value,"slots":slots})
                                 
                                 else:
@@ -1828,7 +1833,7 @@ def intent_set_value(self, slots, intent_message, found_properties, original_val
                                     #voice_message += "it will switch to " + str(desired_value) + str(addendum)
                                     #self.add_action_time({"intent_message":intent_message,"moment":slots['end_time'],"type":"value","original_value":desired_value,"slots":slots})
                                    
-                                voice_message += " at " + self.human_readable_time(slots['end_time'], True)
+                                voice_message += " at " + str(self.human_readable_time(slots['end_time'], True))
                                 
                                 return voice_message
                     except Exception as ex:
