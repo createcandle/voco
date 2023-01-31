@@ -80,7 +80,7 @@ mkdir -p lib package
 pip3 install -r requirements.txt -t lib --no-cache-dir --prefix "" --default-timeout=180 --upgrade
 
 # Remove local cffi so that the globally installed version doesn't clash
-rm -rf ./lib/cffi*
+#rm -rf ./lib/cffi*
 
 # Put package together
 cp -r lib pkg LICENSE manifest.json *.py README.md snips snips64 tts tts64 models sounds css js images views package/
