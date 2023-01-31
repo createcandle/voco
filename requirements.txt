@@ -6,3 +6,4 @@ aiofiles
 pycryptodome
 python-olm
 matrix-nio[e2e]
+Pillow
