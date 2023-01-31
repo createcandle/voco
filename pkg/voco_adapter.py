@@ -12,6 +12,13 @@ import sys
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'lib'))
 if os.path.exists('/usr/lib/aarch64-linux-gnu'):
     sys.path.append('/usr/lib/aarch64-linux-gnu')
+
+print("")
+print("BREFORE sys.path: " + str(sys.path))
+sys.path.remove('/usr/lib/python3/dist-packages') # hide the globally installed packages
+print("")
+print("AFTER sys.path: " + str(sys.path))
+print("")
 #try:
 #    sys.path.append(os.path.join(os.sep,'home','pi','.webthings','addons','voco','lib'))
 #except:
