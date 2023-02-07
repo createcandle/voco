@@ -1,5 +1,5 @@
 from gateway_addon import Notifier, Outlet
-
+import queue
 
 #
 # NOTIFIER
@@ -68,14 +68,16 @@ class VocoOutlet(Outlet):
         
 
     def notify(self, title, message, level):
-
+        if self.notifier.adapter.DEBUG:
+            print("in notifier of outlet (incoming message from rules)")
         #print("NOTIFIER: OUTLET: NOTIFY. self.id = " + str(self.id))
         # Now let's send it up to the voco adapter to speak it out loud.
         try:
             if self.id == "speak":
-                self.notifier.voice_messages_queue.put(str(message)) # TODO do something with the title or alert level?
+                self.notifier.voice_messages_queue.put(str(title) + " " + str(message)) # TODO do something with the title or alert level?
             elif self.id == "matrix":
-                self.notifier.matrix_messages_queue.put({'title':title,'message':message,'level':level}) 
+                if self.notifier.adapter.matrix_started:
+                    self.notifier.matrix_messages_queue.put({'title':title,'message':message,'level':level}) 
             #print("")
             #print("added message to queue")
         except Exception as ex:

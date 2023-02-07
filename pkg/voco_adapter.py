@@ -2028,8 +2028,9 @@ class VocoAdapter(Adapter):
                                     print("terminiating old nanotts")
                                 self.nanotts_process.terminate()
                         except Exception as ex:
-                            if self.DEBUG:
-                                print("nanotts_process did not exist yet: " + str(ex))
+                            pass
+                            #if self.DEBUG:
+                            #    print("nanotts_process did not exist yet: " + str(ex))
                         
     
                         nanotts_volume = int(self.persistent_data['speaker_volume']) / 100
@@ -2646,15 +2647,16 @@ class VocoAdapter(Adapter):
                                 
                                 
                                 # There may have been a reason to restart snips, such as plugging in a new microphone
-                                if self.should_restart_snips:
-                                    if self.DEBUG:
-                                        print("clock: should_restart_snips was true, so will try to restart snips")
-                                    #print("Snips needs to be restarted, part of it may have crashed")
-                                    self.set_status_on_thing("restarting")
-                                    self.should_restart_snips = False
-                                    self.run_snips()
+                                #if self.should_restart_snips:
+                                #    if self.DEBUG:
+                                #        print("clock: should_restart_snips was true, so will try to restart snips")
+                                #    self.set_status_on_thing("restarting")
+                                #    self.should_restart_snips = False
+                                #    self.run_snips()
                                 
-                                else:
+                                #else:
+                                if self.should_restart_snips == False:
+                                    
                                     if self.initial_injection_completed == False and self.injection_in_progress == False:
                                         
                                         if self.persistent_data['is_satellite'] == False:
@@ -3004,8 +3006,9 @@ class VocoAdapter(Adapter):
                             if self.DEBUG:
                                 print("Incoming message from notifier: " + str(notifier_message))
                             self.speak(str(notifier_message)) # Notifier message does not currenty come with an intent TODO: use message title as optional site target
-                except:
-                    pass
+                except Exception as ex:
+                    if self.DEBUG:
+                        print("Clock: Error handling voice messages queue: " + str(ex))
 
                 # Update the persistence data if the number of timers has changed
                 try:
@@ -3039,6 +3042,8 @@ class VocoAdapter(Adapter):
                             if self.still_busy_booting == False:
                                 self.speak("The microphone has been disconnected.")
                             if self.stop_snips_on_microphone_unplug:
+                                if self.DEBUG:
+                                    print("microphone was disconnected. Stopping Snips.")
                                 self.stop_snips()
                     else:
                         #if self.DEBUG:
@@ -3103,8 +3108,8 @@ class VocoAdapter(Adapter):
                     # check if running subprocesses are still running ok
                     
                     if self.missing_microphone == True and self.stop_snips_on_microphone_unplug:
-                        #if self.DEBUG:
-                        #    print("missing microphone, and stop_snips_on_microphone_unplug is true")
+                        if self.DEBUG:
+                            print("missing microphone, and stop_snips_on_microphone_unplug is true, so not restarting Snips.")
                         pass
                         #if self.DEBUG:
                         #    print("will not restart snips since snips should be disabled while microphone is missing.")
@@ -3902,10 +3907,12 @@ class VocoAdapter(Adapter):
             else:
                 if time.time() > self.last_on_second_disconnect_time + 10:
                     self.last_on_second_disconnect_time = time.time()
+                    if self.DEBUG:
+                        print("\nThe second mqtt client disconnected. Stopping snips.\n")
                     self.stop_snips()
                 else:
                     if self.DEBUG:
-                        print("\nmqtt disconnected, but skipping calling stop_snips too often in a row\n")
+                        print("\nThe second mqtt client disconnected, but skipping calling stop_snips too often in a row\n")
         
 
         
