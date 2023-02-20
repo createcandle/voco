@@ -454,7 +454,7 @@ class VocoAdapter(Adapter):
 
 
         # property names that, if no exact property is specified for the thing scanner, will be deemed as likely to be what the user cares about.
-        self.unimportant_properties = ['data blur', 'data mute', 'battery', 'signal strength', 'child lock']
+        self.unimportant_properties = ['data blur', 'data mute', 'battery', 'signal strength', 'child lock', 'sunrise minute', 'sunrise hour', 'sunset minute', 'sunset hour']
 
         # Create a process group.
         #os.setpgrp()
@@ -3103,7 +3103,9 @@ class VocoAdapter(Adapter):
 
                 if self.should_restart_snips == True:
                     if self.DEBUG:
-                        print("clock: self.should_restart_snips is True!")
+                        print("clock: self.should_restart_snips is True! Calling run_snips.")
+                    self.run_snips()
+                    
                 else:
                     # check if running subprocesses are still running ok
                     
@@ -5211,7 +5213,7 @@ class VocoAdapter(Adapter):
             if intent_message['input'] == None:
                 return
                 
-            sentence = str(intent_message['input']).lower()
+            sentence = str(intent_message['input']).lower() # TODO: is it smart to make the sentence lowercase?
             
             if self.DEBUG and self.alternatives_counter == -1:
                 print("")
@@ -5282,6 +5284,7 @@ class VocoAdapter(Adapter):
                         print("spotted unknownword in sentence")
                         self.speak("debug: spotted unknown word",intent=intent_message)
                         #if self.persistent_data['is_satellite'] == False:
+                    
                     if this_is_origin_site:
                         if not self.DEBUG:
                             self.speak("I didn't quite get that",intent=intent_message)
@@ -5290,6 +5293,24 @@ class VocoAdapter(Adapter):
                             print("this is not origin site. Aborting.")
                     return
 
+            # Date
+            if sentence == 'what date is it' \
+                        or sentence == 'what is the date' \
+                        or sentence == "what 's at eight" \
+                        or sentence == 'what month is it' \
+                        or sentence == 'what is it' \
+                        or sentence == 'what is the data' \
+                        or sentence == 'yesterday today' \
+                        or sentence == 'what is it today' \
+                        or sentence == 'what is at today' \
+                        or sentence == 'what is the date today' \
+                        or sentence == 'tell me the date':
+                if self.DEBUG:
+                    print("Handling date intent")
+                slots = []
+                voice_message = intent_get_date(self, slots, intent_message)
+                self.speak(voice_message,intent=intent_message)
+                return
 
             # TODO: could be an option to try and parse the sentence, despite having an unknown word. And if that fails, then say "I didn't quite get that". It could be an unimportant word?
             #try:
@@ -6929,7 +6950,7 @@ class VocoAdapter(Adapter):
                                 print("NO exact property title match spotted.")
                                 
                             if probable_thing_title_confidence < 80:
-                                if self.DEBUG:
+                                if self.DEBUG2:
                                     print("Thing title was set, as was a property title, but this thing has less than 80% confidence of being the correct thing, as contains no perfect property title match, so skipping all its properties")
                                 continue
                         

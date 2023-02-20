@@ -77,6 +77,47 @@ def intent_get_time(self, slots, intent_message):
     return voice_message
 
 
+# This intent was not in the original AI model, but has been "hacked in" by simply reacting to specific 
+# sentences such as "what is the date" and "what date is it".
+def intent_get_date(self, slots, intent_message):
+    voice_message = ""
+    if self.DEBUG:
+        print("__intent_get_date")
+    try:
+        if self.DEBUG:
+            print("self.time_zone = " + str(self.time_zone))
+        #utcnow = datetime.now(tz=pytz.utc)
+        #utc_timestamp = int(utcnow.timestamp())
+        #voice_message = "It is " + str(self.human_readable_time(utc_timestamp, False))
+        
+        months = ['Error','January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
+
+        day = str(run_command('date +"%A"'))
+        month = months[ int(run_command('date +"%m"')) ]
+        date = int(run_command('date +"%d"'))
+        
+        #timestamp_from_terminal = run_command('date +"%s"') 
+        if self.DEBUG:
+            print("intent_get_date: day: " + str(day))
+            print("intent_get_date: month: " + str(month))
+            print("intent_get_date: date: " + str(date))
+        voice_message = "It is " + str(day) + " " + str(month) + " " + str(date)
+        if self.DEBUG:
+            print("intent_get_date: returning voice message: " + str(voice_message))
+        
+        return voice_message
+        
+        #voice_message = clean_up_string_for_speaking(voice_message)
+        #if self.DEBUG:
+        #    print("(...) " + str(voice_message))
+        #self.speak(voice_message,intent=intent_message)
+        
+    except Exception as ex:
+        print("Error dealing with get_date intent: " + str(ex))
+
+    return voice_message
+
+
 
 def intent_set_timer(self, slots, intent_message):
     if self.DEBUG:
