@@ -60,8 +60,12 @@ def intent_get_time(self, slots, intent_message):
         #voice_message = "It is " + str(self.human_readable_time(utc_timestamp, False))
         
         timestamp_from_terminal = run_command('date +"%s"') 
+        #localized_timestamp = int(timestamp_from_terminal) + int(self.seconds_offset_from_utc)
         if self.DEBUG:
             print("intent_get_time: timestamp from terminal: " + str(timestamp_from_terminal))
+            #print("intent_get_time: localized_timestamp: " + str(localized_timestamp))
+        #timestamp_from_terminal = int(timestamp_from_terminal) + int(self.seconds_offset_from_utc)
+            
         voice_message = "It is " + str(self.human_readable_time(timestamp_from_terminal, False))
         
         return voice_message

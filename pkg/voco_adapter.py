@@ -917,28 +917,7 @@ class VocoAdapter(Adapter):
         
         # TIME
         
-        # Calculate timezone difference between the user set timezone and UTC.
-        try:
-            self.user_timezone = timezone(self.time_zone)
-            
-            #utcnow = datetime.now(tz=pytz.utc)
-            #usernow = self.user_timezone.localize(datetime.utcnow()) # utcnow() is naive
-            
-            #print("The universal time is " + str(utcnow))
-            #print("Simpler, time.time() is: " + str( time.time() ))
-            #print("In " + str(self.time_zone) + " the current time is " + str(usernow))
-            #print("With your current localization settings, your computer will tell you it is now " + str(now))
-
-            #tdelta = utcnow - usernow
-            #self.seconds_offset_from_utc = round(tdelta.total_seconds())
-            #print("The difference between UTC and user selected timezone, in seconds, is " + str(self.seconds_offset_from_utc))
-            self.seconds_offset_from_utc = (time.timezone if (time.localtime().tm_isdst == 0) else time.altzone) * -1
-            if self.DEBUG:
-                print("Simpler timezone offset in seconds = " + str(self.seconds_offset_from_utc))
-            
-        except Exception as ex:
-            if self.DEBUG:
-                print("Error handling time zone calculation: " + str(ex))
+        self.update_timezone_offset()
             
         #if self.DEBUG:
         #    print("Starting the Snips processes in a thread")
@@ -1047,6 +1026,31 @@ class VocoAdapter(Adapter):
         
         #self.save_persistent_data()
         self.start_matrix()
+        
+        
+    def update_timezone_offset(self):
+        # Calculate timezone difference between the user set timezone and UTC.
+        try:
+            self.user_timezone = timezone(self.time_zone)
+            
+            #utcnow = datetime.now(tz=pytz.utc)
+            #usernow = self.user_timezone.localize(datetime.utcnow()) # utcnow() is naive
+            
+            #print("The universal time is " + str(utcnow))
+            #print("Simpler, time.time() is: " + str( time.time() ))
+            #print("In " + str(self.time_zone) + " the current time is " + str(usernow))
+            #print("With your current localization settings, your computer will tell you it is now " + str(now))
+
+            #tdelta = utcnow - usernow
+            #self.seconds_offset_from_utc = round(tdelta.total_seconds())
+            #print("The difference between UTC and user selected timezone, in seconds, is " + str(self.seconds_offset_from_utc))
+            self.seconds_offset_from_utc = (time.timezone if (time.localtime().tm_isdst == 0) else time.altzone) * -1
+            if self.DEBUG:
+                print("Simpler timezone offset in seconds = " + str(self.seconds_offset_from_utc))
+            
+        except Exception as ex:
+            if self.DEBUG:
+                print("Error handling time zone calculation: " + str(ex))
         
 
     # set the microphone capture gain volume
@@ -2584,6 +2588,13 @@ class VocoAdapter(Adapter):
             
             if time.time() > self.current_utc_time + 1:
                 self.current_utc_time = int(time.time())
+                
+                # once per hour update the timezone offset. Hopefully this will fix summertime/wintertime issue.
+                if self.current_utc_time % 3600 == 1:
+                    if self.DEBUG:
+                        print("clock: updating timezone offset")
+                    self.update_timezone_offset()
+                
                 
                 # Once a second save the persistent data, if need be
                 if self.save_to_persistent_data:
