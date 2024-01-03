@@ -317,7 +317,7 @@
   "asr" : {
     "type" : "snips"
   },
-  "analyticsEnabled" : true,
-  "heartbeatEnabled" : true,
+  "analyticsEnabled" : false,
+  "heartbeatEnabled" : false,
   "hotword" : "hey_snips"
 }
