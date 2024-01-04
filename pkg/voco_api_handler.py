@@ -536,6 +536,8 @@ class VocoAPIHandler(APIHandler):
                                                         'is_satellite':self.adapter.persistent_data['is_satellite'],
                                                         'connected_satellites': self.adapter.connected_satellites,
                                                         'periodic_voco_attempts':self.adapter.periodic_voco_attempts,
+                                                        'llm_busy_downloading_models':self.adapter.llm_busy_downloading_models,
+                                                        'llm_not_enough_disk_space':self.adapter.llm_not_enough_disk_space
                                                         })
                                 )
                                 

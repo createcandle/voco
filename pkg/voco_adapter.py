@@ -4,6 +4,17 @@
 # For now, during early development, it will be available. Please be considerate of others if you use this in a home situation.
 
 
+# TODO: add site groups
+# snipsdialogue:  --site-group <SITE_IDS>...
+#            [EXPERIMENTAL] List of site ids (comma separated) that should be in the same hotword coalescing group, pass
+#            the argument multiple times to create multiple groups
+# LD_LIBRARY_PATH=/home/pi/.webthings/addons/voco/snips64 /home/pi/.webthings/addons/voco/snips64/snips-dialogue64 --help
+
+
+
+#site-group
+
+
 from __future__ import print_function
 has_fuzz = False
 import os
@@ -28,6 +39,7 @@ import json
 import time
 import queue
 import socket
+#import psutil
 import asyncio
 import logging
 import aiofiles
@@ -95,6 +107,9 @@ try:
 except Exception as ex:
     print("Unable to load VocoAPIHandler (which is used for UI extention): " + str(ex))
 
+# Record audio from stream
+import struct
+import wave
 
 
 _TIMEOUT = 3
@@ -140,7 +155,7 @@ class VocoAdapter(Adapter):
 
         # Check is system is 32 or 64 bit
         self.bits = int(run_command('getconf LONG_BIT'))
-        print("system bits: " + str(self.bits))
+        #print("system bits: " + str(self.bits))
         
         self.bit_extension = ""
         if self.bits == 64:
@@ -153,6 +168,32 @@ class VocoAdapter(Adapter):
         os.environ["LD_LIBRARY_PATH"] = os.path.join(self.user_profile['addonsDir'],self.addon_name,'snips' + self.bit_extension)
 
 
+        # LLM AI
+        self.llm_enabled = True
+        self.llm_tts = True
+        self.record_running = False
+        self.record = wave.Wave_write
+        self.recording_state = 0 # changes to 1 (hotword detected, should record), 2 (busy recording), 3 (hotword toggleoff), and then to 0 again (recording done)
+        self.llm_busy_downloading_models = 0
+        self.llm_not_enough_disk_space = False
+        
+        self.llm_stt_minimal_memory = 1000
+        self.llm_ai_minimal_memory = 4000
+        self.llm_tts_minimal_memory = 300
+        
+        self.llm_stt_skipped = False # if there is not enough memory, then LLM STT will be skipped
+        #self.llm_ai_skipped = False # if there is not enough memory, then LLM AI will be skipped
+        #self.llm_tts_skipped = False # if there is not enough memory, then LLM TTS will be skipped
+        
+        self.llm_model_urls = {
+            'ggml-tiny.bin': 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.bin',
+            'ggml-base.bin': 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin',
+            'ggml-small.bin': 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.bin',
+            'ggml-medium.bin': 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-medium.bin',
+            'ggml-large.bin': 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large.bin',
+        }
+        
+        
         # MATRIX CHAT
         self.async_client = None
         self.matrix_server = None
@@ -626,6 +667,42 @@ class VocoAdapter(Adapter):
         
         # Some paths
         self.addon_path = os.path.join(self.user_profile['addonsDir'], self.addon_name)
+        self.data_dir_path = os.path.join(self.user_profile['dataDir'], self.addon_name)
+        
+        
+        # LLM AI
+        self.recording_dir_path = os.path.join(self.data_dir_path, 'recording')
+        self.last_recording_path = os.path.join(self.recording_dir_path, "recording.wav")
+        os.system('mkdir -p ' + str(self.recording_dir_path))
+        if self.DEBUG:
+            print("WARNING - VOICE RECORDINGS WILL NOT BE DELETED WHILE IN DEBUG MODE")
+        else:
+            os.system('rm -rf ' + str( os.path.join(self.recording_dir_path, '*') ))
+        
+        self.llm_data_dir_path = os.path.join(self.data_dir_path, 'llm')
+        
+        self.llm_tts_dir_path = os.path.join(self.llm_data_dir_path, 'tts')
+        os.system('mkdir -p ' + str(self.llm_tts_dir_path))
+        
+        self.llm_ai_dir_path = os.path.join(self.llm_data_dir_path, 'ai')
+        os.system('mkdir -p ' + str(self.llm_ai_dir_path))
+        
+        self.llm_stt_dir_path = os.path.join(self.llm_data_dir_path, 'stt')
+        os.system('mkdir -p ' + str(self.llm_stt_dir_path))
+        
+        #self.llm_tts_pipe_path = os.path.join(self.llm_tts_path, 'pipe')
+        #os.system('mkfifo ' + str(self.llm_tts_pipe_path))
+        
+        
+        statvfs = os.statvfs(self.llm_tts_dir_path)
+        print("statvfs: " + str(statvfs))
+        self.free_disk_space = int((statvfs.f_frsize * statvfs.f_bavail) / 1000000) # in MB
+        print("statvfs: free disk space in MB: " + str(self.free_disk_space))
+        
+        # 372Mb = 389984256
+        
+        
+        # Old school
         self.tts_path = os.path.join(self.addon_path,"tts" + self.bit_extension)
         self.nanotts_path = str(os.path.join(self.tts_path,'nanotts' + self.bit_extension))
         
@@ -653,6 +730,30 @@ class VocoAdapter(Adapter):
         self.response_wav = os.path.join(os.sep,"tmp","response.wav")
         self.response2_wav = os.path.join(os.sep,"tmp","response2.wav")
 
+        
+        
+        
+        # AI LLM, continued
+        
+        self.audio_frame_topic = 'hermes/audioServer/' + str(self.persistent_data['site_id']) + '/audioFrame'
+        if self.DEBUG:
+            print("audio_frame_topic: " + str(audio_frame_topic))
+        
+        self.total_memory = 0
+        self.used_memory = None
+        self.free_memory = 0
+        self.check_available_memory()
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
         
         # Check if (netbios) ip to hostname conversion tool is available
         self.nbtscan_available = None
@@ -710,6 +811,18 @@ class VocoAdapter(Adapter):
         if 'chatting' not in self.persistent_data:
             self.persistent_data['chatting'] = True
         
+        if 'llm_stt_model' not in self.persistent_data:
+            self.persistent_data['llm_stt_model'] = 'ggml-small.en.bin'
+                
+        if 'llm_ai_model' not in self.persistent_data:
+            self.persistent_data['llm_ai_model'] = 'tinyllama-1.1b-1t-openorca.Q4_K_M.gguf'
+        
+        if 'llm_tts_model' not in self.persistent_data:
+            self.persistent_data['llm_tts_model'] = 'en_US-lessac-medium.onnx'
+            
+        
+        
+        
         
         # load config
         try:
@@ -737,10 +850,14 @@ class VocoAdapter(Adapter):
 
         # Create Voco device
         try:
-            voco_device = VocoDevice(self, self.audio_output_options)
-            self.handle_device_added(voco_device)
+            self.voco_device = VocoDevice(self, self.audio_output_options)
+            self.handle_device_added(self.voco_device)
+            self.voco_device.add_event('event test')
             if self.DEBUG:
                 print("Voco thing created")
+            
+                
+                
         except Exception as ex:
             if self.DEBUG:
                 print("Could not create voco device:" + str(ex))
@@ -1024,8 +1141,14 @@ class VocoAdapter(Adapter):
         
         self.unmute()
         
+        if self.llm_enabled:
+            self.download_llm_models()
+        
         #self.save_persistent_data()
         self.start_matrix()
+        
+        
+        
         
         
     def update_timezone_offset(self):
@@ -1394,12 +1517,23 @@ class VocoAdapter(Adapter):
                 print("Error loading api token from settings: " + str(ex))
 
 
-        # Voice detection
+        
         try:
+            
+            # Voice detection
             if 'Sound detection' in config:
                 self.sound_detection = bool(config['Sound detection'])
                 if self.DEBUG:
-                    print("-Sound detection is present in the config data.")
+                    print("-Sound detection preference is present in the config data: " + str(self.sound_detection))
+                    
+            
+            # Advanced LLM AI
+            if 'Do not use advanced AI' in config:
+                self.llm_enabled = bool(config['Do not use advanced AI'])
+                if self.DEBUG:
+                    print("-Do not use advanced AI preference is present in the config data: " + str(self.llm))
+                            
+                    
         except Exception as ex:
             if self.DEBUG:
                 print("Error loading sound detection preference from settings: " + str(ex))
@@ -1858,6 +1992,20 @@ class VocoAdapter(Adapter):
                 print("Error attemping ffplay: " + str(ex))
         
         
+    # generate voice via LLM AI
+    def llm_speak(self,voice_message):
+        if self.DEBUG:
+            print("generating voice via LLM")
+        output_device_string = "plughw:" + str(self.current_card_id) + "," + str(self.current_device_id)
+        if bluetooth:
+            output_device_string = "bluealsa:DEV=" + str(self.persistent_data['bluetooth_device_mac'])
+        
+        tts_command = "echo '" + str(voice_message) + "' | " + str(os.path.join(self.addon_dir_path,'llm','tts', 'piper')) + " --model " + str(os.path.join(self.llm_tts_dir_path, str(self.persistent_data['llm_tts_model']))) + " --output-raw | aplay -D " + str(output_device_string) + " -r 22050 -f S16_LE -t raw -"
+        if self.DEBUG:
+            print("\n\nVOCO LLM TTS COMMAND: " + str(tts_command))
+        subprocess.run(tts_command, capture_output=False, shell=True, check=False, encoding=None, errors=None, text=None, env=None, universal_newlines=None)
+        
+        #echo 'This sentence is spoken first. This sentence is synthesized while the first sentence is spoken.' |   ./piper --model en_US-lessac-medium.onnx --output-raw |   aplay -r 22050 -f S16_LE -t raw -
         
         
 
@@ -1904,12 +2052,13 @@ class VocoAdapter(Adapter):
                 
             # A very brute-force way to avoid speaking the same sentence twice, which might occur if a satellite and main controller have a thing with the same name 
             dont_speak_twice = False
-            if self.last_spoken_sentence == str(voice_message) and self.last_spoken_sentence_time > (time.time() - 10):
+            if self.last_spoken_sentence == str(voice_message) and self.last_spoken_sentence_time > (time.time() - 5):
                 if self.DEBUG:
                     print("\n\nSTOPPING A SENTENCE FROM BEING SPOKEN TWICE IN A ROW\n\n") # TODO: very crude solution...
                 dont_speak_twice = True
-                
-            self.last_spoken_sentence_time = time.time()
+            else:
+                self.last_spoken_sentence_time = time.time()    
+            
             self.last_spoken_sentence = str(voice_message)
                 
             if dont_speak_twice:
@@ -2026,88 +2175,98 @@ class VocoAdapter(Adapter):
                         if self.DEBUG:
                             print("Alsa environment variable for speech output set to: " + str(option['simple_card_name']))
 
-                        try:
-                            if self.nanotts_process != None:
-                                if self.DEBUG:
-                                    print("terminiating old nanotts")
-                                self.nanotts_process.terminate()
-                        except Exception as ex:
-                            pass
-                            #if self.DEBUG:
-                            #    print("nanotts_process did not exist yet: " + str(ex))
+
+                        self.check_available_memory()
+                        if self.DEBUG:
+                            print("self.free_memory: " + str(self.free_memory) + ' ?>? ' + str(self.llm_tts_minimal_memory))
+                        if self.llm_tts and self.free_memory > self.llm_tts_minimal_memory:
+                            self.llm_speak(voice_message)
+                                                    
+                        else:
+                            try:
+                                if self.nanotts_process != None:
+                                    if self.DEBUG:
+                                        print("terminiating old nanotts")
+                                    self.nanotts_process.terminate()
+                            except Exception as ex:
+                                pass
+                                #if self.DEBUG:
+                                #    print("nanotts_process did not exist yet: " + str(ex))
                         
     
-                        nanotts_volume = int(self.persistent_data['speaker_volume']) / 100
+                            nanotts_volume = int(self.persistent_data['speaker_volume']) / 100
     
-                        if self.DEBUG:
-                            print("nanotts_volume = " + str(nanotts_volume))
+                            if self.DEBUG:
+                                print("nanotts_volume = " + str(nanotts_volume))
     
                         
     
-                        #nanotts_command = [nanotts_path,'-l',str(os.path.join(self.snips_path,'lang')),'-v',str(self.voice_accent),'--volume',str(nanotts_volume),'--speed',str(self.voice_speed),'--pitch',str(self.voice_pitch),'-w','-o',self.response_wav,"-i",str(voice_message)]
-                        #print(str(nanotts_command))
+                            #nanotts_command = [nanotts_path,'-l',str(os.path.join(self.snips_path,'lang')),'-v',str(self.voice_accent),'--volume',str(nanotts_volume),'--speed',str(self.voice_speed),'--pitch',str(self.voice_pitch),'-w','-o',self.response_wav,"-i",str(voice_message)]
+                            #print(str(nanotts_command))
                     
                     
                     
-                        # generate wave file
-                        self.echo_process = subprocess.Popen(('echo', str(voice_message)), stdout=subprocess.PIPE)
-                        nanotts_start_command_array = [self.nanotts_path,'-l',str(os.path.join(self.lang_path)),'-v',str(self.voice_accent),'--volume',str(nanotts_volume),'--speed',str(self.voice_speed),'--pitch',str(self.voice_pitch),'-w','-o',self.response_wav]
-                        self.nanotts_process = subprocess.run(nanotts_start_command_array, capture_output=True, stdin=self.echo_process.stdout, env=environment)
-                        if self.DEBUG:
-                            print("NanoTTS start command: ")
-                            print("export LD_LIBRARY_PATH=" + '{}:{}'.format(self.tts_path,self.arm_libs_path) + ";echo " + str(voice_message) + " | " + str( ' '.join(nanotts_start_command_array) ) + "\n")
+                            # generate wave file
+                            self.echo_process = subprocess.Popen(('echo', str(voice_message)), stdout=subprocess.PIPE)
+                            nanotts_start_command_array = [self.nanotts_path,'-l',str(os.path.join(self.lang_path)),'-v',str(self.voice_accent),'--volume',str(nanotts_volume),'--speed',str(self.voice_speed),'--pitch',str(self.voice_pitch),'-w','-o',self.response_wav]
+                            self.nanotts_process = subprocess.run(nanotts_start_command_array, capture_output=True, stdin=self.echo_process.stdout, env=environment)
+                            if self.DEBUG:
+                                print("NanoTTS start command: ")
+                                print("export LD_LIBRARY_PATH=" + '{}:{}'.format(self.tts_path,self.arm_libs_path) + ";echo " + str(voice_message) + " | " + str( ' '.join(nanotts_start_command_array) ) + "\n")
                         
 
-                        """
-                        try:
-                            if self.nanotts_process != None:
+                            """
+                            try:
+                                if self.nanotts_process != None:
+                                    if self.DEBUG:
+                                        print("terminiating old nanotts again")
+                                    self.nanotts_process.terminate()
+                            except Exception as ex:
                                 if self.DEBUG:
-                                    print("terminiating old nanotts again")
-                                self.nanotts_process.terminate()
-                        except Exception as ex:
-                            if self.DEBUG:
-                                print("nanotts_process did not exist yet again: " + str(ex))
-                        """
+                                    print("nanotts_process did not exist yet again: " + str(ex))
+                            """
                     
-                        # play wave file
-                        try:
-                            # Play sound at the top of a second, so synchronise audio playing with satellites
-                            #print(str(time.time()))
-                            #initial_time = int(time.time())
-                            #while int(time.time()) == initial_time:
-                            #    sleep(0.001)
+                            # play wave file
+                            try:
+                                # Play sound at the top of a second, so synchronise audio playing with satellites
+                                #print(str(time.time()))
+                                #initial_time = int(time.time())
+                                #while int(time.time()) == initial_time:
+                                #    sleep(0.001)
                             
-                            #os.system("aplay -D plughw:" + str(self.current_card_id) + "," + str(self.current_device_id) + ' ' + self.response_wav )
-                            #speak_command = ["ffplay", "-nodisp", "-vn", "-infbuf","-autoexit", self.response_wav,"-volume","100"]
+                                #os.system("aplay -D plughw:" + str(self.current_card_id) + "," + str(self.current_device_id) + ' ' + self.response_wav )
+                                #speak_command = ["ffplay", "-nodisp", "-vn", "-infbuf","-autoexit", self.response_wav,"-volume","100"]
                             
-                            #output_device_string = "plughw:" + str(self.current_card_id) + "," + str(self.current_device_id)
+                                #output_device_string = "plughw:" + str(self.current_card_id) + "," + str(self.current_device_id)
                 
                             
-                            # Play resampled file?
-                            file_to_play = self.response_wav
-                            # If a user is not using an output device with the default samplerate of 16000, then the wav file will have to be resampled first.
-                            if self.sample_rate != 16000:
-                                os.system('ffmpeg -loglevel panic -y -i ' + self.response_wav + ' -vn -af aresample=out_sample_fmt=s16:out_sample_rate=' + str(self.sample_rate) + ' ' + self.response2_wav)
-                                file_to_play = self.response2_wav
+                                # Play resampled file?
+                                file_to_play = self.response_wav
+                                # If a user is not using an output device with the default samplerate of 16000, then the wav file will have to be resampled first.
+                                if self.sample_rate != 16000:
+                                    os.system('ffmpeg -loglevel panic -y -i ' + self.response_wav + ' -vn -af aresample=out_sample_fmt=s16:out_sample_rate=' + str(self.sample_rate) + ' ' + self.response2_wav)
+                                    file_to_play = self.response2_wav
                                 
                             
-                            # Output audio to Bluetooth?
-                            output_to_bluetooth = False
-                            if self.persistent_data['bluetooth_device_mac'] != None:
-                                bluetooth_amixer_test = run_command('amixer -D bluealsa scontents')
-                                if self.DEBUG:
-                                    print("bluetooth_amixer_test: " + str(bluetooth_amixer_test))
-                                if len(bluetooth_amixer_test) > 10:
-                                    output_to_bluetooth = True
+                                # Output audio to Bluetooth?
+                                output_to_bluetooth = False
+                                if self.persistent_data['bluetooth_device_mac'] != None:
+                                    bluetooth_amixer_test = run_command('amixer -D bluealsa scontents')
+                                    if self.DEBUG:
+                                        print("bluetooth_amixer_test: " + str(bluetooth_amixer_test))
+                                    if len(bluetooth_amixer_test) > 10:
+                                        output_to_bluetooth = True
                 
-                            # which audio player to use?
-                            if output_to_bluetooth == False and self.prefer_aplay == False and self.persistent_data['audio_output'] != 'Built-in headphone jack':
-                                self.omxplay(file_to_play,output_to_bluetooth)
-                            else:
-                                self.aplay(file_to_play,output_to_bluetooth)
+                                # which audio player to use?
+                                if output_to_bluetooth == False and self.prefer_aplay == False and self.persistent_data['audio_output'] != 'Built-in headphone jack':
+                                    self.omxplay(file_to_play,output_to_bluetooth)
+                                else:
+                                    self.aplay(file_to_play,output_to_bluetooth)
                                 
-                        except Exception as ex:
-                            print("Error playing spoken voice response: " + str(ex))
+                            except Exception as ex:
+                                print("Error playing spoken voice response: " + str(ex))
+
+                        
         
                         break
             else:
@@ -2646,9 +2805,9 @@ class VocoAdapter(Adapter):
                                 
                             # TODO: this doesn't work on satellites. Maybe it now should?
                             if time.time() - self.addon_start_time > 240 and self.initial_injection_completed == False and self.persistent_data['is_satellite'] == False:
-                                print("Error. Voco failed to load properly (initial_injection_completed was false). Attempting complete reboot of addon with sys.exit()")
+                                print("Error. Voco failed to load properly (initial_injection_completed was false). Attempting reboot of addon by closing proxy.")
                                 self.close_proxy()
-                                sys.exit()
+                                #sys.exit()
                                 
                             if self.still_busy_booting == False:
                                 
@@ -3878,7 +4037,7 @@ class VocoAdapter(Adapter):
         if rc == 0:
             if self.DEBUG:
                 print("good connect by second mqtt client")
-        
+            
             self.mqtt_connected = True
         
             self.mqtt_second_client.subscribe("hermes/hotword/#")
@@ -3891,6 +4050,10 @@ class VocoAdapter(Adapter):
             
             if self.sound_detection:
                 self.mqtt_second_client.subscribe("hermes/voiceActivity/#")
+            
+            #if self.llm_enabled:
+            #    print("subscribing to audioFrame topic on second mqtt client")
+            #    self.mqtt_second_client.subscribe(self.audio_frame_topic)
                 
             if self.is_snips_running() == False:
                 self.run_snips()
@@ -3949,8 +4112,13 @@ class VocoAdapter(Adapter):
             print(str(payload))
             print("+")
             
-        if msg.topic == 'hermes/asr/textCaptured':
+        #if msg.topic == "hermes/audioServer/default/audioFrame":
+        #    self.start_record(msg)
             
+            
+        if msg.topic == 'hermes/asr/textCaptured':
+            #print("received message to hermes/asr/textCaptured")
+            self.stop_recording()
             if self.persistent_data['is_satellite']:
                 #if self.DEBUG:
                 #    print("stored asr payload")
@@ -4026,7 +4194,7 @@ class VocoAdapter(Adapter):
                 if self.DEBUG:
                     print("INJECTION PERFORM MESSAGE RECEIVED")
             """
-                
+            
         elif msg.topic.startswith('hermes/injection/complete'):
             if self.DEBUG:
                 print("INJECTION COMPLETE MESSAGE RECEIVED")
@@ -4090,9 +4258,19 @@ class VocoAdapter(Adapter):
                 if self.DEBUG:
                     print("MQTT message ends with toggleOff")
                 
+                if self.llm_enabled:
+                    print("subscribing to audioFrame topic")
+                    #self.mqtt_client.subscribe('hermes/audioServer/default/audioFrame')
+                    try:
+                        self.mqtt_client.subscribe(self.audio_frame_topic)
+                    except Exception as ex:
+                        print("could not subscribe to audio frame topic on first mqtt client")
+                
                 if 'siteId' in payload:
                     if payload['siteId'] == self.persistent_data['site_id']:
                         self.mute()
+                        if self.recording_state == 0:
+                            self.recording_state = 1
                     ###elif self.persistent_data['is_satellite'] == False:
                     ###    self.mqtt_client.publish("hermes/voco/" + str(payload['siteId']) + "/mute",json.dumps({"mute":True}))
 
@@ -4101,7 +4279,15 @@ class VocoAdapter(Adapter):
         elif msg.topic == 'hermes/hotword/toggleOn':
             
             # unmute if the audio output was muted.
-            self.unmute()
+            
+            if 'siteId' in payload:
+                if payload['siteId'] == self.persistent_data['site_id']:
+            
+                    self.unmute()
+                    #if self.recording_state == 2:
+                    #self.stop_recording()
+                    
+                    
             if self.persistent_data['listening'] == True:
                 if self.persistent_data['is_satellite']: # and self.satellite_should_act_on_intent == False:
                     if self.DEBUG:
@@ -4532,6 +4718,8 @@ class VocoAdapter(Adapter):
                 #self.mqtt_client.subscribe("hermes/hotword/#") # now handled by the second local mqtt client
                 self.mqtt_client.subscribe("hermes/intent/#")
             
+                self.mqtt_client.subscribe("hermes/asr/#")
+            
                 #self.mqtt_client.subscribe("hermes/asr/textCaptured/#") # now handled by the second local mqtt client
                 self.mqtt_client.subscribe("hermes/dialogueManager/sessionStarted/#")
             
@@ -4588,6 +4776,14 @@ class VocoAdapter(Adapter):
             else:
                 print('\n\n\n------------MAIN CONTROLLER: IN ON_MESSAGE (FIRST MESSAGE)--------------')
         
+        #print("msg.topic: " + str(msg.topic))
+
+        
+        if msg.topic == self.audio_frame_topic:
+            if self.recording_state > 0:
+                self.start_record(msg)
+            return
+        
         payload = {}
         try:
             payload = json.loads(msg.payload.decode('utf-8')) 
@@ -4609,7 +4805,7 @@ class VocoAdapter(Adapter):
         self.mqtt_connected = True
             
         
-        
+
         
         if msg.topic == 'hermes/voco/parse':
             if self.DEBUG:
@@ -8394,3 +8590,237 @@ class VocoAdapter(Adapter):
         sock.close()
         return result
         """
+
+
+
+
+
+
+
+#
+#  AI UPGRADE
+#
+
+
+
+    def check_available_memory(self):
+        self.total_memory, self.used_memory, self.free_memory = map(
+            int, os.popen('free -t -m').readlines()[-1].split()[1:])
+
+        if self.DEBUG:
+            print("check_available_memory: total_memory: " + str(self.total_memory))
+            print("check_available_memory: used_memory: " + str(self.used_memory))
+            print("check_available_memory: free_memory: " + str(self.free_memory))
+            
+
+
+    def prepare_voice_generator(self):
+        
+        pass
+        #piper_command = ''self.piper_pipe_path
+        #' | ./piper --json-input --model en_GB-southern_english_female-low.onnx --output-raw | aplay -r 22050 -f S16_LE -t raw -'
+    
+
+
+    # Record audio from MQTT stream
+    def start_record(self,msg):
+        #print("in start_record")
+    	#global self.record_running
+    	#global record
+
+
+        riff, size, fformat = struct.unpack('<4sI4s', msg.payload[:12])
+        if riff != b'RIFF':
+            if self.DEBUG:
+                print("RIFF parse error")
+            return
+        if fformat != b'WAVE':
+            if self.DEBUG:
+                print("FORMAT parse error")
+            return
+    	
+        #print("wav chunk size: %d" % size)
+
+    	# Data Header
+        chunk_header = msg.payload[12:20]
+        subchunkid, subchunksize = struct.unpack('<4sI', chunk_header)
+        #print(" subchunkid, subchunksize : " + str(subchunkid) + ' -- ' + str(subchunksize) )
+    
+        if (subchunkid == b'fmt '):
+            aformat, channels, samplerate, byterate, blockalign, bps = struct.unpack('HHIIHH', msg.payload[20:36])
+            bitrate = (samplerate * channels * bps) / 1024
+            #if self.recording_state == 1:
+            #print("Format: %i, Channels %i, Sample Rate: %i, Kbps: %i" % (aformat, channels, samplerate, bitrate))
+        
+        if self.record_running == False and self.recording_state == 1:
+            if self.DEBUG:
+                print("\nSTARTING RECORDING")
+            self.recording_state = 2
+            self.record_running = True
+            if self.DEBUG:
+                self.last_recording_path = os.path.join(self.recording_dir_path, str(int(time.time())) + "-recording.wav")
+            self.record = wave.open(self.last_recording_path, "wb") # datetime.datetime.now().strftime("%Y%m%d-%H%M%S")+
+            self.record.setnchannels(channels)
+            self.record.setframerate(samplerate)
+            self.record.setsampwidth(2)
+
+        
+        chunkOffset = 52
+        #info = [msg.payload[i:i+4] for i in range(0, len(msg.payload), 4)]
+        #print(info)
+        
+        if self.DEBUG:
+            print("? d ? " + str(msg.payload[52]))
+        
+        #for w in range(0, len(info)):
+        #    print(str(w) + ' __ ' + str(info[w]))
+        #    if (info[w] == b'data'): 
+        #        chunkOffset = w * 4
+        #        print("BINGO! Spotted data as binary. chunkOffset: ", chunkOffset);
+        #        break
+                 
+        #print("? ? data? " + str(info[13]))
+        #chunkOffset = 36
+        
+        while (chunkOffset < size):
+            subchunk2id, subchunk2size = struct.unpack('<4sI', msg.payload[chunkOffset:chunkOffset+8])
+            chunkOffset += 8
+            #print("chunk id: %s, size: %i" % (subchunk2id, subchunk2size))
+            if (subchunk2id == b'data'):  # \x00\x02\x00\x00
+                if(self.record_running):
+                    self.record.writeframes(msg.payload[chunkOffset:chunkOffset+subchunk2size])
+                    #print("+WAV " + str(chunkOffset) + ' * ' + str(msg.payload[chunkOffset:chunkOffset+subchunk2size]))
+            else:
+                if self.DEBUG:
+                    print("Error, did not spot corrent 'data' position in Audio Frame")
+                #print(" :-( Data: %s" % msg.payload[chunkOffset:chunkOffset+subchunk2size])
+
+            chunkOffset = chunkOffset + subchunk2size + 8
+
+
+    def stop_recording(self):
+        if self.DEBUG:
+            print("in stop_recording")
+        self.record_running = False
+        if self.recording_state == 2:
+            self.record.close()
+
+            self.llm_stt()
+            
+        self.recording_state = 0
+
+
+
+    def llm_stt(self):
+        if self.DEBUG:
+            print("in llm_stt")
+        
+        if self.llm_stt:
+        
+            self.check_available_memory()
+            if self.DEBUG:
+                print("self.free_memory: " + str(self.free_memory) + ' ?>? ' + str(self.llm_stt_minimal_memory))
+            
+            if self.free_memory > self.llm_stt_minimal_memory:
+                self.llm_stt_skipped = False
+                
+                #./command -m ./models/ggml-tiny.en.bin -ac 768 -t 3 -c 0
+                stt_command = str(os.path.join(self.addon_dir_path,'llm','stt', 'command')) + " -m " + str(os.path.join(self.llm_stt_dir_path, str(self.persistent_data['llm_tts_model']))) + " -ac 768 -t 3 -c 0"
+                if self.DEBUG:
+                    print("\n\nVOCO LLM STT COMMAND: " + str(stt_command))
+        
+                stt_output = run_command(stt_command)
+                if self.DEBUG:
+                    print("\n\nVOCO LLM STT OUTPUT: " + str(stt_output))
+            
+            else:
+                if self.DEBUG:
+                    print("not enough free memory to run LLM STT")
+                self.llm_stt_skipped = True
+        
+       
+        #subprocess.run(tts_command, capture_output=False, shell=True, check=False, encoding=None, errors=None, text=None, env=None, universal_newlines=None)
+        
+        # https://github.com/ggerganov/whisper.cpp/tree/master/examples/command
+        # ./command -m ./models/ggml-tiny.en.bin -ac 768 -t 3 -c 0
+        #self.last_recording_path
+        
+        
+    def download_llm_models(self):
+        if self.DEBUG:
+            print("in download_llm_models")
+        
+        return
+            
+        # TTS
+        self.llm_busy_downloading_models = 1
+        
+        if self.persistent_data['llm_tts_model'] == 'en_US-lessac-medium.onnx':
+            self.llm_tts_model = os.path.join(self.llm_tts_dir,'en_US-lessac-medium.onnx')
+            if not os.path.exists(llm_tts_model):
+                if self.free_disk_space > 1000:
+                    if self.free_disk_space < 3000 and 'voco' in self.llm_tts_dir:
+                         os.system('rm ' + str(os.path.join(self.llm_tts_dir,'*')))
+                    print("Downloading " + str(self.llm_tts_model))
+                    os.system('wget https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/en/en_US/lessac/medium/en_US-lessac-medium.onnx -O ' + str(self.llm_tts_model))
+                    os.system('wget https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/en/en_US/lessac/medium/en_US-lessac-medium.onnx.json -O ' + str(self.llm_tts_model) + '.json')
+                else:
+                    self.llm_not_enough_disk_space = True
+                    
+        elif self.persistent_data['llm_tts_model'] == 'en_GB-southern_english_female-low.onnx':
+            self.llm_tts_model = os.path.join(self.llm_tts_dir,'en_GB-southern_english_female-low.onnx')
+            if not os.path.exists(llm_tts_model):
+                if self.free_disk_space > 1000:
+                    if self.free_disk_space < 3000 and 'voco' in self.llm_tts_dir:
+                         os.system('rm ' + str(os.path.join(self.llm_tts_dir,'*')))
+                    print("Downloading " + str(self.llm_tts_model))
+                    os.system('wget https://huggingface.co/rhasspy/piper-voices/blob/main/en/en_GB/southern_english_female/low/en_GB-southern_english_female-low.onnx -O ' + str(self.llm_tts_model))
+                    os.system('wget https://huggingface.co/rhasspy/piper-voices/blob/main/en/en_GB/southern_english_female/low/en_GB-southern_english_female-low.onnx.json -O ' + str(self.llm_tts_model) + '.json')
+                else:
+                    self.llm_not_enough_disk_space = True
+         
+        # MAIN AI
+        self.llm_busy_downloading_models = 2
+        
+        if self.persistent_data['llm_ai_model'] == 'tinyllama-1.1b-1t-openorca.Q4_K_M.gguf':
+            self.llm_ai_model = os.path.join(self.llm_ai_dir,'tinyllama-1.1b-1t-openorca.Q4_K_M.gguf')
+            if not os.path.exists(self.llm_ai_model):
+                if self.free_disk_space > 1000:
+                    print("Downloading " + str(self.llm_ai_model))
+                    os.system('wget https://huggingface.co/TheBloke/TinyLlama-1.1B-1T-OpenOrca-GGUF/resolve/main/tinyllama-1.1b-1t-openorca.Q4_K_M.gguf -O ' + str(self.llm_ai_model))
+                else:
+                    self.llm_not_enough_disk_space = True
+        
+        # STT
+        self.llm_busy_downloading_models = 3
+        
+        if self.persistent_data['llm_stt_model'] == 'ggml-small.en.bin':
+            self.llm_stt_model = os.path.join(self.llm_stt_dir,'ggml-small.en.bin')
+            if not os.path.exists(self.llm_stt_model):
+                if self.free_disk_space > 1000:
+                    print("Downloading " + str(self.llm_stt_model))
+                    if self.free_disk_space < 3000 and 'voco' in self.llm_stt_dir:
+                         os.system('rm ' + str(os.path.join(self.llm_stt_dir,'*')))
+                    os.system('wget https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.en.bin?download=true -O ' + str(self.llm_stt_model))
+                else:
+                    self.llm_not_enough_disk_space = True
+                    
+        elif self.persistent_data['llm_stt_model'] == 'ggml-medium.en-q5_0.bin':
+            self.llm_stt_model = os.path.join(self.llm_stt_dir,'ggml-medium.en-q5_0.bin')
+            if not os.path.exists(self.llm_stt_model):
+                if self.free_disk_space > 1000:
+                    if self.free_disk_space < 3000 and 'voco' in self.llm_stt_dir:
+                         os.system('rm ' + str(os.path.join(self.llm_stt_dir,'*')))
+                    print("Downloading " + str(self.llm_stt_model))
+                    os.system('wget https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-medium.en-q5_0.bin?download=true -O ' + str(self.llm_stt_model))
+                else:
+                    self.llm_not_enough_disk_space = True
+        
+        self.llm_busy_downloading_models = 0
+                
+        
+        
+
+
+
+

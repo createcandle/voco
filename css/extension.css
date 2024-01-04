@@ -27,6 +27,51 @@
 	margin:0 auto;
 }
 
+.extension-homebridge-hidden{
+    display:none!important;
+}
+
+
+
+/*  TABS  */
+
+#extension-homebridge-view button {
+    font-size: 1.6rem;
+    padding: 1rem;
+    border: none;
+}
+
+.extension-homebridge-tab-buttons {
+    background-color: rgba(255,255,255,.1);
+    border-radius: 0.7rem;
+    overflow: hidden;
+    font-size: 0;
+    width:60%;
+    max-width: 40rem;
+    margin: 4rem auto 0 auto;
+    display:flex;
+}
+
+#extension-homebridge-view .extension-homebridge-tab-buttons button {
+    background-color: transparent;
+    border-right: 1px solid rgba(0,0,0,.05);
+    color: #eee;
+    cursor: pointer;
+    font-size: 1.8rem;
+    flex-grow:1;
+}
+
+#extension-homebridge-view .extension-homebridge-tab-buttons button:hover{
+    background-color: rgba(0,0,0,0.1);
+    color: white;
+}
+
+body #extension-homebridge-view .extension-homebridge-tab-selected {
+    color: white;
+    background-color: rgba(0,0,0,0.18)!important;
+}
+
+
 /*
 #extension-voco-title #extension-voco-tutorial-button{
 	opacity:0;

@@ -1215,9 +1215,9 @@
 				const list = document.getElementById('extension-voco-list');
 				const original = document.getElementById('extension-voco-original-item');
 			
-				const items = this.items_list
-			
-				items.sort((a, b) => (a.moment > b.moment) ? 1 : -1)
+				const items = this.items_list;
+				
+				items.sort((a, b) => (a.moment > b.moment) ? 1 : -1);
 		
 				
 				list.innerHTML = "";
