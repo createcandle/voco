@@ -1116,6 +1116,17 @@ def intent_set_state(self, slots, intent_message, found_properties, delayed_acti
     try:
         
         sentence = slots['sentence']
+        if self.DEBUG:
+            print("intent_set_state: sentence: " + str(sentence))
+        
+        if sentence.endswith('at night'):
+            if self.DEBUG:
+                print("modifying sentence with 'at night' at the end")
+            sentence = sentence.replace('at night','')
+            slots['start_time'] = None
+            slots['end_time'] = None
+            slots['duration'] = None
+            slots['period'] = None
         
         if slots['boolean'] is None:
             if self.DEBUG:

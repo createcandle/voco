@@ -40,6 +40,19 @@
 		<div id="extension-voco-unavailable" class="extension-voco-warning" style="display:none">
 			<p>Voco seems to be unavailable at the moment</p>
 		</div>
+		
+		<div id="extension-voco-downloading-models" class="extension-voco-vlak" style="display:none">
+			
+			
+			
+            <div class="extension-voco-spinner">
+                <div></div><div></div><div></div><div></div>
+            </div>
+			<p style="text-align:center">Voco is downloading more advanced AI models</p>
+			<div id="extension-voco-downloading-models-progress-container">
+			</div>
+			
+		</div>
 
 		<div id="extension-voco-missing-microphone" style="display:none">
             <img id="extension-voco-missing-microphone-icon" src="/extensions/voco/images/menu-icon.svg" />
@@ -59,6 +72,7 @@
 		<div class="extension-voco-tab-buttons">
             <button id="extension-voco-tab-button-timers" class="extension-voco-main-tab-button extension-voco-tab-selected">Timers</button>
             <button id="extension-voco-tab-button-chat" class="extension-voco-main-tab-button">Chat</button>
+			<button id="extension-voco-tab-button-ai" class="extension-voco-main-tab-button">AI</button>
 			<button id="extension-voco-tab-button-satellites" class="extension-voco-main-tab-button">Satellites</button>
             <button id="extension-voco-tab-button-tutorial" class="extension-voco-main-tab-button">?</button>
         </div>
@@ -344,6 +358,94 @@
             </div>
 
 
+
+
+
+
+			<div id="extension-voco-tab-ai" class="extension-voco-tab extension-voco-hidden">
+				<div id="extension-voco-ai" class="extension-voco-centered-page">
+   			 <div class="extension-voco-vlak">
+                        
+						
+						<p><img src="/extensions/voco/images/hal.svg" alt="What we call AI is just statistics on steroids" style="float:left;width:10rem;margin:0 3rem 3rem 1rem"/>Voco supports more advanced AI assistant features, which run completely on your own controller.</p>
+						<p>This does mean your controller needs to have enough memory (and storage space) to run them. The more memory is available, the higher quality the AI can be.</p>
+                      	
+    				<p>&nbsp;</p>
+						
+						<div id="extension-voco-main-low-disk-space-warning" class="extension-voco-vlak" style="display:none">
+							<p style="text-align:center">There is not enough available disk space for Voco to download more advanced AI models</p>
+						</div>
+						<div id="extension-voco-main-low-memory-warning" class="extension-voco-vlak" style="display:none">
+							<p style="text-align:center">There is not enough free memory for Voco to run more advanced AI models</p>
+						</div>
+						
+						<p>&nbsp;</p>
+						
+						<div class="extension-voco-vlak">
+                            
+    						<h4>Voice synthesis</h4>
+                        
+                <p>More realistic sounding speech can be generated using "Large Language Models". This requires relatively little extra memory. If there is not enough memory, Voco falls back to the basic voice. You can select which voice type you prefer.</p>
+                           	
+							<ul id="extension-voco-tts-models-list" class="extension-voco-ai-models-list"></ul>
+								
+								<!--		
+								<input type="radio" id="html" name="fav_language" value="HTML">
+								<label for="html">HTML</label><br>
+								<input type="radio" id="css" name="fav_language" value="CSS">
+								<label for="css">CSS</label><br>
+								<input type="radio" id="javascript" name="fav_language" value="JavaScript">
+								<label for="javascript">JavaScript</label>
+							
+						   		en_GB-southern_english_female-low
+								-->
+						   
+						</div>
+						
+						
+                        
+						<div class="extension-voco-vlak">
+                            
+    						<h4>Speech recognition</h4>
+                        
+							<p>Voco has a basic speech recognition system, but this can be enhanced by employing so called "Large Language Models". These can understand more words, so they are generally used as a 'second opinion' if the basic system doesn't quite understand what you're saying.</p>
+                            <p>These Large Language Models are, well, large. They require a lot of processing power and sytem memory, and are relatively slow. If you don't want to use them, simply select the 'basic' option.</p>
+							
+							<ul id="extension-voco-stt-models-list" class="extension-voco-ai-models-list"></ul>
+
+						</div>
+						
+						
+						
+						
+						<div class="extension-voco-vlak">
+                            
+    						<h4>AI assistant</h4>
+                        
+                            <p>An AI assistant can give answers to simple questions. This feature requires the most memory and disk space, so a Raspberry Pi 5 with 8GB of memory is recommended.</p>
+							<p>Be aware that the models that can run on Candle are not as advanced or powerful as commercial cloud-based versions. The assistant will make mistakes, so don't rely on it for anything serious such as life-threatening situations.</p>
+							
+							<ul id="extension-voco-ai-models-list" class="extension-voco-ai-models-list"></ul>
+						   
+						</div>
+						
+						
+    					
+					</div>
+				</div>
+
+			</div>
+
+
+
+
+
+
+
+
+
+
+
 			<div id="extension-voco-tab-tutorial" class="extension-voco-tab extension-voco-hidden">
 				<div id="extension-voco-tutorial" class="extension-voco-centered-page">
 					<h2>How to use Voco</h2>
@@ -486,9 +588,6 @@
 		</div>
 		
 		
-		
-		
-
         <br/>
         <br/>
 

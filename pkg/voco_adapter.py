@@ -25,7 +25,7 @@ if os.path.exists('/usr/lib/aarch64-linux-gnu'):
     sys.path.append('/usr/lib/aarch64-linux-gnu')
 
 print("")
-print("BREFORE sys.path: " + str(sys.path))
+print("BEFORE sys.path: " + str(sys.path))
 sys.path.remove('/usr/lib/python3/dist-packages') # hide the globally installed packages
 print("")
 print("AFTER sys.path: " + str(sys.path))
@@ -170,29 +170,106 @@ class VocoAdapter(Adapter):
 
         # LLM AI
         self.llm_enabled = True
-        self.llm_tts = True
+        self.llm_tts_enabled = True
+        self.llm_stt_enabled = True
+        self.llm_should_download = True
         self.record_running = False
         self.record = wave.Wave_write
         self.recording_state = 0 # changes to 1 (hotword detected, should record), 2 (busy recording), 3 (hotword toggleoff), and then to 0 again (recording done)
         self.llm_busy_downloading_models = 0
         self.llm_not_enough_disk_space = False
         
-        self.llm_stt_minimal_memory = 1000
-        self.llm_ai_minimal_memory = 4000
+        self.llm_stt_minimal_memory = 500
+        self.llm_ai_minimal_memory = 3000
         self.llm_tts_minimal_memory = 300
         
         self.llm_stt_skipped = False # if there is not enough memory, then LLM STT will be skipped
         #self.llm_ai_skipped = False # if there is not enough memory, then LLM AI will be skipped
         #self.llm_tts_skipped = False # if there is not enough memory, then LLM TTS will be skipped
         
-        self.llm_model_urls = {
+        
+        
+        
+        self.llm_tts_models = {
+            'Basic':{'model':'nanotts',
+                                'description':'Always use the basic voice. This assures the fastest response times, but may sound less natural.',
+                                'model_url':''
+                            },
+            'American default':{'model':'en_US-lessac-medium.onnx',
+                                'description':'A default male American voice. Technically the highest quality, but requires more memory and may also be slower to generate.',
+                                'model_url':'https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/en/en_US/lessac/medium/en_US-lessac-medium.onnx'
+                            },
+            'Southern English':{'model':'en_GB-southern_english_female-low.onnx',
+                                'description':'A female Southern-english voice. Lower quality, but sounds great.',
+                                'model_url':'https://huggingface.co/rhasspy/piper-voices/blob/main/en/en_GB/southern_english_female/low/en_GB-southern_english_female-low.onnx'
+                            },
+            'British Alan':{'model':'en_GB-alan-low.onnx',
+                                'description':'A slower speaking British male. Low quality, so may be slightly faster to generate.',
+                                'model_url':'https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_GB/alan/low/en_GB-alan-low.onnx'
+                            },
+            'Dutch':{'model':'nl_NL-mls_5809-low.onnx',
+                                'description':'A small model designed to speak Dutch.',
+                                'model_url':'https://huggingface.co/rhasspy/piper-voices/resolve/main/nl/nl_NL/mls_5809/low/nl_NL-mls_5809-low.onnx'
+                            },
+            'German':{'model':'de_DE-pavoque-low.onnx',
+                                'description':'A small model designed to speak German.',
+                                'model_url':'https://huggingface.co/rhasspy/piper-voices/resolve/main/de/de_DE/pavoque/low/de_DE-pavoque-low.onnx'
+                            },
+            'French':{'model':'fr_FR-upmc-medium.onnx',
+                                'description':'A medium sized model designed to speak French.',
+                                'model_url':'https://huggingface.co/rhasspy/piper-voices/resolve/main/fr/fr_FR/upmc/medium/fr_FR-upmc-medium.onnx'
+                            },
+            'Spanish':{'model':'es_ES-carlfm-x_low.onnx',
+                                'description':'A tiny model designed to speak Spanish.',
+                                'model_url':'https://huggingface.co/rhasspy/piper-voices/resolve/main/es/es_ES/carlfm/x_low/es_ES-carlfm-x_low.onnx'
+                            },
+            'Swahili':{'model':'sw_CD-lanfrica-medium.onnx',
+                                'description':'A tiny model designed to speak Spanish.',
+                                'model_url':'https://huggingface.co/rhasspy/piper-voices/resolve/main/sw/sw_CD/lanfrica/medium/sw_CD-lanfrica-medium.onnx'
+                            },
+            'Custom':{'model':'custom',
+                                'description':'You can provide a link to a ONNX voice model of your choice in the addon settings, and Voco will download it for you. You can find models at https://rhasspy.github.io/piper-samples/',
+                                'model_url':'custom'
+                            }
+            
+        }
+        
+
+        #'American male 2':{'model':'en_US-hfc_male-medium','description':'A default male American voice. Technically the best quality, but may also be slower to generate.'},
+        
+
+        """
+        self.llm_stt_model_urls = {
             'ggml-tiny.bin': 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.bin',
             'ggml-base.bin': 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin',
             'ggml-small.bin': 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.bin',
             'ggml-medium.bin': 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-medium.bin',
             'ggml-large.bin': 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large.bin',
         }
+        """
         
+        
+        self.llm_stt_models = {
+            'Basic only':{'model':'voco',
+                                'description':'Use only the very basic AI.',
+                                'model_url':''
+                            },
+            'Basic + Fast':{'model':'ggml-tiny.en.bin',
+                                'description':'A tiny model that can run on low-end hardware, but makes a lot of mistakes.',
+                                'model_url':'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.en.bin'
+                            },
+            'Basic + Average':{'model':'ggml-base.en.bin',
+                                'description':'A base speech recognition model with a small vocabulary',
+                                'model_url':'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.en.bin'
+                            },
+            'Basic + Good':{'model':'ggml-small.en.bin',
+                                'description':'A small but more capable speech recognition model.',
+                                'model_url':'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.en.bin'
+                            }
+            
+        }
+
+                
         
         # MATRIX CHAT
         self.async_client = None
@@ -666,7 +743,7 @@ class VocoAdapter(Adapter):
         #print("self.user_profile = " + str(self.user_profile))
         
         # Some paths
-        self.addon_path = os.path.join(self.user_profile['addonsDir'], self.addon_name)
+        self.addon_dir_path = os.path.join(self.user_profile['addonsDir'], self.addon_name)
         self.data_dir_path = os.path.join(self.user_profile['dataDir'], self.addon_name)
         
         
@@ -695,21 +772,22 @@ class VocoAdapter(Adapter):
         
         
         statvfs = os.statvfs(self.llm_tts_dir_path)
-        print("statvfs: " + str(statvfs))
+        #print("statvfs: " + str(statvfs))
         self.free_disk_space = int((statvfs.f_frsize * statvfs.f_bavail) / 1000000) # in MB
-        print("statvfs: free disk space in MB: " + str(self.free_disk_space))
+        if self.DEBUG:
+            print("statvfs: free disk space in MB: " + str(self.free_disk_space))
         
         # 372Mb = 389984256
         
         
         # Old school
-        self.tts_path = os.path.join(self.addon_path,"tts" + self.bit_extension)
+        self.tts_path = os.path.join(self.addon_dir_path,"tts" + self.bit_extension)
         self.nanotts_path = str(os.path.join(self.tts_path,'nanotts' + self.bit_extension))
         
-        self.snips_path = os.path.join(self.addon_path,"snips" + self.bit_extension)
-        self.models_path = os.path.join(self.addon_path,"models")
+        self.snips_path = os.path.join(self.addon_dir_path,"snips" + self.bit_extension)
+        self.models_path = os.path.join(self.addon_dir_path,"models")
         self.lang_path = os.path.join(self.models_path,"lang") # this is actually used by nanotts, so may be in a strange location at the moment.
-        self.arm_libs_path = os.path.join(self.addon_path,"snips","arm-linux-gnueabihf") # arm32 #TODO: in some places this is still loaded as an environment path in the 64 bit version. Should check if that causes issues.
+        self.arm_libs_path = os.path.join(self.addon_dir_path,"snips","arm-linux-gnueabihf") # arm32 #TODO: in some places this is still loaded as an environment path in the 64 bit version. Should check if that causes issues.
         self.assistant_path = os.path.join(self.models_path,"assistant")
         self.work_path = os.path.join(self.user_profile['dataDir'],'voco','work')
         self.toml_path = os.path.join(self.models_path,"snips.toml")
@@ -726,7 +804,7 @@ class VocoAdapter(Adapter):
         self.alarm_sound = "alarm"
         self.error_sound = "error"
         
-        #self.response_wav = os.path.join(self.addon_path,"snips","response.wav")
+        #self.response_wav = os.path.join(self.addon_dir_path,"snips","response.wav")
         self.response_wav = os.path.join(os.sep,"tmp","response.wav")
         self.response2_wav = os.path.join(os.sep,"tmp","response2.wav")
 
@@ -736,6 +814,10 @@ class VocoAdapter(Adapter):
         # AI LLM, continued
         
         self.audio_frame_topic = 'hermes/audioServer/' + str(self.persistent_data['site_id']) + '/audioFrame'
+        
+        #self.audio_frame_topic = 'hermes/audioServer/cgxdojhe/audioFrame'
+        
+        
         if self.DEBUG:
             print("audio_frame_topic: " + str(audio_frame_topic))
         
@@ -812,7 +894,8 @@ class VocoAdapter(Adapter):
             self.persistent_data['chatting'] = True
         
         if 'llm_stt_model' not in self.persistent_data:
-            self.persistent_data['llm_stt_model'] = 'ggml-small.en.bin'
+            #self.persistent_data['llm_stt_model'] = 'ggml-small.en.bin'
+            self.persistent_data['llm_stt_model'] = 'ggml-base.en.bin'
                 
         if 'llm_ai_model' not in self.persistent_data:
             self.persistent_data['llm_ai_model'] = 'tinyllama-1.1b-1t-openorca.Q4_K_M.gguf'
@@ -852,7 +935,7 @@ class VocoAdapter(Adapter):
         try:
             self.voco_device = VocoDevice(self, self.audio_output_options)
             self.handle_device_added(self.voco_device)
-            self.voco_device.add_event('event test')
+            self.voco_device.add_event('event test',{'meta':True})
             if self.DEBUG:
                 print("Voco thing created")
             
@@ -1529,7 +1612,7 @@ class VocoAdapter(Adapter):
             
             # Advanced LLM AI
             if 'Do not use advanced AI' in config:
-                self.llm_enabled = bool(config['Do not use advanced AI'])
+                self.llm_enabled = not bool(config['Do not use advanced AI'])
                 if self.DEBUG:
                     print("-Do not use advanced AI preference is present in the config data: " + str(self.llm))
                             
@@ -1608,6 +1691,19 @@ class VocoAdapter(Adapter):
         except Exception as ex:
             print("Error loading voice setting(s) from config: " + str(ex))
 
+            
+        # Audio sample rate
+        try:
+            if 'Custom AI voice synthesis model url' in config:
+                if str(config['Custom AI voice synthesis model url']).startswith('http'):
+                    llm_tts_models['Custom']['model_url'] = str(config['Custom AI voice synthesis model url'])
+                if self.DEBUG:
+                    print("-Custom AI voice synthesis model url is present in the config data: " + str(llm_tts_models['Custom']['model_url']))
+        
+        except Exception as ex:
+            print("Error loading custom AI settings from config: " + str(ex))
+        
+            
             
         
             
@@ -1850,7 +1946,7 @@ class VocoAdapter(Adapter):
                 
                 
                 sound_file = sound_file + str(self.persistent_data['speaker_volume']) + '.wav'
-                sound_file = os.path.join(self.addon_path,"sounds",sound_file)
+                sound_file = os.path.join(self.addon_dir_path,"sounds",sound_file)
                 #sound_file = os.path.splitext(sound_file)[0] + str(self.persistent_data['speaker_volume']) + '.wav'
                 #sound_command = "aplay " + str(sound_file) + " -D plughw:" + str(self.current_card_id) + "," + str(self.current_device_id)
                 #os.system()
@@ -1996,17 +2092,33 @@ class VocoAdapter(Adapter):
     def llm_speak(self,voice_message):
         if self.DEBUG:
             print("generating voice via LLM")
-        output_device_string = "plughw:" + str(self.current_card_id) + "," + str(self.current_device_id)
-        if bluetooth:
-            output_device_string = "bluealsa:DEV=" + str(self.persistent_data['bluetooth_device_mac'])
         
-        tts_command = "echo '" + str(voice_message) + "' | " + str(os.path.join(self.addon_dir_path,'llm','tts', 'piper')) + " --model " + str(os.path.join(self.llm_tts_dir_path, str(self.persistent_data['llm_tts_model']))) + " --output-raw | aplay -D " + str(output_device_string) + " -r 22050 -f S16_LE -t raw -"
-        if self.DEBUG:
-            print("\n\nVOCO LLM TTS COMMAND: " + str(tts_command))
-        subprocess.run(tts_command, capture_output=False, shell=True, check=False, encoding=None, errors=None, text=None, env=None, universal_newlines=None)
+        try:
+            # Output audio to Bluetooth?
+            output_to_bluetooth = False
+            if self.persistent_data['bluetooth_device_mac'] != None:
+                bluetooth_amixer_test = run_command('amixer -D bluealsa scontents')
+                if self.DEBUG:
+                    print("bluetooth_amixer_test: " + str(bluetooth_amixer_test))
+                if len(str(bluetooth_amixer_test)) > 10:
+                    output_to_bluetooth = True
+            
+            output_device_string = "plughw:" + str(self.current_card_id) + "," + str(self.current_device_id)
+            if output_to_bluetooth:
+                output_device_string = "bluealsa:DEV=" + str(self.persistent_data['bluetooth_device_mac'])
         
+            piper_path = os.path.join(self.addon_dir_path,'llm','tts', 'piper')
+            tts_command = "echo '" + str(voice_message) + "' | " + str(piper_path) + " --model " + str(self.llm_tts_model) + " --output-raw | aplay -D " + str(output_device_string) + " -r 22050 -f S16_LE -t raw -"
+            if self.DEBUG:
+                print("\n\nVOCO LLM TTS COMMAND: " + str(tts_command))
+                subprocess.run(tts_command, capture_output=False, shell=True, check=False, encoding=None, errors=None, text=None, env=None, universal_newlines=None)
+        
+        except Exception as ex:
+            if self.DEBUG:
+                print("Error in llm_speak: " + str(ex))
         #echo 'This sentence is spoken first. This sentence is synthesized while the first sentence is spoken.' |   ./piper --model en_US-lessac-medium.onnx --output-raw |   aplay -r 22050 -f S16_LE -t raw -
-        
+
+            
         
 
     def speak(self, voice_message="",intent='default'):
@@ -2175,13 +2287,17 @@ class VocoAdapter(Adapter):
                         if self.DEBUG:
                             print("Alsa environment variable for speech output set to: " + str(option['simple_card_name']))
 
-
+                            
+                        # Choose between LLM speech generation and NanoTTS
+                        # For LLM the model must exist, and there must be enough memory
                         self.check_available_memory()
                         if self.DEBUG:
                             print("self.free_memory: " + str(self.free_memory) + ' ?>? ' + str(self.llm_tts_minimal_memory))
-                        if self.llm_tts and self.free_memory > self.llm_tts_minimal_memory:
+                        self.llm_tts_model_path = str(os.path.join(self.llm_tts_dir_path, str(self.persistent_data['llm_tts_model'])))
+        
+                        if self.llm_enabled and self.llm_tts_enabled and self.persistent_data['llm_tts_model'] != 'nanotts' and os.path.exists(self.llm_tts_model_path) and self.free_memory > self.llm_tts_minimal_memory:
                             self.llm_speak(voice_message)
-                                                    
+                        
                         else:
                             try:
                                 if self.nanotts_process != None:
@@ -2478,6 +2594,9 @@ class VocoAdapter(Adapter):
                     
                     ###command = command + ["--mqtt",mqtt_ip,"--alsa_capture","plughw:" + str(self.capture_card_id) + "," + str(self.capture_device_id),"--disable-playback"]
                     command = command + ["--alsa_capture","plughw:" + str(self.capture_card_id) + "," + str(self.capture_device_id),"--disable-playback"]
+                    #command = command + ["--alsa_capture","pcm.mixin","--disable-playback"]
+                    
+                    
                     # "--alsa_playback","default:CARD=ALSA",
                     
                 if unique_command == 'snips-injection':
@@ -2762,6 +2881,9 @@ class VocoAdapter(Adapter):
                     self.save_to_persistent_data = False
                     self.save_persistent_data()
                     
+                
+                
+                
                 
                 # Inject new thing names into snips if necessary
                 if time.time() - self.slow_loop_interval > self.last_slow_loop_time: # + self.minimum_injection_interval > datetime.utcnow().timestamp():
@@ -3364,7 +3486,13 @@ class VocoAdapter(Adapter):
                                 #if self.DEBUG:
                                 #    print("only checking if snips is running once every 3 seconds")
                             
-            
+                
+                # Download LLM models if a new on has been selected. TODO: this currently blocks the clock thread, which is not optimal.
+                if self.llm_should_download:
+                    if self.DEBUG:
+                        print("clock: llm_should_download was True")
+                    self.llm_should_download = False
+                    self.download_llm_models()
 
 
 #
@@ -4051,7 +4179,7 @@ class VocoAdapter(Adapter):
             if self.sound_detection:
                 self.mqtt_second_client.subscribe("hermes/voiceActivity/#")
             
-            #if self.llm_enabled:
+            #if self.llm_enabled: # Moved to the other client
             #    print("subscribing to audioFrame topic on second mqtt client")
             #    self.mqtt_second_client.subscribe(self.audio_frame_topic)
                 
@@ -4259,12 +4387,13 @@ class VocoAdapter(Adapter):
                     print("MQTT message ends with toggleOff")
                 
                 if self.llm_enabled:
-                    print("subscribing to audioFrame topic")
+                    if self.DEBUG:
+                        print("subscribing to audioFrame topic: " + str(self.audio_frame_topic))
                     #self.mqtt_client.subscribe('hermes/audioServer/default/audioFrame')
                     try:
                         self.mqtt_client.subscribe(self.audio_frame_topic)
                     except Exception as ex:
-                        print("could not subscribe to audio frame topic on first mqtt client")
+                        print("Error subscribing to audio frame topic on first mqtt client: " + str(ex))
                 
                 if 'siteId' in payload:
                     if payload['siteId'] == self.persistent_data['site_id']:
@@ -4286,6 +4415,11 @@ class VocoAdapter(Adapter):
                     self.unmute()
                     #if self.recording_state == 2:
                     #self.stop_recording()
+                    
+                    try:
+                        self.mqtt_client.unsubscribe(self.audio_frame_topic)
+                    except Exception as ex:
+                        print("error unsubscribing from audio frame topic on first mqtt client: " + str(ex))
                     
                     
             if self.persistent_data['listening'] == True:
@@ -4780,6 +4914,7 @@ class VocoAdapter(Adapter):
 
         
         if msg.topic == self.audio_frame_topic:
+            #print("got audio frame topic")
             if self.recording_state > 0:
                 self.start_record(msg)
             return
@@ -5428,9 +5563,8 @@ class VocoAdapter(Adapter):
                 print(">>")
                 print("//////////////////////////////////////////////////")
                 
-                #print(">> intent_message    : " + str(intent_message))
-                print(">> intent_message    : " + str(json.dumps(intent_message, indent=4)))
-                #print(">> incoming intent   : " + str(incoming_intent))
+                #print(">> intent_message    : " + str(json.dumps(intent_message, indent=4)))
+
                 print(">>")
                 print(">> sentence          : " + str(sentence))
                 print(">>")
@@ -6560,8 +6694,8 @@ class VocoAdapter(Adapter):
                                 print("\/ self.force_injection: " + str(self.force_injection))
                                 print("\/ len(operations): " + str(len(operations)))
                                 print("\/")
-                                print("\/ operations: " + str(json.dumps(operations, indent=4)))
-                                print("\/")
+                                #print("\/ operations: " + str(json.dumps(operations, indent=4)))
+                                #print("\/")
                                 #print("\n\/ update_request json: " + str(json.dumps(update_request)))
                                 
                                 #print(str(json.dumps(operations)))
@@ -8606,16 +8740,20 @@ class VocoAdapter(Adapter):
     def check_available_memory(self):
         self.total_memory, self.used_memory, self.free_memory = map(
             int, os.popen('free -t -m').readlines()[-1].split()[1:])
+            
+        self.free_memory = self.total_memory - self.used_memory
 
-        if self.DEBUG:
-            print("check_available_memory: total_memory: " + str(self.total_memory))
-            print("check_available_memory: used_memory: " + str(self.used_memory))
-            print("check_available_memory: free_memory: " + str(self.free_memory))
+        #if self.DEBUG:
+        #    print("check_available_memory: total_memory: " + str(self.total_memory))
+        #    print("check_available_memory: used_memory: " + str(self.used_memory))
+        #    print("check_available_memory: free_memory: " + str(self.free_memory))
             
 
 
+    # Create a pipe into the model, so the model can load, and then receive its text input later.
     def prepare_voice_generator(self):
-        
+        if self.DEBUG:
+            print("in prepare_voice_generator")
         pass
         #piper_command = ''self.piper_pipe_path
         #' | ./piper --json-input --model en_GB-southern_english_female-low.onnx --output-raw | aplay -r 22050 -f S16_LE -t raw -'
@@ -8624,7 +8762,7 @@ class VocoAdapter(Adapter):
 
     # Record audio from MQTT stream
     def start_record(self,msg):
-        #print("in start_record")
+        #print("in start_recording")
     	#global self.record_running
     	#global record
 
@@ -8663,22 +8801,23 @@ class VocoAdapter(Adapter):
             self.record.setnchannels(channels)
             self.record.setframerate(samplerate)
             self.record.setsampwidth(2)
-
+            print("typeof self.record: " + str(type(self.record)))
         
         chunkOffset = 52
-        #info = [msg.payload[i:i+4] for i in range(0, len(msg.payload), 4)]
-        #print(info)
         
-        if self.DEBUG:
-            print("? d ? " + str(msg.payload[52]))
+        if str(msg.payload[52]) != '100':
+            if self.DEBUG:
+                print("warning, this was expected to be 100: " + str(msg.payload[52]))
+            info = [msg.payload[i:i+4] for i in range(0, len(msg.payload), 4)]
+            #print(info)
         
-        #for w in range(0, len(info)):
-        #    print(str(w) + ' __ ' + str(info[w]))
-        #    if (info[w] == b'data'): 
-        #        chunkOffset = w * 4
-        #        print("BINGO! Spotted data as binary. chunkOffset: ", chunkOffset);
-        #        break
-                 
+            for w in range(0, len(info)):
+                print(str(w) + ' __ ' + str(info[w]))
+                if (info[w] == b'data'): 
+                    chunkOffset = w * 4
+                    #print("BINGO! Spotted data as binary. chunkOffset: ", chunkOffset);
+                    break
+        
         #print("? ? data? " + str(info[13]))
         #chunkOffset = 36
         
@@ -8698,13 +8837,13 @@ class VocoAdapter(Adapter):
             chunkOffset = chunkOffset + subchunk2size + 8
 
 
+
     def stop_recording(self):
         if self.DEBUG:
-            print("in stop_recording")
+            print("in stop_recording. self.recording_state: " + str(self.recording_state))
         self.record_running = False
         if self.recording_state == 2:
             self.record.close()
-
             self.llm_stt()
             
         self.recording_state = 0
@@ -8715,7 +8854,7 @@ class VocoAdapter(Adapter):
         if self.DEBUG:
             print("in llm_stt")
         
-        if self.llm_stt:
+        if self.llm_stt_enabled:
         
             self.check_available_memory()
             if self.DEBUG:
@@ -8725,7 +8864,13 @@ class VocoAdapter(Adapter):
                 self.llm_stt_skipped = False
                 
                 #./command -m ./models/ggml-tiny.en.bin -ac 768 -t 3 -c 0
-                stt_command = str(os.path.join(self.addon_dir_path,'llm','stt', 'command')) + " -m " + str(os.path.join(self.llm_stt_dir_path, str(self.persistent_data['llm_tts_model']))) + " -ac 768 -t 3 -c 0"
+                
+                # Direct command input from microphone. Doesnt work because the microphone is already taken. Also, focusses more on a limited list of words/commands.
+                # https://github.com/ggerganov/whisper.cpp/blob/master/examples/command/command.cpp
+                #stt_command = str(os.path.join(self.addon_dir_path,'llm','stt', 'command')) + " -m " + str(os.path.join(self.llm_stt_dir_path, str(self.persistent_data['llm_stt_model']))) + " -ac 768 -t 3 -c 0"
+                
+                stt_command = str(os.path.join(self.addon_dir_path,'llm','stt', 'main')) + " -m " + str(os.path.join(self.llm_stt_dir_path, str(self.persistent_data['llm_stt_model']))) + " -f " + str(self.last_recording_path) + " --processors 3 --output-json " # --max-context 30  -ps --prompt 'You are a smart home assistant'"
+                
                 if self.DEBUG:
                     print("\n\nVOCO LLM STT COMMAND: " + str(stt_command))
         
@@ -8744,77 +8889,116 @@ class VocoAdapter(Adapter):
         # https://github.com/ggerganov/whisper.cpp/tree/master/examples/command
         # ./command -m ./models/ggml-tiny.en.bin -ac 768 -t 3 -c 0
         #self.last_recording_path
-        
-        
+    
+    
+    
     def download_llm_models(self):
         if self.DEBUG:
             print("in download_llm_models")
-        
-        return
+        try:
             
-        # TTS
-        self.llm_busy_downloading_models = 1
-        
-        if self.persistent_data['llm_tts_model'] == 'en_US-lessac-medium.onnx':
-            self.llm_tts_model = os.path.join(self.llm_tts_dir,'en_US-lessac-medium.onnx')
-            if not os.path.exists(llm_tts_model):
-                if self.free_disk_space > 1000:
-                    if self.free_disk_space < 3000 and 'voco' in self.llm_tts_dir:
-                         os.system('rm ' + str(os.path.join(self.llm_tts_dir,'*')))
-                    print("Downloading " + str(self.llm_tts_model))
-                    os.system('wget https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/en/en_US/lessac/medium/en_US-lessac-medium.onnx -O ' + str(self.llm_tts_model))
-                    os.system('wget https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/en/en_US/lessac/medium/en_US-lessac-medium.onnx.json -O ' + str(self.llm_tts_model) + '.json')
-                else:
-                    self.llm_not_enough_disk_space = True
+            # TTS
+            self.llm_busy_downloading_models = 1
+            
+            if self.persistent_data['llm_tts_model'] != 'nanotts':
+                self.llm_tts_model = os.path.join(self.llm_tts_dir_path, str(self.persistent_data['llm_tts_model'])) #  + '.onnx'
+                if not os.path.exists(self.llm_tts_model):
+                    if self.free_disk_space > 500:
+                        if self.free_disk_space < 3000 and 'voco' in self.llm_tts_dir_path:
+                             os.system('rm ' + str(os.path.join(self.llm_tts_dir_path,'*')))
+                        if self.DEBUG:print("Downloading " + str(self.llm_tts_model))
                     
-        elif self.persistent_data['llm_tts_model'] == 'en_GB-southern_english_female-low.onnx':
-            self.llm_tts_model = os.path.join(self.llm_tts_dir,'en_GB-southern_english_female-low.onnx')
-            if not os.path.exists(llm_tts_model):
-                if self.free_disk_space > 1000:
-                    if self.free_disk_space < 3000 and 'voco' in self.llm_tts_dir:
-                         os.system('rm ' + str(os.path.join(self.llm_tts_dir,'*')))
-                    print("Downloading " + str(self.llm_tts_model))
-                    os.system('wget https://huggingface.co/rhasspy/piper-voices/blob/main/en/en_GB/southern_english_female/low/en_GB-southern_english_female-low.onnx -O ' + str(self.llm_tts_model))
-                    os.system('wget https://huggingface.co/rhasspy/piper-voices/blob/main/en/en_GB/southern_english_female/low/en_GB-southern_english_female-low.onnx.json -O ' + str(self.llm_tts_model) + '.json')
-                else:
-                    self.llm_not_enough_disk_space = True
-         
-        # MAIN AI
-        self.llm_busy_downloading_models = 2
+                        # get url to download
+                        #for tts_name, tts_details in self.llm_tts_models.items():
+                        for model_name in self.llm_tts_models:
+                            if self.DEBUG:
+                                print("model_name: " + str(model_name))
+                                print("self.llm_tts_models[model_name]: " + str(self.llm_tts_models[model_name]))
+                                print("self.llm_tts_models[model_name].model: " + str(self.llm_tts_models[model_name]['model']))
+                            #print("tts details: " + str(json.dumps(tts_details))
+                            if self.llm_tts_models[model_name]['model'] == str(self.persistent_data['llm_tts_model']) and self.llm_tts_models[model_name]['model_url'].startswith('http'):
+                                os.system('wget ' + str(self.llm_tts_models[model_name]['model_url']) + ' -O ' + str(self.llm_tts_model))
+                                os.system('wget ' + str(self.llm_tts_models[model_name]['model_url']) + '.json -O ' + str(self.llm_tts_model) + '.json')
+                    else:
+                        self.llm_not_enough_disk_space = True
+                        self.persistent_data['llm_tts_model'] = 'nanotts'
+            
+            
+            # MAIN AI
+            self.llm_busy_downloading_models = 2
         
-        if self.persistent_data['llm_ai_model'] == 'tinyllama-1.1b-1t-openorca.Q4_K_M.gguf':
-            self.llm_ai_model = os.path.join(self.llm_ai_dir,'tinyllama-1.1b-1t-openorca.Q4_K_M.gguf')
-            if not os.path.exists(self.llm_ai_model):
-                if self.free_disk_space > 1000:
-                    print("Downloading " + str(self.llm_ai_model))
-                    os.system('wget https://huggingface.co/TheBloke/TinyLlama-1.1B-1T-OpenOrca-GGUF/resolve/main/tinyllama-1.1b-1t-openorca.Q4_K_M.gguf -O ' + str(self.llm_ai_model))
-                else:
-                    self.llm_not_enough_disk_space = True
+            if self.persistent_data['llm_ai_model'] == 'tinyllama-1.1b-1t-openorca.Q4_K_M.gguf':
+                self.llm_ai_model = os.path.join(self.llm_ai_dir_path,'tinyllama-1.1b-1t-openorca.Q4_K_M.gguf')
+                if not os.path.exists(self.llm_ai_model):
+                    if self.free_disk_space > 1000:
+                        if self.DEBUG:
+                            print("Downloading " + str(self.llm_ai_model))
+                        os.system('wget https://huggingface.co/TheBloke/TinyLlama-1.1B-1T-OpenOrca-GGUF/resolve/main/tinyllama-1.1b-1t-openorca.Q4_K_M.gguf -O ' + str(self.llm_ai_model))
+                    else:
+                        self.llm_not_enough_disk_space = True
         
-        # STT
-        self.llm_busy_downloading_models = 3
         
-        if self.persistent_data['llm_stt_model'] == 'ggml-small.en.bin':
-            self.llm_stt_model = os.path.join(self.llm_stt_dir,'ggml-small.en.bin')
-            if not os.path.exists(self.llm_stt_model):
-                if self.free_disk_space > 1000:
-                    print("Downloading " + str(self.llm_stt_model))
-                    if self.free_disk_space < 3000 and 'voco' in self.llm_stt_dir:
-                         os.system('rm ' + str(os.path.join(self.llm_stt_dir,'*')))
-                    os.system('wget https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.en.bin?download=true -O ' + str(self.llm_stt_model))
-                else:
-                    self.llm_not_enough_disk_space = True
+            # STT
+            self.llm_busy_downloading_models = 3
+            
+            if self.persistent_data['llm_stt_model'] != 'voco':
+                self.llm_stt_model = os.path.join(self.llm_stt_dir_path, str(self.persistent_data['llm_stt_model'])) # + '.bin'
+                if not os.path.exists(self.llm_stt_model):
+                    if self.free_disk_space > 1000:
+                        if self.free_disk_space < 3000 and 'voco' in self.llm_stt_dir_path:
+                             os.system('rm ' + str(os.path.join(self.llm_stt_dir_path,'*')))
+                        if self.DEBUG:
+                            print("Downloading " + str(self.llm_stt_model))
                     
-        elif self.persistent_data['llm_stt_model'] == 'ggml-medium.en-q5_0.bin':
-            self.llm_stt_model = os.path.join(self.llm_stt_dir,'ggml-medium.en-q5_0.bin')
-            if not os.path.exists(self.llm_stt_model):
-                if self.free_disk_space > 1000:
-                    if self.free_disk_space < 3000 and 'voco' in self.llm_stt_dir:
-                         os.system('rm ' + str(os.path.join(self.llm_stt_dir,'*')))
-                    print("Downloading " + str(self.llm_stt_model))
-                    os.system('wget https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-medium.en-q5_0.bin?download=true -O ' + str(self.llm_stt_model))
-                else:
-                    self.llm_not_enough_disk_space = True
+                        # get url to download
+                        for model_name, model_details in self.llm_stt_models.items():
+                            if model_details.model == str(self.persistent_data['llm_stt_model'])  and model_details.model_url.startswith('http'):
+                                os.system('wget ' + str(model_details.model_url) + ' -O ' + str(self.llm_stt_model))
+                    else:
+                        self.llm_not_enough_disk_space = True
+                        self.persistent_data['llm_stt_model'] = 'voco'
+            
+            
+            """
+            if self.persistent_data['llm_stt_model'] == 'ggml-base.en.bin':
+                self.llm_stt_model = os.path.join(self.llm_stt_dir_path,'ggml-base.en.bin')
+                if not os.path.exists(self.llm_stt_model):
+                    if self.free_disk_space > 1000:
+                        print("Downloading " + str(self.llm_stt_model))
+                        if self.free_disk_space < 3000 and 'voco' in self.llm_stt_dir_path:
+                             os.system('rm ' + str(os.path.join(self.llm_stt_dir,'*')))
+                        os.system('wget https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.en.bin -O ' + str(self.llm_stt_model))
+                    else:
+                        self.llm_not_enough_disk_space = True
+        
+            if self.persistent_data['llm_stt_model'] == 'ggml-small.en.bin':
+                self.llm_stt_model = os.path.join(self.llm_stt_dir_path,'ggml-small.en.bin')
+                if not os.path.exists(self.llm_stt_model):
+                    if self.free_disk_space > 1000:
+                        print("Downloading " + str(self.llm_stt_model))
+                        if self.free_disk_space < 3000 and 'voco' in self.llm_stt_dir_path:
+                             os.system('rm ' + str(os.path.join(self.llm_stt_dir,'*')))
+                        os.system('wget https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.en.bin -O ' + str(self.llm_stt_model))
+                    else:
+                        self.llm_not_enough_disk_space = True
+                    
+            elif self.persistent_data['llm_stt_model'] == 'ggml-medium.en-q5_0.bin':
+                self.llm_stt_model = os.path.join(self.llm_stt_dir_path,'ggml-medium.en-q5_0.bin')
+                if not os.path.exists(self.llm_stt_model):
+                    if self.free_disk_space > 1000:
+                        if self.free_disk_space < 3000 and 'voco' in self.llm_stt_dir_path:
+                             os.system('rm ' + str(os.path.join(self.llm_stt_dir_path,'*')))
+                        print("Downloading " + str(self.llm_stt_model))
+                        os.system('wget https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-medium.en-q5_0.bin -O ' + str(self.llm_stt_model))
+                    else:
+                        self.llm_not_enough_disk_space = True
+            """
+            
+            if self.DEBUG:
+                print("download_llm_models done")
+        except Exception as ex:
+            print("ERROR in download_llm_models: " + str(ex) + ", self.llm_busy_downloading_models: " + str(self.llm_busy_downloading_models))
+        
         
         self.llm_busy_downloading_models = 0
                 

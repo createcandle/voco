@@ -44,6 +44,7 @@
 	  "MQTT port": 1885,
 	  "Send chat control notifications": false,
 	  "Show the sentence that Voco heard": false,
+	  "Custom AI voice synthesis model url": "",
       "Debugging": false
     },
     "schema": {
@@ -93,7 +94,7 @@
           "type": "string"
         },
         "Voice accent": {
-          "description": "Select an accent that you'd like the speaking voice to have. Default is en-GB",
+          "description": "Select an accent that you'd like the basic speaking voice to have. Default is en-GB",
           "enum": [
             "en-US", 
             "en-GB"
@@ -101,7 +102,7 @@
           "type": "string"
         },
         "Voice pitch": {
-          "description": "Select how high or low you'd like to voice to sound. Default is 1.2.",
+          "description": "Select how high or low you'd like to basic voice to sound. Default is 1.2.",
           "enum": [
             "0.5",
             "0.6",
@@ -123,7 +124,7 @@
           "type": "string"
         },
         "Voice speed": {
-          "description": "How fast should the voice speak? Default is 0.9.",
+          "description": "How fast should the basic voice speak? Default is 0.9.",
           "enum": [
             "0.5",
             "0.6",
@@ -201,6 +202,10 @@
           "description": "Advanced. By default Candle uses port 1885, but you can override that here by entering a different port number.",
           "type": "integer"
         },
+		"Custom AI voice synthesis model url": {
+          "description": "Advanced. Provide a URL to a custom voice synthesis model. It must be a .ommx type.",
+          "type": "string"
+        },
         "Debugging": {
           "description": "Advanced. Debugging allows you to diagnose any issues with the add-on. If enabled it will result in a lot more debug data in the internal log (which can be found under settings -> developer -> view internal logs).",
           "type": "boolean"
@@ -217,6 +222,10 @@
     "images/*.svg",
     "images/*.png",
     "images/*.gif",
+	"images/*.jpg",
+	"images/*.jpeg",
+	"audio/*.wav",
+	"audio/*.mp3",
     "js/*.js",
     "views/*.html"
   ]

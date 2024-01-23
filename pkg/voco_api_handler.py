@@ -105,6 +105,8 @@ class VocoAPIHandler(APIHandler):
                                 print("ajax action = " + str(action))
                             
                             
+                            
+                            # Matrix init
                             if action == 'matrix_init':
                                 
                                 matrix_candle_username = self.adapter.persistent_data['matrix_candle_username']
@@ -134,6 +136,9 @@ class VocoAPIHandler(APIHandler):
                                             'has_matrix_token': has_matrix_token}),
                                 )
                                 
+                                
+                                
+                            # Create Matrix account
                             elif action == 'create_matrix_account':
                                 state = False
                                 if self.DEBUG:
@@ -183,6 +188,7 @@ class VocoAPIHandler(APIHandler):
                                 )
                                 
                                 
+                            # Provide Matrix account
                             elif action == 'provide_matrix_account':
                                 state = False
                                 if self.DEBUG:
@@ -234,6 +240,8 @@ class VocoAPIHandler(APIHandler):
                                 )
                                 
                                 
+                                
+                            # Invite to Matrix
                             elif action == 'invite':
                                 state = False
                                 if self.DEBUG:
@@ -269,6 +277,7 @@ class VocoAPIHandler(APIHandler):
                                 )
                                 
                                 
+                            # Kick from Matrix
                             elif action == 'kick':
                                 state = False
                                 if self.DEBUG:
@@ -304,6 +313,7 @@ class VocoAPIHandler(APIHandler):
                                 )
                                 
                                 
+                            # Refresh matrix members list
                             elif action == 'refresh_matrix_members':
                                 state = True
                                 if self.DEBUG:
@@ -316,7 +326,77 @@ class VocoAPIHandler(APIHandler):
                                   content=json.dumps({'state' : state, 'message' : '' }),
                                 )
                                 
-                        
+                                
+                                
+                                
+                            elif action == 'llm_init':
+                                state = True
+                                if self.DEBUG:
+                                    print('ajax handling llm init')
+                                
+                                return APIResponse(
+                                  status=200,
+                                  content_type='application/json',
+                                  content=json.dumps({
+                                          'state' : state, 
+                                          'message' : '',
+                                          'llm_enabled':self.adapter.llm_enabled,
+                                    
+                                    
+                                          'llm_not_enough_disk_space':self.adapter.llm_not_enough_disk_space,
+                                          'llm_busy_downloading_models':self.adapter.llm_busy_downloading_models,
+                                          
+                                          'llm_tts_minimal_memory':self.adapter.llm_tts_minimal_memory,
+                                          'llm_tts_models':self.adapter.llm_tts_models,
+                                          'llm_tts_model':self.adapter.persistent_data['llm_tts_model'],
+                                          
+                                          'llm_stt_minimal_memory':self.adapter.llm_stt_minimal_memory,
+                                          'llm_stt_models':self.adapter.llm_stt_models,
+                                          'llm_stt_model':self.adapter.persistent_data['llm_stt_model'],
+                                          
+                                          'llm_ai_minimal_memory':self.adapter.llm_ai_minimal_memory,
+                                          'llm_ai_model':self.adapter.persistent_data['llm_ai_model'],
+                                          
+                                      }),
+                                )
+                                
+                                
+                            # Change LLM AI settings, such as the prefered models to use
+                            elif action == 'set_llm':
+                                state = False
+                                if self.DEBUG:
+                                    print('ajax handling set llm')
+                                try:
+                                    if 'llm_tts_model' in request.body:
+                                        self.adapter.persistent_data['llm_tts_model'] = str(request.body['llm_tts_model'])
+                                        self.adapter.llm_should_download = True
+                                        #self.adapter.download_llm_models()
+                                    
+                                    if 'llm_stt_model' in request.body:
+                                        self.adapter.persistent_data['llm_stt_model'] = str(request.body['llm_stt_model'])
+                                        self.adapter.llm_should_download = True
+                                        
+                                    if 'llm_ai_model' in request.body:
+                                        self.adapter.persistent_data['llm_ai_model'] = str(request.body['llm_ai_model'])
+                                        self.adapter.llm_should_download = True
+                                    
+                                    self.adapter.save_persistent_data()
+                                    
+                                    state = True
+                                        
+                                except Exception as ex:
+                                    print("Error in set_llm: " + str(ex))
+                                    
+                                
+                                
+                                return APIResponse(
+                                  status=200,
+                                  content_type='application/json',
+                                  content=json.dumps({'state' : state}),
+                                )
+                                
+                                
+                            # 404
                             else:
                                 return APIResponse(status=404)    
                         
@@ -463,6 +543,12 @@ class VocoAPIHandler(APIHandler):
 
                     
                     
+                    
+                    
+                    
+                        #
+                        #  POLL
+                        #
                         elif request.path == '/poll':
                             if self.DEBUG2:
                                 print("Getting the poll data")
@@ -515,6 +601,8 @@ class VocoAPIHandler(APIHandler):
                                 if 'matrix_server' in self.adapter.persistent_data:
                                     matrix_server = str(self.adapter.persistent_data['matrix_server'])
 
+                                self.adapter.check_available_memory()
+
                                 return APIResponse(
                                     status=200,
                                     content_type='application/json',
@@ -537,7 +625,8 @@ class VocoAPIHandler(APIHandler):
                                                         'connected_satellites': self.adapter.connected_satellites,
                                                         'periodic_voco_attempts':self.adapter.periodic_voco_attempts,
                                                         'llm_busy_downloading_models':self.adapter.llm_busy_downloading_models,
-                                                        'llm_not_enough_disk_space':self.adapter.llm_not_enough_disk_space
+                                                        'llm_not_enough_disk_space':self.adapter.llm_not_enough_disk_space,
+                                                        'free_memory':self.adapter.free_memory
                                                         })
                                 )
                                 
