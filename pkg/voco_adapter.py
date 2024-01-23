@@ -8951,8 +8951,10 @@ class VocoAdapter(Adapter):
                             print("Downloading " + str(self.llm_stt_model))
                     
                         # get url to download
-                        for model_name, model_details in self.llm_stt_models.items():
-                            if model_details.model == str(self.persistent_data['llm_stt_model'])  and model_details.model_url.startswith('http'):
+                        #for model_name, model_details in self.llm_stt_models.items():
+                        for model_name in self.llm_tts_models:
+                            #if model_details.model == str(self.persistent_data['llm_stt_model']) and model_details.model_url.startswith('http'):
+                            if self.llm_stt_models[model_name]['model'] == str(self.persistent_data['llm_stt_model']) and self.llm_stt_models[model_name]['model_url'].startswith('http'):
                                 os.system('wget ' + str(model_details.model_url) + ' -O ' + str(self.llm_stt_model))
                     else:
                         self.llm_not_enough_disk_space = True
