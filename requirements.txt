@@ -1,3 +1,4 @@
+cffi
 python-dateutil
 pytz
 paho-mqtt
