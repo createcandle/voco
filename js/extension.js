@@ -23,6 +23,12 @@
             this.matrix_candle_username = "";
             this.matrix_password = "...";
             
+			this.llm_tts_model = null;
+			this.llm_tts_models = {};
+			
+			this.llm_stt_model = null;
+			this.llm_stt_models = {};
+			
             setTimeout(() => {
                 const jwt = localStorage.getItem('jwt');
                 //console.log("jwt: ", jwt);
@@ -218,7 +224,7 @@
             
                 
                 
-				
+			
 			
 			try{
 				//pre.innerText = "";
@@ -505,10 +511,8 @@
             var refresh_matrix_members_counter = 0 // once in a while try updating the room members list
             
 			this.interval = setInterval( () => {
-				
 				try{
 					if( main_view.classList.contains('selected') ){
-						
                         if(this.busy_polling){
                             if(this.debug){
                                 console.log("voco: was still polling, aborting new poll");
@@ -551,9 +555,8 @@
 				        ).then((body) => {
                             //console.log("Interval: Python API poll result: ", body);
                             if(this.debug){
-                                console.log("Interval: Python API poll result: ", body);
+                                //console.log("Interval: Python API poll result: ", body);
                             }
-							//console.log("Python API poll result:");
 							this.attempts = 0;
 							//console.log(body['items']);
 							if(body['state'] == true){
@@ -629,7 +632,7 @@
 								}
 								
 								
-								pre.innerText = "";
+								//pre.innerText = "";
                                 
                                 // Update list of timers
 								if(this.items_list.length > 0 ){
@@ -707,12 +710,57 @@
                                     }
                                     
                                 }
+								
+								
+								
+								
                                 
 							}
 							else{
-								//console.log("Voco: not ok response while getting items list: ", body);
-								//pre.innerText = body['update'];
+								//console.log("Voco: not ok state in poll response: ", body);
 							}
+							
+							
+							//
+							//   LLM AI
+							//
+							
+							if(typeof body.llm_busy_downloading_models != 'undefined'){
+								const downloading_models_el = document.getElementById('extension-voco-downloading-models');
+								if(downloading_models_el){
+									
+									if(body.llm_busy_downloading_models > 0){
+										downloading_models_el.style.display = 'block';
+										
+										let llm_download_progress_el = document.getElementById('extension-voco-downloading-models-progress-container');
+										if(llm_download_progress_el){
+											llm_download_progress_el.innerHTML = '';
+											for( var m = 0; m < body.llm_busy_downloading_models; m++ ){
+												let progress_block = document.createElement('div');
+												llm_download_progress_el.appendChild(progress_block);
+											}
+										}
+										
+									}
+									else{
+										downloading_models_el.style.display = 'none';
+									}
+								}
+							}
+							
+							if(typeof body.llm_not_enough_disk_space != 'undefined'){
+								const low_disk_el = document.getElementById('extension-voco-main-low-disk-space-warning');
+								if(low_disk_el){
+									if(body.llm_not_enough_disk_space){
+										low_disk_el.style.display = 'block';
+									}
+									else{
+										low_disk_el.style.display = 'none';
+									}
+								}
+							}
+							
+							
                             
                             this.busy_polling = false;
                             this.busy_polling_count = 0;
@@ -722,7 +770,9 @@
 
 				        }).catch((e) => {
 				  			//console.log("Error getting timer items: " , e);
-							console.log("Loading items failed - connection error?: ", e);
+							if(this.debug){
+								console.log("voco: Loading items failed - connection error?: ", e);
+							}
                             document.getElementById('extension-voco-unavailable').style.display = 'block';
                             document.getElementById('extension-voco-text-commands-container').style.display = 'none';
 							//pre.innerText = "Loading items failed - connection error";
@@ -768,7 +818,9 @@
 			});
             */
             
-            
+			document.getElementById('extension-voco-tab-button-ai').addEventListener('click', (event) => {
+				this.update_ai_data();
+			});
             
             
         
@@ -862,6 +914,7 @@
                 document.getElementById('extension-voco-matrix-download-app-tip').classList.add('extension-voco-hidden');
             });
             
+			
             // Join (invite main user) button
             document.getElementById('extension-voco-matrix-invite-main-username-button').addEventListener('click', (event) => {
                 //console.log("clicked on button to invite main user");
@@ -1401,7 +1454,113 @@
             
         }
         
+		
+		update_ai_data(){
+	        window.API.postJson(
+	          `/extensions/${this.id}/api/ajax`,
+				{'action':'llm_init'}
+
+	        ).then((body) => {
+				if(this.debug){
+                    console.log("Voco llm init response: ", body);
+                }
+				console.log("Voco llm init response: ", body);
+	
+				if(body['state'] == true){
+					//console.log("satellite update state was true");
+					if(typeof body.llm_tts_models != 'undefined' && typeof body.llm_tts_model != 'undefined'){
+						this.llm_tts_model = body.llm_tts_model;
+						this.llm_tts_models = body.llm_tts_models;
+						this.generate_llm_models_list('tts',body.llm_tts_models,body.llm_tts_model);
+					}
+					
+					if(typeof body.llm_stt_models != 'undefined' && typeof body.llm_stt_model != 'undefined'){
+						this.llm_stt_model = body.llm_stt_model;
+						this.llm_stt_models = body.llm_stt_models;
+						this.generate_llm_models_list('stt',body.llm_stt_models,body.llm_stt_model);
+					}
+					
+				}
+
+	        }).catch((e) => {
+	  			console.log("Error during llm_init api call: ", e);
+	        });	
+		}
         
+		
+		generate_llm_models_list(llm_type='tts',models={}, active_model='none'){
+			console.log("in generate_llm_models_list: " + llm_type);
+			try{
+				
+				let llm_options_list_el = document.getElementById('extension-voco-' + llm_type + '-models-list');
+				if(llm_options_list_el){
+					llm_options_list_el.innerHTML = '';
+					var counter = 0;
+					for (const [llm_name, llm_details] of Object.entries(models)) {
+  						console.log(`${llm_name}: ${llm_details}`);
+						counter++;
+  						let llm_item_el = document.createElement('li');
+						llm_item_el.classList.add('extension-voco-vlak');
+						
+						let radio_el = document.createElement('input');
+						radio_el.type = 'radio';
+						radio_el.id = 'extension-voco-ai-' + llm_type + '-radio-input' + counter;
+						radio_el.name = 'extension-voco-ai-' + llm_type + '-radio-button';
+						
+						const model_name = llm_details.model;
+						radio_el.addEventListener('change', () => {
+							console.log("checkbox changed to: ", model_name);
+							
+							let action_dict = {'action':'set_llm'};
+							action_dict['llm_' + llm_type + '_model'] = model_name;
+							console.log("action_dict: ", action_dict);
+					        window.API.postJson(
+					          `/extensions/${this.id}/api/ajax`,action_dict
+
+					        ).then((body) => {
+								if(this.debug){
+				                    console.log('Voco set_llm response: ', body);
+				                }
+
+					        }).catch((e) => {
+					  			console.error('Error during set_llm api call: ', e);
+								alert("Could not connect with Voco, your preference may not have been saved");
+					        });	
+							
+						});
+						
+						console.log("model_name =?= active_model: ", model_name, active_model);
+						
+						if(model_name == active_model){
+							console.log("BINGO");
+							radio_el.checked = true;
+						}
+						llm_item_el.appendChild(radio_el);
+						/*
+						let label_el = document.createElement('label');
+						label_el.innerText = '';
+						label_el.for = 'extension-voco-ai-' + llm_type + '-radio-input' + counter;
+  						llm_item_el.appendChild(label_el);
+						*/
+						
+						let llm_details_el = document.createElement('div');
+  					  	llm_details_el.innerHTML = '<h3>' + llm_name + '</h3><p>' + llm_details.description + '</p>';
+						llm_details_el.innerHTML += '<p class="extension-voco-developer-only">Model:' + llm_details.model + '</p>';
+						if(llm_type == 'tts'){
+							llm_details_el.innerHTML += '<audio controls><source src="/extensions/voco/audio/' + llm_details.model + '.wav" type="audio/wav"></audio>';
+						}
+						llm_item_el.appendChild(llm_details_el);
+						llm_options_list_el.appendChild(llm_item_el);
+					}
+				}
+				
+				
+			}
+			catch(e) {
+                console.log("Error in generate_llm_models_list: ", e);
+            }
+		}
+		
         
 	}
 

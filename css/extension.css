@@ -27,21 +27,26 @@
 	margin:0 auto;
 }
 
-.extension-homebridge-hidden{
+.extension-voco-hidden{
     display:none!important;
 }
+
+body:not(.developer).extension-voco-developer-only{
+	display:none;
+}
+
 
 
 
 /*  TABS  */
 
-#extension-homebridge-view button {
+#extension-voco-view button {
     font-size: 1.6rem;
     padding: 1rem;
     border: none;
 }
 
-.extension-homebridge-tab-buttons {
+.extension-voco-tab-buttons {
     background-color: rgba(255,255,255,.1);
     border-radius: 0.7rem;
     overflow: hidden;
@@ -52,7 +57,7 @@
     display:flex;
 }
 
-#extension-homebridge-view .extension-homebridge-tab-buttons button {
+#extension-voco-view .extension-voco-tab-buttons button {
     background-color: transparent;
     border-right: 1px solid rgba(0,0,0,.05);
     color: #eee;
@@ -61,12 +66,12 @@
     flex-grow:1;
 }
 
-#extension-homebridge-view .extension-homebridge-tab-buttons button:hover{
+#extension-voco-view .extension-voco-tab-buttons button:hover{
     background-color: rgba(0,0,0,0.1);
     color: white;
 }
 
-body #extension-homebridge-view .extension-homebridge-tab-selected {
+body #extension-voco-view .extension-voco-tab-selected {
     color: white;
     background-color: rgba(0,0,0,0.18)!important;
 }
@@ -845,7 +850,7 @@ body #extension-voco-view .extension-voco-tab-selected{
     cursor:pointer;
     margin-left:1rem;
 }
-
+f
 
 #extension-voco-matrix-invite-management-output{
     font-style:italic;
@@ -861,6 +866,54 @@ body #extension-voco-view .extension-voco-tab-selected{
 .extension-voco-matrix-members-admin .extension-voco-matrix-members-id{
     cursor:initial;
 }
+
+
+
+
+/*  LLM AI  */
+
+#extension-voco-downloading-models-progress-container{
+	height:2rem;
+	border-radius:1rem;
+	width:80%;
+	margin:2rem auto;
+	background-color:rgba(0,0,0,.3);
+	border:1px solid rgba(0,0,0,.5);
+	box-sizing:border-box;
+	overflow:hidden;
+}
+#extension-voco-downloading-models-progress-container > div{
+	width:25%;
+	height:2rem;
+	display:inline-block;
+	background-color:#888;
+}
+
+
+#extension-voco-downloading-models-progress-container:empty{
+	display:none;
+}
+
+
+.extension-voco-ai-models-list li{
+	position:relative;
+	overflow:hidden;
+	border-radius:1rem;
+	display:flex;
+}
+
+.extension-voco-ai-models-list input[type='radio'] { 
+	transform: scale(3); 
+	/*position:absolute;
+	left:4rem;
+	top:4rem;*/
+}
+.extension-voco-ai-models-list div{
+	margin-left:4rem;
+	padding-left:2rem;
+	border-left:1px solid rgba(255,255,255,.4);
+}
+
 
 /*  spinner  */
 
@@ -1029,6 +1082,11 @@ body #extension-voco-view .extension-voco-tab-selected{
         margin:0 1rem 0 0;
     }
     
+	
+	.extension-voco-vlak .extension-voco-vlak{
+		padding:2rem 4rem;
+	}
+	
 	/*
 	.extension-voco-item{
 		width: calc(50% - 4rem);
