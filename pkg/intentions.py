@@ -353,7 +353,7 @@ def intent_get_timer_count(self, slots, intent_message):
         if slots['timer_type'] == None:
             if self.DEBUG:
                 print("No timer type set, cancelling")
-            voice_message = "Sorry, I did not understand. "
+            voice_message = "Sorry, I don't understand. "
             #self.play_sound(self.error_sound,intent=intent_message)
             #return
         
@@ -679,7 +679,7 @@ def intent_stop_timer(self, slots, intent_message):
                     print("Error removing timer(s): " + str(ex))
         
         else:
-            voice_message = "Sorry, I did not understand. "
+            voice_message = "Sorry, I don't understand. "
             if self.DEBUG:
                 print("Error, reached else in stop_timer")
                   
@@ -1132,7 +1132,7 @@ def intent_set_state(self, slots, intent_message, found_properties, delayed_acti
             if self.DEBUG:
                 print("Error, no boolean set")
             #self.play_sound(self.error_sound,intent=intent_message)
-            return "Sorry, I did not understand. "
+            return "Sorry, I don't understand. "
 
         
 

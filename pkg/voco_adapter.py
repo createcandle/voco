@@ -24,12 +24,12 @@ sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'lib'))
 if os.path.exists('/usr/lib/aarch64-linux-gnu'):
     sys.path.append('/usr/lib/aarch64-linux-gnu')
 
-print("")
-print("BEFORE sys.path: " + str(sys.path))
+#print("")
+#print("BEFORE sys.path: " + str(sys.path))
 sys.path.remove('/usr/lib/python3/dist-packages') # hide the globally installed packages
-print("")
-print("AFTER sys.path: " + str(sys.path))
-print("")
+#print("")
+#print("AFTER sys.path: " + str(sys.path))
+#print("")
 #try:
 #    sys.path.append(os.path.join(os.sep,'home','pi','.webthings','addons','voco','lib'))
 #except:
@@ -107,9 +107,15 @@ try:
 except Exception as ex:
     print("Unable to load VocoAPIHandler (which is used for UI extention): " + str(ex))
 
+
+# AI LLM
+
 # Record audio from stream
 import struct
 import wave
+
+# OpenAI
+from openai import OpenAI
 
 
 _TIMEOUT = 3
@@ -180,14 +186,26 @@ class VocoAdapter(Adapter):
         self.llm_not_enough_disk_space = False
         
         self.llm_stt_minimal_memory = 500
-        self.llm_ai_minimal_memory = 3000
+        self.llm_assistant_minimal_memory = 3000
         self.llm_tts_minimal_memory = 300
         
+        self.llm_stt_possible = False
+        self.llm_tts_possible = False
+        self.llm_assistant_possible = False
+        self.llm_assistant_model = None
+        
+        self.llm_assistant_started = False
+        self.llm_assistant_process = None
+        self.llm_assistant_port = 8047
+        
         self.llm_stt_skipped = False # if there is not enough memory, then LLM STT will be skipped
-        #self.llm_ai_skipped = False # if there is not enough memory, then LLM AI will be skipped
+        #self.llm_assistant_skipped = False # if there is not enough memory, then LLM AI will be skipped
         #self.llm_tts_skipped = False # if there is not enough memory, then LLM TTS will be skipped
         
+        self.try_again_via_stt = False
+        self.try_again_via_ai = False
         
+        self.openai_client = None
         
         
         self.llm_tts_models = {
@@ -250,7 +268,7 @@ class VocoAdapter(Adapter):
         
         
         self.llm_stt_models = {
-            'Basic only':{'model':'voco',
+            'Basic':{'model':'voco',
                                 'description':'Use only the very basic AI.',
                                 'model_url':''
                             },
@@ -324,6 +342,7 @@ class VocoAdapter(Adapter):
         
         
         self.bluetooth_persistence_file_path = os.path.join(self.user_profile['dataDir'], 'bluetoothpairing', 'persistence.json')
+        
         
         
         
@@ -761,11 +780,13 @@ class VocoAdapter(Adapter):
         self.llm_tts_dir_path = os.path.join(self.llm_data_dir_path, 'tts')
         os.system('mkdir -p ' + str(self.llm_tts_dir_path))
         
-        self.llm_ai_dir_path = os.path.join(self.llm_data_dir_path, 'ai')
-        os.system('mkdir -p ' + str(self.llm_ai_dir_path))
+        self.llm_assistant_dir_path = os.path.join(self.llm_data_dir_path, 'assistant')
+        os.system('mkdir -p ' + str(self.llm_assistant_dir_path))
         
         self.llm_stt_dir_path = os.path.join(self.llm_data_dir_path, 'stt')
         os.system('mkdir -p ' + str(self.llm_stt_dir_path))
+        
+        self.llamafile_path = os.path.join(self.addon_dir_path,'llm','assistant','llamafile')
         
         #self.llm_tts_pipe_path = os.path.join(self.llm_tts_path, 'pipe')
         #os.system('mkfifo ' + str(self.llm_tts_pipe_path))
@@ -827,13 +848,10 @@ class VocoAdapter(Adapter):
         self.check_available_memory()
         
         
-        
-        
-        
-        
-        
-        
-        
+        if self.llm_assistant_possible:
+            self.start_ai_assistant()
+            if self.DEBUG:
+                print("called start_ai_assistant")
         
         
         
@@ -897,8 +915,8 @@ class VocoAdapter(Adapter):
             #self.persistent_data['llm_stt_model'] = 'ggml-small.en.bin'
             self.persistent_data['llm_stt_model'] = 'ggml-base.en.bin'
                 
-        if 'llm_ai_model' not in self.persistent_data:
-            self.persistent_data['llm_ai_model'] = 'tinyllama-1.1b-1t-openorca.Q4_K_M.gguf'
+        if 'llm_assistant_model' not in self.persistent_data:
+            self.persistent_data['llm_assistant_model'] = 'tinyllama-1.1b-1t-openorca.Q4_K_M.gguf'
         
         if 'llm_tts_model' not in self.persistent_data:
             self.persistent_data['llm_tts_model'] = 'en_US-lessac-medium.onnx'
@@ -1067,6 +1085,14 @@ class VocoAdapter(Adapter):
             elif self.microphone == "Second attached device, channel 2 (2,1)":
                 print("Setting audio input to second attached device, channel 2 (2,1)")
                 self.capture_card_id = 2
+                self.capture_device_id = 1
+            elif self.microphone == "Third attached device (3,0)":
+                print("Setting audio input to third attached device (3,0)")
+                self.capture_card_id = 3
+                self.capture_device_id = 0
+            elif self.microphone == "Third attached device, channel 2 (3,1)":
+                print("Setting audio input to third attached device, channel 2 (3,1)")
+                self.capture_card_id = 3
                 self.capture_device_id = 1
 
 
@@ -1820,6 +1846,21 @@ class VocoAdapter(Adapter):
                             if self.microphone == None:
                                 self.capture_card_id = 2
                                 self.capture_device_id = 1
+                                
+                if line.startswith('card 3'):
+                    if 'device 0' in line:
+                        result.append('Third attached device (3,0)')
+                        if device_type == 'capture':
+                            if self.microphone == None:
+                                self.capture_card_id = 3
+                                self.capture_device_id = 0
+                        
+                    elif 'device 1' in line:
+                        result.append('Third attached device, channel 2 (3,1)')
+                        if device_type == 'capture':
+                            if self.microphone == None:
+                                self.capture_card_id = 3
+                                self.capture_device_id = 1
                             
         except Exception as e:
             if self.DEBUG:
@@ -2108,7 +2149,8 @@ class VocoAdapter(Adapter):
                 output_device_string = "bluealsa:DEV=" + str(self.persistent_data['bluetooth_device_mac'])
         
             piper_path = os.path.join(self.addon_dir_path,'llm','tts', 'piper')
-            tts_command = "echo '" + str(voice_message) + "' | " + str(piper_path) + " --model " + str(self.llm_tts_model) + " --output-raw | aplay -D " + str(output_device_string) + " -r 22050 -f S16_LE -t raw -"
+            #tts_command = "echo '" + str(voice_message) + "' | " + str(piper_path) + " --model " + str(self.llm_tts_model) + " --output-raw | aplay -D " + str(output_device_string) + " -r 22050 -f S16_LE -t raw -"
+            tts_command = 'echo "' + str(voice_message) + '" | ' + str(piper_path) + ' --model ' + str(self.llm_tts_model) + ' --output-raw | aplay -D ' + str(output_device_string) + ' -r 22050 -f S16_LE -t raw -'
             if self.DEBUG:
                 print("\n\nVOCO LLM TTS COMMAND: " + str(tts_command))
                 subprocess.run(tts_command, capture_output=False, shell=True, check=False, encoding=None, errors=None, text=None, env=None, universal_newlines=None)
@@ -2281,6 +2323,9 @@ class VocoAdapter(Adapter):
                 # filter out characters that cause weird pronounciation.
                 voice_message = clean_up_string_for_speaking(voice_message)
     
+                # For LLM, the model must exist, and there must be enough memory
+                self.check_available_memory()
+    
                 for option in self.audio_controls:
                     if str(option['human_device_name']) == str(self.persistent_data['audio_output']) or str(self.persistent_data['audio_output']) == 'Bluetooth speaker':
                         environment["ALSA_CARD"] = str(option['simple_card_name'])
@@ -2289,13 +2334,12 @@ class VocoAdapter(Adapter):
 
                             
                         # Choose between LLM speech generation and NanoTTS
-                        # For LLM the model must exist, and there must be enough memory
-                        self.check_available_memory()
+                        
                         if self.DEBUG:
                             print("self.free_memory: " + str(self.free_memory) + ' ?>? ' + str(self.llm_tts_minimal_memory))
                         self.llm_tts_model_path = str(os.path.join(self.llm_tts_dir_path, str(self.persistent_data['llm_tts_model'])))
         
-                        if self.llm_enabled and self.llm_tts_enabled and self.persistent_data['llm_tts_model'] != 'nanotts' and os.path.exists(self.llm_tts_model_path) and self.free_memory > self.llm_tts_minimal_memory:
+                        if self.llm_enabled and self.llm_tts_enabled and self.persistent_data['llm_tts_model'] != 'nanotts' and os.path.exists(self.llm_tts_model_path) and self.llm_tts_possible:
                             self.llm_speak(voice_message)
                         
                         else:
@@ -2674,6 +2718,7 @@ class VocoAdapter(Adapter):
                 if self.DEBUG:
                     print("SNIPS SEEMS TO HAVE STARTED OK")
                 self.should_restart_snips = False
+                
                 
             process_count = self.is_snips_running_count()
             
@@ -4332,6 +4377,8 @@ class VocoAdapter(Adapter):
             if self.initial_injection_completed == False:
                 self.speak_welcome_message()
             self.initial_injection_completed = True
+            self.still_busy_booting = False
+            
             """
             if self.persistent_data['is_satellite']:
                 if self.DEBUG:
@@ -5628,12 +5675,21 @@ class VocoAdapter(Adapter):
                     
                     if this_is_origin_site:
                         if not self.DEBUG:
-                            self.speak("I didn't quite get that",intent=intent_message)
+                            if self.llm_stt_possible:
+                                self.speak("Hmmm",intent=intent_message)
+                                self.try_again_via_stt = True
+                            else:
+                                self.speak("I didn't quite get that",intent=intent_message)
+                                self.try_again_via_stt = False
                     else:
                         if self.DEBUG:
                             print("this is not origin site. Aborting.")
                     return
-
+                
+                else:
+                    self.try_again_via_stt = False
+                    
+                    
             # Date
             if sentence == 'what date is it' \
                         or sentence == 'what is the date' \
@@ -5676,7 +5732,7 @@ class VocoAdapter(Adapter):
         
         for intent_option in intents_to_check:
         """
-            
+        
         first_test = True
         first_voice_message = ""
         stop_looping = False
@@ -6258,7 +6314,23 @@ class VocoAdapter(Adapter):
         else:
             if self.DEBUG:
                 print("\n(...) " + str(voice_message))
-            self.speak(voice_message,intent=intent_message)
+                print("self.llm_assistant_started? " + str(self.llm_assistant_started))
+            
+            if voice_message.startswith("Sorry, I don't understand.") and self.llm_assistant_started:
+                if self.DEBUG:
+                    print("The final message was 'Sorry, I do not understand', so the AI assistant can take a shot at it")
+                if self.try_again_via_stt == True:
+                    self.try_again_via_ai = True
+                else:
+                    self.ask_ai_assistant(sentence,intent_message)
+                
+                # TODO: timing is a potential issue. This code assumes this master_intent_callback always finishes long before the STT AI extracts text from the audio.
+                #if self.llm_stt_possible:
+                #    self.try_again_via_ai = True
+                #else:
+                    
+            else:
+                self.speak(voice_message,intent=intent_message)
 
      
      
@@ -8348,7 +8420,7 @@ class VocoAdapter(Adapter):
 
 
 
-    def parse_text(self, origin=None,site_id=None):
+    def parse_text(self, origin=None, site_id=None):
         if self.DEBUG:
             print("in parse_text")
         
@@ -8529,8 +8601,11 @@ class VocoAdapter(Adapter):
     def update_network_info(self):
         try:
             possible_ip = get_ip()
-            if valid_ip(possible_ip):
-                self.ip_address = possible_ip
+            if isinstance(possible_ip,str):
+                if valid_ip(possible_ip):
+                    self.ip_address = possible_ip
+            else:
+                print("update_network_info: error, not a valid possible_ip: " + str(possible_ip))
             #if self.DEBUG:
             #    print("My IP address = " + str(self.ip_address))
         except Exception as ex:
@@ -8743,10 +8818,26 @@ class VocoAdapter(Adapter):
             
         self.free_memory = self.total_memory - self.used_memory
 
-        #if self.DEBUG:
+        if self.free_memory > self.llm_stt_minimal_memory:
+            self.llm_stt_possible = True
+        else:
+            self.llm_stt_possible = False
+            
+        if self.free_memory > self.llm_tts_minimal_memory:
+            self.llm_tts_possible = True
+        else:
+            self.llm_tts_possible = False
+            
+        if self.free_memory > self.llm_assistant_minimal_memory:
+            self.llm_assistant_possible = True
+        else:
+            self.llm_assistant_possible = False
+        
+            
+        if self.DEBUG:
         #    print("check_available_memory: total_memory: " + str(self.total_memory))
         #    print("check_available_memory: used_memory: " + str(self.used_memory))
-        #    print("check_available_memory: free_memory: " + str(self.free_memory))
+            print("check_available_memory: free_memory: " + str(self.free_memory))
             
 
 
@@ -8850,7 +8941,7 @@ class VocoAdapter(Adapter):
 
 
 
-    def llm_stt(self):
+    def llm_stt(self,intent=None):
         if self.DEBUG:
             print("in llm_stt")
         
@@ -8860,7 +8951,13 @@ class VocoAdapter(Adapter):
             if self.DEBUG:
                 print("self.free_memory: " + str(self.free_memory) + ' ?>? ' + str(self.llm_stt_minimal_memory))
             
-            if self.free_memory > self.llm_stt_minimal_memory:
+            #if self.free_memory > self.llm_stt_minimal_memory:
+            
+            
+            
+            if self.llm_stt_possible:
+                if self.DEBUG:
+                    print("llm_stt_possible, DOING SPEECH TO TEXT on: " + str(self.last_recording_path))
                 self.llm_stt_skipped = False
                 
                 #./command -m ./models/ggml-tiny.en.bin -ac 768 -t 3 -c 0
@@ -8869,7 +8966,7 @@ class VocoAdapter(Adapter):
                 # https://github.com/ggerganov/whisper.cpp/blob/master/examples/command/command.cpp
                 #stt_command = str(os.path.join(self.addon_dir_path,'llm','stt', 'command')) + " -m " + str(os.path.join(self.llm_stt_dir_path, str(self.persistent_data['llm_stt_model']))) + " -ac 768 -t 3 -c 0"
                 
-                stt_command = str(os.path.join(self.addon_dir_path,'llm','stt', 'main')) + " -m " + str(os.path.join(self.llm_stt_dir_path, str(self.persistent_data['llm_stt_model']))) + " -f " + str(self.last_recording_path) + " --processors 3 --output-json " # --max-context 30  -ps --prompt 'You are a smart home assistant'"
+                stt_command = str(os.path.join(self.addon_dir_path,'llm','stt', 'main')) + ' -m ' + str(os.path.join(self.llm_stt_dir_path, str(self.persistent_data['llm_stt_model']))) + ' -f ' + str(self.last_recording_path) + ' --prompt "You are a smart home voice assistant listening to commands." -sow -l en -t 4 -nt  ' # -ojf --output-json # --max-context 30  -ps --prompt 'You are a smart home assistant'"
                 
                 if self.DEBUG:
                     print("\n\nVOCO LLM STT COMMAND: " + str(stt_command))
@@ -8877,11 +8974,30 @@ class VocoAdapter(Adapter):
                 stt_output = run_command(stt_command)
                 if self.DEBUG:
                     print("\n\nVOCO LLM STT OUTPUT: " + str(stt_output))
+                    self.llm_speak( str(stt_output) )
+                    
+                if self.llm_assistant_started and self.try_again_via_ai:
+                    if self.DEBUG:
+                        print("passing LLM STT output to AI assistant")
+                    self.try_again_via_stt = False
+                    self.try_again_via_ai = False
+                    self.ask_ai_assistant(str(stt_output),intent)
+                    
+                elif self.try_again_via_stt:
+                    self.try_again_via_stt = False
+                    
+                    if self.DEBUG:
+                        print("retrying with LLM STT output using parse_text")
+                    self.last_text_command = str(stt_output)
+                    self.parse_text(site_id=self.persistent_data['site_id'],origin="text")
             
             else:
                 if self.DEBUG:
-                    print("not enough free memory to run LLM STT")
+                    print("not enough free memory to run LLM STT (or AI assistant)")
+                self.try_again_via_stt = False
+                self.try_again_via_ai = False
                 self.llm_stt_skipped = True
+                
         
        
         #subprocess.run(tts_command, capture_output=False, shell=True, check=False, encoding=None, errors=None, text=None, env=None, universal_newlines=None)
@@ -8927,15 +9043,28 @@ class VocoAdapter(Adapter):
             # MAIN AI
             self.llm_busy_downloading_models = 2
         
-            if self.persistent_data['llm_ai_model'] == 'tinyllama-1.1b-1t-openorca.Q4_K_M.gguf':
-                self.llm_ai_model = os.path.join(self.llm_ai_dir_path,'tinyllama-1.1b-1t-openorca.Q4_K_M.gguf')
-                if not os.path.exists(self.llm_ai_model):
+            # 700 Mb
+            if self.persistent_data['llm_assistant_model'] == 'tinyllama-1.1b-1t-openorca.Q4_K_M.gguf':
+                self.llm_assistant_model = os.path.join(self.llm_assistant_dir_path,'tinyllama-1.1b-1t-openorca.Q4_K_M.gguf')
+                if not os.path.exists(self.llm_assistant_model):
                     if self.free_disk_space > 1000:
                         if self.DEBUG:
-                            print("Downloading " + str(self.llm_ai_model))
-                        os.system('wget https://huggingface.co/TheBloke/TinyLlama-1.1B-1T-OpenOrca-GGUF/resolve/main/tinyllama-1.1b-1t-openorca.Q4_K_M.gguf -O ' + str(self.llm_ai_model))
+                            print("Downloading " + str(self.llm_assistant_model))
+                        os.system('wget https://huggingface.co/TheBloke/TinyLlama-1.1B-1T-OpenOrca-GGUF/resolve/main/tinyllama-1.1b-1t-openorca.Q4_K_M.gguf -O ' + str(self.llm_assistant_model))
                     else:
                         self.llm_not_enough_disk_space = True
+        
+            # 500 Mb
+            elif self.persistent_data['llm_assistant_model'] == 'TinyLlama-1.1B-Chat-v1.0.Q2_K.gguf':
+                self.llm_assistant_model = os.path.join(self.llm_assistant_dir_path,'TinyLlama-1.1B-Chat-v1.0.Q2_K.gguf')
+                if not os.path.exists(self.llm_assistant_model):
+                    if self.free_disk_space > 1000:
+                        if self.DEBUG:
+                            print("Downloading " + str(self.llm_assistant_model))
+                        os.system('wget https://huggingface.co/jartine/TinyLlama-1.1B-Chat-v1.0-GGUF/resolve/main/TinyLlama-1.1B-Chat-v1.0.Q2_K.gguf -O ' + str(self.llm_assistant_model))
+                    else:
+                        self.llm_not_enough_disk_space = True
+        
         
         
             # STT
@@ -8952,10 +9081,10 @@ class VocoAdapter(Adapter):
                     
                         # get url to download
                         #for model_name, model_details in self.llm_stt_models.items():
-                        for model_name in self.llm_tts_models:
+                        for model_name in self.llm_stt_models:
                             #if model_details.model == str(self.persistent_data['llm_stt_model']) and model_details.model_url.startswith('http'):
                             if self.llm_stt_models[model_name]['model'] == str(self.persistent_data['llm_stt_model']) and self.llm_stt_models[model_name]['model_url'].startswith('http'):
-                                os.system('wget ' + str(model_details.model_url) + ' -O ' + str(self.llm_stt_model))
+                                os.system('wget ' + str(self.llm_stt_models[model_name]['model_url']) + ' -O ' + str(self.llm_stt_model))
                     else:
                         self.llm_not_enough_disk_space = True
                         self.persistent_data['llm_stt_model'] = 'voco'
@@ -9005,8 +9134,96 @@ class VocoAdapter(Adapter):
         self.llm_busy_downloading_models = 0
                 
         
+
+
+    def start_ai_assistant(self):
+        if self.DEBUG:
+            print("in start_ai_assistant");
         
+        #self.llm_assistant_process = subprocess.Popen(
+        #    "/home/pi/.webthings/addons/voco/llm/ai/llamafile -m /home/pi/.webthings/data/voco/llm/ai/tinyllama-1.1b-1t-openorca.Q4_K_M.gguf -p 'The following is a conversation between a Researcher and their helpful AI assistant Digital Athena which is a large language model trained on the sum of human knowledge. Researcher: Good morning. Digital Athena: How can I help you today? Researcher:' --interactive --color --batch_size 1024 --ctx_size 4096 --keep -1 --temp 0 --mirostat 2 --in-prefix ' ' --interactive-first --in-suffix 'Digital Athena:' --reverse-prompt 'Researcher:'", 
+        #    stdin=subprocess.PIPE,
+        #    stdout=subprocess.PIPE,
+        #    stderr=subprocess.PIPE,
+        #    text=True,  # Use text mode to handle text input and output
+        #    bufsize=1,  # Line-buffered, so we can read line by line
+        #    shell=True
+        #)
+        
+        my_env = os.environ.copy()
+        #my_env["LD_LIBRARY_PATH"] = '{}:{}'.format(self.snips_path,self.arm_libs_path)
+        #my_env["LD_LIBRARY_PATH"] = '{}'.format(self.snips_path)
+        
+        assistant_command = [
+            self.llamafile_path,
+            '-m',
+            self.llm_assistant_model,
+            '-port',
+            self.llm_assistant_port
+        ]
+        """
+        '-t',
+        3,
+        '-n',
+        1000
+        """
+        
+        #/home/pi/.webthings/addons/voco/llm/ai/llamafile -m /home/pi/.webthings/data/voco/llm/ai/tinyllama-1.1b-1t-openorca.Q4_K_M.gguf 
+        # --port 8047 --nobrowser
+        
+        self.llm_assistant_process = Popen(assistant_command, env=my_env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        
+        time.sleep(1)
+        
+        self.openai_client = OpenAI(
+            base_url="http://localhost:" + str(self.llm_assistant_port) + "/v1", # "http://<Your api-server IP>:port"
+            api_key = "sk-no-key-required"
+        )
+        self.llm_assistant_started = True
+        if self.DEBUG:
+            print("start_ai_assistant DONE")
 
 
-
-
+    def ask_ai_assistant(self,voice_message=None,intent=None):
+        if self.DEBUG:
+            print("in ask_ai_assistant. voice_message: " + str(voice_message))
+        output = ''
+        
+        
+        
+        if self.llm_assistant_started and self.openai_client != None and self.llm_assistant_process != None and voice_message != None and len(voice_message) > 4:
+            
+           
+            
+            completion = self.openai_client.chat.completions.create(
+                model="LLaMA_CPP",
+                messages=[
+                    {"role": "system", "content": "You are LLAMAfile, an AI assistant. Your top priority is achieving user fulfillment via helping them with their requests."},
+                    {"role": "user", "content": "How many eyes does the sun have?"}
+                ]
+            )
+            print("\n\n ) ) ) ) ) ) ) ) ) ) ) ) ) )\n")
+            print(completion.choices[0].message)
+            print("\ncompletion:" + str(completion))
+            print("")
+            #self.speak(output,intent);
+        
+            #print("writing voice message to AI stdin")
+            #self.llm_assistant_process.stdin.write(voice_message + '\n')
+            #self.llm_assistant_process.stdin.flush()
+            
+            #output = self.llm_assistant_process.communicate(input=voice_message)[0]
+            """
+            start_time = time.time()
+            while True:
+                line = self.llm_assistant_process.stdout.readline()
+                if line == '' and self.llm_assistant_process.poll() is not None:
+                    break
+                output += line
+                if time.time() > start_time + 10:
+                    print("AI assistant was taking too long")
+                    break
+            """
+            
+        #print("ask_ai_assistant: output: " + str(output))
+        #self.speak(output,intent);
