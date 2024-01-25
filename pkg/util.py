@@ -560,14 +560,25 @@ def get_audio_controls():
             #print("simple card name = " + str(simple_card_name))
             
             full_card_name   = re.findall(r"\[([^']+)\]", line_a)[0]
-            #print("full card name = " + str(full_card_name))
+            print("audio full card name = " + str(full_card_name))
             
             full_device_name = re.findall(r"\[([^']+)\]", line_b)[0]
-            #print("full device name = " + str(full_device_name))
+            print("audio full device name = " + str(full_device_name))
             
-            human_device_name = str(full_device_name)
+            # TODO: this used to use full_device_name:
+            human_device_name = str(full_card_name)
+            
+            # Raspberry Pi 5
+            human_device_name = human_device_name.replace("vc4-hdmi-0","Built-in video")
+            human_device_name = human_device_name.replace("vc4-hdmi-1","Built-in video two")
+            
+            
             
             # Raspberry Pi 4
+            human_device_name = human_device_name.replace("bcm2835 Headphones","Built-in headphone jack")
+            human_device_name = human_device_name.replace("bcm2835 HDMI 1","Built-in video")
+            human_device_name = human_device_name.replace("bcm2835 HDMI 2","Built-in video two")
+            
             human_device_name = human_device_name.replace("bcm2835 ALSA","Built-in headphone jack")
             human_device_name = human_device_name.replace("bcm2835 IEC958/HDMI","Built-in video")
             human_device_name = human_device_name.replace("bcm2835 IEC958/HDMI1","Built-in video two")
@@ -576,8 +587,13 @@ def get_audio_controls():
             human_device_name = human_device_name.replace("bcm2835 Headphones","Built-in headphone jack")
             
             # ReSpeaker dual microphone pi hat
+            human_device_name = human_device_name.replace("seeed-2mic-voicecard","ReSpeaker headphone jack")
+            human_device_name = human_device_name.replace("seeed-4mic-voicecard","ReSpeaker headphone jack")
+            human_device_name = human_device_name.replace("seeed-6mic-voicecard","ReSpeaker headphone jack")
             human_device_name = human_device_name.replace("bcm2835-i2s-wm8960-hifi wm8960-hifi-0","ReSpeaker headphone jack")
             #print("human device name = " + human_device_name)
+            
+            
             
             
             control_name = None
