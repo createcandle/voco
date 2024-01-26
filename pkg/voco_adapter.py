@@ -83,10 +83,10 @@ except Exception as ex:
     print("ERROR, could not load Matrix library: " + str(ex))
 
 # Pillow
-try:
-    from PIL import Image
-except:
-    print("Error: could not load Pillow library.")
+#try:
+#    from PIL import Image
+#except:
+#    print("Error: could not load Pillow library.")
 
 # Timezones
 try:
@@ -207,7 +207,7 @@ class VocoAdapter(Adapter):
         self.llm_tts_model = None
         self.llm_stt_model = None
         self.llm_assistant_model = None
-        
+        self.assistant_output_counter = 0
         
         
         self.llm_assistant_started = False
@@ -215,6 +215,9 @@ class VocoAdapter(Adapter):
         self.llm_assistant_port = 8047
         self.allow_outside_access_to_assistant = False
         self.last_command_was_answered_by_assistant = False
+        self.last_assistant_output_change_time = 0
+        self.assistant_output_counter = 0
+        self.previous_assistant_output = ''
         
         self.llm_stt_skipped = False # if there is not enough memory, then LLM STT will be skipped
         #self.llm_assistant_skipped = False # if there is not enough memory, then LLM AI will be skipped
@@ -234,8 +237,20 @@ class VocoAdapter(Adapter):
             'Hmmm',
             'Ok, I will let you know when it switches back to on',
             'Ok, I will let you know when it switches back to off',
+            '10',
+            '9',
+            '8',
+            '7',
+            '6',
+            '5',
+            '4',
+            '3',
+            '2',
+            '1',
+            '0'
         ]
         
+
         
         self.llm_tts_models = {
             'Basic':{'model':'nanotts',
@@ -812,7 +827,19 @@ class VocoAdapter(Adapter):
         self.llm_stt_dir_path = os.path.join(self.llm_data_dir_path, 'stt')
         os.system('mkdir -p ' + str(self.llm_stt_dir_path))
         
-        self.llamafile_path = os.path.join(self.addon_dir_path,'llm','assistant','llamafile')
+        self.llamafile_zip_path = os.path.join(self.addon_dir_path,'llm','assistant','llamafile.zip')
+        self.llamafile_path = os.path.join(self.data_dir_path,'llm','llamafile')
+        self.llamafile_llamafile_system_prompt_path = os.path.join(self.data_dir_path,'llm','llamafile_system_prompt.json')
+        
+        
+        if not os.path.exists(self.llamafile_path):
+            print("unzipping llamafile")
+            run_command('unzip ' + str(self.llamafile_zip_path) + ' -d ' + str(os.path.join(self.data_dir_path,'llm')))
+            
+        if os.path.exists(self.llamafile_path):
+            os.system('chmod +x ' + str(self.llamafile_path))
+        else:
+            print("ERROR, llamafile not found at " + str(self.llamafile_path))
         
         #self.llm_tts_pipe_path = '/tmp/llm_pipe' #os.path.join(self.llm_data_dir_path, 'pipe')
         #os.system('mkfifo ' + str(self.llm_tts_pipe_path))
@@ -1280,7 +1307,7 @@ class VocoAdapter(Adapter):
             
             if self.llm_assistant_possible:
                 
-                self.a = threading.Thread(target=self.start_ai_assistant) # , args=(self.voice_messages_queue,)
+                self.a = threading.Thread(target=self.start_ai_assistant) #, args=(self.voice_messages_queue,)
                 self.a.daemon = True
                 self.a.start()
                 
@@ -2986,24 +3013,31 @@ class VocoAdapter(Adapter):
             #    output = self.assistant_process.stdout.readline()
             #    print("assistant_process_output: " + str(output))
             
+            if self.llm_assistant_process != None and self.llm_assistant_process.poll() == None: # and self.llm_assistant_process.stdout != None:
+                pass
+                #while True:
+                #    line = self.llm_assistant_process.stderr.readline()
+                #    self.llm_assistant_process.stderr.flush()
+                #    if not line:
+                #        break
+                #    with open("/tmp/stderr.txt", "a") as myfile2:
+                #        myfile2.write(line)
+                #    self.lock.acquire()
+                #    print("clock: stdERR: " + str(line))
+                #    self.lock.release()
             
             if time.time() > self.current_utc_time + 1:
                 self.current_utc_time = int(time.time())
                 
+                #self.lock.acquire()
+                #print("UTC: " + str(self.current_utc_time))
+                #self.lock.release()
                 
-                
-                #print("tik", flush=True)
-                if self.llm_assistant_process != None: # and self.llm_assistant_process.poll() == None:
-                    pass
-                    #self.lock.acquire()
-                    #while True:
-                    #    if self.llm_assistant_process != None and self.llm_assistant_process.stdout != None:
-                    #        line = self.llm_assistant_process.stdout.readline()
-                    #        if not line:
-                    #            break
-                    #        print("click: readline: " + str(line))
-                    #print("tik")
-                    #self.lock.release()
+                    
+                                 
+                        
+                    
+                    
                     #for line in iter(self.llm_assistant_process.stdout.readline, b''):
                     #    print('-->>> {}'.format(line.rstrip()))
                 
@@ -4232,7 +4266,7 @@ class VocoAdapter(Adapter):
             with open(self.persistence_file_path) as f:
                 #if self.DEBUG:
                 #    print("saving persistent data: " + str(self.persistent_data))
-                json.dump( self.persistent_data, open( self.persistence_file_path, 'w+' ), indent=4 )
+                json.dump( self.persistent_data, open( self.persistence_file_path, 'w' ), indent=4 )
                 if self.DEBUG:
                     print("Data stored")
                 return True
@@ -4546,7 +4580,7 @@ class VocoAdapter(Adapter):
                 if self.DEBUG:
                     print("MQTT message ends with toggleOff")
                 
-                if self.llm_enabled and self.llm_stt_enabled and self.llm_stt_model != None and self.llm_stt_possible:
+                if self.persistent_data['listening'] == True and self.llm_enabled and self.llm_stt_enabled and self.llm_stt_model != None and self.llm_stt_possible:
                     if self.DEBUG:
                         print("subscribing to audioFrame topic: " + str(self.audio_frame_topic))
                     #self.mqtt_client.subscribe('hermes/audioServer/default/audioFrame')
@@ -4587,6 +4621,16 @@ class VocoAdapter(Adapter):
                     try:
                         if self.DEBUG:
                             print("toggleOn: unsubscribing from audio_frame_topic")
+                            if self.llm_assistant_process == None:
+                                print("toggleOn: WARNING, assistant process is none")
+                                self.llm_assistant_started = False
+                            elif self.llm_assistant_process.poll() != None:
+                                print("toggleOn: WARNING, assistant process has stopped!")
+                                self.llm_assistant_started = False
+                            else:
+                                print("toggleOn: assistant process seems to be running OK")
+                                self.llm_assistant_started = True
+                                
                         self.mqtt_client.unsubscribe(self.audio_frame_topic)
                     except Exception as ex:
                         print("error unsubscribing from audio frame topic on first mqtt client: " + str(ex))
@@ -5276,10 +5320,16 @@ class VocoAdapter(Adapter):
                     if self.DEBUG:
                         print("master_intent_callback ran less than 4 seconds ago, ignoring this one, likely an echo.")
                     return
-                self.previous_intent_callback_time = time.time()
+                    
+                if 'origin' in intent_message and intent_message['origin'] == 'voice' and self.persistent_data['listening'] == False:
+                    if self.DEBUG:
+                        print("Not handling voice intent menssage because listening is set to False. Almost slipped through.")
+                else:
+                    self.previous_intent_callback_time = time.time()
                 
-                self.alternatives_counter = -1
-                self.master_intent_callback(intent_message)
+                    self.alternatives_counter = -1
+                    self.master_intent_callback(intent_message)
+                
                 
                 
                 
@@ -5799,7 +5849,7 @@ class VocoAdapter(Adapter):
                     if this_is_origin_site:
                         #if not self.DEBUG:
                         if self.llm_enabled and self.stt_enabled and self.llm_stt_possible and 'origin' in intent_message and intent_message['origin'] == 'voice':
-                            #self.speak("One moment",intent=intent_message)
+                            self.speak("One moment",intent=intent_message)
                             self.try_again_via_stt = True
                         else:
                             # Show the heard sentence in a popup
@@ -5931,9 +5981,9 @@ class VocoAdapter(Adapter):
                 if self.DEBUG:
                     print("intent was None")
                 if final_test:
-                    voice_message = "Sorry, I didn't understand your intention."
+                    voice_message = "Sorry, I don't understand your intention."
                 if first_test:
-                    first_voice_message = "Sorry, I didn't understand your intention."
+                    first_voice_message = "Sorry, I don't understand your intention."
                     #self.speak("Sorry, I didn't understand your intention.",intent=intent_message)
                 break
         
@@ -5951,6 +6001,12 @@ class VocoAdapter(Adapter):
                         slots['start_time'] = None
                     
                     
+                
+                if self.llm_assistant_started and 'about' in sentence and incoming_intent == 'get_time':
+                    if self.DEBUG:
+                        print("Applying ugly heuristic to more likely send second query to assistant again. sentence: " + str(sentence))
+                    return ""
+                        
                 if sentence.startswith('load ') and incoming_intent == 'get_value':
                     if self.DEBUG:
                         print("Applying ugly heuristic to allow for value decrease ('load the' detected at start of sentence)")
@@ -6032,7 +6088,7 @@ class VocoAdapter(Adapter):
                         # This can't happen. TODO: should switch to alternative.
                         if final_test:
                             if not self.persistent_data['is_satellite']:
-                                #self.speak("I did not understand what you wanted to change.",intent=intent_message)
+                                #self.speak("Sorry, I don't understand what you wanted to change.",intent=intent_message)
                                 voice_message = "Sorry, I don't understand. "
                             if self.DEBUG:
                                 print("did not understand the change based on these slots: " + str(slots))
@@ -6041,7 +6097,7 @@ class VocoAdapter(Adapter):
                         else:
                             if first_test:
                                 if not self.persistent_data['is_satellite']:
-                                    first_voice_message = "Sorry, I did not understand what you wanted to change. "
+                                    first_voice_message = "Sorry, I don't understand what you wanted to change. "
                             continue
                             #self.master_intent_callback(intent_message, True) # let's try an alternative intent, if there is one.
                     
@@ -6088,11 +6144,11 @@ class VocoAdapter(Adapter):
                             if final_test:
                                 if not self.persistent_data['is_satellite']:
                                     #self.speak("I was unable to perform the change you wanted.",intent=intent_message)
-                                    first_voice_message = "Sorry, I did not understand the change you wanted. "
+                                    first_voice_message = "Sorry, I don't understand the change you wanted. "
                                 return
                             else:
                                 if first_test:
-                                    first_voice_message = "Sorry, I did not understand the change you wanted. "
+                                    first_voice_message = "Sorry, I don't understand the change you wanted. "
                                 continue
                                 #self.master_intent_callback(intent_message, True) # let's try an alternative intent, if there is one.
                     
@@ -6149,7 +6205,7 @@ class VocoAdapter(Adapter):
                                 
                             if final_test == False:
                                 if first_test:
-                                    first_voice_message = "Sorry, I did not understand what value you wanted to change. "
+                                    first_voice_message = "Sorry, I don't understand what value you wanted to change. "
                                 continue
                                 #self.master_intent_callback(intent_message, True)
                             
@@ -6182,7 +6238,7 @@ class VocoAdapter(Adapter):
                             print("list_timers intent, but no timer type in slots, so cannot be correct intent")
                         if final_test == False:
                             if first_test:
-                                first_voice_message = "Sorry, I did not understand the type of timer. "
+                                first_voice_message = "Sorry, I don't understand the type of timer. "
                             continue
                     
                     if incoming_intent == 'set_timer' and (slots['duration'] == None or slots['end_time'] == None) and slots['time_string'] == None and self.persistent_data['is_satellite'] == False:
@@ -6190,10 +6246,10 @@ class VocoAdapter(Adapter):
                             print("The spoken sentence did not contain a time")
                         #self.play_sound(self.error_sound,intent=intent_message)
                         #time.sleep(.2)
-                        voice_message = "Sorry, I did not understand the time. "
+                        voice_message = "Sorry, I don't understand the time. "
                         if final_test == False:
                             if first_test:
-                                first_voice_message = "Sorry, I did not understand the time. "
+                                first_voice_message = "Sorry, I don't understand the time. "
                             continue
                     
                     
@@ -6216,6 +6272,16 @@ class VocoAdapter(Adapter):
                     elif incoming_intent == 'get_timer_count': 
                         voice_message = intent_get_timer_count(self, slots, intent_message)
                         if not voice_message.startswith('Sorry'):
+                            if str(slots['timer_type']) == 'countdown':
+                                # try to allow satellites to requist that the countdown is spoken everywhere.
+                                # TODO: only expand to that specific room, not 'everywhere'
+                                for index, item in enumerate(self.persistent_data['action_times']):
+                                    if str(item['type']) == 'countdown':
+                                        if 'siteId' in item and item['sideId'] != self.persistent_data['site_id']:
+                                            self.persistent_data['action_times'][index]['sideId'] = 'everywhere'
+                                            voice_message = voice_message + " I will now inform you everywhere. "
+                                        break
+                            
                             stop_looping = True
                             break
                     elif incoming_intent == 'list_timers':
@@ -6359,7 +6425,7 @@ class VocoAdapter(Adapter):
                 #elif self.token != "":
                 #    if self.DEBUG:
                 #        print("Error: the code could not handle that intent. Under construction?")
-                #    self.speak("Sorry, I did not understand your intention.")
+                #    self.speak("Sorry, I don't understand your intention.")
                 #else:
                 #    if self.DEBUG:
                 #        print("Error: the code could not handle that intent. Under construction?")
@@ -6454,7 +6520,7 @@ class VocoAdapter(Adapter):
             
                 if (voice_message == '' or voice_message.startswith("Sorry, I don't understand")) and self.llm_assistant_started:
                     if self.DEBUG:
-                        print("The final message was 'Sorry, I do not understand', so the AI assistant can take a shot at it")
+                        print("The final message was 'Sorry, I don't understand', so the AI assistant can take a shot at it")
                 
                     if isinstance(intent_message,dict) and 'origin' in intent_message and intent_message['origin'] != 'voice':
                         if self.DEBUG:
@@ -6478,7 +6544,7 @@ class VocoAdapter(Adapter):
                 
                         self.try_again_via_ai = True
                 
-                    #self.speak("One moment",intent=intent_message)
+                    self.speak("One moment",intent=intent_message)
                 
                     # TODO: timing is a potential issue. This code assumes this master_intent_callback always finishes long before the STT AI extracts text from the audio.
                     # UPDATE: So far this assumption seems correct
@@ -9140,13 +9206,16 @@ class VocoAdapter(Adapter):
                 if self.DEBUG:
                     print("\n\nVOCO LLM STT COMMAND: " + str(stt_command))
         
-                stt_output = run_command(stt_command)
+                stt_output = run_command(stt_command,40)
                 if self.DEBUG:
                     print("\n\nVOCO LLM STT OUTPUT: " + str(stt_output))
                     #self.llm_speak( str(stt_output) )
                     print(" - - self.try_again_via_stt: " + str(self.try_again_via_stt))
                     print(" - - self.try_again_via_ai: " + str(self.try_again_via_ai))
                     
+                if stt_output == None:
+                    self.speak("Sorry, I don't understand.",intent=intent)
+                    return
                     
                 if '[' in stt_output:
                     if self.DEBUG:
@@ -9300,63 +9369,94 @@ class VocoAdapter(Adapter):
         
         
         
-    async def start_ai_assistant_cli():
+    def start_ai_assistant(self):
         if self.DEBUG:
             print("in start_ai_assistant");
 
-        # WARNING Not CLI at the moment.. testing asynchio option
+        my_env = os.environ.copy()
+        
+        with open("/tmp/assistant_output.txt", "w") as myfile:
+            myfile.write("")
+        
+        #"sh",
+        #    "-c",
+        #
+        
         assistant_command = [
-            "--server",
-            "--nobrowser",
-            "--port",
-            str(self.llm_assistant_port)
-        ]
-        if self.DEBUG:
-            print("self.allow_outside_access_to_assistant: " + str(self.allow_outside_access_to_assistant))
-        if self.allow_outside_access_to_assistant: # or self.DEBUG:
-            assistant_command = assistant_command + ["--host","0.0.0.0"]
-        else:
-            pass
-            #assistant_command = assistant_command + ["--host","127.0.0.1"]
-            #assistant_command = assistant_command + ["--host","localhost"]
-
-
-
-        assistant_command_part2 = [
+            
+            str(self.llamafile_path),
             "-m",
             str(self.llm_assistant_model),
-            "-t",
-            "4"
+            "-p",
+            "'The following is a conversation between a curious Researcher and their helpful AI assistant Digital Athena which is a large language model trained on the sum of human knowledge. Researcher: What is the capital of Germany?. Digital Athena: Berlin is the capital of Germany. Researcher:'",
+            "--interactive",
+            #"--simple-io",
+            "--batch_size",
+            "1024",
+            "--ctx_size",
+            "4096",
+            "--keep",
+            "-1",
+            "--temp",
+            "0",
+            "--mirostat",
+            "2",
+            "--in-prefix",
+            "' '",
+            "--interactive-first",
+            "--in-suffix",
+            "'Digital Athena:'",
+            "--reverse-prompt",
+            "'Researcher:'"
         ]
-
+        
+        assistant_command_part2 = [
+            "-t",
+            "4",
+            #">>",
+            #"-"
+            ">>",
+            "/tmp/assistant_output.txt"
+            #"2>&1",
+            #"|",
+            #"cat"
+        ]
+        
         assistant_command = assistant_command + assistant_command_part2
-
+        
         assistant_command = ' '.join(assistant_command)
-        print("assistant_command: " + str(assistant_command))
+        
+        self.llm_assistant_started = True
+        self.llm_assistant_process = Popen(assistant_command, env=my_env, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,bufsize=100,shell=True) # 
+        
 
-
-
-        self.llm_assistant_process = await asyncio.subprocess.create_subprocess_exec(
-            str(self.llamafile_path), assistant_command, stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
-        )
-        self.llm_assistant_process.stdin.write(b"bob\n")
-        print(await self.llm_assistant_process.stdout.read(1024))
+        #self.llm_assistant_process = await asyncio.subprocess.create_subprocess_exec(
+        #    str(self.llamafile_path), assistant_command, stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
+        #)
+        #self.llm_assistant_process.stdin.write(b"bob\n")
+        #self.llm_assistant_process.stdin.write("What is the capital of Germany?\n")
+        #print(await self.llm_assistant_process.stdout.read(1024))
         #self.llm_assistant_process.stdin.write(b"alice\n")
         #print(await proc.stdout.read(1024))
         #proc.stdin.write(b"quit\n")
         #await proc.wait()
 
-        self.llm_assistant_started = True
-        print("LOCALSHELL STARTED")
+        
+        print("CLI VERSION STARTED")
+        print("\n\n\nHEY, I HAPPENED\n\n\n")
+    
+        
+    
+    
+
     
     
     
-    
-    
-    
-    def start_ai_assistant(self):
+    def start_ai_assistant_server(self):
         if self.DEBUG:
             print("in start_ai_assistant");
+        
+        
         
         my_env = os.environ.copy()
         #my_env["LD_LIBRARY_PATH"] = '{}:{}'.format(self.snips_path,self.arm_libs_path)
@@ -9367,6 +9467,10 @@ class VocoAdapter(Adapter):
             str(self.llamafile_path),
             "--server",
             "--nobrowser",
+            "-c",
+            "2048",
+            "--system-prompt-file",
+            str(self.llamafile_llamafile_system_prompt_path),
             "--port",
             str(self.llm_assistant_port)
         ]
@@ -9426,7 +9530,9 @@ class VocoAdapter(Adapter):
         # llamafile will only run in a shell? It throws an error if run directly
         assistant_command = ' '.join(assistant_command)
         
-        self.llm_assistant_process = Popen(str(assistant_command), env=my_env, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT,shell=True)
+        self.llm_assistant_started = True
+        
+        self.llm_assistant_process = Popen(str(assistant_command), env=my_env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,shell=True)
         #self.llm_assistant_process = Popen(assistant_command, env=my_env, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT,text=True) # ,bufsize=1
         
         # CLI version:
@@ -9453,7 +9559,7 @@ class VocoAdapter(Adapter):
         
         
         #time.sleep(5)
-        #print("\n\n\nHEY, I HAPPENED\n\n\n")
+        print("\n\n\nHEY, I HAPPENED\n\n\n")
         
         #for line in iter(self.llm_assistant_process.stdout.readline, b''):
         #    print('>>> {}'.format(line.rstrip()))
@@ -9497,7 +9603,7 @@ class VocoAdapter(Adapter):
         
         
         server_mode = True
-        #server_mode = False
+        server_mode = False
         
         if self.llm_assistant_process != None and server_mode == True:
             if self.DEBUG:
@@ -9530,7 +9636,7 @@ class VocoAdapter(Adapter):
 
 
     # CLI version seems to be much faster
-    def ask_ai_assistant_cli(self,voice_message=None,intent=None):
+    def ask_ai_assistant(self,voice_message=None,intent=None):
         if self.DEBUG:
             print("in ask_ai_assistant. voice_message: " + str(voice_message))
         
@@ -9540,23 +9646,122 @@ class VocoAdapter(Adapter):
                 print("\n\n\nEXPERIMENT\n")
                 #self.llm_assistant_process.stdin.write(voice_message + '\n')
                 #self.llm_assistant_process.stdin.flush()
-                voice_message = voice_message + '\n'
+                voice_message = voice_message.strip()
+                if not voice_message.endswith('?'):
+                    if voice_message.endswith('.') or voice_message.endswith("!"):
+                        voice_message = voice_message[:-1]
+                    voice_message = voice_message + "?"
+                    
+                voice_message = voice_message + "\n"
                 print("to stdin: " + str(voice_message))
                 
                 #print(self.llm_assistant_process.communicate(input=voice_message)[0])
                 if self.llm_assistant_process != None: # and self.llm_assistant_process.poll() == None:
-                    print("SENDING \nSENDING \nSENDING\n" + str(voice_message))
+                    
+                    print("CLEARING ASSISTANT_OUTPUT.TXT")
+                    #with open("/tmp/assistant_output.txt", "a") as myfile:
+                    #    myfile.write(voice_message)
+                    with open("/tmp/assistant_output.txt", "w") as myfile:
+                        myfile.write("")
+                        
+                    if os.path.exists('/tmp/assistant_output.txt'):
+                        self.last_assistant_output_change_time = os.stat('/tmp/assistant_output.txt').st_mtime
+                    print("self.last_assistant_output_change_time: " + str(self.last_assistant_output_change_time))
+                    
+                    
                     #self.llm_assistant_process.sendline(voice_message)
                     #self.lock.acquire()
+                    
+                    
+                    
+                    
                     
                     #self.llm_assistant_process.communicate(input=voice_message)[0]
                     #self.llm_assistant_process.communicate(input=bytes(voice_message + '^M', 'utf-8'))[0]
                     
-                    sys.stdin.write.write(bytes(voice_message, 'utf-8'))
-                    sys.stdin.flush()
+                    #sys.stdin.write.write(bytes(voice_message, 'utf-8'))
+                    
+                    #output = self.llm_assistant_process.communicate(input=voice_message)[0]
+                    #if output != None:
+                    #    print("got output! " + str(output))
+                    #self.llm_assistant_process.communicate(input=voice_message)
+                    if self.llm_assistant_process.poll() == None:
+                        print("SENDING \nSENDING \nSENDING\n" + str(voice_message))
+                        self.llm_assistant_process.stdin.write(voice_message)
+                        self.llm_assistant_process.stdin.flush()
+                        #for character in voice_message:
+                        #    print("char: " + str(character))
+                            #self.llm_assistant_process.stdin.write(character.encode("utf-8"))
+                        #    self.llm_assistant_process.stdin.write(character)
+                        #    time.sleep(0.0025)
+                            
+                        print("STARING COUNTDOWN")
+                        for x in range(60, 1,-1):
+                            print(x)
+                            sleep(.5)
+                            
+                       
+                            #print("x")
+                            stamp = os.stat('/tmp/assistant_output.txt').st_mtime
+                            if stamp != self.last_assistant_output_change_time:
+                                self.last_assistant_output_change_time = stamp
+                                #self.assistant_output_counter = 5
+                                #self.lock.acquire()
+                                print("\n\n\nstamp changed: " + str(stamp))
+                                #self.lock.release()
+                        
+                                #if self.assistant_output_counter > 0:
+                                #print("__x__" + str(self.assistant_output_counter))
+                                #self.speak(str(self.assistant_output_counter));
+                                #self.assistant_output_counter -= 1
+                        
+                                with open('/tmp/assistant_output.txt', "r") as f:
+                                    content = f.readlines()
+                                    full = ''.join(content)
+                                    full = full.strip()
+                            
+                                    print("full: " + str(full))
+                            
+                                    #if full.endswith('Researcher:') or full.endswith('Researcher: '):
+                                    if 'Researcher:' in full:
+                                
+                                        print("RESEARCHER: IN OUTPUT")
+                                        full = full[16:]
+                                        print("full: " + str(full))
+                                
+                                
+                                        answer = full.split('Researcher:')[0]
+                                        print("ANSWER: " + str(answer))
+                                
+                                        if len(answer) > 1:
+                                            #self.assistant_output_counter = 0
+                                            self.speak(answer)
+                                            break
+                                            
+                                
+                                    #for line in content:
+                                    #    line = line.replace("\n", "")
+                                    #    print("tail: " + str(line))
+                            
+                            
+                            
+                            
+                            
+                            
+                            
+                            
+                    else:
+                        print("YIKES, the assistant has already stopped")
+                    #    self.llm_assistant_process.stdin.flush()
+                    
+                    #sys.stdin.write(voice_message)
+                    #self.llm_assistant_process.stdin.write(bytes(voice_message, 'utf-8'))
+                    #self.llm_assistant_process.stdin.write(voice_message)
                     
                     #self.lock.release()
+                    #self.llm_assistant_process.communicate(bytes(voice_message, 'utf-8'))
                     #self.llm_assistant_process.communicate(voice_message)
+                    #self.llm_assistant_process.stdin.flush()
                     
                     #self.llm_assistant_process.stdin.write(bytes(voice_message, 'utf-8'))
                     #self.llm_assistant_process.stdin.flush()
@@ -9569,7 +9774,7 @@ class VocoAdapter(Adapter):
             print("Caught error in ask_ai_assistant: " + str(ex))
     
 
-    def ask_ai_assistant(self,voice_message=None,intent=None):
+    def ask_ai_assistant_server(self,voice_message=None,intent=None):
         if self.DEBUG:
             print("in ask_ai_assistant. voice_message: " + str(voice_message))
         
@@ -9598,7 +9803,7 @@ class VocoAdapter(Adapter):
                     print("\ncompletion:" + str(completion))
                     print("")
                 self.llm_chat_history.append({"role": "assistant", "content":completion.choices[0].message.content})
-                self.last_command_was_answered_by_assistant = True
+                self.last_command_was_answered_by_assistant = completion.choices[0].message.content
                 self.speak(completion.choices[0].message.content)
                 #self.speak(output,intent);
         
