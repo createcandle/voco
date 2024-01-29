@@ -170,40 +170,6 @@
 			
 			text_input_field.placeholder = hints[random_hint_number];
 			
-				
-			let send_input_text = () => {
-				var text = text_input_field.value;
-				//console.log(text);
-				if(text == ""){
-					text = text_input_field.placeholder;
-					//document.getElementById('extension-voco-response-data').innerText = "You cannot send an empty command";
-					//return;
-				}
-				
-				if(text.toLowerCase() == "hello"){
-					text_input_field.placeholder = text;
-					text_response_field.innerText = "Hello!";
-					return;
-				}
-				//console.log("Sending text command");
-				
-		  		// Send text query
-		        window.API.postJson(
-		          `/extensions/voco/api/parse`,
-					{'text':text}
-
-		        ).then((body) => {
-					if(this.debug){
-                        console.log("parsing text command response: ", body);
-                    }
-					text_input_field.placeholder = text;
-					text_input_field.value = "";
-
-		        }).catch((e) => {
-		  			console.log("Error sending text to be parsed: " , e);
-					//document.getElementById('extension-voco-response-data').innerText = "Error sending text command: " , e;
-		        });
-			}
 
 			document.getElementById('extension-voco-text-input-field').addEventListener('keyup', function onEvent(e) {
 			    if (e.keyCode === 13) {
@@ -218,7 +184,7 @@
 				if(this.debug){
                     console.log("send text command button clicked");
                 }
-				send_input_text();
+				this.send_input_text();
 			});
 			
             // Reset poll attempts if the user clicks on "voco not available" warning.
@@ -1678,12 +1644,13 @@
 									downloaded = '<span class="extension-voco-llm-model-downloaded">Downloaded</span>';
 									llm_item_el.classList.add('extension-voco-llm-item-downloaded');
 								}
-							}
-							if(typeof llm_details.developer != 'undefined'){
-								if(llm_details.developer){
-									llm_item_el.classList.add('extension-voco-show-if-developer');
+								else if(typeof llm_details.developer != 'undefined'){
+									if(llm_details.developer){
+										llm_item_el.classList.add('extension-voco-show-if-developer');
+									}
 								}
 							}
+							
 							
 						
 							const model_name = llm_details.model;
@@ -1746,6 +1713,51 @@
                 console.log("Error in generate_llm_models_list: ", e);
             }
 		}
+		
+		
+		send_input_text(){
+			
+			const text_input_field = document.getElementById('extension-voco-text-input-field');
+			if(text_input_field){
+				var text = text_input_field.value;
+				//console.log(text);
+				if(text == ""){
+					text = text_input_field.placeholder;
+					//document.getElementById('extension-voco-response-data').innerText = "You cannot send an empty command";
+					//return;
+				}
+	
+				if(text.toLowerCase() == "hello"){
+					text_input_field.placeholder = text;
+					text_response_field.innerText = "Hello!";
+					return;
+				}
+				//console.log("Sending text command");
+	
+		  		// Send text query
+		        window.API.postJson(
+		          `/extensions/voco/api/parse`,
+					{'text':text}
+
+		        ).then((body) => {
+					if(this.debug){
+	                    console.log("parsing text command response: ", body);
+	                }
+					text_input_field.placeholder = text;
+					text_input_field.value = "";
+
+		        }).catch((e) => {
+		  			console.log("Error sending text to be parsed: " , e);
+					//document.getElementById('extension-voco-response-data').innerText = "Error sending text command: " , e;
+		        });
+			}
+			else{
+				console.error("voco: text_input_field element missing");
+			}
+			
+		}
+		
+		
 		
         
 		llm_generate_text(prompt,llm_action='generate'){
