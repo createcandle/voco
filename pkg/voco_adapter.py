@@ -181,7 +181,8 @@ class VocoAdapter(Adapter):
         #print("self.user_profile: " + str(self.user_profile))
 
         #os.environ["LD_LIBRARY_PATH"] = os.path.join(self.user_profile['addonsDir'],self.addon_name,'snips') + ":" + os.path.join(self.user_profile['addonsDir'],self.addon_name,'snips64')
-        os.environ["LD_LIBRARY_PATH"] = os.path.join(self.user_profile['addonsDir'],self.addon_name,'snips' + self.bit_extension)
+        self.snips_path = os.path.join(self.user_profile['addonsDir'] ,self.addon_name, 'snips' + self.bit_extension)
+        os.environ["LD_LIBRARY_PATH"] = str(self.snips_path)
 
         self.lock = threading.Lock()
 
@@ -797,17 +798,17 @@ class VocoAdapter(Adapter):
         self.still_busy_booting = True # will be set to false on the first completed run_snips. Used to only say "hello I am listening" once.
         self.external_processes = [] # Will hold all the spawned processes      
         self.current_snips_session_id = ''
+        self.snips_clear_injections_first = False
         self.snips_satellite_parts = ['snips-audio-server','snips-hotword']
         #self.snips_parts = ['snips-hotword','snips-audio-server','snips-tts','snips-nlu','snips-injection','snips-dialogue','snips-asr']
-        
         self.snips_parts = [
-                            'snips-injection',
+                            
                             'snips-tts',
                             'snips-audio-server',
                             'snips-dialogue',
                             'snips-asr',
                             'snips-nlu',
-                            
+                            'snips-injection',
                             'snips-hotword'
                             ]
         
@@ -986,11 +987,13 @@ class VocoAdapter(Adapter):
         # 372Mb = 389984256
         
         
+
         # Old school
         self.tts_path = os.path.join(self.addon_dir_path,"tts" + self.bit_extension)
         self.nanotts_path = str(os.path.join(self.tts_path,'nanotts' + self.bit_extension))
         
-        self.snips_path = os.path.join(self.addon_dir_path,"snips" + self.bit_extension)
+        # Snips paths
+        #self.snips_path = os.path.join(self.addon_dir_path,"snips" + self.bit_extension) # set earlier
         self.models_path = os.path.join(self.addon_dir_path,"models")
         self.lang_path = os.path.join(self.models_path,"lang") # this is actually used by nanotts, so may be in a strange location at the moment.
         self.arm_libs_path = os.path.join(self.addon_dir_path,"snips","arm-linux-gnueabihf") # arm32 #TODO: in some places this is still loaded as an environment path in the 64 bit version. Should check if that causes issues.
@@ -1002,6 +1005,8 @@ class VocoAdapter(Adapter):
         self.g2p_models_path = os.path.join(self.models_path,"g2p-models")
         self.hey_snips_path = os.path.join(self.models_path,"assistant","custom_hotword")
         self.hey_candle_path = os.path.join(self.models_path,"hey_candle")
+        
+        # Matrix paths
         self.matrix_keys_store_path = os.path.join(self.matrix_data_store_path, "keys.txt")
         self.matrix_temp_ogg_file = os.path.join(os.sep, "tmp","matrix_audio_file.ogg")
         
@@ -2939,8 +2944,24 @@ class VocoAdapter(Adapter):
                             print("Error: found a snips process running more than once")
                     
                 
-                bin_path = os.path.join(self.snips_path,unique_command + self.bit_extension)
+                bin_path = os.path.join(self.snips_path, unique_command + self.bit_extension)
+                os.system('chmod +x ' + str(bin_path))
+                
                 command = [bin_path,"-u",self.work_path,"-a",self.assistant_path,"-c",self.toml_path]
+                
+                if self.snips_clear_injections_first:
+                    try:
+                        clear_injections_command = command + ["-g",self.g2p_models_path,"clean","--all"]
+                        clear_injections_command2 = 'LD_LIBRARY_PATH=' + str(my_env["LD_LIBRARY_PATH"]) + ' ' + ' '.join(clear_injections_command)
+                        if self.DEBUG:
+                            print("clear_injections_command2: " + str(clear_injections_command2))
+                        os.system(clear_injections_command2)
+                        #Popen(clear_injections_command, env=my_env, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
+                        if self.DEBUG:
+                            print("old snips-injection data should be cleaned from work dir")
+                    except Exception as ex:
+                        if self.DEBUG:
+                            print("error cleaning injection work dir: " + str(ex))
                 
                 if self.disable_security == False:
                     security_commands = ['--mqtt-username',self.mqtt_username,'--mqtt-password',self.mqtt_password]
@@ -2973,15 +2994,6 @@ class VocoAdapter(Adapter):
                     # "--alsa_playback","default:CARD=ALSA",
                     
                 if unique_command == 'snips-injection':
-                    try:
-                        clear_injections_command = command + ["clean","--all"]
-                        Popen(clear_injections_command, env=my_env, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
-                        if self.DEBUG:
-                            print("old snips-injection data should be cleaned from work dir")
-                    except Exception as ex:
-                        if self.DEBUG:
-                            print("error cleaning injection work dir: " + str(ex))
-                    
                     command = command + ["-g",self.g2p_models_path]
                     
                 if unique_command == 'snips-hotword' or unique_command == 'snips-satellite':
@@ -3013,6 +3025,7 @@ class VocoAdapter(Adapter):
                     print("-- aka:\nLD_LIBRARY_PATH=" +str(my_env["LD_LIBRARY_PATH"]) + " " + str( ' '.join(command) ) + "\n")
                     
                 try:
+                    
                     #if self.DEBUG:
                     #    self.external_processes.append( Popen(command, env=my_env, stdout=sys.stdout, stderr=subprocess.STDOUT) )
                     #else:
@@ -4023,7 +4036,13 @@ class VocoAdapter(Adapter):
         os.system('pkill -f llamafile')
         if os.path.exists(str(self.llm_generated_text_file_path)):
             os.system('rm ' + str(self.llm_generated_text_file_path))
-        os.system('rm ' + str(self.recording_dir))
+        
+        #if os.path.isfile(str(self.last_recording_path)):
+        #    if self.DEBUG:
+        #        print("unload: removed voice audio recording")
+        #    os.system('rm ' + str(self.last_recording_path))
+        self.delete_recordings()
+        
         if self.llm_stt_process != None:
             self.llm_stt_process.kill()
             
@@ -4046,10 +4065,7 @@ class VocoAdapter(Adapter):
             self.mqtt_client.loop_stop()
         self.stop_snips()
         
-        if os.path.isfile(str(self.last_recording_path)):
-            if self.DEBUG:
-                print("unload: removed voice audio recording")
-            os.system('rm ' + str(self.last_recording_path))
+        
             
         time.sleep(.1)
         
