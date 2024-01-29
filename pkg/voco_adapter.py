@@ -958,6 +958,8 @@ class VocoAdapter(Adapter):
         self.llm_stt_dir_path = os.path.join(self.llm_data_dir_path, 'stt')
         self.llm_stt_executable_path = os.path.join(self.addon_dir_path,'llm','stt', 'server')
         
+        os.system('chmod +x ' + str(self.llm_stt_executable_path))
+        
         if not os.path.isdir(str(self.llm_stt_dir_path)):
             os.system('mkdir -p ' + str(self.llm_stt_dir_path))
         
@@ -4560,7 +4562,10 @@ class VocoAdapter(Adapter):
             
             self.mqtt_second_client.subscribe("hermes/asr/textCaptured/#")
             
-            #self.mqtt_second_client.subscribe("hermes/nlu/#")
+            if self.llm_stt_always_use:
+                if self.DEBUG:
+                    print("llm_stt_always_use was true, subscribing to hermes/nlu/#")
+                self.mqtt_second_client.subscribe("hermes/nlu/#")
             
             #if self.DEBUG:
             #    self.mqtt_second_client.subscribe("hermes/dialogueManager/sessionStarted/#")
