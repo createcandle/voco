@@ -74,7 +74,7 @@ class VocoOutlet(Outlet):
         # Now let's send it up to the voco adapter to speak it out loud.
         try:
             if self.id == "speak":
-                self.notifier.voice_messages_queue.put(str(title) + " " + str(message)) # TODO do something with the title or alert level?
+                self.notifier.voice_messages_queue.put({'title':title,'message':message,'voice_message':str(title) + " " + str(message),'level':level}) # TODO do something with the title or alert level?
             elif self.id == "matrix":
                 if self.notifier.adapter.matrix_started:
                     self.notifier.matrix_messages_queue.put({'title':title,'message':message,'level':level}) 

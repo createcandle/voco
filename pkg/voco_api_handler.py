@@ -10,7 +10,7 @@ import requests
 import subprocess
 #import threading
 
-from .util import valid_ip, avahi_detect_gateways
+from .util import valid_ip, avahi_detect_gateways,run_command
 
 from datetime import datetime,timedelta
 #from dateutil import tz
@@ -341,21 +341,25 @@ class VocoAPIHandler(APIHandler):
                                           'state' : state, 
                                           'message' : '',
                                           'llm_enabled':self.adapter.llm_enabled,
-                                    
+                                          
+                                          'llm_stts_enabled':self.adapter.llm_enabled,
+                                          'device_model': self.adapter.device_model,
                                     
                                           'llm_not_enough_disk_space':self.adapter.llm_not_enough_disk_space,
                                           'llm_busy_downloading_models':self.adapter.llm_busy_downloading_models,
                                           
+                                          'llm_models':self.adapter.llm_models,
+                                          
+                                          'llm_tts_enabled':self.adapter.llm_enabled,
                                           'llm_tts_minimal_memory':self.adapter.llm_tts_minimal_memory,
-                                          'llm_tts_models':self.adapter.llm_tts_models,
-                                          'llm_tts_model':self.adapter.persistent_data['llm_tts_model'],
                                           
+                                          'llm_stt_enabled':self.adapter.llm_enabled,
                                           'llm_stt_minimal_memory':self.adapter.llm_stt_minimal_memory,
-                                          'llm_stt_models':self.adapter.llm_stt_models,
-                                          'llm_stt_model':self.adapter.persistent_data['llm_stt_model'],
+                                          'llm_stt_started': self.adapter.llm_stt_started,
                                           
-                                          'llm_ai_minimal_memory':self.adapter.llm_ai_minimal_memory,
-                                          'llm_ai_model':self.adapter.persistent_data['llm_ai_model'],
+                                          'llm_assistant_enabled':self.adapter.llm_enabled,
+                                          'llm_assistant_minimal_memory':self.adapter.llm_assistant_minimal_memory,
+                                          'llm_assistant_started': self.adapter.llm_assistant_started
                                           
                                       }),
                                 )
@@ -368,16 +372,19 @@ class VocoAPIHandler(APIHandler):
                                     print('ajax handling set llm')
                                 try:
                                     if 'llm_tts_model' in request.body:
-                                        self.adapter.persistent_data['llm_tts_model'] = str(request.body['llm_tts_model'])
-                                        self.adapter.llm_should_download = True
-                                        #self.adapter.download_llm_models()
+                                        
+                                        if self.adapter.persistent_data['llm_tts_model'] != str(request.body['llm_tts_model']):
+                                            self.adapter.persistent_data['llm_tts_model'] = str(request.body['llm_tts_model'])
+                                            self.adapter.llm_should_download = True
+                                            self.adapter.clear_llm_tts_cache()
+                                            #self.adapter.download_llm_models()
                                     
                                     if 'llm_stt_model' in request.body:
                                         self.adapter.persistent_data['llm_stt_model'] = str(request.body['llm_stt_model'])
                                         self.adapter.llm_should_download = True
                                         
-                                    if 'llm_ai_model' in request.body:
-                                        self.adapter.persistent_data['llm_ai_model'] = str(request.body['llm_ai_model'])
+                                    if 'llm_assistant_model' in request.body:
+                                        self.adapter.persistent_data['llm_assistant_model'] = str(request.body['llm_assistant_model'])
                                         self.adapter.llm_should_download = True
                                     
                                     self.adapter.save_persistent_data()
@@ -388,6 +395,19 @@ class VocoAPIHandler(APIHandler):
                                     print("Error in set_llm: " + str(ex))
                                     
                                 
+                                
+                                return APIResponse(
+                                  status=200,
+                                  content_type='application/json',
+                                  content=json.dumps({'state' : state}),
+                                )
+                                
+                                
+                            elif action == 'llm_generate_text':
+                                state = False
+                                if 'prompt' in request.body and 'llm_action' in request.body:
+                                    self.adapter.llm_generate_text(str(request.body['prompt']), str(request.body['llm_action']))
+                                    state = True
                                 
                                 return APIResponse(
                                   status=200,
@@ -529,6 +549,7 @@ class VocoAPIHandler(APIHandler):
                                                         'matrix_server': matrix_server,
                                                         'matrix_username': matrix_username,
                                                         'has_matrix_token': has_matrix_token,
+                                                        'device_model': self.adapter.device_model,
                                                         'debug':self.adapter.DEBUG
                                                         }),
                                 )
@@ -553,8 +574,10 @@ class VocoAPIHandler(APIHandler):
                             if self.DEBUG2:
                                 print("Getting the poll data")
                             
+                            generated_text = ''
+                            state = True
+                            
                             try:
-                                state = True
                                 
                                 if self.adapter.matrix_busy_registering == False:
                                     if 'refresh_matrix_members' in request.body:
@@ -563,7 +586,22 @@ class VocoAPIHandler(APIHandler):
                                                 print("poll has asked for a periodic refresh of the matrix members list")
                                             self.adapter.refresh_matrix_members = True
                                             
+                                # get generated text
+                                if self.adapter.llm_busy_generating:
+                                    with open(self.adapter.llm_generated_text_file_path, "r") as f:
+                                        content = f.readlines()
+                                        generated_text = '\n'.join(content)
+                                        self.adapter.llm_generated_text = generated_text
                                 
+                                llm_folder_size = 0
+                                try:
+                                    llm_folder_size_output = run_command("du -s " + str(self.adapter.llm_data_dir_path) + " | awk '{print $1}")
+                                    if llm_folder_size_output != None:
+                                        if self.DEBUG:
+                                            print("str(llm_folder_size).strip(): " + str(str(llm_folder_size).strip()))
+                                        llm_folder_size = int(str(llm_folder_size).strip())
+                                except Exception as ex:
+                                    print("Error getting llm folder size: " + str(ex))
                                 
                                 action_count = len( self.adapter.persistent_data['action_times'] )
 
@@ -601,7 +639,7 @@ class VocoAPIHandler(APIHandler):
                                 if 'matrix_server' in self.adapter.persistent_data:
                                     matrix_server = str(self.adapter.persistent_data['matrix_server'])
 
-                                self.adapter.check_available_memory()
+                                #self.adapter.check_available_memory()
 
                                 return APIResponse(
                                     status=200,
@@ -611,7 +649,9 @@ class VocoAPIHandler(APIHandler):
                                                         'busy_starting_snips': self.adapter.busy_starting_snips,
                                                         'items': self.adapter.persistent_data['action_times'],
                                                         'current_time':self.adapter.current_utc_time,
-                                                        'text_response':self.adapter.last_text_response, 
+                                                        'text_response':self.adapter.last_text_response,
+                                                        'llm_busy_generating':self.adapter.llm_busy_generating,
+                                                        'llm_generated_text':generated_text,
                                                         'initial_injection_completed':self.adapter.initial_injection_completed,
                                                         'missing_microphone':self.adapter.missing_microphone, 
                                                         'matrix_started':self.adapter.matrix_started,
@@ -625,6 +665,7 @@ class VocoAPIHandler(APIHandler):
                                                         'connected_satellites': self.adapter.connected_satellites,
                                                         'periodic_voco_attempts':self.adapter.periodic_voco_attempts,
                                                         'llm_busy_downloading_models':self.adapter.llm_busy_downloading_models,
+                                                        'llm_folder_size':llm_folder_size,
                                                         'llm_not_enough_disk_space':self.adapter.llm_not_enough_disk_space,
                                                         'free_memory':self.adapter.free_memory
                                                         })

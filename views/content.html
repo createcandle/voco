@@ -42,17 +42,14 @@
 		</div>
 		
 		<div id="extension-voco-downloading-models" class="extension-voco-vlak" style="display:none">
-			
-			
-			
             <div class="extension-voco-spinner">
                 <div></div><div></div><div></div><div></div>
             </div>
 			<p style="text-align:center">Voco is downloading more advanced AI models</p>
-			<div id="extension-voco-downloading-models-progress-container">
-			</div>
-			
+			<div id="extension-voco-downloading-models-progress-container"></div>
 		</div>
+		
+		<div id="extension-voco-downloading-models-indicator" class="extension-voco-hidden"></div>
 
 		<div id="extension-voco-missing-microphone" style="display:none">
             <img id="extension-voco-missing-microphone-icon" src="/extensions/voco/images/menu-icon.svg" />
@@ -117,7 +114,7 @@
 				<div id="extension-voco-satellites" class="extension-voco-centered-page">
                     <div class="extension-voco-vlak">
     					<img src="/extensions/voco/images/satellites.png" alt="Satellites example" style="display:block;margin:0 auto;max-width:50%"/>
-    					<p>One microphone might not be enough to cover your entire home. That's why it's possible to turn additional controllers into 'satellites'. One controller will act as the coordinator in your home. Satellites send their voice recordings to that central hub.</p>
+    					<p>One microphone might not be enough to cover your entire home. That's why it's possible to turn additional controllers into 'satellites'. One controller will act as the coordinator in your home. Satellites are reliant on that central hub.</p>
                         <p>Any other available Candle Controllers will be shown here.</p>
                         
     					<div id="extension-voco-loading">
@@ -370,7 +367,11 @@
 						<p><img src="/extensions/voco/images/hal.svg" alt="What we call AI is just statistics on steroids" style="float:left;width:10rem;margin:0 3rem 3rem 1rem"/>Voco supports more advanced AI assistant features, which run completely on your own controller.</p>
 						<p>This does mean your controller needs to have enough memory (and storage space) to run them. The more memory is available, the higher quality the AI can be.</p>
                       	
-    				<p>&nbsp;</p>
+						<p>&nbsp;</p>
+						
+						<div id="extension-voco-main-device-model-warning" class="extension-voco-vlak" style="display:none">
+							<p style="text-align:center">It is recommended to run these AI features on a Raspberrry Pi 5 or better, with preferably 8Gb or ram or more. On your hardware the assistant will take a much longer time to respond.</p>
+						</div>
 						
 						<div id="extension-voco-main-low-disk-space-warning" class="extension-voco-vlak" style="display:none">
 							<p style="text-align:center">There is not enough available disk space for Voco to download more advanced AI models</p>
@@ -378,6 +379,40 @@
 						<div id="extension-voco-main-low-memory-warning" class="extension-voco-vlak" style="display:none">
 							<p style="text-align:center">There is not enough free memory for Voco to run more advanced AI models</p>
 						</div>
+						
+						<div id="extension-voco-main-llm-assistant-not-running" class="extension-voco-vlak" style="display:none;background-color:#9a1074">
+							<p style="text-align:center"><span class="extension-voco-unicode-icon-medium">👾</span> The AI assistant is not running.</p>
+						</div>
+						<div id="extension-voco-main-llm-assistant-running" class="extension-voco-vlak extension-voco-hidden">
+							<p style="text-align:center"><span class="extension-voco-unicode-icon-medium">💬</span> The AI assistant is running.</p>
+						</div>
+						
+						<div id="extension-voco-main-llm-playground" class="extension-voco-vlak">
+							<h3>Playground</h3>
+							<p>The AI can do more than just chat.</p>
+							
+							<div class="extension-voco-vlak">
+								<h4>Write or summarize text</h4>
+								<textarea id="extension-voco-main-llm-playground-textarea">There once was a prince in a far away land who was longing for adventure. His father wouldn't let him visit the towns and countryside outside the capital because he feared the dragons that roamed the land would harm his son. But one day something peculiar happened...</textarea>
+								<div id="extension-voco-main-llm-playground-textarea-buttons">
+									<span><span>
+									<button id="extension-voco-main-llm-playground-write-text-button" class="text-button">Continue the text</button>
+									<button id="extension-voco-main-llm-playground-summarize-button" class="text-button">Summarize</button>
+								</div>
+								<div id="extension-voco-main-llm-playground-stop-button-container">
+									<span>This will take some time</span>
+									<button id="extension-voco-main-llm-playground-stop-button" class="text-button">Stop</button>
+								</div>
+								<pre id="extension-voco-llm-generated-text-output" class="extension-voco-vlak"></pre>
+								
+							</div>
+						</div>
+						
+						
+						<div>
+							<p>Total size of all AI models: <span id="extension-voco-llm-total-size">?</span>b</p>
+						</div>
+						
 						
 						<p>&nbsp;</p>
 						
@@ -387,7 +422,7 @@
                         
                 <p>More realistic sounding speech can be generated using "Large Language Models". This requires relatively little extra memory. If there is not enough memory, Voco falls back to the basic voice. You can select which voice type you prefer.</p>
                            	
-							<ul id="extension-voco-tts-models-list" class="extension-voco-ai-models-list"></ul>
+							<ul id="extension-voco-tts-models-list" class="extension-voco-llm-models-list"></ul>
 								
 								<!--		
 								<input type="radio" id="html" name="fav_language" value="HTML">
@@ -402,7 +437,6 @@
 						   
 						</div>
 						
-						
                         
 						<div class="extension-voco-vlak">
                             
@@ -411,21 +445,19 @@
 							<p>Voco has a basic speech recognition system, but this can be enhanced by employing so called "Large Language Models". These can understand more words, so they are generally used as a 'second opinion' if the basic system doesn't quite understand what you're saying.</p>
                             <p>These Large Language Models are, well, large. They require a lot of processing power and sytem memory, and are relatively slow. If you don't want to use them, simply select the 'basic' option.</p>
 							
-							<ul id="extension-voco-stt-models-list" class="extension-voco-ai-models-list"></ul>
+							<ul id="extension-voco-stt-models-list" class="extension-voco-llm-models-list"></ul>
 
 						</div>
-						
-						
 						
 						
 						<div class="extension-voco-vlak">
                             
     						<h4>AI assistant</h4>
                         
-                            <p>An AI assistant can give answers to simple questions. This feature requires the most memory and disk space, so a Raspberry Pi 5 with 8GB of memory is recommended.</p>
+                            <p>An AI assistant can give answers to simple questions, such as "What is the capital of Portugal?". This feature requires the most memory and disk space, so a Raspberry Pi 5 with 8GB of memory is recommended.</p>
 							<p>Be aware that the models that can run on Candle are not as advanced or powerful as commercial cloud-based versions. The assistant will make mistakes, so don't rely on it for anything serious such as life-threatening situations.</p>
 							
-							<ul id="extension-voco-ai-models-list" class="extension-voco-ai-models-list"></ul>
+							<ul id="extension-voco-assistant-models-list" class="extension-voco-llm-models-list"></ul>
 						   
 						</div>
 						

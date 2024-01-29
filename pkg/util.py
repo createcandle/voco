@@ -295,7 +295,16 @@ def clean_up_string_for_speaking(sentence): # Also used in thing scanner!
 
 
 
-
+def clean_up_filename_string(filename):
+    filename = filename.replace('  ', ' ')
+    filename = filename.replace(' ', '_')
+    filename = filename.replace('.', '')
+    filename = filename.replace('?', '')
+    filename = filename.replace('!', '')
+    filename = filename.replace("'", "")
+    filename = filename.replace('"', '')
+    filename = filename.replace('/', '__')
+    return filename
 
 def clean_up_thing_string(sentence):
     if len(sentence):

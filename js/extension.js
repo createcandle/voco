@@ -23,11 +23,21 @@
             this.matrix_candle_username = "";
             this.matrix_password = "...";
             
+			this.llm_enabled = true;
+			
+			this.previous_llm_folder_size = 0;
+			
 			this.llm_tts_model = null;
 			this.llm_tts_models = {};
 			
 			this.llm_stt_model = null;
 			this.llm_stt_models = {};
+			
+			this.llm_assistant_model = null;
+			this.llm_assistant_models = {};
+			this.llm_assistant_started = false;
+			
+			this.llm_slow_device = false; // Pi 3 or Pi 4 is concidered slow
 			
             setTimeout(() => {
                 const jwt = localStorage.getItem('jwt');
@@ -95,7 +105,7 @@
 
 			const list = document.getElementById('extension-voco-list');
 		
-			const pre = document.getElementById('extension-voco-response-data');
+			//const pre = document.getElementById('extension-voco-response-data');
 			const text_input_field = document.getElementById('extension-voco-text-input-field');
 			const text_response_container = document.getElementById('extension-voco-text-response-container');
 			const text_response_field = document.getElementById('extension-voco-text-response-field');
@@ -161,7 +171,7 @@
 			text_input_field.placeholder = hints[random_hint_number];
 			
 				
-			function send_input_text(){
+			let send_input_text = () => {
 				var text = text_input_field.value;
 				//console.log(text);
 				if(text == ""){
@@ -461,15 +471,16 @@
 			
 		
 		  		// Ask for timer updates
+				this.do_poll();
+				/*
 		        window.API.postJson(
 		          `/extensions/${this.id}/api/poll`
 
 		        ).then((body) => {
                     if(this.debug){
-                        console.log("Python API poll result: ", body);
+                        console.log("Python API initial poll result: ", body);
                     }
 					
-					//console.log(body);
 					//console.log(body['items']);
 					if(body['state'] == true){
 						//console.log("got first extra poll data")
@@ -500,6 +511,7 @@
 		        }).catch((e) => {
 		  			console.log("Error getting Voco timer items: " , e);
 		        });	
+				*/
 				
 				
 			}
@@ -508,286 +520,12 @@
 			}
 		
 
-            var refresh_matrix_members_counter = 0 // once in a while try updating the room members list
+            this.refresh_matrix_members_counter = 0 // once in a while try updating the room members list
             
 			this.interval = setInterval( () => {
 				try{
 					if( main_view.classList.contains('selected') ){
-                        if(this.busy_polling){
-                            if(this.debug){
-                                console.log("voco: was still polling, aborting new poll");
-                            }
-                            this.busy_polling_count++;
-                            
-                            if(this.busy_polling_count > 10){
-                                this.busy_polling = false;
-                                this.busy_polling_count = 0;
-                                if(this.debug){
-                                    console.log("Busy polling for over 20 seconds. Resetting this.busy_polling");
-                                }
-                                document.getElementById('extension-voco-main-controller-not-responding').style.display = 'block';
-                                document.getElementById('extension-voco-text-commands-container').style.display = 'none';
-                            }
-                            else{
-                                return;
-                            }
-                            
-                        }
-                        else{
-                            //console.log("starting poll");
-                            document.getElementById('extension-voco-main-controller-not-responding').style.display = 'none';
-                        }
-                        
-                        var refresh_chat_members = false
-                        refresh_matrix_members_counter++;
-                        if(refresh_matrix_members_counter > 30){
-                            refresh_matrix_members_counter = 0;
-                            refresh_chat_members = true
-                        }
-                        
-                        this.busy_polling = true;
-						//console.log(this.attempts);
-						//console.log("calling")
-				        window.API.postJson(
-                            `/extensions/${this.id}/api/poll`,
-                            {'refresh_matrix_members': refresh_chat_members}
-
-				        ).then((body) => {
-                            //console.log("Interval: Python API poll result: ", body);
-                            if(this.debug){
-                                //console.log("Interval: Python API poll result: ", body);
-                            }
-							this.attempts = 0;
-							//console.log(body['items']);
-							if(body['state'] == true){
-								this.items_list = body['items'];
-								this.current_time = body['current_time'];
-								
-                                if(body['is_satellite'] == false){
-                                    if(body['initial_injection_completed']){
-                                        
-                                        if(body['busy_starting_snips']){
-                                            document.getElementById('extension-voco-injection-busy').style.display = 'block';
-                                            document.getElementById('extension-voco-text-commands-container').style.display = 'none';
-                                        }
-                                        else{
-                                            document.getElementById('extension-voco-injection-busy').style.display = 'none';
-                                            document.getElementById('extension-voco-text-commands-container').style.display = 'block';
-                                        }
-                                        
-                                    }
-                                    else{
-                                        document.getElementById('extension-voco-injection-busy').style.display = 'block';
-                                        document.getElementById('extension-voco-text-commands-container').style.display = 'none';
-                                    }
-                                }
-                                else{
-                                    if(body['busy_starting_snips']){
-                                        document.getElementById('extension-voco-injection-busy').style.display = 'block';
-                                        document.getElementById('extension-voco-text-commands-container').style.display = 'none';
-                                    }
-                                    else{
-                                        document.getElementById('extension-voco-injection-busy').style.display = 'none';
-                                        document.getElementById('extension-voco-text-commands-container').style.display = 'block';
-                                    }
-                                }
-                                
-                                if(body['missing_microphone']){
-                                    document.getElementById('extension-voco-missing-microphone').style.display = 'block';
-                                }
-                                else{
-                                    document.getElementById('extension-voco-missing-microphone').style.display = 'none';
-                                }
-                                
-                                
-                                if(body['periodic_voco_attempts'] > 3){
-                                    document.getElementById('extension-voco-main-controller-not-responding').style.display = 'block';
-                                }
-                                else{
-                                    document.getElementById('extension-voco-main-controller-not-responding').style.display = 'none';
-                                }
-                                
-                                
-                                
-                                
-                                
-								if(body['text_response'].length != 0){
-									var nicer_text = body['text_response'];
-									nicer_text = nicer_text.replace(/ \./g, '\.'); //.replace(" .", ".");
-									
-									function applySentenceCase(str) {
-									    return str.replace(/.+?[\.\?\!](\s|$)/g, function (txt) {
-									        return txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase();
-									    });
-									}
-									
-									nicer_text = applySentenceCase(nicer_text);
-									nicer_text = nicer_text.replace(/\. /g, '\.\<br\/\>');
-									text_response_field.innerHTML = nicer_text;
-									text_response_container.style.display = 'block';
-								}
-								else{
-									text_response_field.innerText = "";
-									text_response_container.style.display = 'none';
-								}
-								
-								
-								//pre.innerText = "";
-                                
-                                // Update list of timers
-								if(this.items_list.length > 0 ){
-									this.regenerate_items();
-								}
-								else{
-									list.innerHTML = '<div class="extension-voco-centered-page"><p style="width:100%;text-align:center;display:bloc">There are currently no active timers, reminders or alarms.</p>';
-								}
-                                
-                                // Show satellites that are connected to this controller (if any)
-                                if(typeof body['connected_satellites'] != 'undefined' && typeof body['is_satellite'] != 'undefined'){
-                                    this.show_connected_satellites( body['connected_satellites'], body['is_satellite'] );
-                                }
-                                
-                                
-                                // MATRIX
-                                
-                                // Update list of matrix room members
-                                if(typeof body['matrix_started'] != 'undefined'){
-                                    
-                                    if(typeof body['matrix_room_members'] != 'undefined'){
-                                        this.matrix_room_members = body['matrix_room_members'];
-                                        this.regenerate_matrix_room_members(body['matrix_room_members']);
-                                        
-                                    }
-                                    
-                                    if(body['matrix_started']){
-                                        //console.log('Matrix has started');
-                                        document.getElementById('extension-voco-chat-loading').classList.add('extension-voco-hidden');
-                                        document.getElementById('extension-voco-matrix-create-account-step1').classList.add('extension-voco-hidden');
-                                        document.getElementById('extension-voco-matrix-create-account-step2').classList.remove('extension-voco-hidden');
-                                    }
-                                    else{
-                                        //console.log('Matrix has not started yet');
-                                    }
-                                    
-                                }
-                                
-                                if( body['matrix_busy_registering'] ){
-                                    if(this.debug){
-                                        console.log('matrix is busy registering accounts and starting');
-                                    }
-                                }
-                                else{
-                                    document.getElementById('extension-voco-chat-busy-registering').classList.add('extension-voco-hidden');
-                                    
-                                    // if a user account was created, show step 2
-                                    if(typeof body['matrix_logged_in'] != 'undefined' & typeof body['matrix_server'] != 'undefined'){
-                                        //console.log('Matrix home server address: ' + body['matrix_server']);
-                                    
-                                        if(body['matrix_server'] == '...'){
-                                            document.getElementById('extension-voco-chat-loading').classList.add('extension-voco-hidden');
-                                            document.getElementById('extension-voco-matrix-create-account-step1').classList.remove('extension-voco-hidden');
-                                            document.getElementById('extension-voco-matrix-create-account-step2').classList.add('extension-voco-hidden');
-                                        }
-                                        else{
-                                            if(body['matrix_logged_in'] == true){
-                                                //console.log('Matrix is logged in');
-                                                document.getElementById('extension-voco-chat-loading').classList.add('extension-voco-hidden');
-                                                document.getElementById('extension-voco-matrix-create-account-step1').classList.add('extension-voco-hidden');
-                                                document.getElementById('extension-voco-matrix-create-account-step2').classList.remove('extension-voco-hidden');
-                                            }
-                                            else if(body['matrix_logged_in'] == false){
-                                                //console.log('Matrix was not logged in');
-                                                document.getElementById('extension-voco-chat-loading').classList.add('extension-voco-hidden');
-                                                document.getElementById('extension-voco-matrix-create-account-step1').classList.remove('extension-voco-hidden');
-                                                document.getElementById('extension-voco-matrix-create-account-step2').classList.add('extension-voco-hidden');
-                                            }
-                                            else if(body['matrix_logged_in'] == null){
-                                                document.getElementById('extension-voco-chat-loading').classList.remove('extension-voco-hidden');
-                                            }
-                                            
-                                        }
-                                    
-                                    }
-                                    
-                                }
-								
-								
-								
-								
-                                
-							}
-							else{
-								//console.log("Voco: not ok state in poll response: ", body);
-							}
-							
-							
-							//
-							//   LLM AI
-							//
-							
-							if(typeof body.llm_busy_downloading_models != 'undefined'){
-								const downloading_models_el = document.getElementById('extension-voco-downloading-models');
-								if(downloading_models_el){
-									
-									if(body.llm_busy_downloading_models > 0){
-										downloading_models_el.style.display = 'block';
-										
-										let llm_download_progress_el = document.getElementById('extension-voco-downloading-models-progress-container');
-										if(llm_download_progress_el){
-											llm_download_progress_el.innerHTML = '';
-											for( var m = 0; m < body.llm_busy_downloading_models; m++ ){
-												let progress_block = document.createElement('div');
-												llm_download_progress_el.appendChild(progress_block);
-											}
-										}
-										
-									}
-									else{
-										downloading_models_el.style.display = 'none';
-									}
-								}
-							}
-							
-							if(typeof body.llm_not_enough_disk_space != 'undefined'){
-								const low_disk_el = document.getElementById('extension-voco-main-low-disk-space-warning');
-								if(low_disk_el){
-									if(body.llm_not_enough_disk_space){
-										low_disk_el.style.display = 'block';
-									}
-									else{
-										low_disk_el.style.display = 'none';
-									}
-								}
-							}
-							
-							
-                            
-                            this.busy_polling = false;
-                            this.busy_polling_count = 0;
-                            document.getElementById('extension-voco-unavailable').style.display = 'none';
-                            document.getElementById('extension-voco-text-commands-container').style.display = 'block';
-                            
-
-				        }).catch((e) => {
-				  			//console.log("Error getting timer items: " , e);
-							if(this.debug){
-								console.log("voco: Loading items failed - connection error?: ", e);
-							}
-                            document.getElementById('extension-voco-unavailable').style.display = 'block';
-                            document.getElementById('extension-voco-text-commands-container').style.display = 'none';
-							//pre.innerText = "Loading items failed - connection error";
-							this.attempts = 0;
-                            this.busy_polling = false;
-                            this.busy_polling_count = 0;
-				        });	
-                        
-				  		// Get list of items
-						if(this.attempts < 3){
-							this.attempts++;
-						}
-						else{
-							//pre.innerText = "Lost connection.";
-						}
+                        this.do_poll();
 					}
                     else{
                         //console.log('voco is not selected');
@@ -817,12 +555,45 @@
 				document.getElementById('extension-voco-content').classList = ['extension-voco-show-tab-tutorial'];
 			});
             */
+			
+			
+			//
+			//  LLM AI
+			//
             
 			document.getElementById('extension-voco-tab-button-ai').addEventListener('click', (event) => {
 				this.update_ai_data();
 			});
             
-            
+			document.getElementById('extension-voco-main-llm-playground-write-text-button').addEventListener('click', (event) => {
+				if(document.getElementById('extension-voco-main-llm-playground-textarea').value.length < 15){
+					alert("Please provide more text to summarize");
+					
+				}
+				else{
+					document.getElementById('extension-voco-main-llm-playground-textarea-buttons').classList.add('extension-voco-hidden');
+					this.llm_generate_text(document.getElementById('extension-voco-main-llm-playground-textarea').value, 'generate');
+				}
+				
+			});
+			
+			document.getElementById('extension-voco-main-llm-playground-summarize-button').addEventListener('click', (event) => {
+				if(document.getElementById('extension-voco-main-llm-playground-textarea').value.length < 60){
+					alert("Please provide more text to summarize");
+				}
+				else{
+					document.getElementById('extension-voco-main-llm-playground-textarea-buttons').classList.add('extension-voco-hidden');
+					this.llm_generate_text(document.getElementById('extension-voco-main-llm-playground-textarea').value, 'summarize');
+				}
+				
+			});
+			
+			document.getElementById('extension-voco-main-llm-playground-stop-button').addEventListener('click', (event) => {
+				document.getElementById('extension-voco-main-llm-playground-textarea-buttons').classList.remove('extension-voco-hidden');
+				this.llm_generate_text('', 'stop');				
+			});
+			
+			
         
         
             //
@@ -1195,6 +966,347 @@
 		*/
 	
 	    
+		do_poll(){
+			
+			const list = document.getElementById('extension-voco-list');
+		
+			//const pre = document.getElementById('extension-voco-response-data');
+			const text_input_field = document.getElementById('extension-voco-text-input-field');
+			const text_response_container = document.getElementById('extension-voco-text-response-container');
+			const text_response_field = document.getElementById('extension-voco-text-response-field');
+			text_response_container.style.display = 'none';
+			
+
+            
+            // TABS
+            
+            var all_tabs = document.querySelectorAll('.extension-voco-tab');
+            var all_tab_buttons = document.querySelectorAll('.extension-voco-main-tab-button');
+			
+            if(this.busy_polling){
+                if(this.debug){
+                    console.log("voco: was still polling, aborting new poll");
+                }
+                this.busy_polling_count++;
+                
+                if(this.busy_polling_count > 10){
+                    this.busy_polling = false;
+                    this.busy_polling_count = 0;
+                    if(this.debug){
+                        console.log("Busy polling for over 20 seconds. Resetting this.busy_polling");
+                    }
+                    document.getElementById('extension-voco-main-controller-not-responding').style.display = 'block';
+                    document.getElementById('extension-voco-text-commands-container').style.display = 'none';
+                }
+                else{
+                    return;
+                }
+                
+            }
+            else{
+                //console.log("starting poll");
+                document.getElementById('extension-voco-main-controller-not-responding').style.display = 'none';
+            }
+            
+            var refresh_chat_members = false
+            this.refresh_matrix_members_counter++;
+            if(this.refresh_matrix_members_counter > 30){
+                this.refresh_matrix_members_counter = 0;
+                refresh_chat_members = true
+            }
+            
+            this.busy_polling = true;
+			//console.log(this.attempts);
+			//console.log("calling")
+	        window.API.postJson(
+                `/extensions/${this.id}/api/poll`,
+                {'refresh_matrix_members': refresh_chat_members}
+
+	        ).then((body) => {
+                //console.log("Interval: Python API poll result: ", body);
+                if(this.debug){
+                    console.log("Voco: Interval: poll response: ", body);
+                }
+				this.attempts = 0;
+				//console.log(body['items']);
+				if(body['state'] == true){
+					this.items_list = body['items'];
+					this.current_time = body['current_time'];
+					
+                    if(body['is_satellite'] == false){
+                        if(body['initial_injection_completed']){
+                            
+                            if(body['busy_starting_snips']){
+                                document.getElementById('extension-voco-injection-busy').style.display = 'block';
+                                document.getElementById('extension-voco-text-commands-container').style.display = 'none';
+                            }
+                            else{
+                                document.getElementById('extension-voco-injection-busy').style.display = 'none';
+                                document.getElementById('extension-voco-text-commands-container').style.display = 'block';
+                            }
+                            
+                        }
+                        else{
+                            document.getElementById('extension-voco-injection-busy').style.display = 'block';
+                            document.getElementById('extension-voco-text-commands-container').style.display = 'none';
+                        }
+                    }
+                    else{
+                        if(body['busy_starting_snips']){
+                            document.getElementById('extension-voco-injection-busy').style.display = 'block';
+                            document.getElementById('extension-voco-text-commands-container').style.display = 'none';
+                        }
+                        else{
+                            document.getElementById('extension-voco-injection-busy').style.display = 'none';
+                            document.getElementById('extension-voco-text-commands-container').style.display = 'block';
+                        }
+                    }
+                    
+                    if(body['missing_microphone']){
+                        document.getElementById('extension-voco-missing-microphone').style.display = 'block';
+                    }
+                    else{
+                        document.getElementById('extension-voco-missing-microphone').style.display = 'none';
+                    }
+                    
+                    
+                    if(body['periodic_voco_attempts'] > 3){
+                        document.getElementById('extension-voco-main-controller-not-responding').style.display = 'block';
+                    }
+                    else{
+                        document.getElementById('extension-voco-main-controller-not-responding').style.display = 'none';
+                    }
+                    
+                    
+                    
+                    //const text_response_container = document.getElementById('extension-voco-text-response-container');
+					//const text_response_field = document.getElementById('extension-voco-text-response-field');
+                    if(text_response_field){
+						if(body['text_response'].length != 0){
+							var nicer_text = body['text_response'];
+							nicer_text = nicer_text.replace(/ \./g, '\.'); //.replace(" .", ".");
+						
+							function applySentenceCase(str) {
+							    return str.replace(/.+?[\.\?\!](\s|$)/g, function (txt) {
+							        return txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase();
+							    });
+							}
+						
+							nicer_text = applySentenceCase(nicer_text);
+							nicer_text = nicer_text.replace(/\. /g, '\.\<br\/\>');
+						
+							if(this.debug){
+								if(text_reponse_field.innerHTML != nicer_text){
+									console.log("got text chat response: ", nicer_text)
+								}
+							}
+						
+							text_response_field.innerHTML = nicer_text;
+							text_response_container.style.display = 'block';
+						}
+						else{
+							text_response_field.innerText = "";
+							text_response_container.style.display = 'none';
+						}
+                    }
+					
+					
+					
+					//pre.innerText = "";
+                    
+                    // Update list of timers
+					if(this.items_list.length > 0 ){
+						this.regenerate_items();
+					}
+					else{
+						list.innerHTML = '<div class="extension-voco-centered-page"><p style="width:100%;text-align:center;display:bloc">There are currently no active timers, reminders or alarms.</p>';
+					}
+                    
+                    // Show satellites that are connected to this controller (if any)
+                    if(typeof body['connected_satellites'] != 'undefined' && typeof body['is_satellite'] != 'undefined'){
+                        this.show_connected_satellites( body['connected_satellites'], body['is_satellite'] );
+                    }
+                    
+                    
+                    // MATRIX
+                    
+                    // Update list of matrix room members
+                    if(typeof body['matrix_started'] != 'undefined'){
+                        
+                        if(typeof body['matrix_room_members'] != 'undefined'){
+                            this.matrix_room_members = body['matrix_room_members'];
+                            this.regenerate_matrix_room_members(body['matrix_room_members']);
+                            
+                        }
+                        
+                        if(body['matrix_started']){
+                            //console.log('Matrix has started');
+                            document.getElementById('extension-voco-chat-loading').classList.add('extension-voco-hidden');
+                            document.getElementById('extension-voco-matrix-create-account-step1').classList.add('extension-voco-hidden');
+                            document.getElementById('extension-voco-matrix-create-account-step2').classList.remove('extension-voco-hidden');
+                        }
+                        else{
+                            //console.log('Matrix has not started yet');
+                        }
+                        
+                    }
+                    
+                    if( body['matrix_busy_registering'] ){
+                        if(this.debug){
+                            console.log('matrix is busy registering accounts and starting');
+                        }
+                    }
+                    else{
+                        document.getElementById('extension-voco-chat-busy-registering').classList.add('extension-voco-hidden');
+                        
+                        // if a user account was created, show step 2
+                        if(typeof body['matrix_logged_in'] != 'undefined' & typeof body['matrix_server'] != 'undefined'){
+                            //console.log('Matrix home server address: ' + body['matrix_server']);
+                        
+                            if(body['matrix_server'] == '...'){
+                                document.getElementById('extension-voco-chat-loading').classList.add('extension-voco-hidden');
+                                document.getElementById('extension-voco-matrix-create-account-step1').classList.remove('extension-voco-hidden');
+                                document.getElementById('extension-voco-matrix-create-account-step2').classList.add('extension-voco-hidden');
+                            }
+                            else{
+                                if(body['matrix_logged_in'] == true){
+                                    //console.log('Matrix is logged in');
+                                    document.getElementById('extension-voco-chat-loading').classList.add('extension-voco-hidden');
+                                    document.getElementById('extension-voco-matrix-create-account-step1').classList.add('extension-voco-hidden');
+                                    document.getElementById('extension-voco-matrix-create-account-step2').classList.remove('extension-voco-hidden');
+                                }
+                                else if(body['matrix_logged_in'] == false){
+                                    //console.log('Matrix was not logged in');
+                                    document.getElementById('extension-voco-chat-loading').classList.add('extension-voco-hidden');
+                                    document.getElementById('extension-voco-matrix-create-account-step1').classList.remove('extension-voco-hidden');
+                                    document.getElementById('extension-voco-matrix-create-account-step2').classList.add('extension-voco-hidden');
+                                }
+                                else if(body['matrix_logged_in'] == null){
+                                    document.getElementById('extension-voco-chat-loading').classList.remove('extension-voco-hidden');
+                                }
+                                
+                            }
+                        
+                        }
+                        
+                    }
+					
+					
+					
+					
+                    
+				}
+				else{
+					//console.log("Voco: not ok state in poll response: ", body);
+				}
+				
+				
+				//
+				//   LLM AI
+				//
+				
+				if(typeof body.llm_folder_size != 'undefined'){
+					if(document.getElementById('extension-voco-llm-total-size')){
+						document.getElementById('extension-voco-llm-total-size').textContent = '' + body.llm_folder_size;
+					}
+					
+					let dl_indicator_el = document.getElementById('extension-voco-downloading-models-indicator');
+					if(dl_indicator_el){
+						try{
+							if(body.llm_folder_size != this.previous_llm_folder_size){
+								
+								if(this.previous_llm_folder_size == 0){
+									this.previous_llm_folder_size = body.llm_folder_size;
+								}
+								const difference = Math.abs(this.previous_llm_folder_size - body.llm_folder_size);
+								if(this.debug){
+									console.log("LLM folder size difference: " + str(difference))
+								}
+								dl_indicator_el.innerHTML = "<strong>AI Model</strong><br/>Download speed: " + difference;
+								dl_indicator_el.classList.remove('extension-voco-hidden');
+							}
+							else{
+								dl_indicator_el.classList.add('extension-voco-hidden')
+							}
+							
+						}
+						catch(e){
+							console.error("Error updating LLM folder size: " + str(ex))
+						}
+						
+					}
+					
+				}
+				
+				if(typeof body.llm_busy_downloading_models != 'undefined'){
+					const downloading_models_el = document.getElementById('extension-voco-downloading-models');
+					if(downloading_models_el){
+						
+						if(body.llm_busy_downloading_models > 0){
+							downloading_models_el.style.display = 'block';
+							
+							let llm_download_progress_el = document.getElementById('extension-voco-downloading-models-progress-container');
+							if(llm_download_progress_el){
+								llm_download_progress_el.innerHTML = '';
+								for( var m = 0; m < body.llm_busy_downloading_models; m++ ){
+									let progress_block = document.createElement('div');
+									llm_download_progress_el.appendChild(progress_block);
+								}
+							}
+							
+						}
+						else{
+							downloading_models_el.style.display = 'none';
+						}
+					}
+				}
+				
+				if(typeof body.llm_not_enough_disk_space != 'undefined'){
+					const low_disk_el = document.getElementById('extension-voco-main-low-disk-space-warning');
+					if(low_disk_el){
+						if(body.llm_not_enough_disk_space){
+							low_disk_el.style.display = 'block';
+						}
+						else{
+							low_disk_el.style.display = 'none';
+						}
+					}
+				}
+				
+				
+                
+                this.busy_polling = false;
+                this.busy_polling_count = 0;
+                document.getElementById('extension-voco-unavailable').style.display = 'none';
+                document.getElementById('extension-voco-text-commands-container').style.display = 'block';
+                
+
+	        }).catch((e) => {
+	  			//console.log("Error getting timer items: " , e);
+				if(this.debug){
+					console.log("voco: Loading items failed - connection error?: ", e);
+				}
+                document.getElementById('extension-voco-unavailable').style.display = 'block';
+                document.getElementById('extension-voco-text-commands-container').style.display = 'none';
+				//pre.innerText = "Loading items failed - connection error";
+				this.attempts = 0;
+                this.busy_polling = false;
+                this.busy_polling_count = 0;
+	        });	
+            
+	  		// Get list of items
+			if(this.attempts < 3){
+				this.attempts++;
+			}
+			else{
+				//pre.innerText = "Lost connection.";
+			}
+		}
+		
+		
+		
+		
+		
         
         //
         //  Regenerate matrix room members on chat tab
@@ -1464,10 +1576,15 @@
 				if(this.debug){
                     console.log("Voco llm init response: ", body);
                 }
-				console.log("Voco llm init response: ", body);
+				//console.log("Voco llm init response: ", body);
 	
-				if(body['state'] == true){
+				if(typeof body['state'] != 'undefined' && body['state'] == true){
 					//console.log("satellite update state was true");
+					
+					if(typeof body.llm_models != 'undefined'){
+						this.generate_llm_models_list(body.llm_models);
+					}
+					/*
 					if(typeof body.llm_tts_models != 'undefined' && typeof body.llm_tts_model != 'undefined'){
 						this.llm_tts_model = body.llm_tts_model;
 						this.llm_tts_models = body.llm_tts_models;
@@ -1480,6 +1597,37 @@
 						this.generate_llm_models_list('stt',body.llm_stt_models,body.llm_stt_model);
 					}
 					
+					if(typeof body.llm_assistant_models != 'undefined' && typeof body.llm_assistant_model != 'undefined'){
+						this.llm_assistant_model = body.llm_assistant_model;
+						this.llm_assistant_models = body.llm_assistant_models;
+						this.generate_llm_models_list('assistant',body.llm_assistant_models,body.llm_assistant_model);
+					}
+					*/
+					
+				}
+				
+				if(typeof body['llm_enabled'] != 'undefined'){
+					this.llm_enabled = body['llm_enabled'];
+				}
+				
+				if(typeof body['llm_enabled'] != 'undefined'){
+					this.llm_assistant_started = body['llm_assistant_started'];
+					if(this.llm_assistant_started){
+						document.getElementById('extension-voco-main-llm-assistant-running').classList.remove('extension-voco-hidden');
+						document.getElementById('extension-voco-main-llm-assistant-not-running').style.display = 'none';
+					}
+					else{
+						document.getElementById('extension-voco-main-llm-assistant-running').classList.add('extension-voco-hidden');
+						document.getElementById('extension-voco-main-llm-assistant-not-running').style.display = 'block';
+					}
+				}
+				
+				
+				if(typeof body['device_model'] != 'undefined'){
+					if(body['device_model'].startsWith('Raspberry Pi 3') || body['device_model'].startsWith('Raspberry Pi 4')){
+						this.llm_slow_device = true;
+						document.getElementById('extension-voco-main-device-model-warning').style.display = 'block';
+					}
 				}
 
 	        }).catch((e) => {
@@ -1488,72 +1636,110 @@
 		}
         
 		
-		generate_llm_models_list(llm_type='tts',models={}, active_model='none'){
-			console.log("in generate_llm_models_list: " + llm_type);
+		//generate_llm_models_list(llm_type='tts',models={}, active_model='none'){
+		generate_llm_models_list(llm_models={}){
+			if(this.debug){
+				console.log("in generate_llm_models_list: models: ", llm_models);
+			}
 			try{
-				
-				let llm_options_list_el = document.getElementById('extension-voco-' + llm_type + '-models-list');
-				if(llm_options_list_el){
-					llm_options_list_el.innerHTML = '';
-					var counter = 0;
-					for (const [llm_name, llm_details] of Object.entries(models)) {
-  						console.log(`${llm_name}: ${llm_details}`);
-						counter++;
-  						let llm_item_el = document.createElement('li');
-						llm_item_el.classList.add('extension-voco-vlak');
+				for (const [llm_type, models] of Object.entries(llm_models)) {
+					//console.log("generating models list for: ",llm_type, models)
+					
+					let llm_options_list_el = document.getElementById('extension-voco-' + llm_type + '-models-list');
+					if(llm_options_list_el){
+						llm_options_list_el.innerHTML = '';
+						var counter = 0;
+						for (const [llm_name, llm_details] of Object.entries(llm_models[llm_type]['list'])) {
+	  						//console.log(`${llm_name}: ${llm_details}`);
+							counter++;
+	  						let llm_item_el = document.createElement('li');
+							llm_item_el.classList.add('extension-voco-vlak');
 						
-						let radio_el = document.createElement('input');
-						radio_el.type = 'radio';
-						radio_el.id = 'extension-voco-ai-' + llm_type + '-radio-input' + counter;
-						radio_el.name = 'extension-voco-ai-' + llm_type + '-radio-button';
+							let radio_el = document.createElement('input');
+							radio_el.type = 'radio';
+							radio_el.id = 'extension-voco-llm-' + llm_type + '-radio-input' + counter;
+							radio_el.name = 'extension-voco-llm-' + llm_type + '-radio-button';
 						
-						const model_name = llm_details.model;
-						radio_el.addEventListener('change', () => {
-							console.log("checkbox changed to: ", model_name);
+							let llm_size = '<span class="extension-voco-llm-model-size"></span>';
+							if(typeof llm_details.size != 'undefined'){
+								if(llm_details.size != null && llm_details.size != 0){
+									llm_size = '<span class="extension-voco-llm-model-size"><span>File size: </span>' + llm_details.size + '<span>Mb</span></span>';
+								}
+							}
+							let llm_memory = '<span class="extension-voco-llm-model-memory"></span>';
+							if(typeof llm_details.memory != 'undefined'){
+								if(llm_details.memory != null && llm_details.memory != 0){
+									llm_memory = '<span class="extension-voco-llm-model-memory"><span>Memory use: </span>' + llm_details.memory + '<span>Mb</span></span>';
+								}
+							}
+							let downloaded = '<span class="extension-voco-llm-model-downloaded">Not downloaded</span>';
+							if(typeof llm_details.downloaded != 'undefined'){
+								if(llm_details.downloaded){
+									downloaded = '<span class="extension-voco-llm-model-downloaded">Downloaded</span>';
+									llm_item_el.classList.add('extension-voco-llm-item-downloaded');
+								}
+							}
+							if(typeof llm_details.developer != 'undefined'){
+								if(llm_details.developer){
+									llm_item_el.classList.add('extension-voco-show-if-developer');
+								}
+							}
 							
-							let action_dict = {'action':'set_llm'};
-							action_dict['llm_' + llm_type + '_model'] = model_name;
-							console.log("action_dict: ", action_dict);
-					        window.API.postJson(
-					          `/extensions/${this.id}/api/ajax`,action_dict
-
-					        ).then((body) => {
-								if(this.debug){
-				                    console.log('Voco set_llm response: ', body);
-				                }
-
-					        }).catch((e) => {
-					  			console.error('Error during set_llm api call: ', e);
-								alert("Could not connect with Voco, your preference may not have been saved");
-					        });	
+						
+							const model_name = llm_details.model;
+							radio_el.addEventListener('change', () => {
+								//console.log("checkbox changed to: ", model_name);
 							
-						});
+								let action_dict = {'action':'set_llm'};
+								action_dict['llm_' + llm_type + '_model'] = model_name;
+								console.log("action_dict: ", action_dict);
+						        window.API.postJson(
+						          `/extensions/${this.id}/api/ajax`,action_dict
+
+						        ).then((body) => {
+									if(this.debug){
+					                    console.log('Voco set_llm response: ', body);
+					                }
+
+						        }).catch((e) => {
+						  			console.error('Error during set_llm api call: ', e);
+									alert("Could not connect with Voco, your preference may not have been saved");
+						        });	
+							
+							});
 						
-						console.log("model_name =?= active_model: ", model_name, active_model);
+							//console.log("model_name =?= active_model: ", model_name, active_model);
+							if(llm_models[llm_type]['active'] != null && llm_models[llm_type]['active'].endsWith(model_name)){
+								console.log("BINGO, spotted the active model");
+								radio_el.checked = true;
+							}
+							/*
+							if(model_name == active_model){
+								console.log("BINGO, spotted the active model");
+								radio_el.checked = true;
+							}
+							*/
+							llm_item_el.appendChild(radio_el);
+							/*
+							let label_el = document.createElement('label');
+							label_el.innerText = '';
+							label_el.for = 'extension-voco-llm-' + llm_type + '-radio-input' + counter;
+	  						llm_item_el.appendChild(label_el);
+							*/
 						
-						if(model_name == active_model){
-							console.log("BINGO");
-							radio_el.checked = true;
+							let llm_details_el = document.createElement('div');
+						
+	  					  	llm_details_el.innerHTML = '<h3>' + llm_name + '</h3>';
+							llm_details_el.innerHTML += '<p>' + llm_details.description + '</p>';
+							llm_details_el.innerHTML += '<div class="extension-voco-llm-model-details"><span class="extension-voco-llm-model-filename"><span>Model: </span>' + llm_details.model + '</span>' + llm_size + llm_memory + downloaded + '</div>';
+							if(llm_type == 'tts'){
+								llm_details_el.innerHTML += '<audio controls><source src="/extensions/voco/audio/' + llm_details.model + '.wav" type="audio/wav"></audio>';
+							}
+							llm_item_el.appendChild(llm_details_el);
+							llm_options_list_el.appendChild(llm_item_el);
 						}
-						llm_item_el.appendChild(radio_el);
-						/*
-						let label_el = document.createElement('label');
-						label_el.innerText = '';
-						label_el.for = 'extension-voco-ai-' + llm_type + '-radio-input' + counter;
-  						llm_item_el.appendChild(label_el);
-						*/
-						
-						let llm_details_el = document.createElement('div');
-  					  	llm_details_el.innerHTML = '<h3>' + llm_name + '</h3><p>' + llm_details.description + '</p>';
-						llm_details_el.innerHTML += '<p class="extension-voco-developer-only">Model:' + llm_details.model + '</p>';
-						if(llm_type == 'tts'){
-							llm_details_el.innerHTML += '<audio controls><source src="/extensions/voco/audio/' + llm_details.model + '.wav" type="audio/wav"></audio>';
-						}
-						llm_item_el.appendChild(llm_details_el);
-						llm_options_list_el.appendChild(llm_item_el);
 					}
 				}
-				
 				
 			}
 			catch(e) {
@@ -1562,6 +1748,23 @@
 		}
 		
         
+		llm_generate_text(prompt,llm_action='generate'){
+	        window.API.postJson(
+	          `/extensions/${this.id}/api/ajax`,
+				{'action':'llm_generate_text','prompt':prompt,'llm_action':llm_action}
+
+	        ).then((body) => {
+				if(this.debug){
+					console.log("llm_generate_text response: ", body);
+				}
+				
+	        }).catch((e) => {
+	  			console.log("Error during llm_generate_text api call: ", e);
+	        });	
+		}
+		
+		
+		
 	}
 
 	new Voco();
