@@ -169,6 +169,10 @@ class VocoAdapter(Adapter):
         #print("Adapter ID = " + self.get_id())
 
 
+        self.pipewire = False
+        if os.path.exists('/usr/bin/pipewire'):
+            self.pipewire = True
+
         # Check is system is 32 or 64 bit
         self.bits = int(run_command('getconf LONG_BIT'))
         #print("system bits: " + str(self.bits))
@@ -947,7 +951,8 @@ class VocoAdapter(Adapter):
         self.llm_assistant_dir_path = os.path.join(self.llm_data_dir_path, 'assistant')
         os.system('mkdir -p ' + str(self.llm_assistant_dir_path))
         self.llamafile_zip_path = os.path.join(self.addon_dir_path,'llm','assistant','llamafile.zip')
-        self.llamafile_path = os.path.join(self.data_dir_path,'llm','llamafile')
+        #self.llamafile_path = os.path.join(self.data_dir_path,'llm','llamafile')
+        self.llamafile_path = os.path.join(self.addon_dir_path,'llm','assistant','llama_cpp')
         self.llamafile_llamafile_system_prompt_path = os.path.join(self.data_dir_path,'llm','llamafile_system_prompt.json')
         self.llm_assistant_prompt_cache_path = os.path.join(self.data_dir_path,'llamafile_prompt_cache') # file
         #self.llm_generated_text_file_path = os.path.join(self.data_dir_path,'llm','llamafile_generated.txt')
@@ -1233,6 +1238,8 @@ class VocoAdapter(Adapter):
         
         # AUDIO
         
+        self.update_speaker_variables()
+        
         if self.DEBUG:
             print("detected microphones: \n" + str(self.capture_devices))
         
@@ -1297,14 +1304,17 @@ class VocoAdapter(Adapter):
                 if self.DEBUG:
                     print("Setting Pi audio_output to automatically switch")
                 run_command("amixer cset numid=3 0")
+                self.set_system_volume_level()
             elif self.speaker == "Headphone jack":
                 if self.DEBUG:
                     print("Setting Pi audio_output to headphone jack")
                 run_command("amixer cset numid=3 1")
+                self.set_system_volume_level()
             elif self.speaker == "HDMI":
                 if self.DEBUG:
                     print("Setting Pi audio_output to HDMI")
                 run_command("amixer cset numid=3 2")
+                self.set_system_volume_level()
             elif self.speaker == "Bluetooth speaker":
                 if self.DEBUG:
                     print("Setting Pi audio_output to Bluetooth")
@@ -1313,14 +1323,17 @@ class VocoAdapter(Adapter):
                     print("Experimental: output forced to bluetooth")
                 else:
                     # fall back to auto mode
+                    if self.DEBUG:
+                        print("falling back to amixer auto mode")
                     run_command("amixer cset numid=3 0")
+                    self.set_system_volume_level()
 
         except Exception as ex:
             if self.DEBUG:
                 print("error setting initial audio_output settings: " + str(ex))
             
             
-        self.update_speaker_variables()
+        
         
         
         # Set the correct initial speaker and microphone gain volume
@@ -1337,6 +1350,12 @@ class VocoAdapter(Adapter):
                 print("Could not set initial audio volume: " + str(ex))
         
         
+        if self.missing_microphone == True:
+            self.set_status_on_thing("No microphone")
+            #self.run_snips()
+            #self.set_status_on_thing("Not listening")
+            
+            
         # TIME
         
         self.update_timezone_offset()
@@ -1363,10 +1382,8 @@ class VocoAdapter(Adapter):
         #    self.run_snips()
         
         
-        if self.missing_microphone == True:
-            self.set_status_on_thing("No microphone")
-            #self.run_snips()
-            #self.set_status_on_thing("Listening")
+        
+            
 
 
         #time.sleep(10)
@@ -1572,7 +1589,7 @@ class VocoAdapter(Adapter):
     def update_speaker_variables(self):
         if self.DEBUG:
             print("in update_speaker_variables")
-            
+        found_audio_control = False
         # Get the initial speaker settings
         for option in self.audio_controls:
             try:
@@ -1584,6 +1601,7 @@ class VocoAdapter(Adapter):
                 if str(option['human_device_name']) == str(self.persistent_data['audio_output']):
                     if self.DEBUG:
                         print("found matching audio control. option: " + str(option))
+                    found_audio_control = True
                     self.current_simple_card_name = option['simple_card_name']
                     self.current_card_id = option['card_id']
                     self.current_device_id = option['device_id']
@@ -1596,6 +1614,8 @@ class VocoAdapter(Adapter):
                 self.current_control_name = ""
         
         if self.DEBUG:
+            if found_audio_control == False:
+                print("ERROR, update_speaker_variables did not find target audio_output: " + str(self.persistent_data['audio_output']) + ", in: " + str(self.audio_controls))
             print("speaker variable self.current_control_name is now: " + str(self.current_control_name ))
 
 
@@ -1896,16 +1916,13 @@ class VocoAdapter(Adapter):
                 if self.DEBUG:
                     print("Volume should be set to initial value of: " + str(int(config['System audio volume'])))
                 if config['System audio volume'] != None:
-                    volume_percentage = int(config['System audio volume'])
-                    if volume_percentage == 0: # not even possible anymore as the minimum is now set to 10 in manifest.json
+                    self.system_volume_percentage = int(config['System audio volume'])
+                    if self.system_volume_percentage == 0: # not even possible anymore as the minimum is now set to 10 in manifest.json
                         if self.DEBUG:
                             print("Warning: volume level was set to 0. It will be changed to 90 instead.")
-                        volume_percentage = 90
-                    if self.DEBUG:
-                        print("System audio volume percentage will be set to: " + str(volume_percentage))
-                    if volume_percentage >= 0 and volume_percentage <= 100:
-                        os.system("sudo amixer cset numid=1 " + str(volume_percentage) + "%") # TODO: should this assume that the current selected mixer is the main output?
-                        #os.system("sudo amixer cset numid=3 " + volume_percentage + "%")
+                        self.system_volume_percentage = 90
+                    self.set_system_volume_level()
+                        
                 if self.DEBUG:
                     print("-Raise the volume is present in the config data.")
         except Exception as ex:
@@ -2110,6 +2127,22 @@ class VocoAdapter(Adapter):
         return result
 
 
+
+    def set_system_volume_level(self,volume=None):
+        if self.DEBUG:
+            print("in set_system_volume_level")
+        if volume != None:
+            self.system_volume_percentage = int(volume)
+        if self.DEBUG:
+            print(" - self.system_volume_percentage: " + str(self.system_volume_percentage))
+        
+            if self.DEBUG:
+                print("System audio volume percentage will be set to: " + str(self.system_volume_percentage))
+            if self.system_volume_percentage >= 0 and self.system_volume_percentage <= 100:
+                #os.system("sudo amixer cset numid=3 " + volume_percentage + "%")
+                os.system("amixer cset numid=1 " + str(self.system_volume_percentage) + "%") # TODO: should this assume that the current selected mixer is the main output?
+                # amixer sset 'Master' 50%
+                os.system("amixer sset 'Master' " + str(self.system_volume_percentage) + "%")
 
     def set_speaker_volume(self, volume):
         if self.DEBUG:
@@ -2781,14 +2814,27 @@ class VocoAdapter(Adapter):
             
         if str(self.current_control_name) != "" and str(self.persistent_data['audio_output']) != 'Bluetooth speaker':
             if self.currently_muted == False:
-            
-                run_command("amixer sset " + str(self.current_control_name) + " mute")
-                self.currently_muted = True
+                mute_command = "amixer sset " + str(self.current_control_name) + " mute"
                 if self.DEBUG:
-                    print("actually muted")
+                    print(" - mute_command: " + str(mute_command))
+                mute_result = run_command(mute_command)
+                if self.DEBUG:
+                    print(" - ran mute command. result: " + str(mute_result))
+                if not 'Unable to find' in mute_result:
+                    self.currently_muted = True
+                else:
+                    if self.DEBUG:
+                        print("Mute failed! Attempting again with master control")
+                    mute_result = run_command("amixer sset 'Master' 0%")
+                    if not 'Unable to find' in mute_result:
+                        self.currently_muted = True
+                    else:
+                        if self.DEBUG:
+                            print("ERROR, MUTE FAILED")
+                
             else:
                 if self.DEBUG:
-                    print("not actually muted: was already muted!")
+                    print(" - not running mute command: self.currently_muted was already true")
         
         
         
@@ -2801,8 +2847,22 @@ class VocoAdapter(Adapter):
                 unmute_command = "amixer sset " + str(self.current_control_name) + " unmute"
                 if self.DEBUG:
                     print("actually unmuting. Command: " + str(unmute_command))
-                run_command(unmute_command)
-                self.currently_muted = False
+                unmute_result = run_command(unmute_command)
+                
+                if self.DEBUG:
+                    print(" - ran unmute command. result: " + str(unmute_result))
+                if not 'Unable to find' in unmute_result:
+                    self.currently_muted = False
+                else:
+                    if self.DEBUG:
+                        print("Unmute failed! Attempting again with master control")
+                    unmute_result = run_command("amixer sset 'Master' " + str(self.system_volume_percentage) + "%")
+                    if not 'Unable to find' in unmute_result:
+                        self.currently_muted = False
+                    else:
+                        if self.DEBUG:
+                            print("ERROR, UNMUTE FAILED")
+                    
             else:
                 if self.DEBUG:
                     print("not unmuting, since mute doesn't actually seem to be active")
@@ -10177,7 +10237,7 @@ class VocoAdapter(Adapter):
             print("llamafile assistant_command: " + str(assistant_command))
         
         self.llm_assistant_started = True
-        self.llm_assistant_process = Popen(assistant_command, env=my_env, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,bufsize=100,shell=True, preexec_fn=os.setsid) # 
+        self.llm_assistant_process = Popen(assistant_command, env=my_env, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,bufsize=100,shell=True,preexec_fn=os.setsid) # 
         
 
         #self.llm_assistant_process = await asyncio.subprocess.create_subprocess_exec(

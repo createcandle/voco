@@ -595,7 +595,7 @@ class VocoAPIHandler(APIHandler):
                                 
                                 llm_folder_size = 0
                                 try:
-                                    llm_folder_size_output = run_command("du -s " + str(self.adapter.llm_data_dir_path) + " | awk '{print $1}")
+                                    llm_folder_size_output = run_command("du -s " + str(self.adapter.llm_data_dir_path) + " | awk '{print $1}'")
                                     if llm_folder_size_output != None:
                                         if self.DEBUG:
                                             print("str(llm_folder_size).strip(): " + str(str(llm_folder_size).strip()))
