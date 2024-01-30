@@ -2512,8 +2512,8 @@ class VocoAdapter(Adapter):
                     print("- speak: intent was not set, so setting siteId to own siteId (speaking it here)")
                 intent = {'siteId':self.persistent_data['site_id']}
             
-            with self.voice_messages_queue.mutex:
-                self.voice_messages_queue.put({'voice_message':str(voice_message),'intent':intent})
+            #with self.voice_messages_queue.mutex:
+            self.voice_messages_queue.put({'voice_message':str(voice_message),'intent':intent})
 
         except Exception as ex:
             print("Error in speak: " + str(ex))
@@ -2935,7 +2935,7 @@ class VocoAdapter(Adapter):
                 
                 if unique_command in snips_check_output:
                     if self.DEBUG:
-                        print("This part of snips seems to already be runing? It was in snips_check_output: " + str(unique_command))
+                        print("This part of snips seems to already be running? It was in snips_check_output: " + str(unique_command))
                     #continue
                     if unique_command not in unique_command_counts:
                         unique_command_counts.append(unique_command)
@@ -6170,8 +6170,8 @@ class VocoAdapter(Adapter):
                     if self.DEBUG:
                         print("stopping speaking and clearing the queue to be spoken")
                     self.last_time_stop_spoken = time.time()
-                    with self.voice_messages_queue.mutex:
-                        self.voice_messages_queue.queue.clear()
+                    #with self.voice_messages_queue.mutex:
+                    self.voice_messages_queue.queue.clear()
                     os.system("pkill -f aplay")
                     os.system("pkill -f piper")
                 

@@ -543,9 +543,11 @@ def get_audio_controls():
         if line.startswith( 'card ' ):
             
             try:
-                #print(line)
+                print(line)
                 line_parts = line.split(',')
-            
+                if len(line_parts) < 2:
+                    continue
+                    
                 line_a = line_parts[0]
                 #print(line_a)
                 line_b = line_parts[1]
@@ -569,10 +571,14 @@ def get_audio_controls():
             #print("simple card name = " + str(simple_card_name))
             
             full_card_name   = re.findall(r"\[([^']+)\]", line_a)[0]
-            print("audio full card name = " + str(full_card_name))
+            #print("audio full card name = " + str(full_card_name))
             
-            full_device_name = re.findall(r"\[([^']+)\]", line_b)[0]
-            print("audio full device name = " + str(full_device_name))
+            full_device_name = str(full_card_name)
+            try:
+                full_device_name = re.findall(r"\[([^']+)\]", line_b)[0]
+                #print("audio full device name = " + str(full_device_name))
+            except Exception as ex:
+                print("error getting full audio device name: " + str(ex))
             
             # TODO: this used to use full_device_name:
             human_device_name = str(full_card_name)
