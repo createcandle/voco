@@ -991,7 +991,7 @@
 	        ).then((body) => {
                 //console.log("Interval: Python API poll result: ", body);
                 if(this.debug){
-                    console.log("Voco: Interval: poll response: ", body);
+                    console.log("Voco: debug: interval: poll response: ", body);
                 }
 				this.attempts = 0;
 				//console.log(body['items']);

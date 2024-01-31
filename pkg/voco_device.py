@@ -8,7 +8,7 @@ from gateway_addon import Device, Property
 class VocoDevice(Device):
     """Candle device type."""
 
-    def __init__(self, adapter, audio_output_list):
+    def __init__(self, adapter, audio_output_list=[], audio_input_list=[]):
         """
         Initialize the object.
         adapter -- the Adapter managing this device
@@ -133,15 +133,28 @@ class VocoDevice(Device):
                                 
             if self.adapter.DEBUG:
                 print("adding audio output property to Voco thing with list: " + str(audio_output_list))
-            self.properties["audio_output"] = VocoProperty(
-                            self,
-                            "audio_output",
-                            {
-                                'title': "Audio output",
-                                'type': 'string',
-                                'enum': audio_output_list
-                            },
-                            str(self.adapter.persistent_data['audio_output']))
+                
+            if len(audio_output_list) > 0:
+                self.properties["audio_output"] = VocoProperty(
+                                self,
+                                "audio_output",
+                                {
+                                    'title': "Audio output",
+                                    'type': 'string',
+                                    'enum': audio_output_list
+                                },
+                                str(self.adapter.persistent_data['audio_output']))
+                                
+            if len(audio_input_list) > 0:
+                self.properties["audio_input"] = VocoProperty(
+                                self,
+                                "audio_input",
+                                {
+                                    'title': "Microphone",
+                                    'type': 'string',
+                                    'enum': audio_input_list
+                                },
+                                str(self.adapter.persistent_data['audio_input']))
                                 
             if self.adapter.sound_detection:
                 if self.adapter.DEBUG:

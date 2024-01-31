@@ -450,6 +450,8 @@ class VocoAPIHandler(APIHandler):
                                 # Update IP address and hostname
                                 self.adapter.update_network_info()
                             
+                                self.adapter.satellite_targets = avahi_detect_gateways()
+                            
                                 # Ask for latest info from other Voco instances
                                 if self.adapter.mqtt_client != None:
                                     self.adapter.mqtt_client.publish("hermes/voco/ping",json.dumps({'ip':self.adapter.ip_address,'site_id':self.adapter.persistent_data['site_id']}))
@@ -595,11 +597,18 @@ class VocoAPIHandler(APIHandler):
                                 
                                 llm_folder_size = 0
                                 try:
-                                    llm_folder_size_output = run_command("du -s " + str(self.adapter.llm_data_dir_path) + " | awk '{print $1}'")
+                                    llm_folder_size_command = "du -s " + str(self.adapter.llm_data_dir_path) + " | awk '{print $1}'"
+                                    if self.DEBUG:
+                                        print("llm_folder_size_command: " + str(llm_folder_size_command))
+                                    llm_folder_size_output = run_command(llm_folder_size_command)
+                                    if self.DEBUG:
+                                        print("llm_folder_size_output: " + str(llm_folder_size_output))
                                     if llm_folder_size_output != None:
+                                        llm_folder_size = int(llm_folder_size)
                                         if self.DEBUG:
-                                            print("str(llm_folder_size).strip(): " + str(str(llm_folder_size).strip()))
-                                        llm_folder_size = int(str(llm_folder_size).strip())
+                                            print("llm_data_dir_path: " + str(self.adapter.llm_data_dir_path))
+                                            print("llm_folder_size: " + str(llm_folder_size))
+                                        
                                 except Exception as ex:
                                     print("Error getting llm folder size: " + str(ex))
                                 

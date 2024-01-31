@@ -8,6 +8,7 @@ import shutil
 import socket
 import random
 import string
+import chardet
 import requests
 from requests.adapters import HTTPAdapter
 import subprocess
@@ -479,7 +480,7 @@ def download_file(url, target_file):
 
 def run_command(cmd, timeout_seconds=20):
     try:
-        p = subprocess.run(cmd, timeout=timeout_seconds, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True, universal_newlines=True)
+        p = subprocess.run(cmd, timeout=timeout_seconds, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True, universal_newlines=True,text=True)
 
         if p.returncode == 0:
             return p.stdout # + '\n' + "Command success" #.decode('utf-8')
@@ -500,6 +501,7 @@ def run_command_with_lines(command):
                             stdout=subprocess.PIPE,
                             stderr=subprocess.PIPE,
                             shell=True)
+                            
         # Read stdout from subprocess until the buffer is empty !
         for bline in iter(p.stdout.readline, b''):
             line = bline.decode('utf-8') #decodedLine = lines.decode('ISO-8859-1')
@@ -531,8 +533,93 @@ def run_command_with_lines(command):
 
 
 
-def get_audio_controls():
 
+def get_pipewire_audio_controls(debug=False):
+    if debug:
+        print("in get_pipewire_audio_controls.")
+        
+    result = {'sinks':{},'sources':{},'default_audio_sink_name':None,'default_audio_sink_nice_name':None,'default_audio_sink_id':None,'default_audio_source_name':None,'default_audio_source_nice_name':None,'default_audio_source_id':None}
+    nodes = {}
+    node = {}
+    
+    pw_metadata_result = run_command('pw-metadata') 
+    lines = pw_metadata_result.splitlines()
+    for line in lines:
+        if "'default.audio.sink'" in line and '"name":"' in line and '"}' in line:
+            name = str(line.split('"name":"')[1])
+            if '"}' in name:
+                result['default_audio_sink_name'] = str(name.split('"}')[0])  
+        if "'default.audio.source'" in line and '"name":"' in line and '"}' in line:
+            name = str(line.split('"name":"')[1])
+            if '"}' in name:
+                result['default_audio_source_name'] = str(name.split('"}')[0])
+    
+    
+    pw_nodes_result = run_command('pw-cli ls Node') 
+    lines = pw_nodes_result.splitlines()
+    lines.append(' id 999999, ')
+    for line in lines:
+        if debug:
+            print("pipewire node line: " + str(line))
+        if 'id ' in line and ',' in line:
+            if debug:
+                print("\nid spotted in line")
+            if 'id' in node:
+                if debug:
+                    print("id spotted in node too, adding it to nodes dict")
+                if 'media_class' in node and node['media_class'].startswith('Video/'):
+                    pass
+                elif 'object_path' in node:
+                    print("\npipewire node - name_nick?: " + str(node))
+                    nice_name = 'Audio output ' + str(node['id'])
+                    if 'node_nick' in node:
+                        nice_name = str(node['node_nick'])
+                    elif 'node_description' in node:
+                        nice_name = str(node['node_description'])
+                    if len(nice_name) > 25 and ' ' in nice_name:
+                        nice_name = nice_name.split(' ')[-1]
+                    node['nice_name'] = nice_name
+                    
+                    if 'capture' in node['object_path']:
+                        result['sources'][node['id']] = node
+                        if result['default_audio_source_name'] != None:
+                            if 'node_name' in node and node['node_name'] == result['default_audio_source_name']:
+                                result['default_audio_source_id'] = node['id']
+                                result['default_audio_source_nice_name'] = node['nice_name']
+                                
+                    if 'playback' in node['object_path']:
+                        result['sinks'][node['id']] = node
+                        if result['default_audio_sink_name'] != None:
+                            if 'node_name' in node and node['node_name'] == result['default_audio_sink_name']:
+                                result['default_audio_sink_id'] = node['id']
+                                result['default_audio_sink_nice_name'] = node['nice_name']
+                    
+            
+            new_id = line.split('id ')[1]
+            new_id = new_id.split(', type')[0]
+            node = {'id':new_id.strip()}
+            
+        elif '=' in line:
+            if debug:
+                print(" = spotted")
+            parts = line.split('=')
+            if len(parts) == 2:
+                attr = str(parts[0]).replace('.','_')
+                val = str(parts[1]).replace('"','')
+                if debug:
+                    print("split into: " + str(parts))
+                    print("  attr: " + str(attr))
+                    print("  val : " + str(val))
+                    
+                node[attr.strip()] = val.strip()
+                      
+    return result
+
+
+
+def get_audio_controls(debug=False):
+    if debug:
+        print("in get_audio_controls.")
     audio_controls = []
     
     aplay_result = run_command('aplay -l') 
@@ -543,20 +630,28 @@ def get_audio_controls():
         if line.startswith( 'card ' ):
             
             try:
-                print(line)
+                if debug:
+                    print(" - get_audio_controls: line: " + str(line))
                 line_parts = line.split(',')
                 if len(line_parts) < 2:
+                    if debug:
+                        print(" - get_audio_controls: line does not have two parts, skipping it")
                     continue
                     
                 line_a = line_parts[0]
-                #print(line_a)
+                if debug:
+                    print(" - get_audio_controls: line_a: " + str(line_a))
                 line_b = line_parts[1]
-                #print(line_b)
-            except:
+                if debug:
+                    print(" - get_audio_controls: line_b: " + str(line_b))
+            except Exception as ex:
+                if debug:
+                    print("ERROR, get_audio_controls: caught error splitting lines: " + str(ex))
                 continue
             
             card_id = int(line_a[5])
-            #print("card id = " + str(card_id))
+            if debug:
+                print(" - card id = " + str(card_id))
             
             
             if card_id != previous_card_id:
@@ -576,11 +671,13 @@ def get_audio_controls():
             full_device_name = str(full_card_name)
             try:
                 full_device_name = re.findall(r"\[([^']+)\]", line_b)[0]
-                #print("audio full device name = " + str(full_device_name))
+                if debug:
+                    print(" - get_audio_controls: full device name = " + str(full_device_name))
             except Exception as ex:
-                print("error getting full audio device name: " + str(ex))
+                if debug:
+                    print(" - get_audio_controls: error getting full audio device name: " + str(ex))
             
-            # TODO: this used to use full_device_name:
+            # TODO: this used to use the full_device_name:
             human_device_name = str(full_card_name)
             
             # Raspberry Pi 5
@@ -618,24 +715,34 @@ def get_audio_controls():
             
             amixer_result = run_command('amixer -c ' + str(card_id) + ' scontrols') 
             lines = amixer_result.splitlines()
-            #print(str(lines))
-            #print("amixer lines array length: " + str(len(lines)))
+            if debug:
+                print("get_audio_controls: amixer lines: \n" + str(lines))
+                print("get_audio_controls: amixer lines array length: " + str(len(lines)))
             if len(lines) > 0:
                 for line in lines:
                     if "'" in line:
-                        #print("maxier controls line = " + line)
+                        if debug:
+                            print(" - get_audio_controls: maxier controls line = " + line)
                         control_name = re.findall(r"'([^']+)'", line)[0]
-                        #print("control name = " + control_name)
+                        if debug:
+                            print(" - get_audio_controls: control name = " + control_name)
                         if control_name != 'mic':
+                            if debug:
+                                print(" - get_audio_controls: found non-'mic' audio control. ")
                             break
                         else:
+                            if debug:
+                                print(" - get_audio_controls: ignoring first control called 'mic'")
                             continue # in case the first control is 'mic', ignore it.
                     else:
+                        if debug:
+                            print(" - get_audio_controls: setting control name to None. ")
                         control_name = None
             
             # if there is no 'simple control', then a backup method is to get the normal control options.  
             else:
-                #print("get audio controls: no simple control found, getting complex one instead")
+                if debug:
+                    print("get audio controls: no simple control found, getting complex one instead")
                 #line_counter = 0
                 amixer_result = run_command('amixer -c ' + str(card_id) + ' controls')
                 lines = amixer_result.splitlines()
@@ -644,20 +751,24 @@ def get_audio_controls():
                         #line_counter += 1
                         
                         line = line.lower()
-                        #print("line.lower = " + line)
+                        if debug:
+                            print(" - get_audio_controls: complex: line.lower = " + line)
                         if "playback" in line:
-                            #print("playback spotted")
+                            if debug:
+                                print(" - get_audio_controls: complex: 'playback' spotted")
                             
                             numid_part = line.split(',')[0]
                             
                             if numid_part.startswith("numid="):
                                 numid_part = numid_part[6:]
-                                #print("numid_part = " + str(numid_part))
+                                if debug:
+                                    print(" - get_audio_controls: complex: numid_part = " + str(numid_part))
                             
                                 #complex_max = 36
                                 complex_count = 1 # mono
                                 complex_control_id = int(numid_part)
-                                #print("complex_control_id = " + str(complex_control_id))
+                                if debug:
+                                    print(" - get_audio_controls: complex: complex_control_id = " + str(complex_control_id))
                             
                                 info_result = run_command('amixer -c ' + str(card_id) + ' cget numid=' + str(numid_part)) #amixer -c 1 cget numid=
                             
@@ -676,7 +787,8 @@ def get_audio_controls():
                             break
                             
                 else:
-                    print("getting audio volume in complex way failed")
+                    if debug:
+                        print(" - get_audio_controls: complex: getting audio volume in complex way failed")
                 
             if control_name == 'mic':
                 control_name = None
@@ -737,52 +849,81 @@ def generate_random_string(length):
 #  A quick scan of the network.
 #
 def avahi_detect_gateways(list_only=False):
-    #print("in avahi_detect_gateways")
-    command = ["avahi-browse","-p","-l","-a","-r","-k","-t"]
+    #print("in avahi_detect_gateways. list_only: " + str(list_only))
+    #command = ["avahi-browse","-p","-l","-a","-r","-k","-t"] # avahi-browse -p -l -a -r -k -t
+    command = ["avahi-browse","--parsable","--all","--ignore-local","--resolve","--no-fail","--no-db-lookup","--terminate"]
+    #command = "avahi-browse --all --resolve --no-db-lookup --parsable --no-fail -t"
     gateway_list = []
     satellite_targets = {}
     try:
-                
-        result = subprocess.run(command, universal_newlines=True, stdout=subprocess.PIPE) #.decode())
-        for line in result.stdout.split('\n'):
+        
+        #print("command: " + str(command))
+        #result = subprocess.run(command, universal_newlines=True, stdout=subprocess.PIPE) #.decode())
+        #avahi_result = subprocess.checkoutput(command, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, shell=True, universal_newlines=True,text=True) # shell=True,
+        
+        
+        avahi_result = subprocess.check_output(command)
+        
+        print(".hex(): " + str(avahi_result.hex() ))
+        
+        encoding = chardet.detect(avahi_result)
+        #print("chardet: encoding: " + str(encoding))
+        output = avahi_result.decode(str(encoding['encoding']),"ignore")
+        #result = result.stdout.decode('utf-16', 'ignore')
+        #result = run_command("avahi-browse --all --resolve --no-db-lookup --parsable --no-fail -t")
+        
+        
+        
+        if avahi_result == None:
+            print("Error, avahi-browse result is None")
+        else:
+            #print("avahi_result was not None")
+            #output = str(avahi_result.stdout)
+            #print("output: " + str(output))
             
-                
-            if  "IPv4;CandleMQTT-" in line:
-                #print(str(line))
-                # get name
-                try:
-                    before = 'IPv4;CandleMQTT-'
-                    after = ';_mqtt._tcp;'
-                    name = line[line.find(before)+16 : line.find(after)]
-                except Exception as ex:
-                    #print("invalid name: " + str(ex))
-                    continue
+            #print("chardet: encoding: " + str(encoding))
+            #result = result.stdout.decode(encoding,"ignore") #.decode(None, 'ignore')
+            #result = output.decode(encoding,"ignore")
+            result = avahi_result.decode(encoding['encoding'],"ignore")
+            
+            print("avahi-browse result: " + str(result))
+            for line in result.split('\n'):
+                if  "IPv4;CandleMQTT-" in line:
+                    #print("avahi_detect_gateways: line: " + str(line))
+                    # get name
+                    try:
+                        before = 'IPv4;CandleMQTT-'
+                        after = ';_mqtt._tcp;'
+                        name = line[line.find(before)+16 : line.find(after)]
+                    except Exception as ex:
+                        #print("avahi_detect_gateways: invalid name: " + str(ex))
+                        continue
                     
-                # get IP
-                #pattern = re.compile(r'(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})')
-                #ip = pattern.search(line)[0]
-                #lst.append(pattern.search(line)[0])
+                    # get IP
+                    #pattern = re.compile(r'(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})')
+                    #ip = pattern.search(line)[0]
+                    #lst.append(pattern.search(line)[0])
 
-                try:
-                    ip_address_list = re.findall(r'(?:\d{1,3}\.)+(?:\d{1,3})', str(line))
-                    #print("ip_address_list = " + str(ip_address_list))
-                    if len(ip_address_list) > 0:
-                        ip_address = str(ip_address_list[0])
-                        if not valid_ip(ip_address):
-                            continue
+                    try:
+                        ip_address_list = re.findall(r'(?:\d{1,3}\.)+(?:\d{1,3})', str(line))
+                        #print("avahi_detect_gateways: ip_address_list = " + str(ip_address_list))
+                        if len(ip_address_list) > 0:
+                            ip_address = str(ip_address_list[0])
+                            if not valid_ip(ip_address):
+                                continue
                     
-                        if ip_address not in gateway_list:
-                            gateway_list.append(ip_address)
-                            satellite_targets[ip_address] = name
+                            if ip_address not in gateway_list:
+                                gateway_list.append(ip_address)
+                                satellite_targets[ip_address] = name
                         
-                except Exception as ex:
-                    pass
-                    #print("no IP address in line: " + str(ex))
+                    except Exception as ex:
+                        pass
+                        #print("avahi_detect_gateways: no IP address in line: " + str(ex))
                     
                
                 
     except Exception as ex:
-        #print("Arp -a error: " + str(ex))
+        print("Caught error in avahi_detect_gateways: " + str(ex))
         pass
         
     if list_only:
@@ -801,7 +942,7 @@ def avahi_detect_gateways(list_only=False):
 
 
 #
-#  A quick scan of the network.
+#  A quick scan of the network. Deprecated.
 #
 
 def arpa_detect_gateways(quick=True):
