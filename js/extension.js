@@ -1067,7 +1067,7 @@
 										console.log("got text chat response: ", nicer_text)
 									}
 								}
-								if(text_reponse_field.innerHTML != nicer_text){
+								if(text_response_field.innerHTML != nicer_text){
 									console.log("got text chat response: ", nicer_text)
 								}
 							}
