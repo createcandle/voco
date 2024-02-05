@@ -262,6 +262,13 @@ def replace_dash_with_minus(match_obj):
     if match_obj.group(1) is not None:
         return match_obj.group(1).replace('-','minus ') #"minus "
 
+
+
+def clean_up_stt_result(sentence):
+    sentence = sentence.strip()
+    sentence = re.sub("[\(\[].*?[\)\]]", "", sentence)
+    return sentence.strip()
+
 def clean_up_string_for_speaking(sentence): # Also used in thing scanner!
     #print("cleaning up: " + str(sentence))
     if len(sentence):
@@ -864,7 +871,7 @@ def avahi_detect_gateways(list_only=False):
         
         avahi_result = subprocess.check_output(command)
         
-        print(".hex(): " + str(avahi_result.hex() ))
+        #print(".hex(): " + str(avahi_result.hex() ))
         
         encoding = chardet.detect(avahi_result)
         #print("chardet: encoding: " + str(encoding))
@@ -886,7 +893,7 @@ def avahi_detect_gateways(list_only=False):
             #result = output.decode(encoding,"ignore")
             result = avahi_result.decode(encoding['encoding'],"ignore")
             
-            print("avahi-browse result: " + str(result))
+            #print("avahi-browse result: " + str(result))
             for line in result.split('\n'):
                 if  "IPv4;CandleMQTT-" in line:
                     #print("avahi_detect_gateways: line: " + str(line))

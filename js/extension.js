@@ -1062,6 +1062,11 @@
 							nicer_text = nicer_text.replace(/\. /g, '\.\<br\/\>');
 						
 							if(this.debug){
+								if(document.getElementById('extension-voco-text-response-field')){
+									if(document.getElementById('extension-voco-text-response-field').innerHTML != nicer_text){
+										console.log("got text chat response: ", nicer_text)
+									}
+								}
 								if(text_reponse_field.innerHTML != nicer_text){
 									console.log("got text chat response: ", nicer_text)
 								}
@@ -1075,7 +1080,9 @@
 							text_response_container.style.display = 'none';
 						}
                     }
-					
+					else{
+						console.error("voco: missing text_response_field");
+					}
 					
 					
 					//pre.innerText = "";
@@ -1189,15 +1196,22 @@
 									console.log("LLM folder size difference: " + str(difference))
 								}
 								dl_indicator_el.innerHTML = "<strong>AI Model</strong><br/>Download speed: " + difference;
-								dl_indicator_el.classList.remove('extension-voco-hidden');
+								if(difference != 0){
+									dl_indicator_el.classList.remove('extension-voco-hidden');
+								}
+								else{
+									dl_indicator_el.classList.add('extension-voco-hidden');
+								}
+								
 							}
 							else{
-								dl_indicator_el.classList.add('extension-voco-hidden')
+								dl_indicator_el.classList.add('extension-voco-hidden');
 							}
 							
 						}
 						catch(e){
 							console.error("Error updating LLM folder size: " + str(ex))
+							dl_indicator_el.classList.add('extension-voco-hidden');
 						}
 						
 					}

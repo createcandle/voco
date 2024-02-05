@@ -145,7 +145,7 @@ class VocoDevice(Device):
                                 },
                                 str(self.adapter.persistent_data['audio_output']))
                                 
-            if len(audio_input_list) > 0:
+            if self.adapter.pipewire_enabled and len(audio_input_list) > 0: # and self.adapter.persistent_data['audio_input'] != None:
                 self.properties["audio_input"] = VocoProperty(
                                 self,
                                 "audio_input",

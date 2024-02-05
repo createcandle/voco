@@ -165,8 +165,8 @@ class VocoAdapter(Adapter):
         #print("Adapter ID = " + self.get_id())
 
 
-        avahi_detect_gateways()
-        return
+        #avahi_detect_gateways()
+        #return
 
 
         self.pipewire_data = {'sinks':{},'sources':{},'default_audio_sink_name':None,'default_audio_sink_nice_name':None,'default_audio_sink_id':None,'default_audio_source_name':None,'default_audio_source_nice_name':None,'default_audio_source_id':None}
@@ -174,7 +174,7 @@ class VocoAdapter(Adapter):
         pipewire_test = run_command('amixer info')
         if pipewire_test != None and 'pipewire' in pipewire_test:
             self.pipewire_enabled = True
-            self.pipewire_data = get_pipewire_audio_controls(True) # True = debug
+            self.pipewire_data = get_pipewire_audio_controls(False) # True = debug
             
         
         #print("self.pipewire_data:" + json.dumps(self.pipewire_data,indent=4))
@@ -214,6 +214,9 @@ class VocoAdapter(Adapter):
         self.llm_tts_enabled = True
         self.llm_tts_minimal_memory = 300
         self.llm_tts_possible = False
+        self.llm_tts_output_device_string = 'Default'
+        self.llm_tts_process = None
+        self.llm_tts_started = False
         
         
         # STT
@@ -221,10 +224,12 @@ class VocoAdapter(Adapter):
         self.llm_stt_minimal_memory = 500
         self.llm_stt_possible = False
         self.llm_stt_done = False
+        self.llm_stt_sentence = ''
         self.llm_stt_always_use = False # EXPERIMENTAL. always let STT figure out the spoken sentence instead of Snips. Slower, but more accurate.
         self.llm_stt_port = 8046
         self.llm_stt_process = None
         self.llm_stt_started = False
+        
         
         self.record_running = False
         self.record = wave.Wave_write
@@ -237,17 +242,22 @@ class VocoAdapter(Adapter):
         
         
         # Assistant
+        self.llm_assistant_enabled = True
         self.assistant_countdown = 0
         self.llm_assistant_minimal_memory = 3000
         self.llm_assistant_possible = False
         self.llm_assistant_started = False
         self.llm_assistant_process = None
         self.llm_assistant_port = 8047
+        self.llm_assistant_name = 'Digital Athena'
         self.last_command_was_answered_by_assistant = False # becomes string of actual last response from assistant
         self.assistant_loop_counter = 0
         self.llm_assistant_response_count = 0
         self.last_assistant_output_change_time = 0
         self.llm_assistant_conversation_seconds_threshold = 30 # If another intent comes it with X seconds after the previous assistant interaction, take it as a strong hint that this is a dialogue to be continued.
+        self.llm_assistant_researcher_was_spotted = True # sometimes assistants don't end a response with the "Researcher:" reverse prompt
+        self.got_assistant_output = False # only briefly becomes true while the assistant is outputting text
+        self.llm_assistant_maximum_no_new_output_duration = 1 # Sometimes an assistant doesn't render the "Researcher:" response. As a fall-back, if the assistant goes quiet for over a second, assume it's done talking.
         
         # Assistant playground
         self.llm_busy_generating = False
@@ -396,8 +406,13 @@ class VocoAdapter(Adapter):
 
 
 
+
         # ASSISTANT MODELS
 
+        # nice comparison or Mistral-based models:
+        # https://www.reddit.com/r/LocalLLaMA/comments/178nf6i/mistral_llm_comparisontest_instruct_openorca/
+        
+        
         self.llm_assistant_models = {
             'Basic':{'model':'voco',
                                 'description':'Do not use any assistant AI. If voice recognition (speech-to-text) it still enabled, that will only be used to atttempt to understand what you said again if it is unclear.',
@@ -416,14 +431,8 @@ class VocoAdapter(Adapter):
                             },
             'Phi 2':{'model':'phi-2.Q4_K_S.gguf',
                                 'size':1650,
-                                'description':'A larger model, made by Microsoft. It was mostly trained on educational textbooks, so it can help with school homework, but might give long-winded answers.',
+                                'description':'A model made by Microsoft. It was mostly trained on educational textbooks, so it can help with school homework, but might give long-winded answers.',
                                 'model_url':'https://huggingface.co/TheBloke/phi-2-GGUF/resolve/main/phi-2.Q4_K_S.gguf'
-                            },
-            'Medicine':{'model':'medicine-llm.Q4_K_S.gguf',
-                                'size':3900,
-                                'developer':True,
-                                'description':'A model designed around medical data. It should speak for itself that this does not replace talking to a real doctor!',
-                                'model_url':'https://huggingface.co/TheBloke/medicine-LLM-GGUF/resolve/main/medicine-llm.Q4_K_S.gguf'
                             },
             'Programming':{'model':'stable-code-3b-Q5_K_M.gguf',
                                 'size':2000,
@@ -431,7 +440,29 @@ class VocoAdapter(Adapter):
                                 'description':'A model designed around writing programming code.',
                                 'model_url':'https://huggingface.co/stabilityai/stable-code-3b/resolve/main/stable-code-3b-Q5_K_M.gguf'
                             },
-                            
+            'Sauerkraut':{'model':'sauerkrautlm-3b-v1.Q4_0.gguf',
+                                'size':2000,
+                                'developer':True,
+                                'description':'A German language model.',
+                                'model_url':'https://huggingface.co/TheBloke/SauerkrautLM-3B-v1-GGUF/resolve/main/sauerkrautlm-3b-v1.Q4_0.gguf'
+                            },
+            'Geitje':{'model':'geitje-7b-chat.Q4_K_M.gguf',
+                                'size':4300,
+                                'developer':True,
+                                'description':'A Dutch language model.',
+                                'model_url': 'https://huggingface.co/TheBloke/GEITje-7B-chat-GGUF/resolve/main/geitje-7b-chat.Q4_K_M.gguf'
+                            },
+            'Medicine':{'model':'medicine-llm.Q4_K_S.gguf',
+                                'size':3900,
+                                'developer':True,
+                                'description':'A model designed around medical data. It should speak for itself that this does not replace talking to a real doctor!',
+                                'model_url':'https://huggingface.co/TheBloke/medicine-LLM-GGUF/resolve/main/medicine-llm.Q4_K_S.gguf'
+                            },
+            'Mistral 7b instruct':{'model':'mistral-7b-instruct-v0.2.Q5_K_M.gguf',
+                                'size':5100,
+                                'description':'A popular higher quality model which needs a lot of memory to run.',
+                                'model_url': 'https://huggingface.co/TheBloke/Mistral-7B-Instruct-v0.2-GGUF/resolve/main/mistral-7b-instruct-v0.2.Q5_K_M.gguf'
+                            },
             'Custom':{'model':'custom',
                              'developer':False,
                              'description':'You can provide a link to a .GUFF voice model of your choice in the addon settings, and Voco will download it for you. You will need to make sure there is enough available disk space and memory yourself.',
@@ -601,15 +632,24 @@ class VocoAdapter(Adapter):
             if 'audio_output' not in self.persistent_data:
                 print("audio_output was not in persistent data, adding it now: " + str(self.audio_controls[0]['human_device_name']))
                 self.persistent_data['audio_output'] = str(self.audio_controls[0]['human_device_name'])
-            
-            
-            if 'audio_input' not in self.persistent_data:
-                print("audio_input was not in persistent data, adding it now: " + str(self.pipewire_data['audio_source_nice_name']))
-                self.persistent_data['audio_input'] = str(self.pipewire_data['audio_source_nice_name'])
-                
-        except:
-            print("Error fixing audio_output in persistent data. Falling back to headphone jack.")
+        except Exception as ex:
+            print("Error fixing audio output in persistent data: " + str(ex))
             self.persistent_data['audio_output'] = 'Built-in headphone jack'
+            
+        try:
+            if 'audio_input' not in self.persistent_data:
+                
+                if 'audio_source_nice_name' in self.pipewire_data:
+                    print("audio_input was not in persistent data, adding it now: " + str(self.pipewire_data['audio_source_nice_name']))
+                    self.persistent_data['audio_input'] = str(self.pipewire_data['audio_source_nice_name'])
+                else:
+                    print("no audio_source_nice_name in pipewire_data. No microphone?")
+                    self.persistent_data['audio_input'] = None
+        except Exception as ex:
+            print("Error fixing audio input in persistent data: " + str(ex))
+            self.persistent_data['audio_input'] = None
+        
+        print("\n self.persistent_data['audio_input']: " + str(self.persistent_data['audio_input']))
         
         
         try:
@@ -952,9 +992,12 @@ class VocoAdapter(Adapter):
         self.llm_data_dir_path = os.path.join(self.data_dir_path, 'llm')
         
         # TTS
+        self.llm_piper_path = os.path.join(self.addon_dir_path,'llm','tts', 'piper')
+        self.llm_tts_espeak_dir_path = os.path.join(self.addon_dir_path,'llm','tts','espeak-ng-data') # sic
         self.llm_tts_dir_path = os.path.join(self.llm_data_dir_path, 'tts')
         self.llm_tts_cache_dir_path = os.path.join(self.llm_data_dir_path, 'tts_cache')
-        self.llm_tts_espeak_dir_path = os.path.join(self.addon_dir_path,'llm','tts','espeak-ng-data') # sic
+        
+        
         
         if not os.path.isdir(str(self.llm_tts_dir_path)):
             os.system('mkdir -p ' + str(self.llm_tts_dir_path))
@@ -1369,9 +1412,6 @@ class VocoAdapter(Adapter):
                 print("error setting initial audio_output settings: " + str(ex))
             
             
-        
-        
-        
         # Set the correct initial speaker and microphone gain volume
         try:
             if self.DEBUG:
@@ -2493,11 +2533,13 @@ class VocoAdapter(Adapter):
             output_device_string = "plughw:" + str(self.current_card_id) + "," + str(self.current_device_id)
             if output_to_bluetooth:
                 output_device_string = "bluealsa:DEV=" + str(self.persistent_data['bluetooth_device_mac'])
-        
-        
+            if self.pipewire_enabled == False and output_device_string != self.llm_tts_output_device_string:
+                if self.DEBUG:
+                    print("restarting TTS process with changed output_device_string: " + str(output_device_string))
+                self.start_llm_tts()
             # echo "One moment" | /home/pi/.webthings/addons/voco/llm/tts/piper --model /home/pi/.webthings/data/voco/llm/tts/en_US-lessac-medium.onnx --espeak_data /home/pi/.webthings/addons/voco/llm/tts/espeak-ng-data --sentence_silence 1 -f /home/pi/.webthings/data/voco/llm/tts/cache/one_moment.wav
         
-            piper_path = os.path.join(self.addon_dir_path,'llm','tts', 'piper')
+            #piper_path = os.path.join(self.addon_dir_path,'llm','tts', 'piper')
             #tts_command = 'echo "' + str(voice_message) + '" | ' + str(piper_path) + ' --model ' + str(self.llm_tts_model) + ' -f ' + str(cached_response_file_path)# + ' --espeak_data ' + str(self.llm_tts_espeak_dir_path)
             #if self.DEBUG:
             #    print("tts_command: " + str(tts_command))
@@ -2509,7 +2551,7 @@ class VocoAdapter(Adapter):
                 
                 cached_response_file_path = os.path.join(self.llm_tts_cache_dir_path,potential_cached_name + '.wav')
                 if not os.path.exists(cached_response_file_path):
-                    tts_command = 'echo "' + str(voice_message) + '" | ' + str(piper_path) + ' --model ' + str(self.llm_models['tts']['active']) + ' -f ' + str(cached_response_file_path)
+                    tts_command = 'echo "' + str(voice_message) + '" | ' + str(self.llm_piper_path) + ' --model ' + str(self.llm_models['tts']['active']) + ' -f ' + str(cached_response_file_path)
                     #tts_command += ' -f ' + str(cached_response_file_path) # --sentence_silence 1
                     if self.DEBUG:
                         print("Attempting to create cached TTS response.  tts_command:  " + str(tts_command))
@@ -2520,17 +2562,27 @@ class VocoAdapter(Adapter):
                 self.play_wav(cached_response_file_path)
                 
             else:
-                if self.pipewire_enabled:
-                    #tts_command = 'echo "' + str(voice_message) + '" | ' + str(piper_path) + ' --model ' + str(self.llm_models['tts']['active']) + ' --output-raw --sentence_silence .5 | aplay -r 22050 -f S16_LE -t raw -' # 
-                    tts_command = 'echo "' + str(voice_message) + '" | ' + str(piper_path) + ' --model ' + str(self.llm_models['tts']['active']) + ' --output-raw --sentence_silence .5 | aplay -r ' + str(self.sample_rate) + ' -f S16_LE -t raw -' # 
-                else:
-                    tts_command = 'echo "' + str(voice_message) + '" | ' + str(piper_path) + ' --model ' + str(self.llm_models['tts']['active']) + ' --output-raw --sentence_silence .5 | aplay -D ' + str(output_device_string) + ' -r 22050 -f S16_LE -t raw -' # 
-                if self.DEBUG:
-                    print("\n\nVOCO LLM TTS COMMAND: " + str(tts_command))
-                subprocess.run(tts_command, capture_output=False, shell=True, check=False, encoding=None, errors=None, text=None, env=None, universal_newlines=None, stdout=subprocess.DEVNULL)
+                if self.llm_tts_process == None or (self.llm_tts_process != None and self.llm_tts_process.poll() != None):
+                    if self.DEBUG:
+                        print("LLM TTS Process needs to be (re)started first")
+                    self.start_llm_tts()
                 
-            #tts_command = "echo '" + str(voice_message) + "' | " + str(piper_path) + " --model " + str(self.llm_tts_model) + " --output-raw | aplay -D " + str(output_device_string) + " -r 22050 -f S16_LE -t raw -"
-            
+                if self.llm_tts_process.poll() == None:
+                    if self.DEBUG:
+                        print("LLM TTS Process is running")
+                    json_voice_message = '{ "text": "' + str(voice_message) + '" }\n'
+                    if self.DEBUG:
+                        print("piping json into Piper: " + str(json_voice_message))
+                    self.llm_tts_process.stdin.write(json_voice_message)
+                    self.llm_tts_process.stdin.flush()
+                    #sleep(1)
+                    if self.DEBUG:
+                        print("Piped into piper\n")
+                    #self.start_llm_tts()
+                    
+                else:
+                    if self.DEBUG:
+                        print("ERROR, LLM TTS Process still isn't running properly")
             
                 
         
@@ -2549,6 +2601,14 @@ class VocoAdapter(Adapter):
     def speak_thread(self, voice_messages_queue):
         if self.DEBUG:
             print("in speak_thread")
+            
+        self.check_available_memory()
+        
+        #if self.llm_enabled and self.llm_tts_enabled and self.free_memory > self.llm_tts_minimal_memory:
+        #    if self.DEBUG:
+        #        print("pre-starting LLM TTS process")
+        #    self.start_llm_tts()
+            
         while self.running:
 
             voice_message = ""
@@ -2875,7 +2935,10 @@ class VocoAdapter(Adapter):
             print("In mute. current_control_name: " + str(self.current_control_name))
             
         if self.pipewire_enabled:
-            #run_command('wpctl set-volume @DEFAULT_AUDIO_SOURCE@ 0%')
+            if self.DEBUG:
+                print("doing mute via pipewire")
+            #run_command('wpctl set-volume @DEFAULT_AUDIO_SINK@ 0%')
+            
             self.currently_muted = True
         elif str(self.current_control_name) != "" and str(self.persistent_data['audio_output']) != 'Bluetooth speaker':
             if self.currently_muted == False:
@@ -2910,6 +2973,7 @@ class VocoAdapter(Adapter):
             
         if self.pipewire_enabled:
             #self.set_system_volume_level()
+            run_command('wpctl set-volume @DEFAULT_AUDIO_SINK@ ' + str(self.system_volume_percentage) + '%')
             self.currently_muted = False
         else:
             if str(self.current_control_name) != "" and str(self.persistent_data['audio_output']) != 'Bluetooth speaker':
@@ -4802,6 +4866,8 @@ class VocoAdapter(Adapter):
                 print("textCaptured payload: " + str(payload))
             
             if self.record_running:
+                if self.DEBUG:
+                    print("textCaptured: record_running was true, calling self.stop_recording.")
                 self.stop_recording()
             else:
                  if self.DEBUG:
@@ -4871,23 +4937,28 @@ class VocoAdapter(Adapter):
             if self.DEBUG:
                 print("\nPARSED INTENT RECEIVED:")
                 print(str(payload))
-            if self.llm_stt_always_use and 'id' in payload and 'fafafafa' in payload['id']:
+            if 'id' in payload and payload['id'].endswith('fafafafa'): # self.llm_stt_always_use and
                 if self.DEBUG:
                     print("..correction.. PARSED LLM TTS INTENT RECEIVED")
                 self.intent_received = True
                 
-                intent_name = os.path.basename(os.path.normpath(msg.topic))
-                if self.DEBUG:
-                    print("intent_name: " + str(intent_name))
+                # close the second session that was started for this intent parsing
+                
+                
+                #intent_name = os.path.basename(os.path.normpath(msg.topic))
+                #if self.DEBUG:
+                #    print("intent_name: " + str(intent_name))
                 intent_message = json.loads(msg.payload.decode("utf-8"))
                 intent_message['origin'] = 'voice'
+                #intent_message['destination'] = 'voice'
                 intent_message['siteId'] = self.persistent_data['site_id']
                 if self.DEBUG:
                     print("\n$\n$\n$\n")
                     print(json.dumps(intent_message, indent=4, sort_keys=True))
                     print("\n$\n$\n$\n")
-                    print("sending intent message to master_intent_callback")
-                    
+                    print("sending fafafafa intent message to master_intent_callback")
+                
+                self.mqtt_client.publish('hermes/dialogueManager/endSession', json.dumps({"text": "", "sessionId": intent_message['sessionId']}))    
                 self.master_intent_callback(intent_message)
             else:
                 if self.DEBUG:
@@ -4895,8 +4966,8 @@ class VocoAdapter(Adapter):
         
         elif msg.topic.startswith('hermes/nlu/intentNotRecognized'):
             if self.DEBUG:
-                print("interesting, an intent was not detected")
-            if self.llm_stt_always_use and 'id' in payload and 'fafafafa' in payload['id']:
+                print("\ninteresting, received MQTT message at nlu/intentNotRecognized\n")
+            if 'id' in payload and payload['id'].endswith('fafafafa'): # self.llm_stt_always_use and
                 self.intent_received = True
                 if 'input' in payload:
                     if self.llm_enabled and self.llm_assistant_enabled and self.llm_assistant_started:
@@ -4905,8 +4976,11 @@ class VocoAdapter(Adapter):
                 if self.DEBUG:
                     print("\n\nNOTE: this may be an opportunity to send the text to the assistant.")
                     print("- payload: " + str(payload))
-        
-        
+                if self.llm_enabled and self.llm_assistant_enabled and self.llm_assistant_started:
+                    if self.llm_stt_sentence != '':
+                        self.ask_ai_assistant(self.llm_stt_sentence)
+                    #else:
+                    #    self.ask_ai_assistant(payload['input'])
         
         if msg.topic.startswith('hermes/injection/perform'):
             
@@ -4954,8 +5028,14 @@ class VocoAdapter(Adapter):
             
             if msg.topic.endswith('/detected'):
                 self.intent_received = False # Used to create a 'no voice input received' sound effect if no intent was heard.
+                #self.llm_stt_done = False
+                self.llm_stt_sentence = ''
+                
                 if self.DEBUG:
                     print("(...) Hotword detected")
+                
+                # pre-load TTS
+                self.start_llm_tts()
                 
                 if 'siteId' in payload:
                     #print("site_id was in hotword detected payload: " + str(payload['siteId']))
@@ -4964,7 +5044,7 @@ class VocoAdapter(Adapter):
                             if self.DEBUG:
                                 print("I should play a detected sound")
                     
-                            if payload['siteId'].endsWith(self.persistent_data['site_id']):
+                            if payload['siteId'].endswith(self.persistent_data['site_id']):
                                 self.assistant_countdown = 0
                     
                             if self.persistent_data['feedback_sounds'] == True:
@@ -5641,7 +5721,7 @@ class VocoAdapter(Adapter):
                 
                 self.intent_received = True # Used to create a 'no voice input received' sound effect if no intent was heard.
                 if self.DEBUG:
-                    print("-----------------------------------")
+                    print("\n----------------------------------- I N T E N T ----------------------------")
                     print(">> Received intent message.")
                     print("message received: "  + str(msg.payload.decode("utf-8")))
                     print("message topic: " + str(msg.topic))
@@ -5650,7 +5730,8 @@ class VocoAdapter(Adapter):
                 if self.DEBUG:
                     print("intent_name: " + str(intent_name))
                 intent_message = json.loads(msg.payload.decode("utf-8"))
-
+                if 'siteId' in intent_message:
+                    print("siteId: " + str(intent_message['siteId']))
 
                 # remove the 'hack' that indicated the voice analysis actually started from a text input.
                 if 'siteId' in intent_message:
@@ -5682,13 +5763,15 @@ class VocoAdapter(Adapter):
                         
                         if intent_message['siteId'] == self.persistent_data['site_id']: # and self.persistent_data['is_satellite']
                             if self.DEBUG:
-                                print("mqtt /hermes/intent: brute-force end the existing session")
+                                print("mqtt /hermes/intent: brute-force end the existing session") #  (NO,TEMPORARILY DISABLED)
                             # Brute-force end the existing session
                             try:
                                 # TODO: TEMPORARILY DISABLED
+                                
                                 self.mqtt_client.publish('hermes/dialogueManager/endSession', json.dumps({"text": "", "sessionId": intent_message['sessionId']}))
-                                if self.DEBUG:
-                                    print("ending Snips session")
+                                self.mqtt_client.publish('hermes/dialogueManager/endSession', json.dumps({"text": "", "sessionId": str(self.current_snips_session_id)}))
+                                #if self.DEBUG:
+                                #    print("ending Snips session")
                             except Exception as ex:
                                 print("error ending session: " + str(ex))
                                 
@@ -6102,11 +6185,11 @@ class VocoAdapter(Adapter):
             if session_id == None and self.current_snips_session_id != '':
                 session_id = self.current_snips_session_id
 
-            query_id = 'b3faa0ff-39e8-4a23-9a12-d918fafafafa', #8e0e
+            query_id = 'b3faa0ff-39e8-4a23-9a12-d918fafafafa' #8e0e
             
             query = {
                     "input": str(sentence),
-                    "id": str(query_id),
+                    "id": query_id,
                     "sessionId": str(self.current_snips_session_id),
                     "customData": "This_is_a_custom_data_test"
                 }
@@ -6128,6 +6211,8 @@ class VocoAdapter(Adapter):
                 print("")
             
             query['asrTokens'] = fake_tokens
+            if self.DEBUG:
+                print("Publishing this to hermes/nlu/query: " + str(json.dumps( query,indent=4))) 
             self.mqtt_client.publish("hermes/nlu/query",json.dumps( query ))
             #if self.last_text_command != "":
                 # {"text":self.last_text_command,"likelihood":1.0,"tokens":fake_tokens,"seconds":float(at_word),"siteId":payload['siteId'],"sessionId":str(payload['sessionId'])}
@@ -6214,7 +6299,15 @@ class VocoAdapter(Adapter):
                 #return
             
             elif best_confidence_score > self.confidence_score_threshold:
-                all_possible_intents.append(most_likely_intent)
+                if self.llm_assistant_started and most_likely_intent == 'get_time' and 'time' not in sentence and best_confidence_score < 0.9:
+                    if self.DEBUG:
+                        print("Skipping testing get_time intent that doesn't have the word 'time' in it because the assistant is running")
+                else:
+                    if self.persistent_data['is_satellite'] and alt_intent_name in ['get_time','set_timer','get_timer_count','list_timers','stop_timer']:
+                        if self.DEBUG:
+                            print("SATELLITE: master_intent_callback: NOT HANDLING most likely timer-related intent") # TODO: even though doing so would make sense..
+                    else:
+                        all_possible_intents.append(most_likely_intent)
             
             if 'alternatives' in intent_message:
                 index = 0
@@ -6225,14 +6318,21 @@ class VocoAdapter(Adapter):
                         print("\nconfidenceScore: " + str(intent_message['alternatives'][index]['confidenceScore']) + ' -> ' + str(alt_intent_name))
                     if intent_message['alternatives'][index]['confidenceScore'] > self.confidence_score_threshold:
                         
-                        if alt_intent_name != 'None':
+                        if self.llm_assistant_started and alt_intent_name == 'get_time' and 'time' not in sentence and best_confidence_score < 0.9:
+                            if self.DEBUG:
+                                print("Skipping get_time intent that doesn't have the word 'time' in it because the assistant is running")
+                        elif alt_intent_name != 'None':
                             if self.persistent_data['is_satellite'] and alt_intent_name in ['get_time','set_timer','get_timer_count','list_timers','stop_timer']:
                                 if self.DEBUG:
-                                    print("SATELLITE: master_intent_callback: NOT HANDLING alt TIMERS")
+                                    print("SATELLITE: master_intent_callback: NOT HANDLING alt TIMERS") # TODO: but handling them if the most likely intent??
                             else:
                                 if self.DEBUG:
-                                    print(" -  addind to list of intents to test")
+                                    print(" -  adding to list of intents to test")
                                 all_possible_intents.append( alt_intent_name )
+                        else:
+                            if self.DEBUG:
+                                print("Strange, intent is None?")
+                                
                     else:
                         if self.DEBUG:
                             print(" - alternative intent had a too low probability")
@@ -6840,7 +6940,7 @@ class VocoAdapter(Adapter):
                         found_thing_on_satellite = True
                     else:
                         if self.DEBUG:
-                            print("Vague match, so NOT setting found_thing_on_satellite to True") # TODO: eh?
+                            print("Vague or no match, so NOT setting found_thing_on_satellite to True") # TODO: eh?
                 
                     # Check if the satellite should handle this thing.
                     if self.DEBUG:
@@ -6920,6 +7020,7 @@ class VocoAdapter(Adapter):
                                     print("didn't find any matching properties in the final intent test. Giving up.")
                                 voice_message = "Sorry, I couldn't find a match. "
                                 #self.speak("Sorry, I couldn't find a match. ",intent=intent_message)
+                            #if not self.llm_assistant_started:
                             break #return
                         #else:
                         #    continue
@@ -6961,7 +7062,9 @@ class VocoAdapter(Adapter):
             if voice_message == "":
                 if self.DEBUG:
                     print("voice message was empty string")
-                if final_test:
+                if not final_test:
+                    if self.DEBUG:
+                        print("- empty string, and not final test, so doing continue")
                     continue
                 elif  self.persistent_data['is_satellite']:
                     if self.DEBUG:
@@ -6981,6 +7084,8 @@ class VocoAdapter(Adapter):
                 
             elif voice_message.startswith('Sorry'):
                 if final_test == False:
+                    if self.DEBUG:
+                        print("Voice message starts with 'Sorry'. But this is not yet the final test. Doing 'continue'.")
                     continue
             else:
                 if self.DEBUG:
@@ -7011,7 +7116,7 @@ class VocoAdapter(Adapter):
             # The for-loop was existed with a break. This can be good or bad.
             #pass
             
-        if first_test == True:
+        if first_test == True and len(all_possible_intents) > 1:
             if self.DEBUG:
                 print("hole in one")
             
@@ -7038,10 +7143,21 @@ class VocoAdapter(Adapter):
                 if self.llm_enabled and (voice_message == '' or voice_message.startswith("Sorry, I don't understand") or voice_message.startswith("Sorry, I couldn't find a match")) and self.llm_assistant_started and best_confidence_score != 1:
                     if self.DEBUG:
                         print("The final message was 'Sorry, I don't understand', so the AI assistant can take a shot at it")
-                
+                        try:
+                            print(" - intent_message: " + str(intent_message))
+                            #print(" - intent_message['siteId']: " + str(intent_message['siteId']))
+                            #print(" - intent_message['origin']: " + str(intent_message['origin']))
+                        except Exception as ex:
+                            print("Error showing final message choice details: " + str(ex))
+                            
                     if self.llm_stt_always_use == True or intent_message['siteId'].startswith('llm_stt-'):
                         if self.DEBUG:
                             print("an intent that was based on LLM STT fell through, so it can be routed directly to the assistant")
+                        self.ask_ai_assistant(sentence,intent=intent_message)
+                        
+                    elif 'id' in intent_message and intent_message['id'].endswith('fafafafa'):
+                        if self.DEBUG:
+                            print("spotted a retried intent query. It's sentence will be routed directly to the assistant")
                         self.ask_ai_assistant(sentence,intent=intent_message)
                         
                     elif isinstance(intent_message,dict) and 'origin' in intent_message and intent_message['origin'] != 'voice':
@@ -7065,6 +7181,9 @@ class VocoAdapter(Adapter):
                             #self.ask_ai_assistant(sentence,intent_message)
                         self.speak("One moment",intent=intent_message)
                         self.try_again_via_assistant = True
+                    else:
+                        if self.DEBUG:
+                            print("\nERROR, This should not happen.\n")
                 
                     if self.DEBUG:
                         print("\n⏰\nSTOPWATCH: + " + str(time.time() - self.llm_stt_stopwatch) + ', ' + str(time.time() - self.llm_stt_stopwatch_start))
@@ -9777,13 +9896,16 @@ class VocoAdapter(Adapter):
             self.recording_state = 0
             self.record_running = False
             self.mqtt_client.unsubscribe(self.audio_frame_topic)
-            self.record.close()
+            try:
+                self.record.close()
             
-            # TODO: potentially pad the recording with some silence
-            # https://superuser.com/questions/579008/add-1-second-of-silence-to-audio-through-ffmpeg
-            # ffmpeg -i jfk-short.wav -af "apad=pad_dur=1" jfk-padded.wav
+                # TODO: potentially pad the recording with some silence
+                # https://superuser.com/questions/579008/add-1-second-of-silence-to-audio-through-ffmpeg
+                # ffmpeg -i jfk-short.wav -af "apad=pad_dur=1" jfk-padded.wav
             
-            self.llm_stt()
+                self.llm_stt()
+            except Exception as ex:
+                print("Error closing audio recording: " + str(ex))
         else:
             print("\n\nERROR, in stop_recording, but self.recording_state is not 2. It is: " + str(self.recording_state))
             if self.record_running:
@@ -9916,6 +10038,121 @@ class VocoAdapter(Adapter):
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+    # start long running TTS process
+    def start_llm_tts(self,restart=False):
+        if self.DEBUG:
+            print("in start_llm_tts")
+        
+        if self.llm_models['tts']['active'] == None:
+            if self.DEBUG:
+                print("\n\nERROR, tts active model was still None. Aborting.")
+            return
+        
+        if self.llm_tts_process != None and self.llm_tts_process.poll() == None:
+            if self.DEBUG:
+                print("\n\nTTS PROCESS ALREADY RUNNING\n\n")
+            if restart == False:
+                return
+            else:
+                if self.DEBUG:
+                    print("\n\RESTARTING TTS. STOPPING IT FIRST\n\n")
+            os.kill(self.llm_tts_process.pid, signal.SIGINT)
+            #os.killpg(os.getpgid(self.llm_assistant_process.pid), signal.SIGHUP)
+            #os.killpg(os.getpgid(self.llm_assistant_process.pid), signal.SIGTERM)
+            time.sleep(.1)
+            
+            if self.llm_tts_process.poll() == None:
+                if self.DEBUG:
+                    print("\n\nERROR, LLM TTS PROCESS IS STILL ALIVE\n\n")
+                
+                try: 
+                    outs, errs = self.llm_tts_process.communicate(timeout=3)
+                except TimeoutExpired:
+                    if self.DEBUG:
+                        print("LLM TTS PROCESS COMMUNICATE TIMED OUT")
+                    self.llm_tts_process.kill()
+                    outs, errs = self.llm_tts_process.communicate(timeout=1)
+                
+            else:
+                if self.DEBUG:
+                    print("LLM TTS PROCESS SEEMS TO HAVE STOPPED PROPERLY")
+                self.llm_tts_process = None
+                
+        #os.system('pkill -f piper')
+        
+        
+        # actually start Piper        
+        
+        if self.llm_enabled and self.llm_tts_enabled and self.free_memory > self.llm_tts_minimal_memory:
+            my_env = os.environ.copy()
+        
+            # speed of voice can be controlled too with
+            # --length_scale 1.0
+        
+            tts_command = [
+                str(self.llm_piper_path),
+                "--model",
+                str(self.llm_models['tts']['active']),
+                "--json-input",
+                "--server",
+                "--output-raw",
+                "--sentence_silence",
+                "0.1",
+                "|",
+                "aplay"
+            ]
+        
+            if self.pipewire_enabled == False:
+                if self.DEBUG:
+                    print("No pipewire, so adding device parameter to Piper: " + str(self.llm_tts_output_device_string))
+                tts_command = tts_command + ["-D",str(self.llm_tts_output_device_string)]
+        
+            tts_command_part2 = [
+                "-r"
+                "22050",
+                "-f"
+                "S16_LE",
+                "-t",
+                "raw",
+                "-"
+            ]
+            tts_command = tts_command + tts_command_part2
+        
+            tts_command = ' '.join(tts_command)
+            if self.DEBUG:
+                print("tts_command: " + str(tts_command))
+        
+            self.llm_tts_process = Popen(tts_command, env=my_env, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,bufsize=1,shell=True) # ,preexec_fn=os.setsid
+            if self.llm_tts_process.poll() == None:
+                if self.DEBUG:
+                    print("LLM TTS PROCESS STARTED SUCCESFULLY")
+                self.llm_tts_started = True
+
+            else:
+                if self.DEBUG:
+                    print("ERROR, LLM TTS PROCESS FAILED TO START")
+                self.llm_tts_started = False
+        else:
+            if self.DEBUG:
+                print("ERROR,LLM TTS PROCESS NOT STARTED (disabled or not enough memmory)")
+            self.llm_tts_started = False
+
+
+
+
+
 #
 #  LLM STT
 #
@@ -9947,7 +10184,7 @@ class VocoAdapter(Adapter):
                     print("llm_stt_possible, DOING SPEECH TO TEXT on: " + str(self.last_recording_path))
                 self.llm_stt_skipped = False
                 self.llm_stt_done = False
-                
+                self.llm_stt_sentence = ''
                 #if self.llm_stt_always_use:
                 #    self.intent_received = True
                 
@@ -9979,9 +10216,9 @@ class VocoAdapter(Adapter):
                     print(" - - self.try_again_via_stt: " + str(self.try_again_via_stt))
                     print(" - - self.try_again_via_assistant: " + str(self.try_again_via_assistant))
                     
-                if stt_result == None or stt_result == '':
+                if stt_result == None:
                     if self.DEBUG:
-                        print("STT output was None or empty string\n\n")
+                        print("STT output was None\n\n")
                     if self.llm_stt_always_use:
                         self.speak("Sorry, I don't understand",intent=intent)
                     return
@@ -9990,6 +10227,16 @@ class VocoAdapter(Adapter):
                     data = json.loads(stt_result)
                     if 'text' in data:
                         stt_output = data['text']
+                    
+                        if stt_output == '':
+                            if self.DEBUG: # or self.llm_stt_always_use:
+                                self.speak("Sorry, I heard nothing",intent=intent)
+                            self.send_pairing_prompt( "AI heard nothing")
+                            return
+                            
+                        stt_output = clean_up_stt_result(stt_output)
+                        self.llm_stt_sentence = stt_output
+                            
                     
                         if '[' in stt_output:
                             if self.DEBUG:
@@ -10006,8 +10253,6 @@ class VocoAdapter(Adapter):
                             print("llm_stt: pairing_prompt: AI heard: " + str(stt_output))
                             self.send_pairing_prompt( "AI heard: " + str(stt_output) )
                         
-                        
-                        
                         if self.llm_stt_always_use:
                             if self.DEBUG:
                                 print("\nllm_stt: llm_stt_always_use is true, so calling query_intent");
@@ -10023,7 +10268,7 @@ class VocoAdapter(Adapter):
                             
                         elif self.try_again_via_stt:
                             if self.DEBUG:
-                                print(" - > retrying with LLM STT output using parse_text")
+                                print(" - > retrying with LLM STT output using query_intent()")
                             self.try_again_via_stt = False
                             self.last_text_command = str(stt_output)
                             #self.parse_text(site_id=self.persistent_data['site_id'],origin="llm_stt")
@@ -10132,7 +10377,7 @@ class VocoAdapter(Adapter):
                     
                     elif self.llm_assistant_response_count > 2 and (time.time() - 60) > self.last_assistant_output_change_time:
                         if self.DEBUG:
-                            print("\nLLM servers thread: attemping to restart assistant process\n")
+                            print("\no\noo\nooo\nLLM servers thread: attemping to restart assistant process\nooo\noo\no\n")
                         self.llm_assistant_started = False
                         self.last_assistant_output_change_time = time.time()
                         self.start_ai_assistant()
@@ -10146,7 +10391,7 @@ class VocoAdapter(Adapter):
         if self.DEBUG:
             print("in start_ai_assistant")
 
-        if self.llm_assistant_process != None and self.llm_assistant_process.poll == None:
+        if self.llm_assistant_process != None and self.llm_assistant_process.poll() == None:
             if self.DEBUG:
                 print("\n\nASSISTANT ALREADY RUNNING, STOPPING IT FIRST\n\n")
             os.kill(self.llm_assistant_process.pid, signal.SIGINT)
@@ -10154,11 +10399,11 @@ class VocoAdapter(Adapter):
             os.killpg(os.getpgid(self.llm_assistant_process.pid), signal.SIGTERM)
             time.sleep(1)
             
-            if self.llm_assistant_process.poll == None:
+            if self.llm_assistant_process.poll() == None:
                 if self.DEBUG:
                     print("\n\nERROR, AI ASSISTANT PROCESS IS STILL ALIVE\n\n")
                 
-                try:
+                try: 
                     outs, errs = self.llm_assistant_process.communicate(timeout=3)
                 except TimeoutExpired:
                     if self.DEBUG:
@@ -10173,12 +10418,20 @@ class VocoAdapter(Adapter):
                 
         os.system('pkill -f llamafile')
         
+        
+        if self.persistent_data['is_satellite'] == True:
+            if self.DEBUG:
+                print("aborting start_ai_assistant: this device is (now) a satellite") # TODO: in the future, if the satellite is powerful enough, why not let it run a local assistant?
+            return
+        
+        
         my_env = os.environ.copy()
         
         with open(self.llm_assistant_output_file_path, "w") as myfile:
             myfile.write("")
         self.last_assistant_output_change_time = time.time()
         self.llm_assistant_response_count = 0
+        self.llm_assistant_researcher_was_spotted = True
         
         #"sh",
         #    "-c",
@@ -10190,7 +10443,7 @@ class VocoAdapter(Adapter):
             "-m",
             str(self.llm_models['assistant']['active']),
             "-p",
-            "'The following is a conversation between a curious Researcher and their helpful AI assistant called Candle which is a large language model trained on the sum of human knowledge. Researcher: What is the capital of Germany?. Candle: Berlin is the capital of Germany. Researcher:'",
+            "'The following is a conversation between a curious Researcher and their helpful AI assistant called " + str(self.llm_assistant_name) + ", which is a large language model trained on the sum of human knowledge. \n\n Researcher: What is the capital of Germany? \n" + str(self.llm_assistant_name) +": Berlin is the capital of Germany. \nResearcher:'",
             "--interactive",
             #"--simple-io",
             "--batch_size",
@@ -10208,11 +10461,11 @@ class VocoAdapter(Adapter):
             "' '",
             "--interactive-first",
             "--in-suffix",
-            "'Candle:'",
+            "'" + str(self.llm_assistant_name) + ":'",
             "--reverse-prompt",
             "'Researcher:'"
         ]
-        
+        # "--silent-prompt",
 
         #"--prompt-cache",
         #str(self.llm_assistant_prompt_cache_path),
@@ -10269,7 +10522,7 @@ class VocoAdapter(Adapter):
                 "system_prompt": {
                     "prompt": "Transcript of a never ending dialog, where the User interacts with an Assistant.\nThe Assistant is helpful, kind, honest, good at writing, and never fails to answer the User's requests immediately and with precision.\nUser: What is the capital of Germany?\nAssistant: Berlin.\nUser: Who is Richard Feynman?\nAssistant: Richard Feynman was an American physicist who is best known for his work in quantum mechanics and particle physics.\nUser:",
                     "anti_prompt": "Researcher:",
-                    "assistant_name": "Assistant:"
+                    "assistant_name": str(self.llm_assistant_name) + ":"
                 }
             }
 
@@ -10461,6 +10714,7 @@ class VocoAdapter(Adapter):
         self.try_again_via_stt = False
         self.try_again_via_assistant = False
         
+        self.mqtt_client.publish('hermes/dialogueManager/endSession', json.dumps({"text": "", "sessionId": str(self.current_snips_session_id)}))
         
         try:
             #if self.llm_assistant_started and self.openai_client != None and self.llm_assistant_process != None and voice_message != None and len(voice_message) > 4:
@@ -10468,12 +10722,24 @@ class VocoAdapter(Adapter):
                 #self.llm_assistant_process.stdin.write(voice_message + '\n')
                 #self.llm_assistant_process.stdin.flush()
                 voice_message = voice_message.strip()
+                original_voice_message = voice_message
+                
+                if voice_message == 'Hello, I am listening.':
+                    if self.DEBUG:
+                        print("heard 'Hello, I am listening', aborting STT.")
+                    return
+                
                 if not voice_message.endswith('?'):
                     if voice_message.endswith('.') or voice_message.endswith("!"):
                         voice_message = voice_message[:-1]
                     voice_message = voice_message + "?"
                     
-                voice_message = voice_message + "\n"
+                voice_message = " " + voice_message + "\n"
+                
+                if self.llm_assistant_researcher_was_spotted == False:
+                    if self.DEBUG:
+                        print("ask_ai_assistant: WARNING\n -> Adding missing 'Researcher: ' to beginning of voice message\n") # experiment
+                    voice_message = '\nResearcher:' + voice_message
                 if self.DEBUG:
                     print("to stdin: " + str(voice_message))
                 
@@ -10524,26 +10790,44 @@ class VocoAdapter(Adapter):
                         #    time.sleep(0.0025)
                             
                         self.llm_assistant_response_count += 1
-                            
+                        
+                        self.got_assistant_output = False    
                         already_sent_sentences = []
-                            
+                        repeated_the_question = False
+                        self.llm_assistant_researcher_was_spotted = False
+                        
+                        
                         if self.DEBUG:
                             print("STARTING COUNTDOWN")
+                        self.last_assistant_output_change_time = os.stat('/tmp/assistant_output.txt').st_mtime
                         for self.assistant_countdown in range(120, 1,-1):
                             if self.DEBUG:
                                 print(self.assistant_countdown)
                             sleep(.2)
                             
+                            now_stamp = time.time()
                             # If the user interupts, stop speaking.
-                            if time.time() - self.last_time_stop_spoken < 4:
+                            if now_stamp - self.last_time_stop_spoken < 4:
                                 if self.DEBUG:
                                     print("ABORTING SPEAKING ASSISTANT OUTPUT, user interupted the process")
-                                self.llm_assistant_response_count += 1
+                                #self.llm_assistant_response_count += 1
                                 break
+                                
+                            if self.got_assistant_output and now_stamp - self.last_assistant_output_change_time > self.llm_assistant_maximum_no_new_output_duration:
+                                if self.DEBUG:
+                                    print("The assistant was speaking, but hasn't said anything new for a while. Breaking.")
+                                break
+                                
                             #print("x")
                             stamp = os.stat('/tmp/assistant_output.txt').st_mtime
                             if stamp != self.last_assistant_output_change_time:
                                 self.last_assistant_output_change_time = stamp
+                                if repeated_the_question == False:
+                                    if self.DEBUG:
+                                        print("ignoring first output from assistant, since it's likely a repeat of the user's question.")
+                                    repeated_the_question = True
+                                else:
+                                    self.got_assistant_output = True
                                 self.assistant_loop_counter = 0
                                 #self.lock.acquire()
                                 if self.DEBUG:
@@ -10559,12 +10843,28 @@ class VocoAdapter(Adapter):
                                     if self.DEBUG:
                                         print("full: " + str(full))
                             
-                                    if 'Candle:' in full:
-                                        full = full.split('Candle:')[1]
+                                    if full.startswith('Researcher:'):
+                                        full = full[11:]
+                                        if self.DEBUG:
+                                            print("Stripped 'Researcher:' from beginning of full:\n" + str(full))
+                                            
+                                    if str(self.llm_assistant_name) + ':' in full:
+                                        # sometimes the assistant halucinates another question by the user
+                                        before_assistant = full.split(str(self.llm_assistant_name) + ':')[0]
+                                        if len(original_voice_message) > 1 and not str(original_voice_message[:-1]) in before_assistant:
+                                            if self.DEBUG:
+                                                print("\nWARNING, the assistant might be halucinating a conversation?\n" + str(before_assistant) + "\n")
+                                        full = full.split(str(self.llm_assistant_name) + ':')[1]
+                                        if self.DEBUG:
+                                            print("Split full to only use the part after '" + str(self.llm_assistant_name) + ":':\n" + str(full))
+                                       
+                            
+                            
                             
                                     if '.' in full:
                                         if self.DEBUG:
                                             print("BINGO!\nIt seems the response will have more than one sentence. In theory the first sentence could already be sent to the speak_thread")
+                                        self.last_command_was_answered_by_assistant = True
                                         
                                         
                                         
@@ -10572,18 +10872,32 @@ class VocoAdapter(Adapter):
                                         line_count = len(lines)
                                         if self.DEBUG:
                                             print("line count: " + str(line_count))
+                                            
+                                        
+                                        
+                                            
                                         if 'Researcher:' in full:
+                                            self.llm_assistant_researcher_was_spotted = True
                                             line_count += 1
+                                            
+                                        if lines[0].strip().endswith(' is not commonly used in English'):
+                                            self.speak("Sorry, could you repeat that?",intent)
+                                            break
+                                            
                                         line_index = 0
                                         for line in lines:
                                             line_index += 1
                                             line = line.strip()
                                             if self.DEBUG:
-                                                print("line: " + str(line))
+                                                print(str(line_index) + ". line: " + str(line))
                                             if line_index < line_count:
-                                                if self.DEBUG:
-                                                    print("parsing line")
-                                                if not line in already_sent_sentences:
+                                                
+                                                if line in already_sent_sentences:
+                                                    if self.DEBUG:
+                                                        print("-line was already sent to speak thread.")
+                                                else:
+                                                    if self.DEBUG:
+                                                        print("-line was not in list of spoken lines yet.")
                                                     if 'Researcher:' in line:
                                                         line = line.split('Researcher:')[0]
                                                         line = line.strip()
@@ -10591,7 +10905,7 @@ class VocoAdapter(Adapter):
                                                         print("\nCAN SEND THIS LINE?: " + str(line))
                                                     if len(line) > 1:
                                                         already_sent_sentences.append(line)
-                                                        print("already_sent_sentences is now: " + str(already_sent_sentences))
+                                                        print("SPEAKING IT.\n - already_sent_sentences is now: " + str(already_sent_sentences))
                                                         if self.DEBUG:
                                                             print("\n⏰\nSTOPWATCH: + " + str(time.time() - self.llm_stt_stopwatch) + ', ' + str(time.time() - self.llm_stt_stopwatch_start))
                                                         self.speak(line,intent)
@@ -10600,7 +10914,7 @@ class VocoAdapter(Adapter):
                                         
                             
                                     #if full.endswith('Researcher:') or full.endswith('Researcher: '):
-                                    if 'Researcher:' in full:
+                                    if 'Researcher:' in full and not full.startswith('Researcher:'):
                                         if self.DEBUG:
                                             print("RESEARCHER: IN OUTPUT")
                                         
@@ -10665,8 +10979,6 @@ class VocoAdapter(Adapter):
                     #self.llm_assistant_process.stdin.write(bytes(voice_message, 'utf-8'))
                     #self.llm_assistant_process.stdin.flush()
                 
-                    
-                
                 #.encode('utf-8')
                 
         except Exception as ex:
@@ -10680,11 +10992,10 @@ class VocoAdapter(Adapter):
         try:
             if self.llm_assistant_started and self.openai_client != None and self.llm_assistant_process != None and voice_message != None and len(voice_message) > 4:
 
-
                 self.llm_last_assistant_reponse_time = time.time()
 
                 if len(self.llm_chat_history) == 0:
-                    self.llm_chat_history.append({"role": "system", "content": "You are Candle, an AI smart home assistant. Your top priority is giving very short and brief answers to the user's questions. Your responses should not exceed three sentences in length."})
+                    self.llm_chat_history.append({"role": "system", "content": "You are " + str(self.llm_assistant_name) + ", an AI smart home assistant. Your top priority is giving very short and brief answers to the user's questions. Your responses should not exceed three sentences in length."})
                 
                 self.llm_chat_history.append({"role": "user", "content":voice_message})
                 

@@ -600,14 +600,15 @@ class VocoAPIHandler(APIHandler):
                                     llm_folder_size_command = "du -s " + str(self.adapter.llm_data_dir_path) + " | awk '{print $1}'"
                                     if self.DEBUG:
                                         print("llm_folder_size_command: " + str(llm_folder_size_command))
-                                    llm_folder_size_output = run_command(llm_folder_size_command)
-                                    if self.DEBUG:
-                                        print("llm_folder_size_output: " + str(llm_folder_size_output))
-                                    if llm_folder_size_output != None:
-                                        llm_folder_size = int(llm_folder_size)
-                                        if self.DEBUG:
-                                            print("llm_data_dir_path: " + str(self.adapter.llm_data_dir_path))
-                                            print("llm_folder_size: " + str(llm_folder_size))
+                                    #llm_folder_size_output = run_command(llm_folder_size_command)
+                                    llm_folder_size = run_command(llm_folder_size_command)
+                                    #if self.DEBUG:
+                                    #    print("llm_folder_size_output: " + str(llm_folder_size_output))
+                                    # if llm_folder_size_output != None:
+                                    #    llm_folder_size = int(llm_folder_size_output.strip())
+                                    #    if self.DEBUG:
+                                    #        print("llm_data_dir_path: " + str(self.adapter.llm_data_dir_path))
+                                    #        print("llm_folder_size: " + str(llm_folder_size))
                                         
                                 except Exception as ex:
                                     print("Error getting llm folder size: " + str(ex))
@@ -810,6 +811,9 @@ class VocoAPIHandler(APIHandler):
                                                 
                                                 self.adapter.persistent_data['main_controller_hostname'] = str(request.body['main_controller_hostname'])
                                                 
+                                                if self.adapter.llm_assistant_running:
+                                                    self.adapter.start_ai_assistant() # this actually only stops the assistant in this case.
+                                                
                                                 #self.adapter.persistent_data['mqtt_server'] = str(request.body['mqtt_server'])
                                                 
                                                 if self.DEBUG:
@@ -855,6 +859,12 @@ class VocoAPIHandler(APIHandler):
                                                 self.adapter.should_restart_mqtt = True
                                                 self.adapter.run_mqtt()
                                                 self.adapter.run_snips() # this stops Snips first
+                                                
+                                                if self.adapter.llm_enabled and self.adapter.llm_assistant_enabled:
+                                                    self.adapter.check_available_memory()
+                                                    if self.adapter.llm_assistant_possible:
+                                                        self.adapter.start_ai_assistant()
+                                                
                                                 state = True
                                                 update = 'Satellite mode disabled'
                                                 if self.DEBUG:
