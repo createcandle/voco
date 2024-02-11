@@ -981,7 +981,7 @@ f
 	background-color:#0c7e0f;
 }
 
-#extension-voco-main-llm-assistant-playground{
+#extension-voco-main-llm-playground{
 	display:none;
 }
 #extension-voco-main-llm-assistant-running:not(.extension-voco-hidden) + #extension-voco-main-llm-playground{

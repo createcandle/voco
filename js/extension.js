@@ -1185,11 +1185,12 @@
 					let dl_indicator_el = document.getElementById('extension-voco-downloading-models-indicator');
 					if(dl_indicator_el){
 						try{
+							if(this.previous_llm_folder_size == 0){
+								this.previous_llm_folder_size = body.llm_folder_size;
+							}
 							if(body.llm_folder_size != this.previous_llm_folder_size){
+								this.previous_llm_folder_size = body.llm_folder_size;
 								
-								if(this.previous_llm_folder_size == 0){
-									this.previous_llm_folder_size = body.llm_folder_size;
-								}
 								const difference = Math.abs(this.previous_llm_folder_size - body.llm_folder_size);
 								if(this.debug){
 									console.log("LLM folder size difference: ",difference);
@@ -1204,6 +1205,9 @@
 								
 							}
 							else{
+								if(this.debug){
+									//console.log("Voco: LLM models folder size did not change: ", body.llm_folder_size);
+								}
 								dl_indicator_el.classList.add('extension-voco-hidden');
 							}
 							
@@ -1342,7 +1346,7 @@
             }
 			catch (e) {
 				// statements to handle any exceptions
-				console.log("Error in regenerate matrix room members: ", e); // pass exception object to error handler
+				console.error("Voco: error in regenerate matrix room members: ", e); // pass exception object to error handler
 			}
         }
         
@@ -1435,7 +1439,7 @@
 							}
 
 						}).catch((e) => {
-							console.log("voco: error in save items handler: ", e);
+							console.error("voco: error in save items handler: ", e);
 							//pre.innerText = e.toString();
 						});
 					
@@ -1494,7 +1498,7 @@
 			}
 			catch (e) {
 				// statements to handle any exceptions
-				console.log("Error in regenerate items: ", e); // pass exception object to error handler
+				console.error("Voco: error in regenerate items: ", e); // pass exception object to error handler
 			}
 		}
         
@@ -1612,7 +1616,7 @@
 				}
 
 	        }).catch((e) => {
-	  			console.log("Error during llm_init api call: ", e);
+	  			console.error("Voco: error during llm_init api call: ", e);
 	        });	
 		}
         
@@ -1674,7 +1678,7 @@
 							
 								let action_dict = {'action':'set_llm'};
 								action_dict['llm_' + llm_type + '_model'] = model_name;
-								console.log("action_dict: ", action_dict);
+								//console.log("voco: action_dict: ", action_dict);
 						        window.API.postJson(
 						          `/extensions/${this.id}/api/ajax`,action_dict
 
@@ -1691,8 +1695,18 @@
 							});
 						
 							//console.log("model_name =?= active_model: ", model_name, active_model);
-							if(llm_models[llm_type]['active'] != null && llm_models[llm_type]['active'].endsWith(model_name)){
-								console.log("BINGO, spotted the active model");
+							if(llm_models[llm_type]['active'] == null){
+								if(model_name == 'voco'){
+									if(this.debug){
+										console.log("Voco: BINGO, spotted the active model (which is plain old voco)");
+									}
+									radio_el.checked = true;
+								}
+							}
+							else if(llm_models[llm_type]['active'].endsWith(model_name)){
+								if(this.debug){
+									console.log("Voco: BINGO, spotted the active model");
+								}
 								radio_el.checked = true;
 							}
 							/*
@@ -1762,7 +1776,7 @@
 					text_input_field.value = "";
 
 		        }).catch((e) => {
-		  			console.log("Error sending text to be parsed: " , e);
+		  			console.error("Voco: error sending text to be parsed: " , e);
 					//document.getElementById('extension-voco-response-data').innerText = "Error sending text command: " , e;
 		        });
 			}
@@ -1786,7 +1800,7 @@
 				}
 				
 	        }).catch((e) => {
-	  			console.log("Error during llm_generate_text api call: ", e);
+	  			console.error("Voco: error during llm_generate_text api call: ", e);
 	        });	
 		}
 		

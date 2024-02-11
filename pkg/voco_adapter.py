@@ -229,7 +229,7 @@ class VocoAdapter(Adapter):
         self.llm_stt_port = 8046
         self.llm_stt_process = None
         self.llm_stt_started = False
-        
+        self.s = None # holds the thread that manages the STT and Assistant processes
         
         self.record_running = False
         self.record = wave.Wave_write
@@ -244,7 +244,7 @@ class VocoAdapter(Adapter):
         # Assistant
         self.llm_assistant_enabled = True
         self.assistant_countdown = 0
-        self.llm_assistant_minimal_memory = 3000
+        self.llm_assistant_minimal_memory = 1000
         self.llm_assistant_possible = False
         self.llm_assistant_started = False
         self.llm_assistant_process = None
@@ -1020,7 +1020,7 @@ class VocoAdapter(Adapter):
         
         # STT
         self.llm_stt_dir_path = os.path.join(self.llm_data_dir_path, 'stt')
-        self.llm_stt_executable_path = os.path.join(self.addon_dir_path,'llm','stt', 'server')
+        self.llm_stt_executable_path = os.path.join(self.addon_dir_path,'llm','stt', 'server0')
         
         os.system('chmod +x ' + str(self.llm_stt_executable_path))
         
@@ -1543,17 +1543,9 @@ class VocoAdapter(Adapter):
         
         self.unmute()
         
-        if self.llm_enabled:
-            self.download_llm_models()
+        #if self.llm_enabled:
+        #    self.download_llm_models()
             
-            if self.llm_stt_enabled:
-                self.s = threading.Thread(target=self.start_llm_stt_server) #, args=(self.voice_messages_queue,)
-                self.s.daemon = True
-                self.s.start()
-            
-                if self.DEBUG:
-                    print("called start_llm_stt_server")
-                    
             #if self.llm_assistant_possible:
                 #self.start_ai_assistant()
                 #if self.DEBUG:
@@ -2534,8 +2526,9 @@ class VocoAdapter(Adapter):
             if output_to_bluetooth:
                 output_device_string = "bluealsa:DEV=" + str(self.persistent_data['bluetooth_device_mac'])
             if self.pipewire_enabled == False and output_device_string != self.llm_tts_output_device_string:
+                self.llm_tts_output_device_string = output_device_string
                 if self.DEBUG:
-                    print("restarting TTS process with changed output_device_string: " + str(output_device_string))
+                    print("restarting TTS process with changed output_device_string: " + str(self.llm_tts_output_device_string))
                 self.start_llm_tts()
             # echo "One moment" | /home/pi/.webthings/addons/voco/llm/tts/piper --model /home/pi/.webthings/data/voco/llm/tts/en_US-lessac-medium.onnx --espeak_data /home/pi/.webthings/addons/voco/llm/tts/espeak-ng-data --sentence_silence 1 -f /home/pi/.webthings/data/voco/llm/tts/cache/one_moment.wav
         
@@ -4082,9 +4075,9 @@ class VocoAdapter(Adapter):
                             
                 
                 # Download LLM models if a new on has been selected. TODO: this currently blocks the clock thread, which is not optimal.
-                if self.llm_should_download:
+                if self.llm_enabled and self.llm_should_download:
                     if self.DEBUG:
-                        print("clock: llm_should_download was True")
+                        print("clock: llm_enabled and llm_should_download was True")
                     self.llm_should_download = False
                     self.download_llm_models()
 
@@ -6458,13 +6451,17 @@ class VocoAdapter(Adapter):
                     if this_is_origin_site:
                         #if not self.DEBUG:
                         if self.llm_enabled and self.llm_stt_enabled and self.llm_stt_possible and 'origin' in intent_message and intent_message['origin'] == 'voice' and best_confidence_score != 1:
-                            print("\n⏰\nSTOPWATCH: + " + str(time.time() - self.llm_stt_stopwatch) + ', ' + str(time.time() - self.llm_stt_stopwatch_start))
+                            if self.DEBUG:
+                                print("\n⏰\nSTOPWATCH: + " + str(time.time() - self.llm_stt_stopwatch) + ', ' + str(time.time() - self.llm_stt_stopwatch_start))
+                                print("Setting try_again_via_stt to True")
                             self.speak("One moment",intent=intent_message)
                             self.try_again_via_stt = True
                         else:
                             # Show the heard sentence in a popup
                             if self.DEBUG or self.popup_heard_sentence:
                                 self.send_pairing_prompt( "misheard: " + str(sentence) )
+                            if self.DEBUG:
+                                print("Not trying again via LLM STT")
                             self.speak("I didn't quite get that",intent=intent_message)
                             self.try_again_via_stt = False    
                     else:
@@ -6479,8 +6476,8 @@ class VocoAdapter(Adapter):
                         self.send_pairing_prompt( "heard: " + str(sentence) )
                     
             # Date
-            if sentence == 'what date is it' \
-                        or sentence == 'what is the date' \
+            if 'hat date is it' in sentence \
+                        or 'hat is the date' in sentence \
                         or sentence == "what 's at eight" \
                         or sentence == 'what month is it' \
                         or sentence == 'what is it' \
@@ -10020,7 +10017,7 @@ class VocoAdapter(Adapter):
                                         print("Deleting LLM model that isn't currently used because disk space is low: " + str(model_file_test_path))
                                     os.system('rm ' + str(model_file_test_path))
                         
-                    if model_name == 'voco':
+                    if self.llm_models[key]['list'][model_name]['model'] == 'voco':
                         self.llm_models[key]['list'][model_name]['downloaded'] = True
                     else:
                         self.llm_models[key]['list'][model_name]['downloaded'] = bool(os.path.exists(model_file_test_path))
@@ -10033,6 +10030,15 @@ class VocoAdapter(Adapter):
             print("Error downloading LLM models: " + str(ex))
             
         self.llm_busy_downloading_models = 0        
+               
+        
+        if self.llm_enabled and self.llm_stt_enabled and self.llm_stt_started == False and self.s == None:
+            self.s = threading.Thread(target=self.start_llm_stt_server) #, args=(self.voice_messages_queue,)
+            self.s.daemon = True
+            self.s.start()
+        
+            if self.DEBUG:
+                print("download llmm models: called start_llm_stt_server")
                 
         #print("\nModel data after download phase:\n\n" + str(json.dumps(self.llm_models, indent=4)))
         #print("\n\n")
@@ -10172,8 +10178,6 @@ class VocoAdapter(Adapter):
             return
             
         if self.llm_enabled and self.llm_stt_enabled and self.llm_stt_started:
-            
-            
             
             #self.check_available_memory()
             if self.DEBUG:
@@ -10355,8 +10359,13 @@ class VocoAdapter(Adapter):
         self.llm_stt_process = Popen(stt_command, env=my_env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, text=True, bufsize=1) # 
         if self.DEBUG:
             print("STT SERVER STARTED")
+            print("self.llm_assistant_possible? " + str(self.llm_assistant_possible))
         
-        if self.llm_assistant_possible:
+        if self.llm_assistant_possible == False:
+            if self.DEBUG:
+                print("STT SERVER STARTED")
+                print("\nNOT STARTING LLM ASSISTANT because llm_assistant_possible is False")
+        else:
             self.start_ai_assistant()
             #if self.DEBUG:
             #    print("called start_ai_assistant")
