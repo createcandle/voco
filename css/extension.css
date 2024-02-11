@@ -1010,6 +1010,10 @@ f
 }
 
 
+#extension-voco-llm-generated-text-output{
+	white-space: pre-wrap;
+	/*word-wrap: break-word;*/
+}
 #extension-voco-llm-generated-text-output:empty{
 	display:none;
 	padding:1rem;
@@ -1030,6 +1034,12 @@ f
 .extension-voco-llm-models-list input{
 	cursor:pointer;
 }
+
+
+
+
+
+
 
 
 

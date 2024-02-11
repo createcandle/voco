@@ -591,9 +591,9 @@ class VocoAPIHandler(APIHandler):
                                 # get generated text
                                 if self.adapter.llm_busy_generating:
                                     with open(self.adapter.llm_generated_text_file_path, "r") as f:
-                                        content = f.readlines()
-                                        generated_text = '\n'.join(content)
-                                        self.adapter.llm_generated_text = generated_text
+                                        #content = f.readlines()
+                                        #generated_text = f.read() #'\n'.join(content)
+                                        self.adapter.llm_generated_text = f.read() #generated_text
                                 
                                 llm_folder_size = 0
                                 try:
@@ -602,6 +602,7 @@ class VocoAPIHandler(APIHandler):
                                         print("llm_folder_size_command: " + str(llm_folder_size_command))
                                     #llm_folder_size_output = run_command(llm_folder_size_command)
                                     llm_folder_size = run_command(llm_folder_size_command)
+                                    llm_folder_size = llm_folder_size.strip()
                                     #if self.DEBUG:
                                     #    print("llm_folder_size_output: " + str(llm_folder_size_output))
                                     # if llm_folder_size_output != None:
@@ -661,7 +662,7 @@ class VocoAPIHandler(APIHandler):
                                                         'current_time':self.adapter.current_utc_time,
                                                         'text_response':self.adapter.last_text_response,
                                                         'llm_busy_generating':self.adapter.llm_busy_generating,
-                                                        'llm_generated_text':generated_text,
+                                                        'llm_generated_text':self.adapter.llm_generated_text,
                                                         'initial_injection_completed':self.adapter.initial_injection_completed,
                                                         'missing_microphone':self.adapter.missing_microphone, 
                                                         'matrix_started':self.adapter.matrix_started,

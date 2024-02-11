@@ -176,7 +176,7 @@
 			        if(this.debug){
                         console.log('Enter pressed in text command input');
                     }
-					send_input_text();
+					this.send_input_text();
 			    }
 			});
 
@@ -940,7 +940,8 @@
 			const text_input_field = document.getElementById('extension-voco-text-input-field');
 			const text_response_container = document.getElementById('extension-voco-text-response-container');
 			const text_response_field = document.getElementById('extension-voco-text-response-field');
-			text_response_container.style.display = 'none';
+			const generated_text_output_el = document.getElementById('extension-voco-llm-generated-text-output');
+			//text_response_container.style.display = 'none';
 			
 
             
@@ -1062,17 +1063,15 @@
 							nicer_text = nicer_text.replace(/\. /g, '\.\<br\/\>');
 						
 							if(this.debug){
-								if(document.getElementById('extension-voco-text-response-field')){
-									if(document.getElementById('extension-voco-text-response-field').innerHTML != nicer_text){
-										console.log("got text chat response: ", nicer_text)
-									}
-								}
-								if(text_response_field.innerHTML != nicer_text){
-									console.log("got text chat response: ", nicer_text)
-								}
+								
 							}
 						
-							text_response_field.innerHTML = nicer_text;
+							if(text_response_field.textContent != nicer_text){
+								console.log("got new text chat response: ", nicer_text);
+								text_response_field.textContent = nicer_text;
+							}
+							
+							//text_response_field.innerHTML = nicer_text;
 							text_response_container.style.display = 'block';
 						}
 						else{
@@ -1170,7 +1169,7 @@
                     
 				}
 				else{
-					//console.log("Voco: not ok state in poll response: ", body);
+					console.error("Voco: not ok state in poll response: ", body);
 				}
 				
 				
@@ -1180,7 +1179,7 @@
 				
 				if(typeof body.llm_folder_size != 'undefined'){
 					if(document.getElementById('extension-voco-llm-total-size')){
-						document.getElementById('extension-voco-llm-total-size').textContent = '' + body.llm_folder_size;
+						document.getElementById('extension-voco-llm-total-size').textContent = '' + Math.round( parseInt(body.llm_folder_size)/1000);
 					}
 					
 					let dl_indicator_el = document.getElementById('extension-voco-downloading-models-indicator');
@@ -1193,7 +1192,7 @@
 								}
 								const difference = Math.abs(this.previous_llm_folder_size - body.llm_folder_size);
 								if(this.debug){
-									console.log("LLM folder size difference: " + str(difference))
+									console.log("LLM folder size difference: ",difference);
 								}
 								dl_indicator_el.innerHTML = "<strong>AI Model</strong><br/>Download speed: " + difference;
 								if(difference != 0){
@@ -1210,7 +1209,7 @@
 							
 						}
 						catch(e){
-							console.error("Error updating LLM folder size: " + str(ex))
+							console.error("Error updating LLM folder size: ",ex)
 							dl_indicator_el.classList.add('extension-voco-hidden');
 						}
 						
@@ -1253,8 +1252,10 @@
 					}
 				}
 				
+				if(typeof body.llm_generated_text != 'undefined' && generated_text_output_el){
+					generated_text_output_el.innerHTML = '' + body.llm_generated_text;
+				}
 				
-                
                 this.busy_polling = false;
                 this.busy_polling_count = 0;
                 document.getElementById('extension-voco-unavailable').style.display = 'none';

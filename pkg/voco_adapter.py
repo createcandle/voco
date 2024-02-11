@@ -2832,6 +2832,10 @@ class VocoAdapter(Adapter):
                 if str(self.persistent_data['audio_output']) != 'Bluetooth speaker':
                     self.unmute()
                 
+                
+                if self.DEBUG or self.popup_heard_sentence:
+                    self.send_pairing_prompt(str(voice_message))
+                
                 # filter out characters that cause weird pronounciation.
                 voice_message = clean_up_string_for_speaking(voice_message)
                 if self.DEBUG:
@@ -11081,14 +11085,14 @@ class VocoAdapter(Adapter):
                         pass
             
                     elif action == 'summarize':
-                        prompt = "Please summarize the following text: " + prompt
-                
+                        prompt = "Please summarize the following text: \n```\n" + prompt + "\n```\n\nSummary:\n"
+                    
                     generate_text_command = [
                         str(self.llamafile_path),
                         "-m",
                         str(self.llm_models['assistant']['active']),
                         "-p",
-                        str(prompt),
+                        "\"" + str(prompt).replace('"', '\\"') + "\"",
                         "-n",
                         "512",
                         "-t",
