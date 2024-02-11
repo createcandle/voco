@@ -4881,7 +4881,8 @@ class VocoAdapter(Adapter):
                     print("sending captured text to main controller: " + str(payload['text']))
                 
                 # TODO: the origin is set as voice, but it might not always be?
-                self.mqtt_client.publish("hermes/voco/parse",json.dumps({ "siteId":str(self.persistent_data['site_id']),"text": payload['text'],'origin':'voice' }))
+                if self.persistent_data['listening']:
+                    self.mqtt_client.publish("hermes/voco/parse",json.dumps({ "siteId":str(self.persistent_data['site_id']),"text": payload['text'],'origin':'voice' }))
                 
                 if self.periodic_voco_attempts > 5:
                     self.speak('Sorry, the main Voco controller is not responding')
@@ -9875,7 +9876,7 @@ class VocoAdapter(Adapter):
             self.try_again_via_stt = False
             self.try_again_via_assistant = False
     
-        if self.recording_state == 0:
+        if self.persistent_data['listening'] and self.recording_state == 0:
             if self.DEBUG:
                 print("toggleOff: setting recording_state to 1, which will start audio recording from MQTT stream for LLM STT")
             self.recording_state = 1
