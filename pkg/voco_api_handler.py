@@ -852,7 +852,10 @@ class VocoAPIHandler(APIHandler):
                                                 else:
                                                     update = 'Error: could not find IP address of prefered controller'
                                             else:
+                                                
+                                                # No longer a satellite
                                                 self.adapter.persistent_data['mqtt_server'] = 'localhost'
+                                                self.adapter.persistent_data['main_controller_ip'] = 'localhost'
                                                 self.adapter.persistent_data['main_controller_hostname'] = self.adapter.hostname
                                                 self.adapter.persistent_data['main_site_id'] = self.adapter.persistent_data['site_id'] #reset to default
                                                 self.adapter.initial_injection_completed = False

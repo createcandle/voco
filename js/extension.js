@@ -1189,12 +1189,14 @@
 								this.previous_llm_folder_size = body.llm_folder_size;
 							}
 							if(body.llm_folder_size != this.previous_llm_folder_size){
-								this.previous_llm_folder_size = body.llm_folder_size;
+								
 								
 								const difference = Math.abs(this.previous_llm_folder_size - body.llm_folder_size);
 								if(this.debug){
 									console.log("LLM folder size difference: ",difference);
 								}
+								this.previous_llm_folder_size = body.llm_folder_size;
+								
 								dl_indicator_el.innerHTML = "<strong>AI Model</strong><br/>Download speed: " + difference;
 								if(difference != 0){
 									dl_indicator_el.classList.remove('extension-voco-hidden');
@@ -1660,7 +1662,7 @@
 							let downloaded = '<span class="extension-voco-llm-model-downloaded">Not downloaded</span>';
 							if(typeof llm_details.downloaded != 'undefined'){
 								if(llm_details.downloaded){
-									downloaded = '<span class="extension-voco-llm-model-downloaded">Downloaded</span>';
+									downloaded = '<span class="extension-voco-llm-model-downloaded">Downloaded <span></span class="extension-voco-llm-model-downloaded-delete-button" data-extension-voco-llm-model-to-delete="' + llm_details.model + '">🗑</span>';
 									llm_item_el.classList.add('extension-voco-llm-item-downloaded');
 								}
 								else if(typeof llm_details.developer != 'undefined'){
@@ -1732,6 +1734,43 @@
 								llm_details_el.innerHTML += '<audio controls><source src="/extensions/voco/audio/' + llm_details.model + '.wav" type="audio/wav"></audio>';
 							}
 							llm_item_el.appendChild(llm_details_el);
+							
+							const delete_button_el = llm_item_el.querySelector('.extension-voco-llm-model-downloaded-delete-button');
+							if(delete_button_el){
+								if(radio_el.checked){
+									delete_button_el.style.display = 'none';
+								}
+								else{
+									delete_button_el.addEventListener('click', (event) => {
+										if(event.target){
+											console.log("clicked on delete button. event.target, delete_button_el: ", event.target, delete_button_el);
+											const  model_to_delete = event.target.getAttribute('data-extension-voco-llm-model-to-delete');
+											console.log("model to delete: ", model_to_delete);
+											delete_button_el.remove();
+										
+									  		// Delete LLM model
+									        window.API.postJson(
+									          `/extensions/voco/api/parse`,
+												{'text':text}
+
+									        ).then((body) => {
+												if(this.debug){
+								                    console.log("parsing text command response: ", body);
+								                }
+												text_input_field.placeholder = text;
+												text_input_field.value = "";
+
+									        }).catch((e) => {
+									  			console.error("Voco: error sending text to be parsed: " , e);
+												//document.getElementById('extension-voco-response-data').innerText = "Error sending text command: " , e;
+									        });
+										}
+									
+									});
+								}
+								
+							}
+							
 							llm_options_list_el.appendChild(llm_item_el);
 						}
 					}

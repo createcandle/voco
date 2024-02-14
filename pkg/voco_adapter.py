@@ -705,9 +705,9 @@ class VocoAdapter(Adapter):
                 self.persistent_data['main_controller_hostname'] = self.hostname
                 self.save_to_persistent_data = True
                 
-            #if 'main_controller_ip' not in self.persistent_data: # to remember what the main voco server is, for satellites. # TODO: still used?
-            #    print("main_controller_ip was not in persistent data, adding it now.")
-            #    self.persistent_data['main_controller_ip'] = 'localhost'
+            if 'main_controller_ip' not in self.persistent_data: # to remember what the main voco server is, for satellites. Now used to send audio to STT server
+                print("main_controller_ip was not in persistent data, adding it now.")
+                self.persistent_data['main_controller_ip'] = 'localhost'
             
             if 'satellite_thing_titles' not in self.persistent_data:
                 print("satellite_thing_titles was not in persistent data, adding it now.")
@@ -999,6 +999,7 @@ class VocoAdapter(Adapter):
         
         
         
+        
         if not os.path.isdir(str(self.llm_tts_dir_path)):
             os.system('mkdir -p ' + str(self.llm_tts_dir_path))
         if not os.path.isdir(str(self.llm_tts_cache_dir_path)):
@@ -1022,20 +1023,25 @@ class VocoAdapter(Adapter):
         self.llm_stt_dir_path = os.path.join(self.llm_data_dir_path, 'stt')
         self.llm_stt_executable_path = os.path.join(self.addon_dir_path,'llm','stt', 'server0')
         
-        os.system('chmod +x ' + str(self.llm_stt_executable_path))
+        
         
         if not os.path.isdir(str(self.llm_stt_dir_path)):
             os.system('mkdir -p ' + str(self.llm_stt_dir_path))
         
-        
+        # make sure all LLM binaries exist and are executable
         if not os.path.exists(self.llamafile_path):
             print("unzipping llamafile")
             run_command('unzip ' + str(self.llamafile_zip_path) + ' -d ' + str(os.path.join(self.data_dir_path,'llm')))
-            
+        
         if os.path.exists(self.llamafile_path):
             os.system('chmod +x ' + str(self.llamafile_path))
         else:
             print("ERROR, llamafile not found at " + str(self.llamafile_path))
+        
+        if os.path.exists(str(self.llm_piper_path)):
+            os.system('chmod +x ' + str(self.llm_piper_path))
+        if os.path.exists(str(self.llm_stt_executable_path)):
+            os.system('chmod +x ' + str(self.llm_stt_executable_path))
         
         #self.llm_tts_pipe_path = '/tmp/llm_pipe' #os.path.join(self.llm_data_dir_path, 'pipe')
         #os.system('mkfifo ' + str(self.llm_tts_pipe_path))
@@ -2933,7 +2939,7 @@ class VocoAdapter(Adapter):
             
         if self.pipewire_enabled:
             if self.DEBUG:
-                print("doing mute via pipewire")
+                print("doing mute via pipewire (blocked)")
             #run_command('wpctl set-volume @DEFAULT_AUDIO_SINK@ 0%')
             
             self.currently_muted = True
@@ -3211,7 +3217,10 @@ class VocoAdapter(Adapter):
                 elif unique_command == 'snips-asr':
                     command = command + ["--thread_number","1"] # TODO Check if this actually helps.
                 
-                #if unique_command == 'snips-dialogue':
+                elif unique_command == 'snips-dialogue':
+                    command = command + ["--session-timeout","10"]
+                   
+                    
                 #    extra_dialogue_manager_command = command.copy()
                 #    extra_dialogue_manager_command = extra_dialogue_manager_command + ["--mqtt",mqtt_ip]
                 
@@ -4232,7 +4241,11 @@ class VocoAdapter(Adapter):
             print("In unload. Shutting down Voco.")
             print("")
             
+        self.running = False
+        
         os.system('pkill -f llamafile')
+        os.system('pkill -f server0')
+        os.system('pkill -f piper')
         if os.path.exists(str(self.llm_generated_text_file_path)):
             os.system('rm ' + str(self.llm_generated_text_file_path))
         
@@ -4251,7 +4264,7 @@ class VocoAdapter(Adapter):
                 print("should send message to Matrix that Voco is going offline")
             time.sleep(.5)
             
-        self.running = False
+        
         
         # inform main server we're no longer up and running. We ask the main server to ignore our things.
         if self.persistent_data['is_satellite']:
@@ -4956,7 +4969,8 @@ class VocoAdapter(Adapter):
                     print("\n$\n$\n$\n")
                     print("sending fafafafa intent message to master_intent_callback")
                 
-                self.mqtt_client.publish('hermes/dialogueManager/endSession', json.dumps({"text": "", "sessionId": intent_message['sessionId']}))    
+                self.mqtt_client.publish('hermes/dialogueManager/endSession', json.dumps({"text": "", "sessionId": intent_message['sessionId']}))
+                self.mqtt_client.publish('hermes/dialogueManager/endSession', json.dumps({"text": "", "sessionId": str(self.current_snips_session_id)}))
                 self.master_intent_callback(intent_message)
             else:
                 if self.DEBUG:
@@ -4967,6 +4981,10 @@ class VocoAdapter(Adapter):
                 print("\ninteresting, received MQTT message at nlu/intentNotRecognized\n")
             if 'id' in payload and payload['id'].endswith('fafafafa'): # self.llm_stt_always_use and
                 self.intent_received = True
+                
+                self.mqtt_client.publish('hermes/dialogueManager/endSession', json.dumps({"text": "", "sessionId": intent_message['sessionId']}))
+                self.mqtt_client.publish('hermes/dialogueManager/endSession', json.dumps({"text": "", "sessionId": str(self.current_snips_session_id)}))
+                
                 if 'input' in payload:
                     if self.llm_enabled and self.llm_assistant_enabled and self.llm_assistant_started:
                         self.ask_ai_assistant(payload['input'],intent={'siteId':self.persistent_data['site_id']})
@@ -6049,7 +6067,8 @@ class VocoAdapter(Adapter):
                     if payload['ip'] != self.ip_address and payload['hostname'] == self.persistent_data['main_controller_hostname']: # and self.persistent_data['main_site_id'] == self.persistent_data['site_id']: # and self.persistent_data['main_site_id'] == self.persistent_data['site_id']:
                         if self.DEBUG:
                             print("broadcast pong was from intented main MQTT server. This has supplied the intended main_site_id: " + str(payload['siteId']) )
-                    
+                        self.persistent_data['main_controller_ip'] = payload['ip']
+                        
                         if self.persistent_data['main_site_id'] != payload['siteId']:
                             self.save_to_persistent_data = True
                             if self.DEBUG:
@@ -7168,7 +7187,7 @@ class VocoAdapter(Adapter):
                             print("intent_message['origin']: " + str(intent_message['origin']))
                         
                         self.ask_ai_assistant(sentence,intent=intent_message)
-                
+                    
                     elif self.llm_stt_done == False:
                         if self.DEBUG:
                             print("intent has undefined origin, or origin was voice. setting self.try_again_via_assistant to true")
@@ -7183,6 +7202,13 @@ class VocoAdapter(Adapter):
                             #self.ask_ai_assistant(sentence,intent_message)
                         self.speak("One moment",intent=intent_message)
                         self.try_again_via_assistant = True
+                    
+                    elif self.llm_stt_started == False:
+                        if self.DEBUG:
+                            print("llm_stt has not started (or has crashed), so that avenue is not available. Falling back to just speaking the voice_message: " + str(voice_message))
+                        self.last_command_was_answered_by_assistant = False
+                        self.speak(voice_message,intent=intent_message)
+                        
                     else:
                         if self.DEBUG:
                             print("\nERROR, This should not happen.\n")
@@ -10173,12 +10199,23 @@ class VocoAdapter(Adapter):
         if self.DEBUG:
             print("in llm_stt")
         
-        if self.llm_models['stt']['active'] == None:
+        if self.llm_models['stt']['active'] == None: # TODO: or just skip ahead anyway if this is a satellite, and the main controller has running TTS server running. This will need to be communicated via the pings.
             if self.DEBUG:
                 print("llm_stt: no active model defined yet")
             return
             
         if self.llm_enabled and self.llm_stt_enabled and self.llm_stt_started:
+            
+            # Check if the LLM STT server is still running OK
+            if self.llm_stt_process == None:
+                print("llm_stt: WARNING, stt process is none")
+                self.llm_stt_started = False
+            elif self.llm_stt_process.poll() != None:
+                print("llm_stt: WARNING, stt process has stopped!")
+                self.llm_stt_started = False
+            else:
+                print("llm_stt: stt process seems to be running OK")
+                self.llm_stt_started = True
             
             #self.check_available_memory()
             if self.DEBUG:
@@ -10188,119 +10225,132 @@ class VocoAdapter(Adapter):
             
             # WORKS: curl http://localhost:8046/inference -H "Content-Type: multipart/form-data" -F file="@/home/pi/.webthings/whis/whisper.cpp-master/samples/jfk.wav" -F temperature="0.0" -F temperature_inc="0.2" -F response_format="json"
             
-            if self.llm_stt_possible:
+            if self.DEBUG:
+                print("llm_stt_possible, DOING SPEECH TO TEXT on: " + str(self.last_recording_path))
+            self.llm_stt_skipped = False
+            self.llm_stt_done = False
+            self.llm_stt_sentence = ''
+            #if self.llm_stt_always_use:
+            #    self.intent_received = True
+            
+            #./command -m ./models/ggml-tiny.en.bin -ac 768 -t 3 -c 0
+            
+            # Direct command input from microphone. Doesnt work because the microphone is already taken. Also, focusses more on a limited list of words/commands.
+            # https://github.com/ggerganov/whisper.cpp/blob/master/examples/command/command.cpp
+            #stt_command = str(os.path.join(self.addon_dir_path,'llm','stt', 'command')) + " -m " + str(os.path.join(self.llm_stt_dir_path, str(self.persistent_data['llm_stt_model']))) + " -ac 768 -t 3 -c 0"
+            
+            #stt_command = 'curl http://localhost:' + str(self.llm_stt_port) + '/inference -H "Content-Type: multipart/form-data" -F file="@' + str(self.last_recording_path) + '" -F temperature="0.2" -F temperature_inc="0.2" -F response_format="json"'
+            stt_command = 'curl http://' + str(self.persistent_data['main_controller_ip']) + ':' + str(self.llm_stt_port) + '/inference -H "Content-Type: multipart/form-data" -F file="@' + str(self.last_recording_path) + '" -F temperature="0.2" -F temperature_inc="0.2" -F response_format="json"'
+            if self.DEBUG:
+                print("\n\nVOCO LLM STT CURL COMMAND: " + str(stt_command))
+                #print("\n⏰\nSTT START STOPWATCH: + " + str(time.time() - self.llm_stt_stopwatch) + ', ' + str(time.time() - self.llm_stt_stopwatch_start))
+                #self.llm_stt_stopwatch = time.time()  
+              
+            stt_result = run_command(stt_command,30) # If this takes more than 30 seconds..
+            #self.llm_stt_stopwatch = time.time() - self.llm_stt_stopwatch
+            
+            self.llm_stt_done = True
+            
+            if not self.DEBUG:
+                self.delete_recordings()
+            
+            if self.DEBUG:
+                print("\n\nVOCO LLM STT RESULT: " + str(stt_result))
+                print("\n⏰\nSTT DONE STOPWATCH: + " + str(time.time() - self.llm_stt_stopwatch) + ', ' + str(time.time() - self.llm_stt_stopwatch_start))
+                self.llm_stt_stopwatch = time.time()
+                print(" - - self.try_again_via_stt: " + str(self.try_again_via_stt))
+                print(" - - self.try_again_via_assistant: " + str(self.try_again_via_assistant))
+                
+            if stt_result == None:
                 if self.DEBUG:
-                    print("llm_stt_possible, DOING SPEECH TO TEXT on: " + str(self.last_recording_path))
-                self.llm_stt_skipped = False
-                self.llm_stt_done = False
-                self.llm_stt_sentence = ''
-                #if self.llm_stt_always_use:
-                #    self.intent_received = True
+                    print("STT output was None\n\n")
+                if self.llm_stt_always_use or self.try_again_via_assistant:
+                    self.speak("Sorry, I don't understand",intent=intent)
+                return
                 
-                #./command -m ./models/ggml-tiny.en.bin -ac 768 -t 3 -c 0
+            try:
+                data = json.loads(stt_result)
+                if 'text' in data:
+                    stt_output = data['text']
                 
-                # Direct command input from microphone. Doesnt work because the microphone is already taken. Also, focusses more on a limited list of words/commands.
-                # https://github.com/ggerganov/whisper.cpp/blob/master/examples/command/command.cpp
-                #stt_command = str(os.path.join(self.addon_dir_path,'llm','stt', 'command')) + " -m " + str(os.path.join(self.llm_stt_dir_path, str(self.persistent_data['llm_stt_model']))) + " -ac 768 -t 3 -c 0"
-                
-                
-                stt_command = 'curl http://localhost:' + str(self.llm_stt_port) + '/inference -H "Content-Type: multipart/form-data" -F file="@' + str(self.last_recording_path) + '" -F temperature="0.2" -F temperature_inc="0.2" -F response_format="json"'
-                if self.DEBUG:
-                    print("\n\nVOCO LLM STT CURL COMMAND: " + str(stt_command))
-                    #print("\n⏰\nSTT START STOPWATCH: + " + str(time.time() - self.llm_stt_stopwatch) + ', ' + str(time.time() - self.llm_stt_stopwatch_start))
-                    #self.llm_stt_stopwatch = time.time()  
-                  
-                stt_result = run_command(stt_command,30) # If this takes more than 30 seconds..
-                #self.llm_stt_stopwatch = time.time() - self.llm_stt_stopwatch
-                
-                self.llm_stt_done = True
-                
-                if not self.DEBUG:
-                    self.delete_recordings()
-                
-                if self.DEBUG:
-                    print("\n\nVOCO LLM STT RESULT: " + str(stt_result))
-                    print("\n⏰\nSTT DONE STOPWATCH: + " + str(time.time() - self.llm_stt_stopwatch) + ', ' + str(time.time() - self.llm_stt_stopwatch_start))
-                    self.llm_stt_stopwatch = time.time()
-                    print(" - - self.try_again_via_stt: " + str(self.try_again_via_stt))
-                    print(" - - self.try_again_via_assistant: " + str(self.try_again_via_assistant))
-                    
-                if stt_result == None:
-                    if self.DEBUG:
-                        print("STT output was None\n\n")
-                    if self.llm_stt_always_use:
-                        self.speak("Sorry, I don't understand",intent=intent)
-                    return
-                    
-                try:
-                    data = json.loads(stt_result)
-                    if 'text' in data:
-                        stt_output = data['text']
-                    
-                        if stt_output == '':
-                            if self.DEBUG: # or self.llm_stt_always_use:
-                                self.speak("Sorry, I heard nothing",intent=intent)
-                            self.send_pairing_prompt( "AI heard nothing")
-                            return
-                            
-                        stt_output = clean_up_stt_result(stt_output)
-                        self.llm_stt_sentence = stt_output
-                            
-                    
-                        if '[' in stt_output:
-                            if self.DEBUG:
-                                print("removing parts in between square brackets from stt_output")
-                            stt_output = re.sub(r'\[.*?\]', '', stt_output)
-                    
-                        if stt_output.startswith("turn on") or stt_output.startswith("turn off"):
-                            if self.DEBUG:
-                                print("STT output started with turn on or turn off, so should not be handled by LLM assistant")
-                            self.try_again_via_assistant = False
+                    if stt_output == '':
+                        if self.DEBUG: # or self.llm_stt_always_use:
+                            self.speak("debug, I heard nothing",intent=intent)
+                        self.send_pairing_prompt( "AI heard nothing")
+                        return
                         
-                        # Show the heard sentence in a popup
-                        if self.DEBUG or self.popup_heard_sentence:
-                            print("llm_stt: pairing_prompt: AI heard: " + str(stt_output))
-                            self.send_pairing_prompt( "AI heard: " + str(stt_output) )
+                    stt_output = clean_up_stt_result(stt_output)
+                    
                         
-                        if self.llm_stt_always_use:
-                            if self.DEBUG:
-                                print("\nllm_stt: llm_stt_always_use is true, so calling query_intent");
-                            self.query_intent(stt_output)
-                        
-                        elif self.llm_assistant_started and self.try_again_via_assistant:
-                            if self.DEBUG:
-                                print(" - > passing LLM STT output to AI assistant")
-                            self.try_again_via_stt = False
-                            self.try_again_via_assistant = False
-                            #self.speak("Hmmm",intent=intent)
-                            self.ask_ai_assistant(str(stt_output),intent=intent)
-                            
-                        elif self.try_again_via_stt:
-                            if self.DEBUG:
-                                print(" - > retrying with LLM STT output using query_intent()")
-                            self.try_again_via_stt = False
-                            self.last_text_command = str(stt_output)
-                            #self.parse_text(site_id=self.persistent_data['site_id'],origin="llm_stt")
-                            
-                            self.query_intent(stt_output)
-                            
-                        else:
-                            if self.DEBUG:
-                                print(" - > Not doing anything with LLM STT output. self.llm_assistant_started: " + str(self.llm_assistant_started))
-                                print("")
-                                
-                                
-                    else:
+                
+                    if '[' in stt_output:
                         if self.DEBUG:
-                            print("invalid result? No text in stt server json result")
-                except Exception as ex:
-                    if self.DEBUG:
-                        print("Error parsing STT server result, invalid json?" + str(ex))
+                            print("removing parts in between square brackets from stt_output")
+                        stt_output = re.sub(r'\[.*?\]', '', stt_output)
                 
+                    if stt_output.startswith("turn on") or stt_output.startswith("turn off"):
+                        if self.DEBUG:
+                            print("STT output started with turn on or turn off, so should not be handled by LLM assistant")
+                        self.try_again_via_assistant = False
+                    
+                    # Show the heard sentence in a popup
+                    if self.DEBUG or self.popup_heard_sentence:
+                        print("llm_stt: pairing_prompt: AI heard: " + str(stt_output))
+                        self.send_pairing_prompt( "AI heard: " + str(stt_output) )
+                    
+                    if self.llm_stt_always_use:
+                        if self.DEBUG:
+                            print("\nllm_stt: llm_stt_always_use is true, so calling query_intent");
+                        self.query_intent(stt_output)
+                    
+                    elif self.llm_assistant_started and self.try_again_via_assistant:
+                        if self.DEBUG:
+                            print(" - > passing LLM STT output to AI assistant")
+                        self.try_again_via_stt = False
+                        self.try_again_via_assistant = False
+                        #self.speak("Hmmm",intent=intent)
+                        
+                        self.ask_ai_assistant(str(stt_output),intent=intent)
+                        
+                    elif self.try_again_via_stt:
+                        if self.DEBUG:
+                            print(" - > retrying with LLM STT output using query_intent()")
+                        self.try_again_via_stt = False
+                        self.last_text_command = str(stt_output)
+                        #self.parse_text(site_id=self.persistent_data['site_id'],origin="llm_stt")
+                        self.llm_stt_sentence = stt_output
+                        self.query_intent(stt_output)
+                        
+                    else:
+                        self.llm_stt_sentence = ''
+                        self.try_again_via_stt = False
+                        self.try_again_via_assistant = False
+                        if self.DEBUG:
+                            print(" - > Not doing anything with LLM STT output. self.llm_assistant_started: " + str(self.llm_assistant_started))
+                            print("")
+                            
+                            
+                else:
+                    if self.DEBUG:
+                        print("invalid result? No text in stt server json result")
+            except Exception as ex:
+                if self.DEBUG:
+                    print("Error parsing STT server result, invalid json? Error: " + str(ex))
+                self.llm_stt_sentence = ''
+                if self.try_again_via_stt or self.try_again_via_assistant:
+                    self.speak("Sorry, I don't understand",intent=intent)
+                self.try_again_via_stt = False
+                self.try_again_via_assistant = False
+                self.llm_stt_skipped = True
+                
+                    
+                    
+                    
             
             else:
                 if self.DEBUG:
                     print("not enough free memory to run LLM STT (or AI assistant)")
+                self.llm_stt_sentence = ''
                 self.try_again_via_stt = False
                 self.try_again_via_assistant = False
                 self.llm_stt_skipped = True
@@ -10336,6 +10386,8 @@ class VocoAdapter(Adapter):
         
         my_env = os.environ.copy()
         
+        #'--audio_ctx',
+        #'0',
         
         # suppress_non_speech_tokens
         
@@ -10375,7 +10427,7 @@ class VocoAdapter(Adapter):
             self.assistant_loop_counter = 0
             
             while self.running:
-                sleep(1)
+                
                 self.assistant_loop_counter += 1
                 if self.assistant_loop_counter == 60:
                     self.assistant_loop_counter = 0
@@ -10395,7 +10447,8 @@ class VocoAdapter(Adapter):
                         self.llm_assistant_started = False
                         self.last_assistant_output_change_time = time.time()
                         self.start_ai_assistant()
-    
+                
+                sleep(1)
             
     
     
@@ -10490,7 +10543,7 @@ class VocoAdapter(Adapter):
             #">>",
             #"-"
             ">>",
-            self.llm_assistant_output_file_path
+            str(self.llm_assistant_output_file_path)
             #"2>&1",
             #"|",
             #"cat"
@@ -10728,6 +10781,8 @@ class VocoAdapter(Adapter):
         self.try_again_via_stt = False
         self.try_again_via_assistant = False
         
+        if intent != None and 'sessionId' in intent:
+            self.mqtt_client.publish('hermes/dialogueManager/endSession', json.dumps({"text": "", "sessionId": intent['sessionId']}))
         self.mqtt_client.publish('hermes/dialogueManager/endSession', json.dumps({"text": "", "sessionId": str(self.current_snips_session_id)}))
         
         try:
@@ -10850,12 +10905,19 @@ class VocoAdapter(Adapter):
                         
                         
                                 with open('/tmp/assistant_output.txt', "r") as f:
-                                    content = f.readlines()
-                                    full = ''.join(content)
+                                    #content = f.readlines()
+                                    #full = ''.join(content)
+                                    full = f.read() #lines()
                                     full = full.strip()
+                                    
                             
                                     if self.DEBUG:
                                         print("full: " + str(full))
+                            
+                                    if '\n\n' in full:
+                                        if self.DEBUG:
+                                            print("spotted two consecutive newlines in a row in full STT output")
+                                        full = full.split('\n\n')[0]
                             
                                     if full.startswith('Researcher:'):
                                         full = full[11:]
