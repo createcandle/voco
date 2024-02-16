@@ -231,7 +231,7 @@ class VocoAdapter(Adapter):
         
         # STT
         self.llm_stt_enabled = True
-        self.llm_stt_binary_name = 'server0'
+        self.llm_stt_binary_name = 'whisper_server'
         self.llm_stt_minimal_memory = 600
         self.llm_stt_possible = False
         self.llm_stt_done = False
