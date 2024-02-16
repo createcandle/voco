@@ -4879,14 +4879,16 @@ class VocoAdapter(Adapter):
 
         
     def on_second_message(self, client, userdata, msg):
-        if self.DEBUG:
-            print('\n\n\n===========LOCAL MESSAGE (2nd client)===========')
-        
         if msg.topic == self.audio_frame_topic:
-            print("\n\nGOOD, got audio frame topic at second (local) MQTT client\n\n")
+            #print("GOOD, got audio frame topic at second (local) MQTT client")
             if self.recording_state > 0:
                 self.start_record(msg)
             return
+        
+        if self.DEBUG:
+            print('\n\n\n===========LOCAL MESSAGE (2nd client)===========')
+        
+        
             
         payload = {}
         try:
@@ -5009,9 +5011,15 @@ class VocoAdapter(Adapter):
                     print(json.dumps(intent_message, indent=4, sort_keys=True))
                     print("\n$\n$\n$\n")
                     print("sending fafafafa intent message to master_intent_callback")
+                    
+                    print("intent_message['sessionId']: " + str(intent_message['sessionId']))
+                    print("self.current_snips_session_id: " + str(self.current_snips_session_id))
                 
                 self.mqtt_client.publish('hermes/dialogueManager/endSession', json.dumps({"text": "", "sessionId": intent_message['sessionId']}))
-                self.mqtt_client.publish('hermes/dialogueManager/endSession', json.dumps({"text": "", "sessionId": str(self.current_snips_session_id)}))
+                if str(intent_message['sessionId']) != str(self.current_snips_session_id):
+                    if self.DEBUG:
+                        print("publishing to endSession twice. ")
+                    self.mqtt_client.publish('hermes/dialogueManager/endSession', json.dumps({"text": "", "sessionId": str(self.current_snips_session_id)}))
                 self.master_intent_callback(intent_message)
             else:
                 if self.DEBUG:
@@ -5019,13 +5027,21 @@ class VocoAdapter(Adapter):
         
         elif msg.topic.startswith('hermes/nlu/intentNotRecognized'):
             if self.DEBUG:
-                print("\ninteresting, received MQTT message at nlu/intentNotRecognized\n")
+                print("\ninteresting, received MQTT message at nlu/intentNotRecognized\npayload: " + str(payload))
             if 'id' in payload and payload['id'].endswith('fafafafa'): # self.llm_stt_always_use and
                 self.intent_received = True
                 
-                self.mqtt_client.publish('hermes/dialogueManager/endSession', json.dumps({"text": "", "sessionId": intent_message['sessionId']}))
-                self.mqtt_client.publish('hermes/dialogueManager/endSession', json.dumps({"text": "", "sessionId": str(self.current_snips_session_id)}))
-                
+                if self.DEBUG:
+                    print("intentNotRecognized: intent_message['sessionId']: " + str(intent_message['sessionId']))
+                    print("intentNotRecognized: self.current_snips_session_id: " + str(self.current_snips_session_id))
+                    
+                if self.persistent_data['is_satellite'] == False:
+                    self.mqtt_client.publish('hermes/dialogueManager/endSession', json.dumps({"text": "", "sessionId": str(intent_message['sessionId'])}))
+                    if str(intent_message['sessionId']) != str(self.current_snips_session_id):
+                        if self.DEBUG:
+                            print("intentNotRecognized: CLOSING TWO SESSIONS")
+                        self.mqtt_client.publish('hermes/dialogueManager/endSession', json.dumps({"text": "", "sessionId": str(self.current_snips_session_id)}))
+                    
                 if 'input' in payload:
                     if self.llm_enabled and self.llm_assistant_enabled and self.llm_assistant_started:
                         self.ask_ai_assistant(payload['input'],intent={'siteId':self.persistent_data['site_id']})
@@ -5712,7 +5728,7 @@ class VocoAdapter(Adapter):
                 
             if self.persistent_data['is_satellite']:
                 if self.DEBUG:
-                    print("I am a satellite, and detected a session start")
+                    print("I am a satellite, and detected a session start.  payload: " + str(payload))
                 
             self.check_available_memory()
                 
@@ -10430,7 +10446,7 @@ class VocoAdapter(Adapter):
             #stt_command = str(os.path.join(self.addon_dir_path,'llm','stt', 'command')) + " -m " + str(os.path.join(self.llm_stt_dir_path, str(self.persistent_data['llm_stt_model']))) + " -ac 768 -t 3 -c 0"
             
             #stt_command = 'curl http://localhost:' + str(self.llm_stt_port) + '/inference -H "Content-Type: multipart/form-data" -F file="@' + str(self.last_recording_path) + '" -F temperature="0.2" -F temperature_inc="0.2" -F response_format="json"'
-            stt_command = 'curl http://' + str(self.persistent_data['main_controller_ip']) + ':' + str(self.llm_stt_port) + '/inference -H "Content-Type: multipart/form-data" -F file="@' + str(self.last_recording_path) + '" -F temperature="0.2" -F temperature_inc="0.2" -F response_format="json"'
+            stt_command = 'curl http://localhost:' + str(self.llm_stt_port) + '/inference -H "Content-Type: multipart/form-data" -F file="@' + str(self.last_recording_path) + '" -F temperature="0.2" -F temperature_inc="0.2" -F response_format="json"'  # ' + str(self.persistent_data['main_controller_ip']) + '
             if self.DEBUG:
                 print("\n\nVOCO LLM STT CURL COMMAND: " + str(stt_command))
                 #print("\n⏰\nSTT START STOPWATCH: + " + str(time.time() - self.llm_stt_stopwatch) + ', ' + str(time.time() - self.llm_stt_stopwatch_start))
@@ -10438,7 +10454,7 @@ class VocoAdapter(Adapter):
             
             stt_result = run_command(stt_command,30) # If this takes more than 30 seconds..
             #self.llm_stt_stopwatch = time.time() - self.llm_stt_stopwatch
-            self.parse_llm_stt_result(stt_result)
+            self.parse_llm_stt_result(stt_result, intent)
             
         
        
@@ -10453,7 +10469,7 @@ class VocoAdapter(Adapter):
     
     
     # result can come from on device STT server, or from other more capable STT server on the local network.
-    def parse_llm_stt_result(self, stt_result=None):
+    def parse_llm_stt_result(self, stt_result=None, intent=None):
         if self.DEBUG:
             print("in parse_llm_stt_result")
         self.llm_stt_done = True
