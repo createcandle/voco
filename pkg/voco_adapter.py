@@ -171,8 +171,17 @@ class VocoAdapter(Adapter):
 
         self.pipewire_data = {'sinks':{},'sources':{},'default_audio_sink_name':None,'default_audio_sink_nice_name':None,'default_audio_sink_id':None,'default_audio_source_name':None,'default_audio_source_nice_name':None,'default_audio_source_id':None}
         self.pipewire_enabled = False
-        pipewire_test = run_command('amixer info')
-        if pipewire_test != None and 'pipewire' in pipewire_test:
+        pipewire_test = run_command('ps aux | grep pipewire')
+        #pipewire_test = subprocess.check_output(['amixer','info'])
+        
+        
+        if self.DEBUG:
+            print("pipewire_test: " + str(pipewire_test))
+        
+        #if pipewire_test != None and 'pipewire' in pipewire_test.lower():
+        if pipewire_test != None and 'bin/pipewire' in pipewire_test.lower():
+            if self.DEBUG:
+                print("pipewire is enabled")
             self.pipewire_enabled = True
             self.pipewire_data = get_pipewire_audio_controls(False) # True = debug
             
@@ -207,11 +216,12 @@ class VocoAdapter(Adapter):
         self.llm_should_download = True
         self.llm_busy_downloading_models = 0
         self.llm_not_enough_disk_space = False
-        self.llm_downloaded_models = {'tts':[],'stt':[],'assistant':[]}
+        #self.llm_downloaded_models = {'tts':[],'stt':[],'assistant':[]} # is this still used?
         
         
         # TTS
         self.llm_tts_enabled = True
+        self.llm_tts_binary_name = 'piper'
         self.llm_tts_minimal_memory = 300
         self.llm_tts_possible = False
         self.llm_tts_output_device_string = 'Default'
@@ -221,7 +231,8 @@ class VocoAdapter(Adapter):
         
         # STT
         self.llm_stt_enabled = True
-        self.llm_stt_minimal_memory = 500
+        self.llm_stt_binary_name = 'server0'
+        self.llm_stt_minimal_memory = 600
         self.llm_stt_possible = False
         self.llm_stt_done = False
         self.llm_stt_sentence = ''
@@ -243,8 +254,9 @@ class VocoAdapter(Adapter):
         
         # Assistant
         self.llm_assistant_enabled = True
+        self.llm_assistant_binary_name = 'llamacpp'
         self.assistant_countdown = 0
-        self.llm_assistant_minimal_memory = 1000
+        self.llm_assistant_minimal_memory = 1200
         self.llm_assistant_possible = False
         self.llm_assistant_started = False
         self.llm_assistant_process = None
@@ -287,13 +299,16 @@ class VocoAdapter(Adapter):
         self.device_model = run_command("cat /proc/device-tree/model")
         print("self.device_model: " + str(self.device_model))
         # Could try to generate audio files for common voice responses, to speed up these parts.
-        self.use_audio_cache = True
+        
+        # This is not really a good option since aplay doesn't allow for volume control. Perhaps ffplay could be used instead, but that's slower, which negates the whole point.
+        self.use_audio_cache = False
         self.llm_tts_common_responses = [
             "Hello. I am listening.",
             "One moment",
             "Hmmm",
             "echo",
             "Sorry, I don't understand",
+            "Sorry, the main Voco controller is not responding",
             "Ok, I will let you know when it switches back to on",
             "Ok, I will let you know when it switches back to off",
             "10",
@@ -857,7 +872,7 @@ class VocoAdapter(Adapter):
         self.external_processes = [] # Will hold all the spawned processes      
         self.current_snips_session_id = ''
         self.snips_clear_injections_first = False
-        self.snips_satellite_parts = ['snips-audio-server','snips-hotword']
+        self.snips_satellite_parts = ['snips-audio-server','snips-hotword'] # No longer needed, as the satellite now runs the full monty
         #self.snips_parts = ['snips-hotword','snips-audio-server','snips-tts','snips-nlu','snips-injection','snips-dialogue','snips-asr']
         self.snips_parts = [
                             
@@ -992,7 +1007,7 @@ class VocoAdapter(Adapter):
         self.llm_data_dir_path = os.path.join(self.data_dir_path, 'llm')
         
         # TTS
-        self.llm_piper_path = os.path.join(self.addon_dir_path,'llm','tts', 'piper')
+        self.llm_piper_path = os.path.join(self.addon_dir_path,'llm','tts', self.llm_tts_binary_name)
         self.llm_tts_espeak_dir_path = os.path.join(self.addon_dir_path,'llm','tts','espeak-ng-data') # sic
         self.llm_tts_dir_path = os.path.join(self.llm_data_dir_path, 'tts')
         self.llm_tts_cache_dir_path = os.path.join(self.llm_data_dir_path, 'tts_cache')
@@ -1012,7 +1027,7 @@ class VocoAdapter(Adapter):
         #self.llm_assistant_binary_path = os.path.join(self.data_dir_path,'llm','llamafile')
         
         
-        self.llm_assistant_binary_path = os.path.join(self.addon_dir_path,'llm','assistant','llamacpp')
+        self.llm_assistant_binary_path = os.path.join(self.addon_dir_path,'llm','assistant',self.llm_assistant_binary_name)
         
         
         #self.llm_assistant_binary_path = os.path.join(self.addon_dir_path,'llm','assistant','llama_cpp')
@@ -1026,7 +1041,7 @@ class VocoAdapter(Adapter):
         
         # STT
         self.llm_stt_dir_path = os.path.join(self.llm_data_dir_path, 'stt')
-        self.llm_stt_executable_path = os.path.join(self.addon_dir_path,'llm','stt', 'server0')
+        self.llm_stt_executable_path = os.path.join(self.addon_dir_path,'llm','stt', self.llm_stt_binary_name)
         
         
         
@@ -1196,13 +1211,21 @@ class VocoAdapter(Adapter):
         
         if 'llm_stt_model' not in self.persistent_data:
             #self.persistent_data['llm_stt_model'] = 'ggml-small.en.bin'
-            self.persistent_data['llm_stt_model'] = 'ggml-base.en.bin'
+            self.persistent_data['llm_stt_model'] = 'voco'
+            if self.free_memory > self.llm_stt_minimal_memory + 500:
+                self.persistent_data['llm_stt_model'] = 'ggml-base.en.bin'
+                
+        if 'llm_tts_model' not in self.persistent_data:
+            self.persistent_data['llm_tts_model'] = 'voco'
+            if self.free_memory > self.llm_tts_minimal_memory + 500:
+                self.persistent_data['llm_tts_model'] = 'en_US-lessac-medium.onnx'
                 
         if 'llm_assistant_model' not in self.persistent_data:
-            self.persistent_data['llm_assistant_model'] = 'tinyllama-1.1b-1t-openorca.Q4_K_M.gguf'
+            self.persistent_data['llm_assistant_model'] = 'voco'
+            if self.free_memory > self.llm_assistant_minimal_memory + 500:
+                self.persistent_data['llm_assistant_model'] = 'tinyllama-1.1b-1t-openorca.Q4_K_M.gguf'
         
-        if 'llm_tts_model' not in self.persistent_data:
-            self.persistent_data['llm_tts_model'] = 'en_US-lessac-medium.onnx'
+       
             
         
         
@@ -4069,19 +4092,14 @@ class VocoAdapter(Adapter):
                                 if poll_error_count > 0:
                                     if self.DEBUG:
                                         print("clock: poll error count was: " + str(poll_error_count))
-                                        alternative_process_counter = self.is_snips_running_count()
-                                        if self.DEBUG:
-                                            print("clock: second opinion on Snips being down: self.is_snips_running_count() count: " + str(alternative_process_counter))
+                                    alternative_process_counter = self.is_snips_running_count()
+                                    if self.DEBUG:
+                                        print("clock: second opinion on Snips being down: self.is_snips_running_count() count: " + str(alternative_process_counter))
                             
-                                        if self.persistent_data['is_satellite']:
-                                            if alternative_process_counter < len(self.snips_satellite_parts): # == 0:
-                                                if self.DEBUG:
-                                                    print("conclusion: snips satellite should be restarted")
-                                                self.should_restart_snips = True
-                                        elif alternative_process_counter < len(self.snips_parts):
-                                            self.should_restart_snips = True
-                                            if self.DEBUG:
-                                                print("conclusion: too few snips parts are up, snips coordinator should be restarted")
+                                    if alternative_process_counter < len(self.snips_parts):
+                                        self.should_restart_snips = True
+                                        if self.DEBUG:
+                                            print("conclusion: too few snips parts are up, snips coordinator should be restarted")
                             else:
                                 pass
                                 #if self.DEBUG:
@@ -4248,9 +4266,9 @@ class VocoAdapter(Adapter):
             
         self.running = False
         
-        os.system('pkill -f llamafile')
-        os.system('pkill -f server0')
-        os.system('pkill -f piper')
+        os.system('pkill -f ' + str(self.llm_tts_binary_name))
+        os.system('pkill -f ' + str(self.llm_stt_binary_name))
+        os.system('pkill -f ' + str(self.llm_assistant_binary_name))
         if os.path.exists(str(self.llm_generated_text_file_path)):
             os.system('rm ' + str(self.llm_generated_text_file_path))
         
@@ -4854,6 +4872,13 @@ class VocoAdapter(Adapter):
     def on_second_message(self, client, userdata, msg):
         if self.DEBUG:
             print('\n\n\n===========LOCAL MESSAGE (2nd client)===========')
+        
+        if msg.topic == self.audio_frame_topic:
+            print("\n\nGOOD, got audio frame topic at second (local) MQTT client\n\n")
+            if self.recording_state > 0:
+                self.start_record(msg)
+            return
+            
         payload = {}
         try:
             payload = json.loads(msg.payload.decode('utf-8')) 
@@ -4874,6 +4899,8 @@ class VocoAdapter(Adapter):
         #if msg.topic == "hermes/audioServer/default/audioFrame":
         #    self.start_record(msg)
             
+            
+        
             
         if msg.topic == 'hermes/asr/textCaptured':
             if self.DEBUG:
@@ -5198,7 +5225,7 @@ class VocoAdapter(Adapter):
                             print("toggleOn: stt process seems to be running OK")
                             self.llm_stt_started = True
                         
-                        self.mqtt_client.unsubscribe(self.audio_frame_topic)
+                        self.mqtt_second_client.unsubscribe(self.audio_frame_topic)
                         
                     except Exception as ex:
                         print("error unsubscribing from audio frame topic on first mqtt client: " + str(ex))
@@ -5604,9 +5631,9 @@ class VocoAdapter(Adapter):
 
         
         if msg.topic == self.audio_frame_topic:
-            #print("got audio frame topic")
-            if self.recording_state > 0:
-                self.start_record(msg)
+            print("\n\nWARNING, got audio frame topic at first MQTT client\n\n")
+            #if self.recording_state > 0:
+            #    self.start_record(msg)
             return
         
         payload = {}
@@ -5649,6 +5676,19 @@ class VocoAdapter(Adapter):
                     if payload['siteId'].endswith(self.persistent_data['site_id']):
                         if self.DEBUG:
                             print("in /parse, is satellite, and site_id matches with mine")
+                        
+                        if 'unknownword' in payload['text']:
+                            if self.DEBUG:
+                                print("in hermers/voco/parse, is satellite, and site_id matches with mine, but 'unknownword' in sentence. ABORTING")
+                            self.last_text_command = ''
+                            return
+                            
+                        if payload['text'] == 'set':
+                            if self.DEBUG:
+                                print("in hermers/voco/parse, is satellite, and site_id matches with mine, but sentence is 'set'. ABORTING")
+                            self.last_text_command = ''
+                            return
+                            
                         self.last_text_command = payload['text']
                         self.parse_text(site_id=payload['siteId'],origin=payload['origin'])
                     else:
@@ -6325,7 +6365,7 @@ class VocoAdapter(Adapter):
                     if self.DEBUG:
                         print("Skipping testing get_time intent that doesn't have the word 'time' in it because the assistant is running")
                 else:
-                    if self.persistent_data['is_satellite'] and alt_intent_name in ['get_time','set_timer','get_timer_count','list_timers','stop_timer']:
+                    if self.persistent_data['is_satellite'] and most_likely_intent in ['get_time','set_timer','get_timer_count','list_timers','stop_timer']:
                         if self.DEBUG:
                             print("SATELLITE: master_intent_callback: NOT HANDLING most likely timer-related intent") # TODO: even though doing so would make sense..
                     else:
@@ -6373,7 +6413,7 @@ class VocoAdapter(Adapter):
             
         sentence = str(intent_message['input']).lower() # TODO: is it smart to make the sentence lowercase?
         
-        if len(all_possible_intents) == 0:
+        if len(all_possible_intents) == 0 and self.persistent_data['is_satellite'] == False:
             if self.DEBUG:
                 print("POSSIBLE INTENTS LIST IS EMPTY")
             if self.llm_stt_always_use:
@@ -6447,7 +6487,7 @@ class VocoAdapter(Adapter):
                     #with self.voice_messages_queue.mutex:
                     self.voice_messages_queue.queue.clear()
                     os.system("pkill -f aplay")
-                    os.system("pkill -f piper")
+                    os.system('pkill -f ' + str(self.llm_tts_binary_name))
                 
                 else: 
                     if self.DEBUG:
@@ -7176,7 +7216,10 @@ class VocoAdapter(Adapter):
                         except Exception as ex:
                             print("Error showing final message choice details: " + str(ex))
                             
-                    if self.llm_stt_always_use == True or intent_message['siteId'].startswith('llm_stt-'):
+                    if 'siteId' in intent_message and intent_message['siteId'] != self.persistent_data['site_id']:
+                        self.speak(voice_message,intent=intent_message)
+                        
+                    if self.llm_stt_always_use == True or ('siteId' in intent_message and intent_message['siteId'].startswith('llm_stt-')):
                         if self.DEBUG:
                             print("an intent that was based on LLM STT fell through, so it can be routed directly to the assistant")
                         self.ask_ai_assistant(sentence,intent=intent_message)
@@ -9334,6 +9377,12 @@ class VocoAdapter(Adapter):
         if site_id == None:
             site_id = str(self.persistent_data['site_id'])
             
+        if 'unknownword' in self.last_text_command:
+            self.last_text_command = ''
+            
+        if self.last_text_command == 'set':
+            self.last_text_command = ''
+            
         # messages can be returned to the web interface (text), or to the matrix chat room (matrix)
         if self.last_text_command != "":
             self.last_text_command = self.last_text_command.strip()
@@ -9913,7 +9962,7 @@ class VocoAdapter(Adapter):
             self.recording_state = 1
             if self.DEBUG:
                 print("subscribing to audioFrame topic: " + str(self.audio_frame_topic))
-            self.mqtt_client.subscribe(self.audio_frame_topic)
+            self.mqtt_second_client.subscribe(self.audio_frame_topic)
 
 
     def stop_recording(self):
@@ -9928,7 +9977,9 @@ class VocoAdapter(Adapter):
         if self.recording_state == 2:
             self.recording_state = 0
             self.record_running = False
-            self.mqtt_client.unsubscribe(self.audio_frame_topic)
+            if self.DEBUG:
+                print("stop_recording: unsubscribing from audio frame topic")
+            self.mqtt_second_client.unsubscribe(self.audio_frame_topic)
             try:
                 self.record.close()
             
@@ -10047,7 +10098,11 @@ class VocoAdapter(Adapter):
                                 if os.path.exists(model_file_test_path):
                                     if self.DEBUG:
                                         print("Deleting LLM model that isn't currently used because disk space is low: " + str(model_file_test_path))
+                                    os.system('pkill -f ' + str(self.llm_tts_binary_name))
+                                    os.system('pkill -f ' + str(self.llm_stt_binary_name))
+                                    os.system('pkill -f ' + str(self.llm_assistant_binary_name)) # make sure model file isn't locked
                                     os.system('rm ' + str(model_file_test_path))
+                                    self.assistant_loop_counter = 58
                         
                     if self.llm_models[key]['list'][model_name]['model'] == 'voco':
                         self.llm_models[key]['list'][model_name]['downloaded'] = True
@@ -10055,8 +10110,10 @@ class VocoAdapter(Adapter):
                         self.llm_models[key]['list'][model_name]['downloaded'] = bool(os.path.exists(model_file_test_path))
                  
                 if downloaded_assistant_model and self.llm_stt_started:
-                    os.system('pkill -f llamafile')
-                    
+                    # This will cause the assistant to be restarted
+                    os.system('pkill -f ' + str(self.llm_stt_binary_name))
+                    os.system('pkill -f ' + str(self.llm_assistant_binary_name))
+                    self.assistant_loop_counter = 58
                 
         except Exception as ex:
             print("Error downloading LLM models: " + str(ex))
@@ -10109,7 +10166,7 @@ class VocoAdapter(Adapter):
                 return
             else:
                 if self.DEBUG:
-                    print("\n\RESTARTING TTS. STOPPING IT FIRST\n\n")
+                    print("\n\RESTARTING TTS. STOPPING IT FIRST\n\nself.llm_tts_process.pid: " + str(self.llm_tts_process.pid))
             os.kill(self.llm_tts_process.pid, signal.SIGINT)
             #os.killpg(os.getpgid(self.llm_assistant_process.pid), signal.SIGHUP)
             #os.killpg(os.getpgid(self.llm_assistant_process.pid), signal.SIGTERM)
@@ -10433,6 +10490,15 @@ class VocoAdapter(Adapter):
             
             while self.running:
                 
+                if self.persistent_data['is_satellite'] == True:
+                    if self.llm_stt_started:
+                        
+                        #self.llm_stt_process.terminate()
+                        # TODO: kill both processes nicely
+                        os.system('pkill -f ' + str(self.llm_stt_binary_name))
+                        os.system('pkill -f ' + str(self.llm_assistant_binary_name))
+                    break
+                
                 self.assistant_loop_counter += 1
                 if self.assistant_loop_counter == 60:
                     self.assistant_loop_counter = 0
@@ -10466,10 +10532,11 @@ class VocoAdapter(Adapter):
         if self.llm_assistant_process != None and self.llm_assistant_process.poll() == None:
             if self.DEBUG:
                 print("\n\nASSISTANT ALREADY RUNNING, STOPPING IT FIRST\n\n")
-            os.kill(self.llm_assistant_process.pid, signal.SIGINT)
-            os.killpg(os.getpgid(self.llm_assistant_process.pid), signal.SIGHUP)
-            os.killpg(os.getpgid(self.llm_assistant_process.pid), signal.SIGTERM)
-            time.sleep(1)
+                print("self.llm_assistant_process.pid: " + str(self.llm_assistant_process.pid))
+            #os.kill(self.llm_assistant_process.pid, signal.SIGINT)
+            #os.killpg(os.getpgid(self.llm_assistant_process.pid), signal.SIGHUP)
+            #os.killpg(os.getpgid(self.llm_assistant_process.pid), signal.SIGTERM)
+            #time.sleep(1)
             
             if self.llm_assistant_process.poll() == None:
                 if self.DEBUG:
@@ -10488,12 +10555,11 @@ class VocoAdapter(Adapter):
                     print("AI ASSISTANT PROCESS SEEMS TO HAVE STOPPED PROPERLY")
                 self.llm_assistant_process = None
                 
-        os.system('pkill -f llamafile')
-        
+        os.system('pkill -f ' + str(self.llm_assistant_binary_name))
         
         if self.persistent_data['is_satellite'] == True:
             if self.DEBUG:
-                print("aborting start_ai_assistant: this device is (now) a satellite") # TODO: in the future, if the satellite is powerful enough, why not let it run a local assistant?
+                print("aborting start_ai_assistant: this device is (now) a satellite. Aborting start of assistant") # TODO: in the future, if the satellite is powerful enough, why not let it run a local assistant?
             return
         
         

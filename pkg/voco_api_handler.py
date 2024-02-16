@@ -803,8 +803,6 @@ class VocoAPIHandler(APIHandler):
                                         try:
                                             
                                             
-                                            
-                                            
                                             self.adapter.persistent_data['is_satellite'] = bool(request.body['is_satellite'])
 
                                             #if bool(request.body['is_satellite']) != self.adapter.persistent_data['is_satellite']:
@@ -812,7 +810,7 @@ class VocoAPIHandler(APIHandler):
                                                 
                                                 self.adapter.persistent_data['main_controller_hostname'] = str(request.body['main_controller_hostname'])
                                                 
-                                                if self.adapter.llm_assistant_running:
+                                                if self.adapter.llm_assistant_started:
                                                     self.adapter.start_ai_assistant() # this actually only stops the assistant in this case.
                                                 
                                                 #self.adapter.persistent_data['mqtt_server'] = str(request.body['mqtt_server'])
@@ -867,7 +865,7 @@ class VocoAPIHandler(APIHandler):
                                                 if self.adapter.llm_enabled and self.adapter.llm_assistant_enabled:
                                                     self.adapter.check_available_memory()
                                                     if self.adapter.llm_assistant_possible:
-                                                        self.adapter.start_ai_assistant()
+                                                        self.adapter.download_llm_models()
                                                 
                                                 state = True
                                                 update = 'Satellite mode disabled'
