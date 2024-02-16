@@ -40,7 +40,9 @@ import time
 import queue
 import signal
 import socket
+import base64
 #import psutil
+
 import asyncio
 import logging
 import aiofiles
@@ -230,7 +232,7 @@ class VocoAdapter(Adapter):
         
         
         # STT
-        self.llm_stt_enabled = True
+        self.llm_stt_enabled = False
         self.llm_stt_binary_name = 'whisper_server'
         self.llm_stt_minimal_memory = 600
         self.llm_stt_possible = False
@@ -346,33 +348,38 @@ class VocoAdapter(Adapter):
                                 'description':'A slower speaking British male. Low quality, so may be slightly faster to generate.',
                                 'model_url':'https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_GB/alan/low/en_GB-alan-low.onnx'
                             },
-            'Dutch':{'model':'nl_NL-mls_5809-low.onnx',
-                                'size':61,
-                                'description':'A small model designed to speak Dutch.',
-                                'model_url':'https://huggingface.co/rhasspy/piper-voices/resolve/main/nl/nl_NL/mls_5809/low/nl_NL-mls_5809-low.onnx'
-                            },
-            'German':{'model':'de_DE-pavoque-low.onnx',
-                                'description':'A small model designed to speak German.',
-                                'model_url':'https://huggingface.co/rhasspy/piper-voices/resolve/main/de/de_DE/pavoque/low/de_DE-pavoque-low.onnx'
-                            },
-            'French':{'model':'fr_FR-upmc-medium.onnx',
-                                'description':'A medium sized model designed to speak French.',
-                                'model_url':'https://huggingface.co/rhasspy/piper-voices/resolve/main/fr/fr_FR/upmc/medium/fr_FR-upmc-medium.onnx'
-                            },
-            'Spanish':{'model':'es_ES-carlfm-x_low.onnx',
-                                'description':'A tiny model designed to speak Spanish.',
-                                'model_url':'https://huggingface.co/rhasspy/piper-voices/resolve/main/es/es_ES/carlfm/x_low/es_ES-carlfm-x_low.onnx'
-                            },
-            'Swahili':{'model':'sw_CD-lanfrica-medium.onnx',
-                                'description':'A tiny model designed to speak Spanish.',
-                                'model_url':'https://huggingface.co/rhasspy/piper-voices/resolve/main/sw/sw_CD/lanfrica/medium/sw_CD-lanfrica-medium.onnx'
-                            },
             'Custom':{'model':'custom',
                                 'description':'You can provide a link to a ONNX voice model of your choice in the addon settings, and Voco will download it for you. You can find models at https://rhasspy.github.io/piper-samples/',
                                 'model_url':'custom'
                             }
             
         }
+        
+        """
+        
+        'Dutch':{'model':'nl_NL-mls_5809-low.onnx',
+                            'size':61,
+                            'description':'A small model designed to speak Dutch.',
+                            'model_url':'https://huggingface.co/rhasspy/piper-voices/resolve/main/nl/nl_NL/mls_5809/low/nl_NL-mls_5809-low.onnx'
+                        },
+        'German':{'model':'de_DE-pavoque-low.onnx',
+                            'description':'A small model designed to speak German.',
+                            'model_url':'https://huggingface.co/rhasspy/piper-voices/resolve/main/de/de_DE/pavoque/low/de_DE-pavoque-low.onnx'
+                        },
+        'French':{'model':'fr_FR-upmc-medium.onnx',
+                            'description':'A medium sized model designed to speak French.',
+                            'model_url':'https://huggingface.co/rhasspy/piper-voices/resolve/main/fr/fr_FR/upmc/medium/fr_FR-upmc-medium.onnx'
+                        },
+        'Spanish':{'model':'es_ES-carlfm-x_low.onnx',
+                            'description':'A tiny model designed to speak Spanish.',
+                            'model_url':'https://huggingface.co/rhasspy/piper-voices/resolve/main/es/es_ES/carlfm/x_low/es_ES-carlfm-x_low.onnx'
+                        },
+        'Swahili':{'model':'sw_CD-lanfrica-medium.onnx',
+                            'description':'A tiny model designed to speak Spanish.',
+                            'model_url':'https://huggingface.co/rhasspy/piper-voices/resolve/main/sw/sw_CD/lanfrica/medium/sw_CD-lanfrica-medium.onnx'
+                        },
+        """
+        
         
 
         #'American male 2':{'model':'en_US-hfc_male-medium','description':'A default male American voice. Technically the best quality, but may also be slower to generate.'},
@@ -997,7 +1004,7 @@ class VocoAdapter(Adapter):
         
         # LLM AI PATHS
         self.recording_dir_path = os.path.join(self.data_dir_path, 'recording')
-        self.last_recording_path = os.path.join(self.recording_dir_path, "recording.wav")
+        self.last_recording_path = os.path.join(self.recording_dir_path, str(self.persistent_data['site_id']) + ".wav")
         os.system('mkdir -p ' + str(self.recording_dir_path))
         if self.DEBUG:
             print("WARNING - VOICE RECORDING(S) WILL NOT BE DELETED WHILE IN DEBUG MODE")
@@ -1080,6 +1087,8 @@ class VocoAdapter(Adapter):
         # Old school
         self.tts_path = os.path.join(self.addon_dir_path,"tts" + self.bit_extension)
         self.nanotts_path = str(os.path.join(self.tts_path,'nanotts' + self.bit_extension))
+        if os.path.exists(str(self.nanotts_path)):
+            os.system('chmod +x ' + str(self.nanotts_path))
         
         # Snips paths
         #self.snips_path = os.path.join(self.addon_dir_path,"snips" + self.bit_extension) # set earlier
@@ -5127,48 +5136,43 @@ class VocoAdapter(Adapter):
         elif msg.topic == 'hermes/hotword/toggleOff':
             if self.persistent_data['listening'] == True:
                 if self.DEBUG:
-                    print("MQTT message ends with toggleOff")
+                    print("MQTT message at hermes/hotword/toggleOff")
                 
                 if 'sessionId' in payload:
                     self.current_snips_session_id = payload['sessionId']
                     if self.DEBUG:
-                        print("current_snips_session_id: " + str(self.current_snips_session_id))
+                        print(" - toggleOff: set current_snips_session_id to: " + str(self.current_snips_session_id))
                 
-                if self.persistent_data['listening'] == True and self.llm_enabled and self.llm_stt_enabled and self.llm_models['stt']['active'] != None and self.llm_stt_possible:
-                    #pass
-                    #self.mqtt_client.subscribe('hermes/audioServer/default/audioFrame')
+                if self.persistent_data['listening'] == True:
+                    
+                    # record audio?
+                    if ((self.llm_enabled and self.llm_stt_enabled and self.llm_models['stt']['active'] != None and self.llm_stt_possible) or self.persistent_data['is_satellite'] == True):
+                        #pass
+                        #self.mqtt_client.subscribe('hermes/audioServer/default/audioFrame')
                     
                     
+                        # TEST TO START RECORDING EARLIER
                     
-                    
-                    # TEST TO START RECORDING EARLIER
-                    
-                    try:
-                        if payload['siteId'].startswith('llm_stt-'):
-                            if self.DEBUG:
-                                print("toggleOff: siteId starts with llm_stt-, so not starting audio recording.")
+                        try:
+                            if 'siteId' in payload and payload['siteId'].startswith('llm_stt-') and payload['siteId'].endswith(str(self.persistent_data['site_id'])):
+                                if self.DEBUG:
+                                    print("toggleOff: siteId starts with llm_stt-, so not starting audio recording.")
                         
-                        else:
-                            
-                            if 'siteId' in payload and payload['siteId'] == self.persistent_data['site_id']:
-                    
+                            elif 'siteId' in payload and payload['siteId'] == self.persistent_data['site_id']:
                                 self.start_recording()
                             
-                
-                    except Exception as ex:
-                        print("Error subscribing to audio frame topic on first mqtt client: " + str(ex))
+                        except Exception as ex:
+                            print("Error in toggleOff start_recording check: " + str(ex))
                     
-                    
-                    
-                
-                if 'siteId' in payload and payload['siteId'] == self.persistent_data['site_id']:
-                    if self.DEBUG:
-                        print("toggleOff: calling mute()")
-                    self.mute()
+                    # Mute?
+                    if 'siteId' in payload and payload['siteId'] == self.persistent_data['site_id']:
+                        if self.DEBUG:
+                            print("toggleOff: calling mute()")
+                        self.mute()
                         
-                    ###elif self.persistent_data['is_satellite'] == False:
-                    ###    self.mqtt_client.publish("hermes/voco/" + str(payload['siteId']) + "/mute",json.dumps({"mute":True}))
-
+                        ###elif self.persistent_data['is_satellite'] == False:
+                        ###    self.mqtt_client.publish("hermes/voco/" + str(payload['siteId']) + "/mute",json.dumps({"mute":True}))
+                    
 
         
         elif msg.topic == 'hermes/hotword/toggleOn':
@@ -5537,6 +5541,9 @@ class VocoAdapter(Adapter):
             
             self.mqtt_connected = True
             
+            if self.currently_scanning_for_missing_mqtt_server:
+                if self.DEBUG:
+                    print("mqtt_client: on_connect: currently_scanning_for_missing_mqtt_server was True, setting to false")
             self.currently_scanning_for_missing_mqtt_server = False
                 
             ###self.run_snips()
@@ -5658,7 +5665,6 @@ class VocoAdapter(Adapter):
             
         
 
-        
         if msg.topic == 'hermes/voco/parse':
             if self.DEBUG:
                 print("hermes/voco/parse: payload: " + str(payload))
@@ -6007,8 +6013,56 @@ class VocoAdapter(Adapter):
                     self.parse_ping(payload,ping_type="pong")
                 
                 
+                elif msg.topic.endswith('/do_stt'):
+                    if self.DEBUG:
+                        print("message to hermes/voco ends in /do_stt")
+                    if 'siteId' in payload and 'wav' in payload:
+                        
+                        target_site_id = str(payload['siteId'])
+                        if self.DEBUG:
+                            print("got WAV data and origin siteId: " + str(target_site_id))
+                        
+                        try:
+                            do_stt_result = ''
+                            if self.DEBUG:
+                                do_stt_result = 'What do you need to make cheese?'
                             
-
+                            if self.llm_stt_started:
+                            
+                                #base64_message = 'UHl0aG9uIGlzIGZ1bg=='
+                                base64_bytes = payload['wav'].encode('ascii')
+                                message_bytes = base64.b64decode(base64_bytes)
+                                #message = message_bytes.decode('ascii')
+                            
+                            
+                                do_stt_wav_file_path = os.path.join(self.recording_dir_path, str(self.persistent_data['target_site_id']) + ".wav")
+                                f = open(do_stt_wav_file_path, "wb")
+                                f.write(message_bytes)
+                                f.close()
+                                if self.DEBUG:
+                                    print("wav saved as: " + str(do_stt_wav_file_path))
+                    
+                                do_stt_command = 'curl http://localhost:' + str(self.llm_stt_port) + '/inference -H "Content-Type: multipart/form-data" -F file="@' + str(do_stt_wav_file_path) + '" -F temperature="0.2" -F temperature_inc="0.2" -F response_format="json"'
+                                if self.DEBUG:
+                                    print("\n\nVOCO LLM DO_STT CURL COMMAND: " + str(do_stt_command))
+                                do_stt_result = run_command(do_stt_command,30) # If this takes more than 30 seconds..
+                        
+                            # Return the STT result back to the satellite
+                            if self.DEBUG:
+                                print("do_stt_result: " + str(do_stt_result))
+                            self.mqtt_client.publish("hermes/voco/" + str(target_site_id) + "/stt_done", json.dumps( {"text":str(do_stt_result),"siteId":str(target_site_id)} )) # ,"sessionId":str(payload['sessionId']
+                            
+                        except Exception as ex:
+                            print("Caught error in /do_stt: " + str(ex))
+                        
+                        
+                    
+                elif msg.topic.endswith('/stt_done'):
+                    if self.DEBUG:
+                        print("got message on /stt_done.  payload: " + str(payload))
+                    if 'text' in payload:
+                        self.parse_llm_stt_result(payload['text'])
+                    
                 """
                 elif msg.topic.endswith('/mute'):
                     if self.DEBUG:
@@ -6159,24 +6213,21 @@ class VocoAdapter(Adapter):
                         self.save_to_persistent_data = True
             
             
-                    # Main server was missing for a while
-                    if self.periodic_voco_attempts > 3:
-                        if self.DEBUG:
-                            print("Voco addon on the main server sent a ping/pong after being missing for a while.")
-            
                     # Main server was missing for a LONG while
                     if self.currently_scanning_for_missing_mqtt_server:
                         self.currently_scanning_for_missing_mqtt_server = False
                         self.persistent_data['mqtt_server'] = str(payload['ip'])
                         self.save_to_persistent_data = True
-                            
+                        
                         # set the status back to something normal
                         if self.persistent_data['listening']:
                             self.set_status_on_thing("Listening")
                         else:
                             self.set_status_on_thing("Not listening")
-                            
-                            
+                
+                        self.should_restart_mqtt = True
+                
+                
                 #
                 # Message from a connected satellite
                 #
@@ -7273,9 +7324,11 @@ class VocoAdapter(Adapter):
                     
                 else:
                     if self.DEBUG:
-                        print("no need to use LLM Assistant")
+                        print("no need to use LLM Assistant. voice_message: " + str(voice_message))
                     self.last_command_was_answered_by_assistant = False
-                    self.speak(voice_message,intent=intent_message)
+                    if voice_message != '':
+                        self.speak(voice_message,intent=intent_message)
+                        
         except Exception as ex:
             print("Error handling resulting voice response: " + str(ex))    
         
@@ -10119,15 +10172,14 @@ class VocoAdapter(Adapter):
             print("Error downloading LLM models: " + str(ex))
             
         self.llm_busy_downloading_models = 0        
-               
         
-        if self.llm_enabled and self.llm_stt_enabled and self.llm_stt_started == False and self.s == None:
-            self.s = threading.Thread(target=self.start_llm_stt_server) #, args=(self.voice_messages_queue,)
+        if self.llm_enabled and (self.llm_stt_enabled or self.llm_assistant_enabled) and self.s == None:
+            self.s = threading.Thread(target=self.start_llm_servers) #, args=(self.voice_messages_queue,)
             self.s.daemon = True
             self.s.start()
         
             if self.DEBUG:
-                print("download llmm models: called start_llm_stt_server")
+                print("download llmm models: called start_llm_servers")
                 
         #print("\nModel data after download phase:\n\n" + str(json.dumps(self.llm_models, indent=4)))
         #print("\n\n")
@@ -10136,7 +10188,66 @@ class VocoAdapter(Adapter):
 
 
 
+    def start_llm_servers(self):
+        if self.DEBUG:
+            print("in start_llm_servers thread")
+            
+        # Start the STT server
+        if self.llm_stt_enabled:
+            self.start_llm_stt_server()
+            
+        # Next, start the assistant    
+        if self.DEBUG:
+            print("self.llm_assistant_possible? " + str(self.llm_assistant_possible))
+        
+        if self.llm_assistant_enabled:
+            if self.llm_assistant_possible == False:
+                if self.DEBUG:
+                    print("\nNOT STARTING LLM ASSISTANT because llm_assistant_possible is False")
+            else:
+                self.start_ai_assistant()
 
+        self.assistant_loop_counter = 0
+        while self.running:
+            
+            if self.persistent_data['is_satellite'] == True:
+                if self.llm_stt_started:
+                    
+                    #self.llm_stt_process.terminate()
+                    # TODO: kill both processes nicely
+                    os.system('pkill -f ' + str(self.llm_stt_binary_name))
+                    os.system('pkill -f ' + str(self.llm_assistant_binary_name))
+                break
+            
+            self.assistant_loop_counter += 1
+            if self.assistant_loop_counter == 60:
+                self.assistant_loop_counter = 0
+                if self.DEBUG:
+                    print("at assistant periodic restart check. self.llm_assistant_response_count: " + str(self.llm_assistant_response_count))
+                
+                if self.llm_stt_enabled:
+                    if self.llm_stt_process == None or (self.llm_stt_process != None and self.llm_stt_process.poll() != None):
+                        if self.DEBUG:
+                            print("\nLLM servers thread: STT server seems to have crashed. Attempting restart\n")
+                        self.llm_stt_started = False
+                        self.start_llm_stt_server()
+                
+                if self.llm_assistant_enabled:
+                    if self.llm_assistant_process == None or (self.llm_assistant_process != None and self.llm_assistant_process.poll() != None):
+                        if self.DEBUG:
+                            print("\nLLM servers thread: assistant seems to have crashed. Attempting restart\n")
+                        self.llm_assistant_started = False
+                        self.last_assistant_output_change_time = time.time()
+                        self.start_ai_assistant()
+                
+                    elif self.llm_assistant_response_count > 2 and (time.time() - 60) > self.last_assistant_output_change_time:
+                        if self.DEBUG:
+                            print("\no\noo\nooo\nLLM servers thread: attemping to restart assistant process\nooo\noo\no\n")
+                        self.llm_assistant_started = False
+                        self.last_assistant_output_change_time = time.time()
+                        self.start_ai_assistant()
+            
+            sleep(1)
 
 
 
@@ -10259,13 +10370,30 @@ class VocoAdapter(Adapter):
 
     def llm_stt(self,intent=None):
         if self.DEBUG:
-            print("in llm_stt")
+            print("in llm_stt. intent: " + str(intent))
+            print(" - llm_stt_started: " + str(self.llm_stt_started))
+        
+        # TODO: Technically the main Voco controller might not be the fastest STT server on the network. Each Voco instance with an STT server could share a score for their own speed, so satellites can select the fastest one to latch onto.
+        if self.llm_stt_started == False and self.mqtt_client != None and self.mqtt_connected and self.persistent_data['main_site_id'] != self.persistent_data['site_id'] and self.persistent_data['is_satellite'] == True:
+            f=open(str(self.last_recording_path), "rb")
+            fileContent = f.read()
+            
+            message_bytes = fileContent.encode('ascii')
+            base64_bytes = base64.b64encode(message_bytes)
+            base64_message = base64_bytes.decode('ascii')
+            
+            #byteArr = bytearray(fileContent)
+            #self.mqtt_client.publish("/hermes/voco/" + str(self.persistent_data['main_site_id']) + '/do_sst', byteArr, 0)
+            
+            self.mqtt_client.publish("/hermes/voco/" + str(self.persistent_data['main_site_id']) + '/do_sst', json.dumps({'siteId':str(self.persistent_data['main_site_id']), 'wav':str(base64_message)}) )
+        
+            
         
         if self.llm_models['stt']['active'] == None: # TODO: or just skip ahead anyway if this is a satellite, and the main controller has running TTS server running. This will need to be communicated via the pings.
             if self.DEBUG:
                 print("llm_stt: no active model defined yet")
             return
-            
+        
         if self.llm_enabled and self.llm_stt_enabled and self.llm_stt_started:
             
             # Check if the LLM STT server is still running OK
@@ -10307,116 +10435,11 @@ class VocoAdapter(Adapter):
                 print("\n\nVOCO LLM STT CURL COMMAND: " + str(stt_command))
                 #print("\n⏰\nSTT START STOPWATCH: + " + str(time.time() - self.llm_stt_stopwatch) + ', ' + str(time.time() - self.llm_stt_stopwatch_start))
                 #self.llm_stt_stopwatch = time.time()  
-              
+            
             stt_result = run_command(stt_command,30) # If this takes more than 30 seconds..
             #self.llm_stt_stopwatch = time.time() - self.llm_stt_stopwatch
+            self.parse_llm_stt_result(stt_result)
             
-            self.llm_stt_done = True
-            
-            if not self.DEBUG:
-                self.delete_recordings()
-            
-            if self.DEBUG:
-                print("\n\nVOCO LLM STT RESULT: " + str(stt_result))
-                print("\n⏰\nSTT DONE STOPWATCH: + " + str(time.time() - self.llm_stt_stopwatch) + ', ' + str(time.time() - self.llm_stt_stopwatch_start))
-                self.llm_stt_stopwatch = time.time()
-                print(" - - self.try_again_via_stt: " + str(self.try_again_via_stt))
-                print(" - - self.try_again_via_assistant: " + str(self.try_again_via_assistant))
-                
-            if stt_result == None:
-                if self.DEBUG:
-                    print("STT output was None\n\n")
-                if self.llm_stt_always_use or self.try_again_via_assistant:
-                    self.speak("Sorry, I don't understand",intent=intent)
-                return
-                
-            try:
-                data = json.loads(stt_result)
-                if 'text' in data:
-                    stt_output = data['text']
-                
-                    if stt_output == '':
-                        if self.DEBUG: # or self.llm_stt_always_use:
-                            self.speak("debug, I heard nothing",intent=intent)
-                        self.send_pairing_prompt( "AI heard nothing")
-                        return
-                        
-                    stt_output = clean_up_stt_result(stt_output)
-                    
-                        
-                
-                    if '[' in stt_output:
-                        if self.DEBUG:
-                            print("removing parts in between square brackets from stt_output")
-                        stt_output = re.sub(r'\[.*?\]', '', stt_output)
-                
-                    if stt_output.startswith("turn on") or stt_output.startswith("turn off"):
-                        if self.DEBUG:
-                            print("STT output started with turn on or turn off, so should not be handled by LLM assistant")
-                        self.try_again_via_assistant = False
-                    
-                    # Show the heard sentence in a popup
-                    if self.DEBUG or self.popup_heard_sentence:
-                        print("llm_stt: pairing_prompt: AI heard: " + str(stt_output))
-                        self.send_pairing_prompt( "AI heard: " + str(stt_output) )
-                    
-                    if self.llm_stt_always_use:
-                        if self.DEBUG:
-                            print("\nllm_stt: llm_stt_always_use is true, so calling query_intent");
-                        self.query_intent(stt_output)
-                    
-                    elif self.llm_assistant_started and self.try_again_via_assistant:
-                        if self.DEBUG:
-                            print(" - > passing LLM STT output to AI assistant")
-                        self.try_again_via_stt = False
-                        self.try_again_via_assistant = False
-                        #self.speak("Hmmm",intent=intent)
-                        
-                        self.ask_ai_assistant(str(stt_output),intent=intent)
-                        
-                    elif self.try_again_via_stt:
-                        if self.DEBUG:
-                            print(" - > retrying with LLM STT output using query_intent()")
-                        self.try_again_via_stt = False
-                        self.last_text_command = str(stt_output)
-                        #self.parse_text(site_id=self.persistent_data['site_id'],origin="llm_stt")
-                        self.llm_stt_sentence = stt_output
-                        self.query_intent(stt_output)
-                        
-                    else:
-                        self.llm_stt_sentence = ''
-                        self.try_again_via_stt = False
-                        self.try_again_via_assistant = False
-                        if self.DEBUG:
-                            print(" - > Not doing anything with LLM STT output. self.llm_assistant_started: " + str(self.llm_assistant_started))
-                            print("")
-                            
-                            
-                else:
-                    if self.DEBUG:
-                        print("invalid result? No text in stt server json result")
-            except Exception as ex:
-                if self.DEBUG:
-                    print("Error parsing STT server result, invalid json? Error: " + str(ex))
-                self.llm_stt_sentence = ''
-                if self.try_again_via_stt or self.try_again_via_assistant:
-                    self.speak("Sorry, I don't understand",intent=intent)
-                self.try_again_via_stt = False
-                self.try_again_via_assistant = False
-                self.llm_stt_skipped = True
-                
-                    
-                    
-                    
-            
-            else:
-                if self.DEBUG:
-                    print("not enough free memory to run LLM STT (or AI assistant)")
-                self.llm_stt_sentence = ''
-                self.try_again_via_stt = False
-                self.try_again_via_assistant = False
-                self.llm_stt_skipped = True
-                
         
        
         #subprocess.run(tts_command, capture_output=False, shell=True, check=False, encoding=None, errors=None, text=None, env=None, universal_newlines=None)
@@ -10429,20 +10452,129 @@ class VocoAdapter(Adapter):
                 print("WARNING, STT SERVER HAS NOT STARTED")
     
     
+    # result can come from on device STT server, or from other more capable STT server on the local network.
+    def parse_llm_stt_result(self, stt_result=None):
+        if self.DEBUG:
+            print("in parse_llm_stt_result")
+        self.llm_stt_done = True
+        
+        if not self.DEBUG:
+            self.delete_recordings()
+        
+        if self.DEBUG:
+            print("\n\nVOCO LLM STT RESULT: " + str(stt_result))
+            print("\n⏰\nSTT DONE STOPWATCH: + " + str(time.time() - self.llm_stt_stopwatch) + ', ' + str(time.time() - self.llm_stt_stopwatch_start))
+            self.llm_stt_stopwatch = time.time()
+            print(" - - self.try_again_via_stt: " + str(self.try_again_via_stt))
+            print(" - - self.try_again_via_assistant: " + str(self.try_again_via_assistant))
+            
+        if stt_result == None:
+            if self.DEBUG:
+                print("STT output was None\n\n")
+            if self.llm_stt_always_use or self.try_again_via_assistant:
+                self.speak("Sorry, I don't understand",intent=intent)
+            return
+            
+        try:
+            data = json.loads(stt_result)
+            if 'text' in data:
+                stt_output = data['text']
+            
+                if stt_output == '':
+                    if self.DEBUG: # or self.llm_stt_always_use:
+                        self.speak("debug, I heard nothing",intent=intent)
+                    self.send_pairing_prompt( "AI heard nothing")
+                    return
+                    
+                stt_output = clean_up_stt_result(stt_output)
+                
+                    
+            
+                if '[' in stt_output:
+                    if self.DEBUG:
+                        print("removing parts in between square brackets from stt_output")
+                    stt_output = re.sub(r'\[.*?\]', '', stt_output)
+            
+                if stt_output.startswith("turn on") or stt_output.startswith("turn off"):
+                    if self.DEBUG:
+                        print("STT output started with turn on or turn off, so should not be handled by LLM assistant")
+                    self.try_again_via_assistant = False
+                
+                # Show the heard sentence in a popup
+                if self.DEBUG or self.popup_heard_sentence:
+                    print("llm_stt: pairing_prompt: AI heard: " + str(stt_output))
+                    self.send_pairing_prompt( "AI heard: " + str(stt_output) )
+                
+                if self.llm_stt_always_use:
+                    if self.DEBUG:
+                        print("\nllm_stt: llm_stt_always_use is true, so calling query_intent");
+                    self.query_intent(stt_output)
+                
+                elif self.llm_assistant_started and self.try_again_via_assistant:
+                    if self.DEBUG:
+                        print(" - > passing LLM STT output to AI assistant")
+                    self.try_again_via_stt = False
+                    self.try_again_via_assistant = False
+                    #self.speak("Hmmm",intent=intent)
+                    
+                    self.ask_ai_assistant(str(stt_output),intent=intent)
+                    
+                elif self.try_again_via_stt:
+                    if self.DEBUG:
+                        print(" - > retrying with LLM STT output using query_intent()")
+                    self.try_again_via_stt = False
+                    self.last_text_command = str(stt_output)
+                    #self.parse_text(site_id=self.persistent_data['site_id'],origin="llm_stt")
+                    self.llm_stt_sentence = stt_output
+                    self.query_intent(stt_output)
+                    
+                else:
+                    self.llm_stt_sentence = ''
+                    self.try_again_via_stt = False
+                    self.try_again_via_assistant = False
+                    if self.DEBUG:
+                        print(" - > Not doing anything with LLM STT output. self.llm_assistant_started: " + str(self.llm_assistant_started))
+                        print("")
+                        
+                        
+            else:
+                if self.DEBUG:
+                    print("invalid result? No text in stt server json result")
+        except Exception as ex:
+            if self.DEBUG:
+                print("Error parsing STT server result, invalid json? Error: " + str(ex))
+            self.llm_stt_sentence = ''
+            if self.try_again_via_stt or self.try_again_via_assistant:
+                self.speak("Sorry, I don't understand",intent=intent)
+            self.try_again_via_stt = False
+            self.try_again_via_assistant = False
+            self.llm_stt_skipped = True
+            
+        """
+        else:
+            if self.DEBUG:
+                print("not enough free memory to run LLM STT (or AI assistant)")
+            self.llm_stt_sentence = ''
+            self.try_again_via_stt = False
+            self.try_again_via_assistant = False
+            self.llm_stt_skipped = True
+        """
     
     
     
     
-    
-    
-
-
-
-
 
     def start_llm_stt_server(self):
         if self.DEBUG:
             print("in start_llm_stt_server")
+        
+        
+        if self.llm_stt_process != None or (self.llm_stt_process != None and self.llm_stt_process.poll() == None):
+            if self.DEBUG:
+                print(" - llm_stt_server seems to already be running!")
+            self.llm_stt_process.kill()
+            time.sleep(0.1)
+            os.system('pkill -f ' + str(self.llm_stt_binary_name))
         
         #/home/pi/.webthings/addons/voco/llm/stt/server -m /home/pi/.webthings/data/voco/llm/stt/ggml-base.en.bin -t 3  --host 0.0.0.0 --port 8046 --public /home/pi/.webthings/data/voco/recording/
         
@@ -10468,61 +10600,14 @@ class VocoAdapter(Adapter):
         if self.DEBUG:
             print("STT_COMMAND: " + str(' '.join(stt_command)))
         
-        #stt_command = ' '.join(stt_command)
-
-        self.llm_stt_started = True
         self.llm_stt_process = Popen(stt_command, env=my_env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, text=True, bufsize=1) # 
-        if self.DEBUG:
-            print("STT SERVER STARTED")
-            print("self.llm_assistant_possible? " + str(self.llm_assistant_possible))
-        
-        if self.llm_assistant_possible == False:
+        time.sleep(.1)
+        if self.llm_stt_process.poll() == None:
+            self.llm_stt_started = True
             if self.DEBUG:
                 print("STT SERVER STARTED")
-                print("\nNOT STARTING LLM ASSISTANT because llm_assistant_possible is False")
-        else:
-            self.start_ai_assistant()
-            #if self.DEBUG:
-            #    print("called start_ai_assistant")
-            
-            # If the last interaction with the assistant has been a while, try to restart it to create a 'fresh' dialogue.
-            self.assistant_loop_counter = 0
-            
-            while self.running:
-                
-                if self.persistent_data['is_satellite'] == True:
-                    if self.llm_stt_started:
-                        
-                        #self.llm_stt_process.terminate()
-                        # TODO: kill both processes nicely
-                        os.system('pkill -f ' + str(self.llm_stt_binary_name))
-                        os.system('pkill -f ' + str(self.llm_assistant_binary_name))
-                    break
-                
-                self.assistant_loop_counter += 1
-                if self.assistant_loop_counter == 60:
-                    self.assistant_loop_counter = 0
-                    if self.DEBUG:
-                        print("at assistant periodic restart check. self.llm_assistant_response_count: " + str(self.llm_assistant_response_count))
-                    
-                    if self.llm_assistant_process == None or self.llm_assistant_process.poll() != None:
-                        if self.DEBUG:
-                            print("\nLLM servers thread: assistant seems to have crashed. Attempting restart\n")
-                        self.llm_assistant_started = False
-                        self.last_assistant_output_change_time = time.time()
-                        self.start_ai_assistant()
-                    
-                    elif self.llm_assistant_response_count > 2 and (time.time() - 60) > self.last_assistant_output_change_time:
-                        if self.DEBUG:
-                            print("\no\noo\nooo\nLLM servers thread: attemping to restart assistant process\nooo\noo\no\n")
-                        self.llm_assistant_started = False
-                        self.last_assistant_output_change_time = time.time()
-                        self.start_ai_assistant()
-                
-                sleep(1)
-            
-    
-    
+
+
     
         
     def start_ai_assistant(self):

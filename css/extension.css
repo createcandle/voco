@@ -477,6 +477,10 @@ body #extension-voco-view .extension-voco-tab-selected{
     text-transform: capitalize;
 }
 
+.extension-voco-radio-select-item input[type="radio"]{
+	transform:scale(2);
+}
+
 .extension-voco-line2{
 	display:flex;
 	flex-wrap:wrap;
