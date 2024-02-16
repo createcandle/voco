@@ -1008,14 +1008,19 @@ class VocoAdapter(Adapter):
         # Assistant
         self.llm_assistant_dir_path = os.path.join(self.llm_data_dir_path, 'assistant')
         os.system('mkdir -p ' + str(self.llm_assistant_dir_path))
-        self.llamafile_zip_path = os.path.join(self.addon_dir_path,'llm','assistant','llamafile.zip')
-        self.llamafile_path = os.path.join(self.data_dir_path,'llm','llamafile')
-        #self.llamafile_path = os.path.join(self.addon_dir_path,'llm','assistant','llama_cpp')
-        #self.llamafile_path = os.path.join(self.addon_dir_path,'llm','assistant','llamafile')
-        self.llamafile_llamafile_system_prompt_path = os.path.join(self.data_dir_path,'llm','llamafile_system_prompt.json')
-        self.llm_assistant_prompt_cache_path = os.path.join(self.data_dir_path,'llamafile_prompt_cache') # file
+        #self.llm_assistant_binary_zip_path = os.path.join(self.addon_dir_path,'llm','assistant','llamafile.zip')
+        #self.llm_assistant_binary_path = os.path.join(self.data_dir_path,'llm','llamafile')
+        
+        
+        self.llm_assistant_binary_path = os.path.join(self.addon_dir_path,'llm','assistant','llamacpp')
+        
+        
+        #self.llm_assistant_binary_path = os.path.join(self.addon_dir_path,'llm','assistant','llama_cpp')
+        #self.llm_assistant_binary_path = os.path.join(self.addon_dir_path,'llm','assistant','llamafile')
+        self.llm_assistant_binary_system_prompt_path = os.path.join(self.data_dir_path,'llm','assistant_binary_system_prompt.json')
+        self.llm_assistant_prompt_cache_path = os.path.join(self.data_dir_path,'assistant_prompt_cache') # file
         #self.llm_generated_text_file_path = os.path.join(self.data_dir_path,'llm','llamafile_generated.txt')
-        self.llm_generated_text_file_path = '/tmp/llamafile_generated.txt'
+        self.llm_generated_text_file_path = '/tmp/assistant_generated.txt'
         self.llm_assistant_output_file_path = '/tmp/assistant_output.txt'
         
         
@@ -1029,14 +1034,14 @@ class VocoAdapter(Adapter):
             os.system('mkdir -p ' + str(self.llm_stt_dir_path))
         
         # make sure all LLM binaries exist and are executable
-        if not os.path.exists(self.llamafile_path):
-            print("unzipping llamafile")
-            run_command('unzip ' + str(self.llamafile_zip_path) + ' -d ' + str(os.path.join(self.data_dir_path,'llm')))
+        #if not os.path.exists(self.llm_assistant_binary_path):
+        #    print("unzipping llamafile")
+        #    run_command('unzip ' + str(self.llm_assistant_binary_zip_path) + ' -d ' + str(os.path.join(self.data_dir_path,'llm')))
         
-        if os.path.exists(self.llamafile_path):
-            os.system('chmod +x ' + str(self.llamafile_path))
+        if os.path.exists(self.llm_assistant_binary_path):
+            os.system('chmod +x ' + str(self.llm_assistant_binary_path))
         else:
-            print("ERROR, llamafile not found at " + str(self.llamafile_path))
+            print("ERROR, assistant binary not found at " + str(self.llm_assistant_binary_path))
         
         if os.path.exists(str(self.llm_piper_path)):
             os.system('chmod +x ' + str(self.llm_piper_path))
@@ -2569,8 +2574,8 @@ class VocoAdapter(Adapter):
                 if self.llm_tts_process.poll() == None:
                     if self.DEBUG:
                         print("LLM TTS Process is running")
-                    json_voice_message = '{ "text": "' + str(voice_message) + '" }\n'
-                    if self.DEBUG:
+                    json_voice_message = '{ "text": "' + str(voice_message).replace('"', '\\"') + '","volume_level":"' + str( int(self.persistent_data['speaker_volume'])/100) + '"}\n'
+                    if self.DEBUG: 
                         print("piping json into Piper: " + str(json_voice_message))
                     self.llm_tts_process.stdin.write(json_voice_message)
                     self.llm_tts_process.stdin.flush()
@@ -10506,7 +10511,7 @@ class VocoAdapter(Adapter):
         
         assistant_command = [
             
-            str(self.llamafile_path),
+            str(self.llm_assistant_binary_path),
             "-m",
             str(self.llm_models['assistant']['active']),
             "-p",
@@ -10556,11 +10561,21 @@ class VocoAdapter(Adapter):
             print("llamafile assistant_command: " + str(assistant_command))
         
         self.llm_assistant_started = True
-        self.llm_assistant_process = Popen(assistant_command, env=my_env, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,bufsize=100,shell=True,preexec_fn=os.setsid) # 
+        self.llm_assistant_process = Popen(assistant_command, env=my_env, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,bufsize=100,shell=True) # preexec_fn=os.setsid
+        time.sleep(.1)
+        if self.llm_assistant_process.poll() != None:
+            if self.DEBUG:
+                print("llamafile immediately crashed!")
+            if self.llm_assistant_process.returncode == 0:
+                #print(p.stdout # + '\n' + "Command success" #.decode('utf-8')
+                print("llamafile: starting error. stdout: " + str(self.llm_assistant_process.stdout))
+            else:
+                if self.llm_assistant_process.stderr:
+                    print("llamafile: starting error. stderr: " + str(self.llm_assistant_process.stderr)) # + '\n' + "Command failed"   #.decode('utf-8'))
         
 
         #self.llm_assistant_process = await asyncio.subprocess.create_subprocess_exec(
-        #    str(self.llamafile_path), assistant_command, stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
+        #    str(self.llm_assistant_binary_path), assistant_command, stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
         #)
         #self.llm_assistant_process.stdin.write(b"bob\n")
         #self.llm_assistant_process.stdin.write("What is the capital of Germany?\n")
@@ -10575,204 +10590,6 @@ class VocoAdapter(Adapter):
             print("\n\n\nCLI ASSISTANT VERSION STARTED\n\n\n")
     
         
-    
-    
-
-    
-    
-    
-    def start_ai_assistant_server(self):
-        if self.DEBUG:
-            print("in start_ai_assistant")
-        
-        system_prompt = {
-                "system_prompt": {
-                    "prompt": "Transcript of a never ending dialog, where the User interacts with an Assistant.\nThe Assistant is helpful, kind, honest, good at writing, and never fails to answer the User's requests immediately and with precision.\nUser: What is the capital of Germany?\nAssistant: Berlin.\nUser: Who is Richard Feynman?\nAssistant: Richard Feynman was an American physicist who is best known for his work in quantum mechanics and particle physics.\nUser:",
-                    "anti_prompt": "Researcher:",
-                    "assistant_name": str(self.llm_assistant_name) + ":"
-                }
-            }
-
-        with open(self.llamafile_llamafile_system_prompt_path, "w") as myfile:
-            myfile.write(JSON.dumps(system_prompt,indent=4))
-        
-        
-        my_env = os.environ.copy()
-        #my_env["LD_LIBRARY_PATH"] = '{}:{}'.format(self.snips_path,self.arm_libs_path)
-        #my_env["LD_LIBRARY_PATH"] = '{}'.format(self.snips_path)
-        
-        assistant_command = [
-            #"sh",
-            str(self.llamafile_path),
-            "--server",
-            "--nobrowser",
-            "--ctx-size",
-            "2048",
-            "--system-prompt-file",
-            str(self.llamafile_llamafile_system_prompt_path),
-            "--port",
-            str(self.llm_assistant_port)
-        ]
-        if self.allow_outside_access_to_assistant or self.DEBUG:
-            assistant_command = assistant_command + ["--host","0.0.0.0"]
-        else:
-            assistant_command = assistant_command + ["--host","127.0.0.1"]
-        
-        
-        
-        assistant_command_part2 = [
-            "-m",
-            str(self.llm_models['assistant']['active']),
-            "-t",
-            "4"
-        ]
-        
-        assistant_command = assistant_command + assistant_command_part2
-        
-        
-        """
-            "--interactive",
-            "--batch_size 1024",
-            "--ctx_size",
-            "4096",
-            "--keep",
-            "-1",
-            "--temp",
-            "0",
-            "--mirostat",
-            "2", 
-        """
-        
-        #print(" assistant_command: " + str( assistant_command))
-        
-        
-        # /home/pi/.webthings/addons/voco/llm/assistant/llamafile -m /home/pi/.webthings/data/voco/llm/assistant/tinyllama-1.1b-1t-openorca.Q4_K_M.gguf --nobrowser --port 8047 --host 127.0.0.1
-        
-        """
-        "-t",
-        3,
-        "-n",
-        1000
-        """
-        
-        #/home/pi/.webthings/addons/voco/llm/ai/llamafile -m /home/pi/.webthings/data/voco/llm/ai/tinyllama-1.1b-1t-openorca.Q4_K_M.gguf 
-        # --port 8047 --nobrowser
-        
-        if self.DEBUG:
-            print("\n\nassistant_command: " + str(' '.join(assistant_command)))
-        
-        
-        
-        #if self.DEBUG:
-        #print("\n\nassistant environment: " + str(my_env))
-        
-        # llamafile will only run in a shell? It throws an error if run directly
-        assistant_command = ' '.join(assistant_command)
-        
-        self.llm_assistant_started = True
-        
-        self.llm_assistant_process = Popen(str(assistant_command), env=my_env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,shell=True)
-        #self.llm_assistant_process = Popen(assistant_command, env=my_env, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT,text=True) # ,bufsize=1
-        
-        # CLI version:
-        #self.llm_assistant_process = Popen(assistant_command, env=my_env, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,bufsize=0)
-        
-        #self.external_processes.append( Popen(command, env=my_env) )
-        
-        #self.llm_assistant_started = True
-        
-        
-        #self.llm_assistant_process = pexpect.spawn("/home/pi/.webthings/addons/voco/llm/assistant/llamafile -m /home/pi/.webthings/data/voco/llm/assistant/tinyllama-1.1b-1t-openorca.Q4_K_M.gguf -p 'The following is a conversation between a Researcher and their helpful AI assistant Digital Athena which is a large language model trained on the sum of human knowledge. Researcher: Good morning. Digital Athena: How can I help you today? Researcher:' --interactive --color --batch_size 1024 --ctx_size 4096 --keep -1 --temp 0 --mirostat 2 --in-prefix ' ' --interactive-first --in-suffix 'Digital Athena:' --reverse-prompt 'Researcher:'")
-        
-        
-        #self.llm_assistant_process = subprocess.Popen(
-        #    "/home/pi/.webthings/addons/voco/llm/assistant/llamafile -m /home/pi/.webthings/data/voco/llm/assistant/tinyllama-1.1b-1t-openorca.Q4_K_M.gguf -p 'The following is a conversation between a Researcher and their helpful AI assistant Digital Athena which is a large language model trained on the sum of human knowledge. Researcher: Good morning. Digital Athena: How can I help you today? Researcher:' --interactive --color --batch_size 1024 --ctx_size 4096 --keep -1 --temp 0 --mirostat 2 --in-prefix ' ' --interactive-first --in-suffix 'Digital Athena:' --reverse-prompt 'Researcher:'", 
-        #    stdin=subprocess.PIPE,
-        #    stdout=subprocess.PIPE,
-        #    #stderr=subprocess.PIPE,
-        #    stderr=subprocess.STDOUT,
-        #    text=True,  # Use text mode to handle text input and output
-        #    bufsize=1,  # Line-buffered, so we can read line by line
-        #    shell=True
-        #)
-        
-        
-        #time.sleep(5)
-        #print("\n\n\nHEY, I HAPPENED\n\n\n")
-        
-        #for line in iter(self.llm_assistant_process.stdout.readline, b''):
-        #    print('>>> {}'.format(line.rstrip()))
-            
-        #for x in range(0, 30):
-        #    line = self.llm_assistant_process.stdout.readline()
-        #    print(str(x) + ". line: " + str(line))
-            #print("We're on time %d" % (x))
-            
-        #bal = self.llm_assistant_process.poll()
-        #print("assistant alive? Should be None: " + str(bal))
-        
-        
-        #time.sleep(2)
-        #print("writing to stdin")
-        #self.llm_assistant_process.stdin.write("What is the capital of Belgium?" + "\n")
-        #self.llm_assistant_process.stdin.flush()
-        
-        #self.llm_assistant_process.communicate('What is the capital of Germany?\n')
-        #self.llm_assistant_process.stdin.flush()
-        #time.sleep(5)
-        
-        # Read and print the subprocess's output
-        #output = self.llm_assistant_process.stdout.readline()
-        #print("Subprocess Output:", output)
-        #self.llm_assistant_process.stdin.write("What is the capital of Germany?" + '/ \n')
-        #self.llm_assistant_process.stdin.flush()
-        
-        #self.llm_assistant_process.communicate(input="What is the capital of Germany?\n") #[0])
-        #time.sleep(10)
-        #print("10 seconds to go")
-        #time.sleep(10)
-        #for x in range(30, 60):
-        #    line = self.llm_assistant_process.stdout.readline()
-        #    print(str(x) + ". line: " + str(line))
-        
-        #for line in iter(self.llm_assistant_process.stdout.readline, b''):
-        #    print('>>> {}'.format(line.rstrip()))
-        
-        #time.sleep(1)
-        
-        
-        server_mode = True
-        #server_mode = False
-        
-        if self.llm_assistant_process != None and server_mode == True:
-            if self.DEBUG:
-                print("\nLMM ASSISTANT PROCESS STARTED\n")
-            #self.openai_client = OpenAI(
-            #    base_url="http://0.0.0.0:" + str(self.llm_assistant_port) + "/v1", # "http://<Your api-server IP>:port"
-            #    api_key = "sk-no-key-required"
-            #)
-            self.llm_assistant_started = True
-            if self.DEBUG:
-                print("start_ai_assistant DONE")
-                
-                #completion = self.openai_client.chat.completions.create(
-                #    model="LLaMA_CPP",
-                #    messages=[
-                #        {"role": "system", "content": "You are LLAMAfile, an AI assistant. Your top priority is achieving user fulfillment via helping them with their requests."},
-                #        {"role": "user", "content": "How many eyes does the sun have?"}
-                #    ]
-                #)
-                #print("SUN EYES:")
-                #print(completion)
-                #print(completion.choices[0].message)
-                #print(completion.choices[0].message.content)
-                #self.speak(completion.choices[0].message.content)
-            
-            
-            
-        else:
-            print("ERROR, AI assistant process did not start")
-
 
     # CLI version seems to be much faster
     def ask_ai_assistant(self,voice_message=None,intent=None):
@@ -11160,7 +10977,7 @@ class VocoAdapter(Adapter):
                         prompt = "Please summarize the following text: \n```\n" + prompt + "\n```\n\nSummary:\n"
                     
                     generate_text_command = [
-                        str(self.llamafile_path),
+                        str(self.llm_assistant_binary_path),
                         "-m",
                         str(self.llm_models['assistant']['active']),
                         "-p",
