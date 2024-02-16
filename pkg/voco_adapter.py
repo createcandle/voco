@@ -4936,9 +4936,15 @@ class VocoAdapter(Adapter):
                 if self.DEBUG:
                     print("sending captured text to main controller: " + str(payload['text']))
                 
+                
+                    
                 # TODO: the origin is set as voice, but it might not always be?
                 if self.persistent_data['listening']:
-                    self.mqtt_client.publish("hermes/voco/parse",json.dumps({ "siteId":str(self.persistent_data['site_id']),"text": payload['text'],'origin':'voice' }))
+                    if 'unknownword' in str(payload['text']) or str(payload['text']) == '':
+                        if self.DEBUG:
+                            print("text contained 'unknownword' or was empty string. aborting")
+                    else:
+                        self.mqtt_client.publish("hermes/voco/parse",json.dumps({ "siteId":str(self.persistent_data['site_id']),"text": payload['text'],'origin':'voice' }))
                 
                 if self.periodic_voco_attempts > 5:
                     self.speak('Sorry, the main Voco controller is not responding')
@@ -10394,8 +10400,8 @@ class VocoAdapter(Adapter):
             f=open(str(self.last_recording_path), "rb")
             fileContent = f.read()
             
-            message_bytes = fileContent.encode('ascii')
-            base64_bytes = base64.b64encode(message_bytes)
+            #message_bytes = fileContent.encode('ascii')
+            base64_bytes = base64.b64encode(fileContent)
             base64_message = base64_bytes.decode('ascii')
             
             #byteArr = bytearray(fileContent)
