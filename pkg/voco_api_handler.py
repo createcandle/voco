@@ -4,7 +4,7 @@ import os
 import re
 import json
 import time
-from time import sleep
+#from time import sleep
 import socket
 import requests
 import subprocess
@@ -342,7 +342,6 @@ class VocoAPIHandler(APIHandler):
                                           'message' : '',
                                           'llm_enabled':self.adapter.llm_enabled,
                                           
-                                          'llm_stts_enabled':self.adapter.llm_enabled,
                                           'device_model': self.adapter.device_model,
                                     
                                           'llm_not_enough_disk_space':self.adapter.llm_not_enough_disk_space,
@@ -350,15 +349,19 @@ class VocoAPIHandler(APIHandler):
                                           
                                           'llm_models':self.adapter.llm_models,
                                           
-                                          'llm_tts_enabled':self.adapter.llm_enabled,
+                                          'llm_tts_enabled':self.adapter.llm_tts_enabled,
                                           'llm_tts_minimal_memory':self.adapter.llm_tts_minimal_memory,
+                                          'llm_tts_not_enough_memory':self.adapter.llm_tts_not_enough_memory,
+                                          'llm_tts_started': self.adapter.llm_tts_started,
                                           
-                                          'llm_stt_enabled':self.adapter.llm_enabled,
+                                          'llm_stt_enabled':self.adapter.llm_stt_enabled,
                                           'llm_stt_minimal_memory':self.adapter.llm_stt_minimal_memory,
+                                          'llm_stt_not_enough_memory':self.adapter.llm_stt_not_enough_memory,
                                           'llm_stt_started': self.adapter.llm_stt_started,
                                           
-                                          'llm_assistant_enabled':self.adapter.llm_enabled,
+                                          'llm_assistant_enabled':self.adapter.llm_assistant_enabled,
                                           'llm_assistant_minimal_memory':self.adapter.llm_assistant_minimal_memory,
+                                          'llm_assistant_not_enough_memory':self.adapter.llm_assistant_not_enough_memory,
                                           'llm_assistant_started': self.adapter.llm_assistant_started
                                           
                                       }),
@@ -455,7 +458,7 @@ class VocoAPIHandler(APIHandler):
                                 # Ask for latest info from other Voco instances
                                 if self.adapter.mqtt_client != None:
                                     self.adapter.mqtt_client.publish("hermes/voco/ping",json.dumps({'ip':self.adapter.ip_address,'site_id':self.adapter.persistent_data['site_id']}))
-                                    sleep(1)
+                                    #time.sleep(.1) # TODO: disabled this in feb 2024
                             
                                 """
                                 # Satellite targets
@@ -865,7 +868,8 @@ class VocoAPIHandler(APIHandler):
                                                 if self.adapter.llm_enabled and self.adapter.llm_assistant_enabled:
                                                     self.adapter.check_available_memory()
                                                     if self.adapter.llm_assistant_possible:
-                                                        self.adapter.download_llm_models()
+                                                        self.adapter.llm_should_download = True
+                                                        self.adapter.assistant_loop_counter = self.adapter.llm_servers_watchdog_interval - 2
                                                 
                                                 state = True
                                                 update = 'Satellite mode disabled'

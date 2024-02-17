@@ -361,31 +361,47 @@
 
 			<div id="extension-voco-tab-ai" class="extension-voco-tab extension-voco-hidden">
 				<div id="extension-voco-ai" class="extension-voco-centered-page">
-   			 <div class="extension-voco-vlak">
+   			 	   <div class="extension-voco-vlak">
                         
-						
 						<p><img src="/extensions/voco/images/hal.svg" alt="What we call AI is just statistics on steroids" style="float:left;width:10rem;margin:0 3rem 3rem 1rem"/>Voco supports more advanced AI assistant features, which run completely on your own controller.</p>
-						<p>This does mean your controller needs to have enough memory (and storage space) to run them. The more memory is available, the higher quality the AI can be.</p>
+						<p>This does mean your controller needs to have enough memory (and storage space) to run them. The more memory is available, the better quality the AI can be.</p>
                       	
 						<p>&nbsp;</p>
 						
 						<div id="extension-voco-main-device-model-warning" class="extension-voco-vlak" style="display:none">
-							<p style="text-align:center">Note: on the current hardware the assistant will take a much longer time to respond. It is recommended to run these AI features on a Raspberrry Pi 5 or better, with preferably 8Gb or ram or more.</p>
+							<p style="text-align:center">Note: on the current hardware the assistant will take a much longer time to respond. It is recommended to run these AI features on a Raspberrry Pi 5 or better, with at least 4 gigabytes of RAM memory.</p>
 						</div>
 						
 						<div id="extension-voco-main-low-disk-space-warning" class="extension-voco-vlak" style="display:none">
 							<p style="text-align:center">There is not enough available disk space for Voco to download more advanced AI models</p>
 						</div>
+						<!--
 						<div id="extension-voco-main-low-memory-warning" class="extension-voco-vlak" style="display:none">
 							<p style="text-align:center">There is not enough free memory for Voco to run more advanced AI models</p>
 						</div>
+						-->
 						
-						<div id="extension-voco-main-llm-assistant-not-running" class="extension-voco-vlak" style="display:none;background-color:#9a1074">
-							<p style="text-align:center"><span class="extension-voco-unicode-icon-medium">👾</span> The AI assistant is not running.</p>
+						<div id="extension-voco-main-llm-tts-not-running" class="extension-voco-vlak extension-voco-orange-bg">
+							<p style="text-align:center"><span class="extension-voco-unicode-icon-medium">💬</span> Text-to-Speech is not running<span id="extension-voco-main-llm-tts-error"></span></p>
 						</div>
-						<div id="extension-voco-main-llm-assistant-running" class="extension-voco-vlak extension-voco-hidden">
-							<p style="text-align:center"><span class="extension-voco-unicode-icon-medium">💬</span> The AI assistant is running.</p>
+						<div id="extension-voco-main-llm-tts-running" class="extension-voco-vlak extension-voco-hidden extension-voco-green-bg">
+							<p style="text-align:center"><span class="extension-voco-unicode-icon-medium">💬</span> Text-to-Speech is running</p>
 						</div>
+						
+						<div id="extension-voco-main-llm-stt-not-running" class="extension-voco-vlak extension-voco-orange-bg">
+							<p style="text-align:center"><span class="extension-voco-unicode-icon-medium">👂</span> Speech-to-Text is not running<span id="extension-voco-main-llm-stt-error"></span></p>
+						</div>
+						<div id="extension-voco-main-llm-stt-running" class="extension-voco-vlak extension-voco-hidden extension-voco-green-bg">
+							<p style="text-align:center"><span class="extension-voco-unicode-icon-medium">👂</span> Speech-to-Text is running</p>
+						</div>
+						
+						<div id="extension-voco-main-llm-assistant-not-running" class="extension-voco-vlak extension-voco-orange-bg">
+							<p style="text-align:center"><span class="extension-voco-unicode-icon-medium">👾</span> The AI assistant is not running<span id="extension-voco-main-llm-assistant-error"></span></p>
+						</div>
+						<div id="extension-voco-main-llm-assistant-running" class="extension-voco-vlak extension-voco-hidden extension-voco-green-bg">
+							<p style="text-align:center"><span class="extension-voco-unicode-icon-medium">👾</span> The AI assistant is running</p>
+						</div>
+						
 						
 						<div id="extension-voco-main-llm-playground" class="extension-voco-vlak">
 							<h3>Playground</h3>
@@ -409,24 +425,21 @@
 						</div>
 						
 						
-						
-						
-						
 						<p>&nbsp;</p>
 						
 						<div class="extension-voco-vlak">
                             
     						<h2>Voice synthesis</h2>
                         
-                <p>More realistic sounding speech can be generated using "Large Language Models". This requires relatively little extra memory. If there is not enough memory, Voco falls back to the basic voice. You can select which voice type you prefer.</p>
+                			<p>More realistic sounding speech can be generated using "Large Language Models". This requires relatively little extra memory. If there is not enough memory, Voco falls back to the basic voice. You can select which voice type you prefer.</p>
                            	
-							  <ul id="extension-voco-tts-models-list" class="extension-voco-llm-models-list">
-								  <li>
+							<ul id="extension-voco-tts-models-list" class="extension-voco-llm-models-list">
+								<li>
 				                    <div class="extension-voco-spinner">
 				                        <div></div><div></div><div></div><div></div>
 				                    </div>
-								  </li>
-						   </ul>
+								</li>
+							</ul>
 						</div>
 						
                         
@@ -467,7 +480,7 @@
 						
 						
 						<div>
-							<p style="text-align:center">Total disk space used by AI models: <span id="extension-voco-llm-total-size">?</span>MB</p>
+							<p style="text-align:center">Total disk space used by AI models: <span id="extension-voco-llm-total-size">?</span></p>
 						</div>
     					
 					</div>

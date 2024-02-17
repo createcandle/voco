@@ -214,6 +214,9 @@ class VocoAdapter(Adapter):
         self.try_again_via_stt = False
         self.try_again_via_assistant = False
         
+        
+        self.llm_servers_watchdog_interval = 40 # should be at least 2
+        
         # Downloading models
         self.llm_should_download = True
         self.llm_busy_downloading_models = 0
@@ -225,6 +228,7 @@ class VocoAdapter(Adapter):
         self.llm_tts_enabled = True
         self.llm_tts_binary_name = 'piper'
         self.llm_tts_minimal_memory = 300
+        self.llm_tts_not_enough_memory = False
         self.llm_tts_possible = False
         self.llm_tts_output_device_string = 'Default'
         self.llm_tts_process = None
@@ -235,6 +239,7 @@ class VocoAdapter(Adapter):
         self.llm_stt_enabled = True
         self.llm_stt_binary_name = 'whisper_server'
         self.llm_stt_minimal_memory = 600
+        self.llm_stt_not_enough_memory = False
         self.llm_stt_possible = False
         self.llm_stt_done = False
         self.llm_stt_sentence = ''
@@ -259,7 +264,8 @@ class VocoAdapter(Adapter):
         self.llm_assistant_enabled = True
         self.llm_assistant_binary_name = 'llamacpp'
         self.assistant_countdown = 0
-        self.llm_assistant_minimal_memory = 1200
+        self.llm_assistant_minimal_memory = 1000
+        self.llm_assistant_not_enough_memory = False
         self.llm_assistant_possible = False
         self.llm_assistant_started = False
         self.llm_assistant_process = None
@@ -443,20 +449,100 @@ class VocoAdapter(Adapter):
                                 'model_url':'',
                                 'downloaded':True
                             },
+            'TinyMistral 248M':{'model':'TinyLlama-1.1B-Chat-v1.0.Q2_K.gguf',
+                                'size':500,
+                                'description':'This is a minuscule AI model of just 500Mb in size. It makes many mistakes and does not contain a lot of knowledge, but it might be fun to try on low-memory systems.',
+                                'model_url':'https://huggingface.co/afrideva/TinyMistral-248M-GGUF/resolve/main/tinymistral-248m.q4_k_m.gguf',
+                                'prompts':{
+                                    'system':'<|im_start|>system\n{system_message}<|im_end|>',
+                                    'user':'<|im_start|>user\n{prompt}<|im_end|>',
+                                    'reverse':'<|im_start|>assistant\n',
+                                    'end':'<|im_end|>'
+                                }
+                            },
+                            
+                            
+                            
+                            
+                            
             'TinyLlama 1.1B Q2 Chat':{'model':'TinyLlama-1.1B-Chat-v1.0.Q2_K.gguf',
                                 'size':500,
-                                'description':'This is a AI model of just 500Mb in size. It makes more mistakes and does not contain a lot of knowledge, but might be useful on low-memory systems.',
-                                'model_url':'https://huggingface.co/jartine/TinyLlama-1.1B-Chat-v1.0-GGUF/resolve/main/TinyLlama-1.1B-Chat-v1.0.Q2_K.gguf'
+                                'description':'This is a minuscule AI model of just 500Mb in size. It makes many mistakes and does not contain a lot of knowledge, but it might be fun to try on low-memory systems.',
+                                'model_url':'https://huggingface.co/jartine/TinyLlama-1.1B-Chat-v1.0-GGUF/resolve/main/TinyLlama-1.1B-Chat-v1.0.Q2_K.gguf',
+                                'prompts':{
+                                    'system':'<|im_start|>system\n{system_message}<|im_end|>',
+                                    'user':'<|im_start|>user\n{prompt}<|im_end|>',
+                                    'reverse':'<|im_start|>assistant\n',
+                                    'end':'<|im_end|>'
+                                }
                             },
             'TinyLlama 1.1B Q4 OpenOrca':{'model':'tinyllama-1.1b-1t-openorca.Q4_K_M.gguf',
                                 'size':700,
                                 'description':'A 700Mb model which contains slightly more knowledge. The default.',
-                                'model_url':'https://huggingface.co/TheBloke/TinyLlama-1.1B-1T-OpenOrca-GGUF/resolve/main/tinyllama-1.1b-1t-openorca.Q4_K_M.gguf'
+                                'model_url':'https://huggingface.co/TheBloke/TinyLlama-1.1B-1T-OpenOrca-GGUF/resolve/main/tinyllama-1.1b-1t-openorca.Q4_K_M.gguf',
+                                'prompts':{
+                                    'system':'<|im_start|>system\n{system_message}<|im_end|>',
+                                    'user':'<|im_start|>user\n{prompt}<|im_end|>',
+                                    'reverse':'<|im_start|>assistant\n',
+                                    'end':'<|im_end|>'
+                                }
+                            },
+            'Rocket 3B':{'model':'rocket-3b.Q5_K_M.gguf',
+                                'size':1650,
+                                'description':'Named after the small but powerful Rocket in the Guardians of the Galaxy movies.',
+                                'model_url':'https://huggingface.co/TheBloke/rocket-3B-GGUF/resolve/main/rocket-3b.Q5_K_M.gguf',
+                                'prompts':{
+                                    'system':'<|im_start|>system\n{system_message}<|im_end|>',
+                                    'user':'<|im_start|>user\n{prompt}<|im_end|>',
+                                    'reverse':'<|im_start|>assistant\n',
+                                    'end':'<|im_end|>'
+                                }
                             },
             'Phi 2':{'model':'phi-2.Q4_K_S.gguf',
                                 'size':1650,
+                                'developer':True,
                                 'description':'A model made by Microsoft. It was mostly trained on educational textbooks, so it can help with school homework, but might give long-winded answers.',
-                                'model_url':'https://huggingface.co/TheBloke/phi-2-GGUF/resolve/main/phi-2.Q4_K_S.gguf'
+                                'model_url':'https://huggingface.co/TheBloke/phi-2-GGUF/resolve/main/phi-2.Q4_K_S.gguf',
+                                'prompts':{
+                                    'system':'',
+                                    'user':'Alice: {prompt}\nBob: ',
+                                    'reverse':'Alice:',
+                                    'end':''
+                                }
+                            },
+            'Dolphin 2.6 Phi 2':{'model':'dolphin-2_6-phi-2.Q4_K_M.gguf',
+                                'size':1800,
+                                'description':'Based on the Phi-2 model made by Microsoft. It was mostly trained on educational textbooks, so it could help with school homework. It might give long-winded answers.',
+                                'model_url':'https://huggingface.co/TheBloke/dolphin-2_6-phi-2-GGUF/resolve/main/dolphin-2_6-phi-2.Q4_K_M.gguf',
+                                'prompts':{
+                                    'system':'<|im_start|>system\n{system_message}<|im_end|>',
+                                    'user':'<|im_start|>user\n{prompt}<|im_end|>',
+                                    'reverse':'<|im_start|>assistant\n',
+                                    'end':'<|im_end|>'
+                                }
+                            },
+            'Mistral 7B Instruct':{'model':'mistral-7b-instruct-v0.1.Q4_K_M.gguf',
+                                'size':4000,
+                                'developer':True,
+                                'description':'A popular model which requires quite a bit of memory.',
+                                'model_url':'https://huggingface.co/TheBloke/Mistral-7B-Instruct-v0.1-GGUF/resolve/main/mistral-7b-instruct-v0.1.Q4_K_M.gguf',
+                                'prompts':{
+                                    'system':'<s>[INST] What is your favourite condiment? [/INST]\nWell, I am quite partial to a good squeeze of fresh lemon juice. It adds just the right amount of zesty flavour to whatever I am cooking up in the kitchen!</s> ',
+                                    'user':'[INST]{prompt}[/INST]',
+                                    'reverse':'',
+                                    'end':''
+                                }
+                            },
+            'Openhermes 2.5 Mistral 7b':{'model':'openhermes-2.5-mistral-7b.Q4_K_M.gguf',
+                                'size':4000,
+                                'description':'The OpenHermes version of the popular Mistral 7B model. Supposedly contains a lot of useful information.',
+                                'model_url':'https://huggingface.co/TheBloke/OpenHermes-2.5-Mistral-7B-GGUF/resolve/main/openhermes-2.5-mistral-7b.Q4_K_M.gguf',
+                                'prompts':{
+                                    'system':'<|im_start|>system\n{system_message}<|im_end|>',
+                                    'user':'<|im_start|>user\n{prompt}<|im_end|>',
+                                    'reverse':'<|im_start|>assistant\n',
+                                    'end':'<|im_end|>'
+                                }
                             },
             'Programming':{'model':'stable-code-3b-Q5_K_M.gguf',
                                 'size':2000,
@@ -482,15 +568,16 @@ class VocoAdapter(Adapter):
                                 'description':'A model designed around medical data. It should speak for itself that this does not replace talking to a real doctor!',
                                 'model_url':'https://huggingface.co/TheBloke/medicine-LLM-GGUF/resolve/main/medicine-llm.Q4_K_S.gguf'
                             },
-            'Mistral 7b instruct':{'model':'mistral-7b-instruct-v0.2.Q5_K_M.gguf',
-                                'size':5100,
-                                'description':'A popular higher quality model which needs a lot of memory to run.',
-                                'model_url': 'https://huggingface.co/TheBloke/Mistral-7B-Instruct-v0.2-GGUF/resolve/main/mistral-7b-instruct-v0.2.Q5_K_M.gguf'
-                            },
             'Custom':{'model':'custom',
                              'developer':False,
-                             'description':'You can provide a link to a .GUFF voice model of your choice in the addon settings, and Voco will download it for you. You will need to make sure there is enough available disk space and memory yourself.',
-                             'model_url':'custom'
+                             'description':'Advanced users may provide a link to a .GUFF model that supports ChatML in the addon settings, and Voco will download it. You will need to make sure there is enough available disk space and memory yourself.',
+                             'model_url':'custom',
+                             'prompts':{
+                                 'system':'<|im_start|>system\n{system_message}<|im_end|>',
+                                 'user':'<|im_start|>user\n{prompt}<|im_end|>',
+                                 'reverse':'<|im_start|>assistant\n',
+                                 'end':'<|im_end|>'
+                             }
                          }
         }
         
@@ -1538,6 +1625,15 @@ class VocoAdapter(Adapter):
             # Start the internal clock which is used to handle timers. It also receives messages from the notifier.
 
         time.sleep(1.14)
+        
+        if self.llm_enabled and (self.llm_stt_enabled or self.llm_assistant_enabled) and self.s == None:
+            self.s = threading.Thread(target=self.start_llm_servers) #, args=(self.voice_messages_queue,)
+            self.s.daemon = True
+            self.s.start()
+        
+            if self.DEBUG:
+                print("voco init: called start_llm_servers")
+                
 
         # Set thing to connected state
         try:
@@ -4121,14 +4217,6 @@ class VocoAdapter(Adapter):
                                 #if self.DEBUG:
                                 #    print("only checking if snips is running once every 3 seconds")
                             
-                
-                # Download LLM models if a new on has been selected. TODO: this currently blocks the clock thread, which is not optimal.
-                if self.llm_enabled and self.llm_should_download:
-                    if self.DEBUG:
-                        print("clock: llm_enabled and llm_should_download was True")
-                    self.llm_should_download = False
-                    self.download_llm_models()
-
 
 #
 #  THINGS PROPERTIES
@@ -10037,8 +10125,6 @@ class VocoAdapter(Adapter):
             chunkOffset = chunkOffset + subchunk2size + 8
 
 
-
-
     def start_recording(self):
         if self.DEBUG:
             print("\n😻\nin start_recording. self.recording_state: " + str(self.recording_state))
@@ -10125,7 +10211,6 @@ class VocoAdapter(Adapter):
             
             self.llm_busy_downloading_models = 0
             
-            
             for key in self.llm_models.keys():
                 key = str(key)
                 self.llm_busy_downloading_models += 1
@@ -10201,7 +10286,7 @@ class VocoAdapter(Adapter):
                                     os.system('pkill -f ' + str(self.llm_stt_binary_name))
                                     os.system('pkill -f ' + str(self.llm_assistant_binary_name)) # make sure model file isn't locked
                                     os.system('rm ' + str(model_file_test_path))
-                                    self.assistant_loop_counter = 58
+                                    self.assistant_loop_counter = self.llm_servers_watchdog_interval - 2
                         
                     if self.llm_models[key]['list'][model_name]['model'] == 'voco':
                         self.llm_models[key]['list'][model_name]['downloaded'] = True
@@ -10212,21 +10297,14 @@ class VocoAdapter(Adapter):
                     # This will cause the assistant to be restarted
                     os.system('pkill -f ' + str(self.llm_stt_binary_name))
                     os.system('pkill -f ' + str(self.llm_assistant_binary_name))
-                    self.assistant_loop_counter = 58
+                    self.assistant_loop_counter = self.llm_servers_watchdog_interval - 2
                 
         except Exception as ex:
             print("Error downloading LLM models: " + str(ex))
             
         self.llm_busy_downloading_models = 0        
         
-        if self.llm_enabled and (self.llm_stt_enabled or self.llm_assistant_enabled) and self.s == None:
-            self.s = threading.Thread(target=self.start_llm_servers) #, args=(self.voice_messages_queue,)
-            self.s.daemon = True
-            self.s.start()
         
-            if self.DEBUG:
-                print("download llmm models: called start_llm_servers")
-                
         #print("\nModel data after download phase:\n\n" + str(json.dumps(self.llm_models, indent=4)))
         #print("\n\n")
 
@@ -10264,6 +10342,14 @@ class VocoAdapter(Adapter):
         while self.running:
             
             
+            # Download LLM models if a new on has been selected.
+            if self.llm_enabled and self.llm_should_download:
+                if self.DEBUG:
+                    print("start_llm_servers: llm_enabled and llm_should_download was True")
+                self.llm_should_download = False
+                self.download_llm_models()
+                
+            
             # TODO: satellites should be allowed to run their own STT and Assistant if they are powerful enough.
             if self.persistent_data['is_satellite'] == True:
                 if self.llm_stt_started:
@@ -10278,7 +10364,7 @@ class VocoAdapter(Adapter):
                 break
                 
             self.assistant_loop_counter += 1
-            if self.assistant_loop_counter == 60:
+            if self.assistant_loop_counter == self.llm_servers_watchdog_interval:
                 self.assistant_loop_counter = 0
                 if self.DEBUG:
                     print("at assistant periodic restart check. self.llm_assistant_response_count: " + str(self.llm_assistant_response_count))
@@ -10325,12 +10411,8 @@ class VocoAdapter(Adapter):
     # start long running TTS process
     def start_llm_tts(self,restart=False):
         if self.DEBUG:
-            print("in start_llm_tts")
+            print("in start_llm_tts. restart: " + str(restart))
         
-        if self.llm_models['tts']['active'] == None:
-            if self.DEBUG:
-                print("\n\nERROR, tts active model was still None. Aborting.")
-            return
         
         if self.llm_tts_process != None and self.llm_tts_process.poll() == None:
             if self.DEBUG:
@@ -10365,7 +10447,24 @@ class VocoAdapter(Adapter):
         #os.system('pkill -f piper')
         
         
+        
+        
+        if self.llm_models['tts']['active'] == None:
+            if self.DEBUG:
+                print("\n\nERROR, tts active model was still None. Aborting.")
+            self.llm_tts_started = False
+            return
+        
+        if str(self.persistent_data['llm_tts_model']) == 'voco':
+            if self.DEBUG:
+                print("not starting LLM TTS, llm_tts_model in persistent data is set to voco")
+            self.llm_tts_started = False
+            return
+        
+        
         # actually start Piper        
+        
+        self.check_available_memory()
         
         if self.llm_enabled and self.llm_tts_enabled and self.free_memory > self.llm_tts_minimal_memory:
             my_env = os.environ.copy()
@@ -10434,9 +10533,6 @@ class VocoAdapter(Adapter):
         if self.DEBUG:
             print("in llm_stt. intent: " + str(intent))
             print(" - llm_stt_started: " + str(self.llm_stt_started))
-        
-                
-            
         
         #if self.llm_models['stt']['active'] == None and self.persistent_data['is_satellite'] == False: # TODO: or just skip ahead anyway if this is a satellite, and the main controller has running TTS server running. This will need to be communicated via the pings.
         #    if self.DEBUG:
@@ -10516,7 +10612,6 @@ class VocoAdapter(Adapter):
             
             self.mqtt_client.publish("/hermes/voco/" + str(self.persistent_data['main_site_id']) + '/do_stt', json.dumps({'siteId':str(self.persistent_data['main_site_id']), 'wav':str(base64_message)}) )
         
-        
         else:
             if self.DEBUG:
                 print("WARNING, STT SERVER HAS NOT STARTED (and main controller is not an option either)")
@@ -10530,7 +10625,8 @@ class VocoAdapter(Adapter):
     
     
     
-    # result can come from on device STT server, or from other more capable STT server on the local network.
+    
+    # Result can come from on device STT process, or from other more capable STT server on the local network.
     def parse_llm_stt_result(self, stt_result=None, intent=None):
         if self.DEBUG:
             print("in parse_llm_stt_result")
@@ -10565,8 +10661,6 @@ class VocoAdapter(Adapter):
                     return
                     
                 stt_output = clean_up_stt_result(stt_output)
-                
-                    
             
                 if '[' in stt_output:
                     if self.DEBUG:
@@ -10653,43 +10747,67 @@ class VocoAdapter(Adapter):
             time.sleep(0.1)
             os.system('pkill -f ' + str(self.llm_stt_binary_name))
         
+        self.llm_stt_started = False
         #/home/pi/.webthings/addons/voco/llm/stt/server -m /home/pi/.webthings/data/voco/llm/stt/ggml-base.en.bin -t 3  --host 0.0.0.0 --port 8046 --public /home/pi/.webthings/data/voco/recording/
-        
         
         if str(self.persistent_data['llm_stt_model']) == 'voco':
             if self.DEBUG:
                 print("llm_stt_model is set to voco, so not starting STT server")
-            self.llm_stt_started = False
             return
             
-        my_env = os.environ.copy()
         
-        #'--audio_ctx',
-        #'0',
+        self.llm_stt_not_enough_memory = False
+        self.check_available_memory()
         
-        # suppress_non_speech_tokens
+        if self.llm_enabled and self.llm_stt_enabled:
+            if self.free_memory > self.llm_stt_minimal_memory:
+            
+                my_env = os.environ.copy()
         
-        #stt_command = str(self.llm_stt_binary_path) + ' -m ' + str(os.path.join(self.llm_stt_dir_path, str(self.persistent_data['llm_stt_model']))) + ' -t 3 --host 0.0.0.0 --port ' + str(self.llm_stt_port)
-        stt_command = [
-            str(self.llm_stt_binary_path),
-            '-m',
-            str(os.path.join(self.llm_stt_dir_path, str(self.persistent_data['llm_stt_model']))),
-            '-t',
-            '2',
-            '--host',
-            '0.0.0.0',
-            '--port',
-            str(self.llm_stt_port)
-        ]
-        if self.DEBUG:
-            print("STT_COMMAND: " + str(' '.join(stt_command)))
+                #'--audio_ctx',
+                #'0',
         
-        self.llm_stt_process = Popen(stt_command, env=my_env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, text=True, bufsize=1) # 
-        time.sleep(.1)
-        if self.llm_stt_process.poll() == None:
-            self.llm_stt_started = True
+                # suppress_non_speech_tokens
+        
+                #stt_command = str(self.llm_stt_binary_path) + ' -m ' + str(os.path.join(self.llm_stt_dir_path, str(self.persistent_data['llm_stt_model']))) + ' -t 3 --host 0.0.0.0 --port ' + str(self.llm_stt_port)
+                stt_command = [
+                    str(self.llm_stt_binary_path),
+                    '-m',
+                    str(os.path.join(self.llm_stt_dir_path, str(self.persistent_data['llm_stt_model']))),
+                    '-t',
+                    '2',
+                    '--host',
+                    '0.0.0.0',
+                    '--port',
+                    str(self.llm_stt_port)
+                ]
+                if self.DEBUG:
+                    print("STT_COMMAND: " + str(' '.join(stt_command)))
+        
+                self.llm_stt_process = Popen(stt_command, env=my_env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, text=True, bufsize=1) # 
+                time.sleep(.1)
+                if self.llm_stt_process.poll() == None:
+                    self.llm_stt_started = True
+                    if self.DEBUG:
+                        print("\n\n\nLLM STT process started succesfully\n\n\n")
+                else:
+                    if self.DEBUG:
+                        print("\n\n\nLLM STT process immediately crashed! return code: " + str(self.llm_stt_process.returncode) + "\n\n\n")
+ 
+                    if self.llm_stt_process.stdout:
+                        print("STT process: starting error. stdout: " + str(self.llm_stt_process.stdout))
+                    if self.llm_stt_process.stderr:
+                        print("STT process: starting error. stderr: " + str(self.llm_stt_process.stderr)) # + '\n' + "Command failed"   #.decode('utf-8'))
+                    
+                        
+            else:
+                if self.DEBUG:
+                    print("ERROR, not enough memory to start STT server")
+                self.llm_stt_not_enough_memory = True
+                
+        else:
             if self.DEBUG:
-                print("STT SERVER STARTED")
+                print("LLM or STT server DISABLED\n")
 
 
     
@@ -10726,89 +10844,120 @@ class VocoAdapter(Adapter):
                 
         os.system('pkill -f ' + str(self.llm_assistant_binary_name))
         
-        if self.persistent_data['is_satellite'] == True:
+        self.llm_assistant_response_count = 0
+        
+        #if self.persistent_data['is_satellite'] == True:
+        #    if self.DEBUG:
+        #        print("aborting start_ai_assistant: this device is (now) a satellite. Aborting start of assistant") # TODO: in the future, if the satellite is powerful enough, why not let it run a local assistant?
+        #    return
+        
+        if str(self.persistent_data['llm_assistant_model']) == 'voco':
             if self.DEBUG:
-                print("aborting start_ai_assistant: this device is (now) a satellite. Aborting start of assistant") # TODO: in the future, if the satellite is powerful enough, why not let it run a local assistant?
+                print("llm_assistant_model is set to voco, so not starting Assistant server")
+            self.llm_assistant_started = False
             return
         
+        self.llm_assistant_not_enough_memory = False
+        self.check_available_memory()
         
-        my_env = os.environ.copy()
+        if self.llm_enabled and self.llm_assistant_enabled:
+            if self.free_memory > self.llm_assistant_minimal_memory:
+                
+                my_env = os.environ.copy()
         
-        with open(self.llm_assistant_output_file_path, "w") as myfile:
-            myfile.write("")
-        self.last_assistant_output_change_time = time.time()
-        self.llm_assistant_response_count = 0
-        self.llm_assistant_researcher_was_spotted = True
+                with open(self.llm_assistant_output_file_path, "w") as myfile:
+                    myfile.write("")
+                self.last_assistant_output_change_time = time.time()
         
-        #"sh",
-        #    "-c",
-        #
+                self.llm_assistant_researcher_was_spotted = True
         
-        assistant_command = [
+                #"sh",
+                #    "-c",
+                #
+        
+                assistant_command = [
             
-            str(self.llm_assistant_binary_path),
-            "-m",
-            str(self.llm_models['assistant']['active']),
-            "-p",
-            "'The following is a conversation between a curious Researcher and their helpful AI assistant called " + str(self.llm_assistant_name) + ", which is a large language model trained on the sum of human knowledge. \n\n Researcher: What is the capital of Germany? \n" + str(self.llm_assistant_name) +": Berlin is the capital of Germany. \nResearcher:'",
-            "--interactive",
-            #"--simple-io",
-            "--batch_size",
-            "1024",
-            "--ctx_size",
-            "1024",
-            "--keep",
-            "-1",
-            "--log-disable",
-            "--temp",
-            "0",
-            "--mirostat",
-            "2",
-            "--in-prefix",
-            "' '",
-            "--interactive-first",
-            "--in-suffix",
-            "'" + str(self.llm_assistant_name) + ":'",
-            "--reverse-prompt",
-            "'Researcher:'"
-        ]
-        # "--silent-prompt",
+                    str(self.llm_assistant_binary_path),
+                    "-m",
+                    str(self.llm_models['assistant']['active']),
+                    "-p",
+                    "'The following is a conversation between a curious Researcher and their helpful AI assistant called " + str(self.llm_assistant_name) + ", which is a large language model trained on the sum of human knowledge. \n\n Researcher: What is the capital of Germany? \n" + str(self.llm_assistant_name) +": Berlin is the capital of Germany. \nResearcher:'",
+                    "--interactive",
+                    #"--simple-io",
+                    "--batch_size",
+                    "1024",
+                    "--ctx_size",
+                    "1024",
+                    "--keep",
+                    "-1",
+                    "--log-disable",
+                    "--temp",
+                    "0",
+                    "--mirostat",
+                    "2",
+                    "--in-prefix",
+                    "' '",
+                    "--interactive-first",
+                    "--in-suffix",
+                    "'" + str(self.llm_assistant_name) + ":'",
+                    "--reverse-prompt",
+                    "'Researcher:'"
+                ]
+                # "--silent-prompt",
 
-        #"--prompt-cache",
-        #str(self.llm_assistant_prompt_cache_path),
+                #"--prompt-cache",
+                #str(self.llm_assistant_prompt_cache_path),
         
-        assistant_command_part2 = [
-            "-t",
-            "3",
-            #">>",
-            #"-"
-            ">>",
-            str(self.llm_assistant_output_file_path)
-            #"2>&1",
-            #"|",
-            #"cat"
-        ]
+                assistant_command_part2 = [
+                    "-t",
+                    "3",
+                    #">>",
+                    #"-"
+                    ">>",
+                    str(self.llm_assistant_output_file_path)
+                    #"2>&1",
+                    #"|",
+                    #"cat"
+                ]
         
-        assistant_command = assistant_command + assistant_command_part2
+                assistant_command = assistant_command + assistant_command_part2
         
-        assistant_command = ' '.join(assistant_command)
-        if self.DEBUG:
-            print("llamafile assistant_command: " + str(assistant_command))
+                assistant_command = ' '.join(assistant_command)
+                if self.DEBUG:
+                    print("llamafile assistant_command: " + str(assistant_command))
         
-        self.llm_assistant_started = True
-        self.llm_assistant_process = Popen(assistant_command, env=my_env, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,bufsize=100,shell=True) # preexec_fn=os.setsid
-        time.sleep(.1)
-        if self.llm_assistant_process.poll() != None:
-            if self.DEBUG:
-                print("llamafile immediately crashed!")
-            if self.llm_assistant_process.returncode == 0:
-                #print(p.stdout # + '\n' + "Command success" #.decode('utf-8')
-                print("llamafile: starting error. stdout: " + str(self.llm_assistant_process.stdout))
+                
+                self.llm_assistant_process = Popen(assistant_command, env=my_env, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,bufsize=100,shell=True) # preexec_fn=os.setsid
+                time.sleep(.1)
+                if self.llm_assistant_process.poll() == None:
+                    if self.DEBUG:
+                        print("\n\n\nLLM Assistant process started succesfully\n\n\n")
+                    self.llm_assistant_started = True
+                else:
+                    if self.DEBUG:
+                        print("\n\n\nLLM Assistant process immediately crashed! return code: " + str(self.llm_assistant_process.returncode) + "\n\n\n")
+                    self.llm_assistant_started = False
+                    if self.llm_assistant_process.returncode == 0:
+                        #print(p.stdout # + '\n' + "Command success" #.decode('utf-8')
+                        print("assistant process : starting error. stdout: " + str(self.llm_assistant_process.stdout))
+                    else:
+                        if self.llm_assistant_process.stderr:
+                            print("assistant process: starting error. stderr: " + str(self.llm_assistant_process.stderr)) # + '\n' + "Command failed"   #.decode('utf-8'))
+                
+                    if self.llm_assistant_process.stdout:
+                        print("assistant process: starting error. stdout: " + str(self.llm_assistant_process.stdout))
+                    if self.llm_assistant_process.stderr:
+                        print("assistant process: starting error. stderr: " + str(self.llm_assistant_process.stderr)) # + '\n' + "Command failed"   #.decode('utf-8'))
+                    
+
             else:
-                if self.llm_assistant_process.stderr:
-                    print("llamafile: starting error. stderr: " + str(self.llm_assistant_process.stderr)) # + '\n' + "Command failed"   #.decode('utf-8'))
-        
-
+                if self.DEBUG:
+                    print("\n\nWARNING, not enough memory to start Assistant\n\n")
+                self.llm_assistant_not_enough_memory = True
+                
+        else:
+            if self.DEBUG:
+                print("LLM or Assistant not enabled\n")
         #self.llm_assistant_process = await asyncio.subprocess.create_subprocess_exec(
         #    str(self.llm_assistant_binary_path), assistant_command, stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
         #)
@@ -10821,8 +10970,7 @@ class VocoAdapter(Adapter):
         #await proc.wait()
 
         
-        if self.DEBUG:
-            print("\n\n\nCLI ASSISTANT VERSION STARTED\n\n\n")
+        
     
         
 

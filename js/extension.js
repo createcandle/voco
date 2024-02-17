@@ -951,10 +951,11 @@
             var all_tab_buttons = document.querySelectorAll('.extension-voco-main-tab-button');
 			
             if(this.busy_polling){
+				this.busy_polling_count++;
                 if(this.debug){
-                    console.log("voco: was still polling, aborting new poll");
+                    console.log("voco: was still busy polling. this.busy_polling: ", this.busy_polling);
                 }
-                this.busy_polling_count++;
+                
                 
                 if(this.busy_polling_count > 10){
                     this.busy_polling = false;
@@ -966,6 +967,9 @@
                     document.getElementById('extension-voco-text-commands-container').style.display = 'none';
                 }
                 else{
+	                if(this.debug){
+	                    console.log("Aborting poll");
+	                }
                     return;
                 }
                 
@@ -1179,7 +1183,15 @@
 				
 				if(typeof body.llm_folder_size != 'undefined'){
 					if(document.getElementById('extension-voco-llm-total-size')){
-						document.getElementById('extension-voco-llm-total-size').textContent = '' + Math.round( parseInt(body.llm_folder_size)/1000);
+						let llm_mb = Math.round(parseInt(body.llm_folder_size)/1000);
+						if(llm_mb < 1000){
+							document.getElementById('extension-voco-llm-total-size').textContent = '' + llm_mb + " MB";
+						}
+						else{
+							llm_mb = Math.round(llm_mb / 100) / 10;
+							document.getElementById('extension-voco-llm-total-size').textContent = '' + llm_mb + " GB";
+						}
+						
 					}
 					
 					let dl_indicator_el = document.getElementById('extension-voco-downloading-models-indicator');
@@ -1565,6 +1577,8 @@
                 }
 				//console.log("Voco llm init response: ", body);
 	
+				let content_container_el = document.getElementById('extension-voco-content-container');
+	
 				if(typeof body['state'] != 'undefined' && body['state'] == true){
 					//console.log("satellite update state was true");
 					
@@ -1597,15 +1611,37 @@
 					this.llm_enabled = body['llm_enabled'];
 				}
 				
-				if(typeof body['llm_enabled'] != 'undefined'){
-					this.llm_assistant_started = body['llm_assistant_started'];
-					if(this.llm_assistant_started){
-						document.getElementById('extension-voco-main-llm-assistant-running').classList.remove('extension-voco-hidden');
-						document.getElementById('extension-voco-main-llm-assistant-not-running').style.display = 'none';
+				if(typeof body['llm_tts_started'] != 'undefined'){
+					this.llm_tts_started = body['llm_tts_started'];
+					if(this.llm_tts_started){
+						content_container_el.classList.add('extension-voco-tts-running');
 					}
 					else{
-						document.getElementById('extension-voco-main-llm-assistant-running').classList.add('extension-voco-hidden');
-						document.getElementById('extension-voco-main-llm-assistant-not-running').style.display = 'block';
+						content_container_el.classList.remove('extension-voco-tts-running');
+					}
+				}
+				
+				if(typeof body['llm_stt_started'] != 'undefined'){
+					this.llm_stt_started = body['llm_stt_started'];
+					if(this.llm_stt_started){
+						content_container_el.classList.add('extension-voco-stt-running');
+						//document.getElementById('extension-voco-main-llm-stt-running').classList.remove('extension-voco-hidden');
+						//document.getElementById('extension-voco-main-llm-stt-not-running').style.display = 'none';
+					}
+					else{
+						content_container_el.classList.remove('extension-voco-stt-running');
+						//document.getElementById('extension-voco-main-llm-stt-running').classList.add('extension-voco-hidden');
+						//document.getElementById('extension-voco-main-llm-stt-not-running').style.display = 'block';
+					}
+				}
+				
+				if(typeof body['llm_assistant_started'] != 'undefined'){
+					this.llm_assistant_started = body['llm_assistant_started'];
+					if(this.llm_assistant_started){
+						content_container_el.classList.add('extension-voco-assistant-running');
+					}
+					else{
+						content_container_el.classList.remove('extension-voco-assistant-running');
 					}
 				}
 				

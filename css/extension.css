@@ -745,9 +745,28 @@ body #extension-voco-view .extension-voco-tab-selected{
     border-radius:.5rem;
 }
 
+.extension-voco-llm-warning{
+    max-width:60rem;
+    margin:2rem auto;
+    padding:2rem;
+    background-color:red;
+    color:white;
+    border-radius:.5rem;
+}
+
 #extension-voco-unavailable{
     text-align:center;
 }
+
+.extension-voco-green-bg{
+	background-color:#0c7e0f;
+}
+
+.extension-voco-orange-bg{
+	background-color:#9a1074;
+}
+
+
 
 #extension-voco-missing-microphone-icon{
     width:64px;
@@ -981,16 +1000,11 @@ f
 	margin-right:1rem;
 }
 
-#extension-voco-main-llm-assistant-running{
-	background-color:#0c7e0f;
-}
-
-#extension-voco-main-llm-playground{
-	display:none;
-}
+/*
 #extension-voco-main-llm-assistant-running:not(.extension-voco-hidden) + #extension-voco-main-llm-playground{
 	display:block;
 }
+*/
 
 
 #extension-voco-main-llm-playground-textarea{
@@ -1039,13 +1053,19 @@ f
 	cursor:pointer;
 }
 
+.extension-voco-tts-running #extension-voco-main-llm-tts-not-running,
+.extension-voco-stt-running #extension-voco-main-llm-stt-not-running,
+.extension-voco-assistant-running #extension-voco-main-llm-assistant-not-running,
+#extension-voco-main-llm-playground{
+	display:none;
+}
 
-
-
-
-
-
-
+.extension-voco-tts-running #extension-voco-main-llm-tts-running,
+.extension-voco-stt-running #extension-voco-main-llm-stt-running,
+.extension-voco-assistant-running #extension-voco-main-llm-assistant-running,
+.extension-voco-assistant-running #extension-voco-main-llm-playground{
+	display:block;
+}
 
 /*  spinner  */
 
