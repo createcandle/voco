@@ -6155,7 +6155,7 @@ class VocoAdapter(Adapter):
                                 #message = message_bytes.decode('ascii')
                             
                             
-                                do_stt_wav_file_path = os.path.join(self.recording_dir_path, str(self.persistent_data['target_site_id']) + ".wav")
+                                do_stt_wav_file_path = os.path.join(self.recording_dir_path, str(target_site_id) + ".wav")
                                 f = open(do_stt_wav_file_path, "wb")
                                 f.write(message_bytes)
                                 f.close()
@@ -6170,7 +6170,7 @@ class VocoAdapter(Adapter):
                             # Return the STT result back to the satellite
                             if self.DEBUG:
                                 print("do_stt_result: " + str(do_stt_result))
-                            self.mqtt_client.publish("hermes/voco/" + str(target_site_id) + "/stt_done", json.dumps( {"text":str(do_stt_result),"siteId":str(target_site_id)} )) # ,"sessionId":str(payload['sessionId']
+                            self.mqtt_client.publish("hermes/voco/" + str(target_site_id) + "/stt_done", json.dumps( {"stt_result":str(do_stt_result),"siteId":str(target_site_id)} )) # ,"sessionId":str(payload['sessionId']
                             
                         except Exception as ex:
                             print("Caught error in /do_stt: " + str(ex))
@@ -6180,8 +6180,8 @@ class VocoAdapter(Adapter):
                 elif msg.topic.endswith('/stt_done'):
                     if self.DEBUG:
                         print("got message on /stt_done.  payload: " + str(payload))
-                    if 'text' in payload:
-                        self.parse_llm_stt_result(payload['text'])
+                    if 'stt_result' in payload:
+                        self.parse_llm_stt_result(payload['stt_result'])
                     
                 """
                 elif msg.topic.endswith('/mute'):
@@ -10598,7 +10598,7 @@ class VocoAdapter(Adapter):
         # TODO: Technically the main Voco controller might not be the fastest STT server on the network. Each Voco instance with an STT server could share a score for their own speed, so satellites can select the fastest one to latch onto.
         elif self.llm_stt_started == False and self.mqtt_client != None and self.mqtt_connected and self.persistent_data['main_site_id'] != self.persistent_data['site_id'] and self.persistent_data['is_satellite'] == True and self.main_controller_has_stt:
             if self.DEBUG:
-                print("sending audio recording to main controller for STT: " + str(self.last_recording_path))
+                print("sending audio recording to main controller for STT via /do_stt: " + str(self.last_recording_path))
                 
             f=open(str(self.last_recording_path), "rb")
             fileContent = f.read()
@@ -10607,10 +10607,12 @@ class VocoAdapter(Adapter):
             base64_bytes = base64.b64encode(fileContent)
             base64_message = base64_bytes.decode('ascii')
             
+            mqtt_path = "hermes/voco/" + str(self.persistent_data['main_site_id']) + '/do_stt'
             #byteArr = bytearray(fileContent)
             #self.mqtt_client.publish("/hermes/voco/" + str(self.persistent_data['main_site_id']) + '/do_sst', byteArr, 0)
-            
-            self.mqtt_client.publish("/hermes/voco/" + str(self.persistent_data['main_site_id']) + '/do_stt', json.dumps({'siteId':str(self.persistent_data['main_site_id']), 'wav':str(base64_message)}) )
+            if self.DEBUG:
+                print("publishing to: " + str(mqtt_path) + ", base64: " + str(type(base64_message)) + ', length: ' + str(len(base64_message)))
+            self.mqtt_client.publish(mqtt_path, json.dumps({'siteId':str(self.persistent_data['site_id']), 'wav':str(base64_message)}) )
         
         else:
             if self.DEBUG:
