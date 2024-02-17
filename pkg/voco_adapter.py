@@ -243,7 +243,7 @@ class VocoAdapter(Adapter):
         self.llm_stt_process = None
         self.llm_stt_started = False
         self.s = None # holds the thread that manages the STT and Assistant processes
-        self.main_controller_has_stt = False
+        self.main_controller_has_stt = False # satellites can let the main controller perform the heavy voice processing, but only if it has an stt server
         
         self.record_running = False
         self.record = wave.Wave_write
@@ -6018,7 +6018,8 @@ class VocoAdapter(Adapter):
                             print("Should speak, but no message to be spoken and/or no intent data provided?")
                         
                 elif msg.topic.endswith('/ping'):
-                        
+                    if self.DEBUG:
+                        print("received ping targetted at this controller")
                     self.parse_ping(payload,ping_type="ping")
                         
                     # Send back a pong message
@@ -6117,6 +6118,8 @@ class VocoAdapter(Adapter):
         if self.DEBUG2:
             print("- - - About to ping or pong. Broadcast flag = " + str(broadcast))
             
+        if self.DEBUG:
+            print("- - - self.llm_stt_started: " + str(self.llm_stt_started))
     
         self.update_network_info()
         if self.mqtt_connected and self.ip_address != None:
@@ -6689,13 +6692,11 @@ class VocoAdapter(Adapter):
             #    print("\n\n\n__LOOP " + str(x))
             #    print("intent: " + str(all_possible_intents[x]))
             
-            
             if x > 0:
                 first_test = False
                 
             if x == all_possible_intents_count:
                 final_test = True
-            
             
             if self.DEBUG:
                 print("\n\n\n.")
@@ -6707,9 +6708,6 @@ class VocoAdapter(Adapter):
                 print("all_possible_intents: " + str(all_possible_intents))
             
             
-            
-            
-            
             if stop_looping:
                 if self.DEBUG:
                     print("top_looping was true. Aborting loop")
@@ -6719,7 +6717,6 @@ class VocoAdapter(Adapter):
             if self.DEBUG:
                 print("alternatives_counter: " + str(alternatives_counter))
             self.alternatives_counter = x - 1
-            
             
             try:
                 if self.alternatives_counter == -1:
@@ -6741,8 +6738,6 @@ class VocoAdapter(Adapter):
                 #self.speak("Sorry, there was an error.",intent=intent_message)
                 break
         
-
-        
             if incoming_intent == None or incoming_intent == 'None':
                 if self.DEBUG:
                     print("intent was None")
@@ -6762,13 +6757,11 @@ class VocoAdapter(Adapter):
                     if slots['start_time'] < time.time():
                         slots['start_time'] = None
                     
-                    
-                
                 if self.llm_assistant_started and 'about' in sentence and incoming_intent == 'get_time':
                     if self.DEBUG:
                         print("Applying ugly heuristic to more likely send second query to assistant again. sentence: " + str(sentence))
-                    break
                     #return ""
+                    break
                         
                 if sentence.startswith('load ') and incoming_intent == 'get_value':
                     if self.DEBUG:
@@ -6785,10 +6778,14 @@ class VocoAdapter(Adapter):
                     incoming_intent = 'set_state'
                     
                 if incoming_intent == 'set_timer' and word_count < 4:
+                    #voice_message = "Sorry, I don't understand the timer."
                     if self.DEBUG:
                         print("Error, not enough words for set timer")
-                        return "Debug: Not enough words for set timer"
-                    return ""
+                        #voice_message = "Sorry, I don't understand, not enough words."
+                        #return "Debug: Not enough words for set timer"
+                    #return ""
+                    
+                    break
                     
                 if (incoming_intent == 'get_value' or incoming_intent == 'set_value' or incoming_intent == 'set_state' or incoming_intent == 'get_boolean') and slots['thing'] == None and slots['property'] == None and slots['boolean'] == None and slots['number'] == None and slots['percentage'] == None and slots['string'] == None:
                     if self.DEBUG:
@@ -6800,18 +6797,23 @@ class VocoAdapter(Adapter):
                         print("__self.llm_assistant_enabled: " + str(self.llm_assistant_enabled))
                         print("__self.llm_assistant_started: " + str(self.llm_assistant_started))
                         
+                    # TODO: check if this is a good idea
                     if ((first_test and word_count == 3) or (word_count < 4 and time.time() - self.last_assistant_output_change_time < self.llm_assistant_conversation_seconds_threshold)) and self.llm_enabled and self.llm_stt_enabled and self.llm_stt_started and self.llm_assistant_enabled and self.llm_assistant_started:
+                        if self.DEBUG:
+                            print("pretty much everything was missing. Making it so that this short command after a recent interaction with the assistant will also be quickly redirected to the assistant. A bit of a gamble.")
                         #return "Sorry, I don't understand. "
                         self.try_again_via_assistant = True
-                        voice_message = "Sorry, I don't understand." # this will cause the LLM to take over
+                        #voice_message = "Sorry, I don't understand." # this will cause the LLM to take over # No need, empty voice message will also do that
                         continue
-                        
+                    
+                    """
                     if word_count < 4:
                         if self.DEBUG:
                             print("thing scanner sanite check: pretty much everything was missing, and not enough words")
                             return "Debug: Not enough words"
                         else:
                             return ""
+                    """
                     
                     # Very hacky way of adding "increase volume" and "decrease volume", which is often misheard since the model wasn't designed to handle it.
                     if incoming_intent == 'set_value' and (sentence.startswith('increase ') or sentence.startswith('decrease ') or sentence.startswith('degrees ') or sentence.startswith('lower ') or sentence.startswith('load ') or sentence.startswith('raise ')):
@@ -6916,7 +6918,7 @@ class VocoAdapter(Adapter):
                                 if not self.persistent_data['is_satellite']:
                                     #self.speak("I was unable to perform the change you wanted.",intent=intent_message)
                                     first_voice_message = "Sorry, I don't understand the change you wanted. "
-                                return
+                                continue
                             else:
                                 if first_test:
                                     first_voice_message = "Sorry, I don't understand the change you wanted. "
