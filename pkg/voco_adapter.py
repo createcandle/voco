@@ -158,8 +158,8 @@ class VocoAdapter(Adapter):
         #print(str( os.path.join(os.path.dirname(os.path.abspath(__file__)), 'lib') ))
         self.pairing = False
         self.DEBUG = False
-        self.DEBUG2 = False
-        self.DEV = False
+        self.DEBUG2 = True # TODO: TEMPORARY EXTRA DEBUG INFO
+        self.DEV = False # not used anymore?
         self.addon_name = 'voco'
         self.name = self.__class__.__name__ # VocoAdapter
         #print("self.name = " + str(self.name))
@@ -6160,8 +6160,9 @@ class VocoAdapter(Adapter):
 
 
     def parse_ping(self,payload,ping_type="ping"):
-        if self.DEBUG2:
+        if self.DEBUG:
             print("\n    ( . . . pong . . . )---\n")
+        if self.DEBUG:
             print('in parse_ping. ping_type: ' + str(ping_type))
             print("(own site_id: " + str(self.persistent_data['site_id']) + ")")
             print("- - - payload: " + str(payload))
@@ -10496,7 +10497,12 @@ class VocoAdapter(Adapter):
         else:
             if self.DEBUG:
                 print("WARNING, STT SERVER HAS NOT STARTED (and main controller is not an option either)")
-    
+                print(" - self.llm_stt_started: " + str(self.llm_stt_started))
+                print(" - self.mqtt_connected: " + str(self.mqtt_connected))
+                print(" - self.persistent_data['site_id']: " + str(self.persistent_data['site_id']))
+                print(" - self.persistent_data['main_site_id']: " + str(self.persistent_data['main_site_id']))
+                print(" - self.persistent_data['is_satellite']: " + str(self.persistent_data['is_satellite']))
+                print(" - self.main_controller_has_stt: " + str(self.main_controller_has_stt))
     
     # result can come from on device STT server, or from other more capable STT server on the local network.
     def parse_llm_stt_result(self, stt_result=None, intent=None):
