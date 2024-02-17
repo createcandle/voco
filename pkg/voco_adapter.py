@@ -232,7 +232,7 @@ class VocoAdapter(Adapter):
         
         
         # STT
-        self.llm_stt_enabled = True
+        self.llm_stt_enabled = False
         self.llm_stt_binary_name = 'whisper_server'
         self.llm_stt_minimal_memory = 600
         self.llm_stt_possible = False
@@ -1015,8 +1015,9 @@ class VocoAdapter(Adapter):
         
         self.llm_data_dir_path = os.path.join(self.data_dir_path, 'llm')
         
+        
         # TTS
-        self.llm_piper_path = os.path.join(self.addon_dir_path,'llm','tts', self.llm_tts_binary_name)
+        self.llm_tts_binary_path = os.path.join(self.addon_dir_path,'llm','tts', self.llm_tts_binary_name)
         self.llm_tts_espeak_dir_path = os.path.join(self.addon_dir_path,'llm','tts','espeak-ng-data') # sic
         self.llm_tts_dir_path = os.path.join(self.llm_data_dir_path, 'tts')
         self.llm_tts_cache_dir_path = os.path.join(self.llm_data_dir_path, 'tts_cache')
@@ -1035,9 +1036,7 @@ class VocoAdapter(Adapter):
         #self.llm_assistant_binary_zip_path = os.path.join(self.addon_dir_path,'llm','assistant','llamafile.zip')
         #self.llm_assistant_binary_path = os.path.join(self.data_dir_path,'llm','llamafile')
         
-        
         self.llm_assistant_binary_path = os.path.join(self.addon_dir_path,'llm','assistant',self.llm_assistant_binary_name)
-        
         
         #self.llm_assistant_binary_path = os.path.join(self.addon_dir_path,'llm','assistant','llama_cpp')
         #self.llm_assistant_binary_path = os.path.join(self.addon_dir_path,'llm','assistant','llamafile')
@@ -1050,7 +1049,7 @@ class VocoAdapter(Adapter):
         
         # STT
         self.llm_stt_dir_path = os.path.join(self.llm_data_dir_path, 'stt')
-        self.llm_stt_executable_path = os.path.join(self.addon_dir_path,'llm','stt', self.llm_stt_binary_name)
+        self.llm_stt_binary_path = os.path.join(self.addon_dir_path,'llm','stt', self.llm_stt_binary_name)
         
         
         
@@ -1067,11 +1066,16 @@ class VocoAdapter(Adapter):
         else:
             print("ERROR, assistant binary not found at " + str(self.llm_assistant_binary_path))
         
-        if os.path.exists(str(self.llm_piper_path)):
-            os.system('chmod +x ' + str(self.llm_piper_path))
-        if os.path.exists(str(self.llm_stt_executable_path)):
-            os.system('chmod +x ' + str(self.llm_stt_executable_path))
+        if os.path.exists(str(self.llm_stt_binary_path)):
+            os.system('chmod +x ' + str(self.llm_stt_binary_path))
+        else:
+            print("ERROR, STT binary not found at " + str(self.llm_stt_binary_path))    
         
+        if os.path.exists(str(self.llm_tts_binary_path)):
+            os.system('chmod +x ' + str(self.llm_tts_binary_path))
+        else:
+            print("ERROR, TTS binary not found at " + str(self.llm_tts_binary_path))
+            
         #self.llm_tts_pipe_path = '/tmp/llm_pipe' #os.path.join(self.llm_data_dir_path, 'pipe')
         #os.system('mkfifo ' + str(self.llm_tts_pipe_path))
         
@@ -2589,7 +2593,7 @@ class VocoAdapter(Adapter):
                 
                 cached_response_file_path = os.path.join(self.llm_tts_cache_dir_path,potential_cached_name + '.wav')
                 if not os.path.exists(cached_response_file_path):
-                    tts_command = 'echo "' + str(voice_message) + '" | ' + str(self.llm_piper_path) + ' --model ' + str(self.llm_models['tts']['active']) + ' -f ' + str(cached_response_file_path)
+                    tts_command = 'echo "' + str(voice_message) + '" | ' + str(self.llm_tts_binary_path) + ' --model ' + str(self.llm_models['tts']['active']) + ' -f ' + str(cached_response_file_path)
                     #tts_command += ' -f ' + str(cached_response_file_path) # --sentence_silence 1
                     if self.DEBUG:
                         print("Attempting to create cached TTS response.  tts_command:  " + str(tts_command))
@@ -4940,13 +4944,14 @@ class VocoAdapter(Adapter):
                 # TODO: the origin is set as voice, but it might not always be?
                 if self.persistent_data['listening']:
                     
-                    if self.DEBUG:
-                        print("satellite, so sending captured text to main controller: " + str(payload['text']))
+                    
                     
                     if 'unknownword' in str(payload['text']) or str(payload['text']) == '':
                         if self.DEBUG:
-                            print("text contained 'unknownword' or was empty string. aborting")
+                            print("textCaptured: satellite: text contained 'unknownword' or was empty string, not passing to main controller. aborting")
                     else:
+                        if self.DEBUG:
+                            print("textCaptured: satellite, so sending captured text to main controller: " + str(payload['text']))
                         self.mqtt_client.publish("hermes/voco/parse",json.dumps({ "siteId":str(self.persistent_data['site_id']),"text": payload['text'],'origin':'voice' }))
                 
                 if self.periodic_voco_attempts > 5:
@@ -10236,6 +10241,9 @@ class VocoAdapter(Adapter):
         # Start the STT server
         if self.llm_stt_enabled:
             self.start_llm_stt_server()
+        else:
+            if self.DEBUG:
+                print("\n!\n\nWARNING, STT IS DISABLED\n\n!\n")
             
         # Next, start the assistant    
         if self.DEBUG:
@@ -10247,10 +10255,16 @@ class VocoAdapter(Adapter):
                     print("\nNOT STARTING LLM ASSISTANT because llm_assistant_possible is False")
             else:
                 self.start_ai_assistant()
+        else:
+            if self.DEBUG:
+                print("\n!\n\nWARNING, ASSISTANT IS DISABLED\n\n!\n")
+
 
         self.assistant_loop_counter = 0
         while self.running:
             
+            
+            # TODO: satellites should be allowed to run their own STT and Assistant if they are powerful enough.
             if self.persistent_data['is_satellite'] == True:
                 if self.llm_stt_started:
                     
@@ -10258,8 +10272,11 @@ class VocoAdapter(Adapter):
                     # TODO: kill both processes nicely
                     os.system('pkill -f ' + str(self.llm_stt_binary_name))
                     os.system('pkill -f ' + str(self.llm_assistant_binary_name))
+                    
+                if self.DEBUG:
+                    print("BREAKING OUT OF LLM SERVERS WHILE LOOP")
                 break
-            
+                
             self.assistant_loop_counter += 1
             if self.assistant_loop_counter == 60:
                 self.assistant_loop_counter = 0
@@ -10289,8 +10306,12 @@ class VocoAdapter(Adapter):
                         self.start_ai_assistant()
             
             sleep(1)
+            
+            if self.running == False:
+                break
 
-
+        if self.DEBUG:
+            print("EXITING LLM SERVERS WHILE LOOP / THREAD")
 
 
 
@@ -10353,7 +10374,7 @@ class VocoAdapter(Adapter):
             # --length_scale 1.0
         
             tts_command = [
-                str(self.llm_piper_path),
+                str(self.llm_tts_binary_path),
                 "--model",
                 str(self.llm_models['tts']['active']),
                 "--json-input",
@@ -10506,6 +10527,9 @@ class VocoAdapter(Adapter):
                 print(" - self.persistent_data['is_satellite']: " + str(self.persistent_data['is_satellite']))
                 print(" - self.main_controller_has_stt: " + str(self.main_controller_has_stt))
     
+    
+    
+    
     # result can come from on device STT server, or from other more capable STT server on the local network.
     def parse_llm_stt_result(self, stt_result=None, intent=None):
         if self.DEBUG:
@@ -10622,10 +10646,9 @@ class VocoAdapter(Adapter):
         if self.DEBUG:
             print("in start_llm_stt_server")
         
-        
         if self.llm_stt_process != None or (self.llm_stt_process != None and self.llm_stt_process.poll() == None):
             if self.DEBUG:
-                print(" - llm_stt_server seems to already be running!")
+                print(" - llm_stt_server seems to already be running! Killing it first")
             self.llm_stt_process.kill()
             time.sleep(0.1)
             os.system('pkill -f ' + str(self.llm_stt_binary_name))
@@ -10639,9 +10662,9 @@ class VocoAdapter(Adapter):
         
         # suppress_non_speech_tokens
         
-        #stt_command = str(self.llm_stt_executable_path) + ' -m ' + str(os.path.join(self.llm_stt_dir_path, str(self.persistent_data['llm_stt_model']))) + ' -t 3 --host 0.0.0.0 --port ' + str(self.llm_stt_port)
+        #stt_command = str(self.llm_stt_binary_path) + ' -m ' + str(os.path.join(self.llm_stt_dir_path, str(self.persistent_data['llm_stt_model']))) + ' -t 3 --host 0.0.0.0 --port ' + str(self.llm_stt_port)
         stt_command = [
-            str(self.llm_stt_executable_path),
+            str(self.llm_stt_binary_path),
             '-m',
             str(os.path.join(self.llm_stt_dir_path, str(self.persistent_data['llm_stt_model']))),
             '-t',
