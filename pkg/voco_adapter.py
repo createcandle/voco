@@ -232,7 +232,7 @@ class VocoAdapter(Adapter):
         
         
         # STT
-        self.llm_stt_enabled = False
+        self.llm_stt_enabled = True
         self.llm_stt_binary_name = 'whisper_server'
         self.llm_stt_minimal_memory = 600
         self.llm_stt_possible = False
@@ -10655,6 +10655,13 @@ class VocoAdapter(Adapter):
         
         #/home/pi/.webthings/addons/voco/llm/stt/server -m /home/pi/.webthings/data/voco/llm/stt/ggml-base.en.bin -t 3  --host 0.0.0.0 --port 8046 --public /home/pi/.webthings/data/voco/recording/
         
+        
+        if str(self.persistent_data['llm_stt_model']) == 'voco':
+            if self.DEBUG:
+                print("llm_stt_model is set to voco, so not starting STT server")
+            self.llm_stt_started = False
+            return
+            
         my_env = os.environ.copy()
         
         #'--audio_ctx',
