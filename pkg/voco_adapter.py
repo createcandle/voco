@@ -232,7 +232,7 @@ class VocoAdapter(Adapter):
         
         
         # STT
-        self.llm_stt_enabled = True
+        self.llm_stt_enabled = False
         self.llm_stt_binary_name = 'whisper_server'
         self.llm_stt_minimal_memory = 600
         self.llm_stt_possible = False
@@ -243,6 +243,7 @@ class VocoAdapter(Adapter):
         self.llm_stt_process = None
         self.llm_stt_started = False
         self.s = None # holds the thread that manages the STT and Assistant processes
+        self.main_controller_has_stt = False
         
         self.record_running = False
         self.record = wave.Wave_write
@@ -272,6 +273,7 @@ class VocoAdapter(Adapter):
         self.llm_assistant_researcher_was_spotted = True # sometimes assistants don't end a response with the "Researcher:" reverse prompt
         self.got_assistant_output = False # only briefly becomes true while the assistant is outputting text
         self.llm_assistant_maximum_no_new_output_duration = 1 # Sometimes an assistant doesn't render the "Researcher:" response. As a fall-back, if the assistant goes quiet for over a second, assume it's done talking.
+        self.main_controller_has_assistant = False
         
         # Assistant playground
         self.llm_busy_generating = False
@@ -2684,7 +2686,7 @@ class VocoAdapter(Adapter):
         try:
             
             if self.DEBUG:
-                print("in speak.")
+                print("\nin speak.")
                 print(" - voice_message: " + str(voice_message))
                 print(" - intent: " + str(intent))
                 
@@ -3663,7 +3665,7 @@ class VocoAdapter(Adapter):
                                         if self.DEBUG:
                                             print("MQTT broker has not responded. It may be down permanently.")
                                         self.mqtt_connected = False
-                                        self.set_status_on_thing("Main controller is not responding")
+                                        self.set_status_on_thing("Main controller is unavailable")
                                 
                                     if self.periodic_mqtt_attempts%5 == 4:
                                         if self.DEBUG:
@@ -3680,6 +3682,7 @@ class VocoAdapter(Adapter):
                                         if self.DEBUG:
                                             print("main Voco controller has not responded. It may be down permanently.")
                                         self.voco_connected = False
+                                        self.set_status_on_thing("Main controller is not responding")
                                 
                                     if self.periodic_voco_attempts%5 == 4:
                                         if self.DEBUG:
@@ -4925,7 +4928,7 @@ class VocoAdapter(Adapter):
             else:
                  if self.DEBUG:
                      print("textCaptured -> would normally call stop recording, but audio is not being recorded? Likely a faux message. payload: " + str(payload))
-                     
+            
             if self.persistent_data['is_satellite']:
                 #if self.DEBUG:
                 #    print("stored asr payload")
@@ -4933,13 +4936,13 @@ class VocoAdapter(Adapter):
                 #self.mqtt_client.publish("hermes/dialogueManager/startSession",json.dumps({"init":{"type":"action","canBeEnqueued": True},"siteId":str(self.persistent_data['site_id'])}) ) #, "customData":{'origin':'voice','from_satellite':True,'from_satellite_id':str(self.persistent_data['site_id'])} }))
                 #self.mqtt_client.publish("hermes/dialogueManager/startSession",json.dumps({"init":{"type":"action","canBeEnqueued": True},"siteId":str(self.persistent_data['site_id'])}) ) #, "customData":{'origin':'voice','from_satellite':True,'from_satellite_id':str(self.persistent_data['site_id'])} }))
                 
-                if self.DEBUG:
-                    print("sending captured text to main controller: " + str(payload['text']))
-                
-                
                     
                 # TODO: the origin is set as voice, but it might not always be?
                 if self.persistent_data['listening']:
+                    
+                    if self.DEBUG:
+                        print("satellite, so sending captured text to main controller: " + str(payload['text']))
+                    
                     if 'unknownword' in str(payload['text']) or str(payload['text']) == '':
                         if self.DEBUG:
                             print("text contained 'unknownword' or was empty string. aborting")
@@ -6008,10 +6011,11 @@ class VocoAdapter(Adapter):
                         print("message to hermes/voco ends in /speak")
                     if 'message' in payload and 'intent' in payload:
                         if self.DEBUG:
-                            print("This device received /speak mqtt command: " + payload['message'] + ", with intent: " + str(payload['intent']))
+                            print("This device received /speak mqtt command: " + payload['message'] + "\n - with intent: " + str(payload['intent']))
                         self.speak(voice_message=payload['message'],intent=payload['intent']) #,intent={'siteId':self.persistent_data['site_id']})
                     else:
-                        print("Should speak, but no message to be spoken and/or no intent data provided?")
+                        if self.DEBUG:
+                            print("Should speak, but no message to be spoken and/or no intent data provided?")
                         
                 elif msg.topic.endswith('/ping'):
                         
@@ -6137,7 +6141,9 @@ class VocoAdapter(Adapter):
                             'satellite':self.persistent_data['is_satellite'],
                             'main_controller': self.persistent_data['main_site_id'],
                             'satellite_intent_handling':self.satellite_should_act_on_intent,
-                            'thing_titles':self.persistent_data['local_thing_titles']
+                            'thing_titles':self.persistent_data['local_thing_titles'],
+                            'has_stt':self.llm_stt_started,
+                            'has_assistant':self.llm_assistant_started
                             }))
                 
                 if self.DEBUG2:
@@ -6189,6 +6195,16 @@ class VocoAdapter(Adapter):
                         if self.DEBUG:
                             print("broadcast pong was from intented main MQTT server. This has supplied the intended main_site_id: " + str(payload['siteId']) )
                         self.persistent_data['main_controller_ip'] = payload['ip']
+                        
+                        if 'has_stt' in payload:
+                            self.main_controller_has_stt = payload['has_stt']
+                            if self.DEBUG:
+                                print("self.main_controller_has_stt: " + str(self.main_controller_has_stt))
+                        
+                        if 'has_assistant' in payload:
+                            self.main_controller_has_assistant = payload['has_assistant']
+                            if self.DEBUG:
+                                print("self.main_controller_has_assistant: " + str(self.main_controller_has_assistant))
                         
                         if self.persistent_data['main_site_id'] != payload['siteId']:
                             self.save_to_persistent_data = True
@@ -10395,26 +10411,13 @@ class VocoAdapter(Adapter):
             print("in llm_stt. intent: " + str(intent))
             print(" - llm_stt_started: " + str(self.llm_stt_started))
         
-        # TODO: Technically the main Voco controller might not be the fastest STT server on the network. Each Voco instance with an STT server could share a score for their own speed, so satellites can select the fastest one to latch onto.
-        if self.llm_stt_started == False and self.mqtt_client != None and self.mqtt_connected and self.persistent_data['main_site_id'] != self.persistent_data['site_id'] and self.persistent_data['is_satellite'] == True:
-            f=open(str(self.last_recording_path), "rb")
-            fileContent = f.read()
-            
-            #message_bytes = fileContent.encode('ascii')
-            base64_bytes = base64.b64encode(fileContent)
-            base64_message = base64_bytes.decode('ascii')
-            
-            #byteArr = bytearray(fileContent)
-            #self.mqtt_client.publish("/hermes/voco/" + str(self.persistent_data['main_site_id']) + '/do_sst', byteArr, 0)
-            
-            self.mqtt_client.publish("/hermes/voco/" + str(self.persistent_data['main_site_id']) + '/do_sst', json.dumps({'siteId':str(self.persistent_data['main_site_id']), 'wav':str(base64_message)}) )
-        
+                
             
         
-        if self.llm_models['stt']['active'] == None: # TODO: or just skip ahead anyway if this is a satellite, and the main controller has running TTS server running. This will need to be communicated via the pings.
-            if self.DEBUG:
-                print("llm_stt: no active model defined yet")
-            return
+        #if self.llm_models['stt']['active'] == None and self.persistent_data['is_satellite'] == False: # TODO: or just skip ahead anyway if this is a satellite, and the main controller has running TTS server running. This will need to be communicated via the pings.
+        #    if self.DEBUG:
+        #        print("llm_stt: no active model defined yet")
+        #    return
         
         if self.llm_enabled and self.llm_stt_enabled and self.llm_stt_started:
             
@@ -10469,9 +10472,30 @@ class VocoAdapter(Adapter):
         # https://github.com/ggerganov/whisper.cpp/tree/master/examples/command
         # ./command -m ./models/ggml-tiny.en.bin -ac 768 -t 3 -c 0
         #self.last_recording_path
+        
+        
+        # If satellite, then try letting main/another controller do STT
+        # TODO: Technically the main Voco controller might not be the fastest STT server on the network. Each Voco instance with an STT server could share a score for their own speed, so satellites can select the fastest one to latch onto.
+        elif self.llm_stt_started == False and self.mqtt_client != None and self.mqtt_connected and self.persistent_data['main_site_id'] != self.persistent_data['site_id'] and self.persistent_data['is_satellite'] == True and self.main_controller_has_stt:
+            if self.DEBUG:
+                print("sending audio recording to main controller for STT: " + str(self.last_recording_path))
+                
+            f=open(str(self.last_recording_path), "rb")
+            fileContent = f.read()
+            
+            #message_bytes = fileContent.encode('ascii')
+            base64_bytes = base64.b64encode(fileContent)
+            base64_message = base64_bytes.decode('ascii')
+            
+            #byteArr = bytearray(fileContent)
+            #self.mqtt_client.publish("/hermes/voco/" + str(self.persistent_data['main_site_id']) + '/do_sst', byteArr, 0)
+            
+            self.mqtt_client.publish("/hermes/voco/" + str(self.persistent_data['main_site_id']) + '/do_stt', json.dumps({'siteId':str(self.persistent_data['main_site_id']), 'wav':str(base64_message)}) )
+        
+        
         else:
             if self.DEBUG:
-                print("WARNING, STT SERVER HAS NOT STARTED")
+                print("WARNING, STT SERVER HAS NOT STARTED (and main controller is not an option either)")
     
     
     # result can come from on device STT server, or from other more capable STT server on the local network.
