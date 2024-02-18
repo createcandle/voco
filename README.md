@@ -8,6 +8,10 @@ https://www.candlesmarthome.com/voco-privacy-friendly-voice-control
 ![Voco interface](https://github.com/createcandle/voco/blob/master/voco_screenshot.png?raw=true)
 
 
+![Voco AI interface](https://github.com/createcandle/voco/blob/master/screenshot.gif?raw=true)
+_New 100% local AI assistant features using "Large Language Models" (LLM's)_
+
+
 # Installation
 Visit the add-ons page in your WebThings Gateway, and add the 'Voco' add-on.
 
