@@ -2860,9 +2860,10 @@ class VocoAdapter(Adapter):
             if self.last_spoken_sentence == str(voice_message) and self.last_spoken_sentence_time > (time.time() - 5):
                 if self.DEBUG:
                     print("\n\nSPEAK: STOPPING A SENTENCE FROM BEING SPOKEN TWICE IN A ROW:" + str(self.last_spoken_sentence) + "\n") # TODO: very crude solution...
+                    print("- time delta was: " + str(time.time() - self.last_spoken_sentence_time))
                 dont_speak_twice = True
             else:
-                self.last_spoken_sentence_time = time.time()    
+                self.last_spoken_sentence_time = time.time()
             
             self.last_spoken_sentence = str(voice_message)
                 
@@ -6191,11 +6192,21 @@ class VocoAdapter(Adapter):
                             if self.DEBUG:
                                 print("\n[+]\ndo_stt_result: " + str(do_stt_result))
                                 print("publishing result back to:  hermes/voco/" + str(target_site_id) + "/stt_done")
-                                if do_stt_result == None:
-                                    do_stt_result = '{"text":"Debug: Speech to text on main controller timed out"}'
-                                elif 'text' in do_stt_result:
+                            
+                            if do_stt_result == None:
+                                do_stt_result = '{"text":"Sorry, speech to text on main controller took too long"}'
+                            
+                            if isinstance(do_stt_result, str):
+                            
+                                if '"text":' in do_stt_result:
                                     do_stt_result['text'] = do_stt_result['text'].strip()
-                            self.mqtt_client.publish("hermes/voco/" + str(target_site_id) + "/stt_done", json.dumps( {"stt_result":str(do_stt_result),"siteId":str(target_site_id)} )) # ,"sessionId":str(payload['sessionId']
+                                    
+                                else:
+                                    if self.DEBUG:
+                                        print("There was an error doing STT") # e.g. Failed to open/read local data from file/applicatiom
+                                    do_stt_result = '{"text":"Sorry, speech recognition on main controller failed"}'
+                            
+                                self.mqtt_client.publish("hermes/voco/" + str(target_site_id) + "/stt_done", json.dumps( {"stt_result":str(do_stt_result),"siteId":str(target_site_id)} )) # ,"sessionId":str(payload['sessionId']
                             
                         except Exception as ex:
                             print("Caught error in /do_stt: " + str(ex))
@@ -7517,8 +7528,11 @@ class VocoAdapter(Adapter):
                     
                 else:
                     if self.DEBUG:
-                        print("no need/ability to use LLM Assistant. voice_message: " + str(voice_message))
-                        print("self.main_controller_has_stt: " + str(self.main_controller_has_stt))
+                        print("no need/ability to use LLM Assistant.\n - voice_message: " + str(voice_message))
+                        print(" - self.main_controller_has_stt: " + str(self.main_controller_has_stt))
+                        print(" - self.main_controller_has_assistant: " + str(self.main_controller_has_assistant))
+                        print(" - best_confidence_score: " + str(best_confidence_score))
+                        
                     self.last_command_was_answered_by_assistant = False
                     if self.persistent_data['is_satellite'] == False:
                         self.speak(voice_message,intent=intent_message)
@@ -10810,7 +10824,11 @@ class VocoAdapter(Adapter):
                 print("Error parsing STT server result, invalid json? Error: " + str(ex))
             self.llm_stt_sentence = ''
             if self.try_again_via_stt or self.try_again_via_assistant:
-                self.speak("Sorry, I don't understand",intent=intent)
+                if intent != None and 'siteId' in intent and intent['siteId'] != self.persistent_data['site_id']:
+                    if self.DEBUG:
+                        print("Error parsing STT server result, but the STT server was working for a satellite, so not speaking error message")
+                else:
+                    self.speak("Sorry, I don't understand",intent=intent)
             self.try_again_via_stt = False
             self.try_again_via_assistant = False
             self.llm_stt_skipped = True
