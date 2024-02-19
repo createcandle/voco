@@ -5047,7 +5047,7 @@ class VocoAdapter(Adapter):
                             print("textCaptured: satellite, so sending captured text to main controller: " + str(payload['text']))
                         self.mqtt_client.publish("hermes/voco/parse",json.dumps({ "siteId":str(self.persistent_data['site_id']),"text": payload['text'],'origin':'voice' }))
                 
-                if self.periodic_voco_attempts > 5:
+                if self.periodic_voco_attempts > 2:
                     self.speak('Sorry, the main Voco controller is not responding')
                 
                 #'message' in payload and 'intent' in payload:
@@ -7473,7 +7473,7 @@ class VocoAdapter(Adapter):
                         #    self.try_again_via_assistant = True
                             #self.ask_ai_assistant(sentence,intent_message)
                         self.try_again_via_assistant = True
-                        self.try_llm_stt()
+                        self.try_llm_stt(intent=intent_message)
                     
                     elif self.llm_stt_started == False:
                         if self.DEBUG:
@@ -10583,11 +10583,14 @@ class VocoAdapter(Adapter):
             if self.DEBUG:
                 print("- try_llm_stt. calling llm_stt: " + str(intent))
             before_time = time.time()
-            self.speak("One moment",intent=intent)
+            
+            if intent != None: # and 'siteId' in intent and intent['siteId'] == self.persistent_data['site_id']: 
+                self.speak("One moment",intent=intent)
+                
             if self.DEBUG:
                 print("try_llm_stt: calling speak to say 'One moment' took this much time: " + str(time.time() - before_time))
                 
-            self.llm_stt()
+            self.llm_stt(intent=intent)
 
 
     def llm_stt(self,intent=None):
