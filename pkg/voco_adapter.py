@@ -6193,21 +6193,31 @@ class VocoAdapter(Adapter):
                                 print("\n[+]\ndo_stt_result: " + str(do_stt_result))
                                 print("publishing result back to:  hermes/voco/" + str(target_site_id) + "/stt_done")
                             
-                            if do_stt_result == None:
-                                do_stt_result = '{"text":"Sorry, speech to text on main controller took too long"}'
+                            #if do_stt_result == None:
+                            #    do_stt_result = '{"text":""}'
                             
                             if isinstance(do_stt_result, str):
                                 if self.DEBUG:
                                     print("do_stt_result was a string")
                                 
-                                if '\n"' in do_stt_result:
-                                    do_stt_result = do_stt_result.replace('\n"','')
+                                try:
+                                    json_object = json.loads(do_stt_result)
+                                    if 'text' in json_object:
+                                        json_object['text'] = json_object['text'].strip()
+                                        do_stt_result = json.dumps(json_object)
+                                except ValueError as e:
+                                    if self.DEBUG:
+                                        print("STT result was not valid json: " + str(do_stt_result))
+                                    do_stt_result = None
+                                    
+                                #if '\n"' in do_stt_result:
+                                #    do_stt_result = do_stt_result.replace('\n"','')
                                     #do_stt_result['text'] = do_stt_result['text'].strip()
                                     
-                                else:
-                                    if self.DEBUG:
-                                        print("There was an error doing STT") # e.g. Failed to open/read local data from file/applicatiom
-                                    do_stt_result = '{"text":"Sorry, speech recognition on main controller failed"}'
+                                #else:
+                                #    if self.DEBUG:
+                                #        print("There was an error doing STT") # e.g. Failed to open/read local data from file/applicatiom
+                                    
                             
                                 self.mqtt_client.publish("hermes/voco/" + str(target_site_id) + "/stt_done", json.dumps( {"stt_result":str(do_stt_result),"siteId":str(target_site_id)} )) # ,"sessionId":str(payload['sessionId']
                             
