@@ -6200,7 +6200,6 @@ class VocoAdapter(Adapter):
                                 if self.DEBUG:
                                     print("do_stt_result was a string")
                                 
-                                parsed = json.parse()
                                 if '\n"' in do_stt_result:
                                     do_stt_result = do_stt_result.replace('\n"','')
                                     #do_stt_result['text'] = do_stt_result['text'].strip()
