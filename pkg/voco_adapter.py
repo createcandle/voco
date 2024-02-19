@@ -6150,6 +6150,9 @@ class VocoAdapter(Adapter):
                     self.parse_ping(payload,ping_type="pong")
                 
                 
+                
+                # LLM STT Voco MQTT messages
+                
                 elif msg.topic.endswith('/do_stt'):
                     if self.DEBUG:
                         print("message to hermes/voco ends in /do_stt")
@@ -6162,7 +6165,7 @@ class VocoAdapter(Adapter):
                         try:
                             do_stt_result = ''
                             if self.DEBUG:
-                                do_stt_result = 'Debug: What do you need to make cheese?'
+                                do_stt_result = 'Debug: the Speech to Text server did nothing'
                             
                             if self.llm_stt_started:
                             
@@ -6186,31 +6189,42 @@ class VocoAdapter(Adapter):
                         
                             # Return the STT result back to the satellite
                             if self.DEBUG:
-                                print("do_stt_result: " + str(do_stt_result))
+                                print("\n[+]\ndo_stt_result: " + str(do_stt_result))
                                 print("publishing result back to:  hermes/voco/" + str(target_site_id) + "/stt_done")
                                 if do_stt_result == None:
                                     do_stt_result = '{"text":"Debug: Speech to text on main controller timed out"}'
-                                
+                                elif 'text' in do_stt_result:
+                                    do_stt_result['text'] = do_stt_result['text'].strip()
                             self.mqtt_client.publish("hermes/voco/" + str(target_site_id) + "/stt_done", json.dumps( {"stt_result":str(do_stt_result),"siteId":str(target_site_id)} )) # ,"sessionId":str(payload['sessionId']
                             
                         except Exception as ex:
                             print("Caught error in /do_stt: " + str(ex))
                         
-                        
-                    
                 elif msg.topic.endswith('/stt_done'):
                     if self.DEBUG:
                         print("got message on /stt_done.  payload: " + str(payload))
                     if 'stt_result' in payload:
                         self.parse_llm_stt_result(payload['stt_result'])
                     
-                """
-                elif msg.topic.endswith('/mute'):
+                
+                
+                
+                # LLM Assistant Voco MQTT messages
+                
+                elif msg.topic.endswith('/do_assistant'):
                     if self.DEBUG:
-                        print("(---) Received mute command")
-                    self.mute()
-                """
-
+                        print("message to hermes/voco ends in /do_assistant")
+                    if 'siteId' in payload and 'text' in payload:
+                        voice_message = str(payload['text'])
+                        if self.llm_assistant_started and self.llm_assistant_process != None and voice_message != None and len(voice_message) > 4:
+                            self.really_ask_ai_assistant(voice_message,intent=payload)
+                        else:
+                            if self.DEBUG:
+                                print("incoming MQTT message to /do_assistant, but assistant not started, so cannot handle it")
+                            self.speak("Sorry, the assistant on the main controller has not started",intent=payload)
+                    else:
+                        if self.DEBUG:
+                            print("incoming MQTT message to /do_assistant has invalid payload: " + str(payload))
 
             except Exception as ex:
                 print("Error handling incoming Voco MQTT message: " + str(ex))
@@ -7503,7 +7517,8 @@ class VocoAdapter(Adapter):
                     
                 else:
                     if self.DEBUG:
-                        print("no need to use LLM Assistant. voice_message: " + str(voice_message))
+                        print("no need/ability to use LLM Assistant. voice_message: " + str(voice_message))
+                        print("self.main_controller_has_stt: " + str(self.main_controller_has_stt))
                     self.last_command_was_answered_by_assistant = False
                     if self.persistent_data['is_satellite'] == False:
                         self.speak(voice_message,intent=intent_message)
@@ -10664,6 +10679,7 @@ class VocoAdapter(Adapter):
         
         # If satellite, then try letting main/another controller do STT
         # TODO: Technically the main Voco controller might not be the fastest STT server on the network. Each Voco instance with an STT server could share a score for their own speed, so satellites can select the fastest one to latch onto.
+        # TODO: these might be to stringent checks:
         elif self.llm_stt_started == False and self.mqtt_client != None and self.mqtt_connected and self.persistent_data['main_site_id'] != self.persistent_data['site_id'] and self.persistent_data['is_satellite'] == True and self.main_controller_has_stt:
             if self.DEBUG:
                 print("sending audio recording to main controller for STT via /do_stt: " + str(self.last_recording_path))
@@ -10682,7 +10698,7 @@ class VocoAdapter(Adapter):
                 if self.DEBUG:
                     print("publishing to: " + str(mqtt_path) + ", base64: " + str(type(base64_message)) + ', length: ' + str(len(base64_message)))
                 self.mqtt_client.publish(mqtt_path, json.dumps({'siteId':str(self.persistent_data['site_id']), 'wav':str(base64_message)}) )
-                
+
             except Exception as ex:
                 print("llm_stt: Error passing voice recording to main controller: " + str(ex))
                 
@@ -10759,7 +10775,7 @@ class VocoAdapter(Adapter):
                         print("\nllm_stt: llm_stt_always_use is true, so calling query_intent");
                     self.query_intent(stt_output)
                 
-                elif self.llm_assistant_started and self.try_again_via_assistant:
+                elif self.try_again_via_assistant:
                     if self.DEBUG:
                         print(" - > passing LLM STT output to AI assistant")
                     self.try_again_via_stt = False
@@ -11064,282 +11080,303 @@ class VocoAdapter(Adapter):
         
         if intent != None and 'sessionId' in intent:
             self.mqtt_client.publish('hermes/dialogueManager/endSession', json.dumps({"text": "", "sessionId": intent['sessionId']}))
-        self.mqtt_client.publish('hermes/dialogueManager/endSession', json.dumps({"text": "", "sessionId": str(self.current_snips_session_id)}))
+        #self.mqtt_client.publish('hermes/dialogueManager/endSession', json.dumps({"text": "", "sessionId": str(self.current_snips_session_id)}))
         
         try:
             #if self.llm_assistant_started and self.openai_client != None and self.llm_assistant_process != None and voice_message != None and len(voice_message) > 4:
-            if self.llm_assistant_process != None and voice_message != None and len(voice_message) > 4:
-                #self.llm_assistant_process.stdin.write(voice_message + '\n')
-                #self.llm_assistant_process.stdin.flush()
-                voice_message = voice_message.strip()
-                original_voice_message = voice_message
+            if self.llm_assistant_started and self.llm_assistant_process != None and voice_message != None and len(voice_message) > 4:
+                self.really_ask_ai_assistant(voice_message,intent=intent)
                 
-                if voice_message == 'Hello, I am listening.':
-                    if self.DEBUG:
-                        print("heard 'Hello, I am listening', aborting STT.")
-                    return
-                
-                if not voice_message.endswith('?'):
-                    if voice_message.endswith('.') or voice_message.endswith("!"):
-                        voice_message = voice_message[:-1]
-                    voice_message = voice_message + "?"
-                    
-                voice_message = " " + voice_message + "\n"
-                
-                if self.llm_assistant_researcher_was_spotted == False:
-                    if self.DEBUG:
-                        print("ask_ai_assistant: WARNING\n -> Adding missing 'Researcher: ' to beginning of voice message\n") # experiment
-                    voice_message = '\nResearcher:' + voice_message
+            
+            elif self.mqtt_client != None and self.mqtt_connected and self.persistent_data['is_satellite'] and self.main_controller_has_assistant:
                 if self.DEBUG:
-                    print("to stdin: " + str(voice_message))
+                    print("sending voice message to assistant process on main controller")
+                mqtt_path = "hermes/voco/" + str(self.persistent_data['main_site_id']) + '/do_assistant'
+                self.mqtt_client.publish(mqtt_path, json.dumps({'siteId':str(self.persistent_data['site_id']), 'text':str(voice_message)}) )
+            
+            else:
+                if self.DEBUG:
+                    print("\n\nDEAD END - cannot send voice message to an assistant\n\n")
+                    
                 
-                #print(self.llm_assistant_process.communicate(input=voice_message)[0])
-                if self.llm_assistant_process != None: # and self.llm_assistant_process.poll() == None:
-                    
-                    if self.DEBUG:
-                        print("CLEARING ASSISTANT_OUTPUT.TXT")
-                    #with open(self.llm_assistant_output_file_path, "a") as myfile:
-                    #    myfile.write(voice_message)
-                    with open(self.llm_assistant_output_file_path, "w") as myfile:
-                        myfile.write("")
-                        
-                    if os.path.exists('/tmp/assistant_output.txt'):
-                        self.last_assistant_output_change_time = os.stat('/tmp/assistant_output.txt').st_mtime
-                    if self.DEBUG:
-                        print("self.last_assistant_output_change_time: " + str(self.last_assistant_output_change_time))
-                    
-                    
-                    #self.llm_assistant_process.sendline(voice_message)
-                    #self.lock.acquire()
-                    
-                    
-                    
-                    
-                    
-                    #self.llm_assistant_process.communicate(input=voice_message)[0]
-                    #self.llm_assistant_process.communicate(input=bytes(voice_message + '^M', 'utf-8'))[0]
-                    
-                    #sys.stdin.write.write(bytes(voice_message, 'utf-8'))
-                    
-                    #output = self.llm_assistant_process.communicate(input=voice_message)[0]
-                    #if output != None:
-                    #    print("got output! " + str(output))
-                    #self.llm_assistant_process.communicate(input=voice_message)
-                    if self.llm_assistant_process.poll() == None:
-                        if self.DEBUG:
-                            print("\n⏰\nSTOPWATCH: + " + str(time.time() - self.llm_stt_stopwatch) + ', ' + str(time.time() - self.llm_stt_stopwatch_start))
-                        self.llm_stt_stopwatch = time.time()
-                        if self.DEBUG:
-                            print("SENDING \nSENDING \nSENDING\n" + str(voice_message))
-                        self.llm_assistant_process.stdin.write(voice_message)
-                        self.llm_assistant_process.stdin.flush()
-                        #for character in voice_message:
-                        #    print("char: " + str(character))
-                            #self.llm_assistant_process.stdin.write(character.encode("utf-8"))
-                        #    self.llm_assistant_process.stdin.write(character)
-                        #    time.sleep(0.0025)
-                            
-                        self.llm_assistant_response_count += 1
-                        
-                        self.got_assistant_output = False    
-                        already_sent_sentences = []
-                        repeated_the_question = False
-                        self.llm_assistant_researcher_was_spotted = False
-                        
-                        
-                        if self.DEBUG:
-                            print("STARTING COUNTDOWN")
-                        self.last_assistant_output_change_time = os.stat('/tmp/assistant_output.txt').st_mtime
-                        for self.assistant_countdown in range(120, 1,-1):
-                            if self.DEBUG:
-                                print(self.assistant_countdown)
-                            sleep(.2)
-                            
-                            now_stamp = time.time()
-                            # If the user interupts, stop speaking.
-                            if now_stamp - self.last_time_stop_spoken < 4:
-                                if self.DEBUG:
-                                    print("ABORTING SPEAKING ASSISTANT OUTPUT, user interupted the process")
-                                #self.llm_assistant_response_count += 1
-                                break
-                                
-                            if self.got_assistant_output and now_stamp - self.last_assistant_output_change_time > self.llm_assistant_maximum_no_new_output_duration:
-                                if self.DEBUG:
-                                    print("The assistant was speaking, but hasn't said anything new for a while. Breaking.")
-                                break
-                                
-                            #print("x")
-                            stamp = os.stat('/tmp/assistant_output.txt').st_mtime
-                            if stamp != self.last_assistant_output_change_time:
-                                self.last_assistant_output_change_time = stamp
-                                if repeated_the_question == False:
-                                    if self.DEBUG:
-                                        print("ignoring first output from assistant, since it's likely a repeat of the user's question.")
-                                    repeated_the_question = True
-                                else:
-                                    self.got_assistant_output = True
-                                self.assistant_loop_counter = 0
-                                #self.lock.acquire()
-                                if self.DEBUG:
-                                    print("\n\nstamp changed. ⏰ stopwatch:" + str(time.time() - self.llm_stt_stopwatch_start))
-                                #self.lock.release()
-                        
-                        
-                                with open('/tmp/assistant_output.txt', "r") as f:
-                                    #content = f.readlines()
-                                    #full = ''.join(content)
-                                    full = f.read() #lines()
-                                    full = full.strip()
-                                    
-                            
-                                    if self.DEBUG:
-                                        print("full: " + str(full))
-                            
-                                    if '\n\n' in full:
-                                        if self.DEBUG:
-                                            print("spotted two consecutive newlines in a row in full STT output")
-                                        full = full.split('\n\n')[0]
-                            
-                                    if full.startswith('Researcher:'):
-                                        full = full[11:]
-                                        if self.DEBUG:
-                                            print("Stripped 'Researcher:' from beginning of full:\n" + str(full))
-                                            
-                                    if str(self.llm_assistant_name) + ':' in full:
-                                        # sometimes the assistant halucinates another question by the user
-                                        before_assistant = full.split(str(self.llm_assistant_name) + ':')[0]
-                                        if len(original_voice_message) > 1 and not str(original_voice_message[:-1]) in before_assistant:
-                                            if self.DEBUG:
-                                                print("\nWARNING, the assistant might be halucinating a conversation?\n" + str(before_assistant) + "\n")
-                                        full = full.split(str(self.llm_assistant_name) + ':')[1]
-                                        if self.DEBUG:
-                                            print("Split full to only use the part after '" + str(self.llm_assistant_name) + ":':\n" + str(full))
-                                       
-                            
-                            
-                            
-                                    if '.' in full:
-                                        if self.DEBUG:
-                                            print("BINGO!\nIt seems the response will have more than one sentence. In theory the first sentence could already be sent to the speak_thread")
-                                        self.last_command_was_answered_by_assistant = True
-                                        
-                                        
-                                        
-                                        lines = full.split('.')
-                                        line_count = len(lines)
-                                        if self.DEBUG:
-                                            print("line count: " + str(line_count))
-                                            
-                                        
-                                        
-                                            
-                                        if 'Researcher:' in full:
-                                            self.llm_assistant_researcher_was_spotted = True
-                                            line_count += 1
-                                            
-                                        if lines[0].strip().endswith(' is not commonly used in English'):
-                                            self.speak("Sorry, could you repeat that?",intent)
-                                            break
-                                            
-                                        line_index = 0
-                                        for line in lines:
-                                            line_index += 1
-                                            line = line.strip()
-                                            if self.DEBUG:
-                                                print(str(line_index) + ". line: " + str(line))
-                                            if line_index < line_count:
-                                                
-                                                if line in already_sent_sentences:
-                                                    if self.DEBUG:
-                                                        print("-line was already sent to speak thread.")
-                                                else:
-                                                    if self.DEBUG:
-                                                        print("-line was not in list of spoken lines yet.")
-                                                    if 'Researcher:' in line:
-                                                        line = line.split('Researcher:')[0]
-                                                        line = line.strip()
-                                                    if self.DEBUG:
-                                                        print("\nCAN SEND THIS LINE?: " + str(line))
-                                                    if len(line) > 1:
-                                                        already_sent_sentences.append(line)
-                                                        print("SPEAKING IT.\n - already_sent_sentences is now: " + str(already_sent_sentences))
-                                                        if self.DEBUG:
-                                                            print("\n⏰\nSTOPWATCH: + " + str(time.time() - self.llm_stt_stopwatch) + ', ' + str(time.time() - self.llm_stt_stopwatch_start))
-                                                        self.speak(line,intent)
-                                        
-                            
-                                        
-                            
-                                    #if full.endswith('Researcher:') or full.endswith('Researcher: '):
-                                    if 'Researcher:' in full and not full.startswith('Researcher:'):
-                                        if self.DEBUG:
-                                            print("RESEARCHER: IN OUTPUT")
-                                        
-                                        
-                                        if self.DEBUG:
-                                            print("DONE!")
-                                        break
-                                        
-                                        #full = full[16:]
-                                        #if self.DEBUG:
-                                        #    print("clipped full: " + str(full))
-                                
-                                        """
-                                        if 'Researcher:' in full:
-                                            full = full.split('Researcher:')[0]
-
-                                        if self.DEBUG:
-                                            print("ANSWER: " + str(full))
-                                        if len(full) > 1:
-                                            if self.DEBUG:
-                                                print("\n⏰\nSTOPWATCH: + " + str(time.time() - self.llm_stt_stopwatch) + ', ' + str(time.time() - self.llm_stt_stopwatch_start))
-                                            self.llm_stt_stopwatch = time.time()
-                                            self.llm_assistant_response_count += 1
-                                            self.speak(full,intent)
-                                            if self.DEBUG:
-                                                print("\n⏰\nSTOPWATCH: + " + str(time.time() - self.llm_stt_stopwatch) + ', ' + str(time.time() - self.llm_stt_stopwatch_start))
-                                            self.llm_stt_stopwatch = time.time()
-                                            if self.DEBUG:
-                                                print("DONE!")
-                                        break
-                                        """
-                                
-                                    #for line in content:
-                                    #    line = line.replace("\n", "")
-                                    #    print("tail: " + str(line))
-                            
-                            
-                        with open(self.llm_assistant_output_file_path, "w") as myfile:
-                            myfile.write("")   
-                            
-                            
-                            
-                            
-                            
-                    else:
-                        print("YIKES, the assistant has already stopped")
-                        
-                        with open(self.llm_assistant_output_file_path, "w") as myfile:
-                            myfile.write("")
-                    
-                    #    self.llm_assistant_process.stdin.flush()
-                    
-                    #sys.stdin.write(voice_message)
-                    #self.llm_assistant_process.stdin.write(bytes(voice_message, 'utf-8'))
-                    #self.llm_assistant_process.stdin.write(voice_message)
-                    
-                    #self.lock.release()
-                    #self.llm_assistant_process.communicate(bytes(voice_message, 'utf-8'))
-                    #self.llm_assistant_process.communicate(voice_message)
-                    #self.llm_assistant_process.stdin.flush()
-                    
-                    #self.llm_assistant_process.stdin.write(bytes(voice_message, 'utf-8'))
-                    #self.llm_assistant_process.stdin.flush()
-                
-                #.encode('utf-8')
                 
         except Exception as ex:
             print("Caught error in ask_ai_assistant: " + str(ex))
+    
+    
+    
+    def really_ask_ai_assistant(self,voice_message,intent=None):
+        #self.llm_assistant_process.stdin.write(voice_message + '\n')
+        #self.llm_assistant_process.stdin.flush()
+        voice_message = voice_message.strip()
+        original_voice_message = voice_message
+        
+        if voice_message == 'Hello, I am listening.':
+            if self.DEBUG:
+                print("heard 'Hello, I am listening', aborting parsing by Assistant.")
+            return
+        
+        if not voice_message.endswith('?'):
+            if voice_message.endswith('.') or voice_message.endswith("!"):
+                voice_message = voice_message[:-1]
+            voice_message = voice_message + "?"
+            
+        voice_message = " " + voice_message + "\n"
+        
+        if self.llm_assistant_researcher_was_spotted == False:
+            if self.DEBUG:
+                print("ask_ai_assistant: WARNING\n -> Adding missing 'Researcher: ' to beginning of voice message\n") # experiment
+            voice_message = '\nResearcher:' + voice_message
+        if self.DEBUG:
+            print("to stdin: " + str(voice_message))
+        
+        #print(self.llm_assistant_process.communicate(input=voice_message)[0])
+        if self.llm_assistant_process != None: # and self.llm_assistant_process.poll() == None:
+            
+            if self.DEBUG:
+                print("CLEARING ASSISTANT_OUTPUT.TXT")
+            #with open(self.llm_assistant_output_file_path, "a") as myfile:
+            #    myfile.write(voice_message)
+            with open(self.llm_assistant_output_file_path, "w") as myfile:
+                myfile.write("")
+                
+            if os.path.exists('/tmp/assistant_output.txt'):
+                self.last_assistant_output_change_time = os.stat('/tmp/assistant_output.txt').st_mtime
+            if self.DEBUG:
+                print("self.last_assistant_output_change_time: " + str(self.last_assistant_output_change_time))
+            
+            
+            #self.llm_assistant_process.sendline(voice_message)
+            #self.lock.acquire()
+            
+            
+            
+            
+            
+            #self.llm_assistant_process.communicate(input=voice_message)[0]
+            #self.llm_assistant_process.communicate(input=bytes(voice_message + '^M', 'utf-8'))[0]
+            
+            #sys.stdin.write.write(bytes(voice_message, 'utf-8'))
+            
+            #output = self.llm_assistant_process.communicate(input=voice_message)[0]
+            #if output != None:
+            #    print("got output! " + str(output))
+            #self.llm_assistant_process.communicate(input=voice_message)
+            if self.llm_assistant_process.poll() == None:
+                if self.DEBUG:
+                    print("\n⏰\nSTOPWATCH: + " + str(time.time() - self.llm_stt_stopwatch) + ', ' + str(time.time() - self.llm_stt_stopwatch_start))
+                self.llm_stt_stopwatch = time.time()
+                if self.DEBUG:
+                    print("SENDING \nSENDING \nSENDING\n" + str(voice_message))
+                self.llm_assistant_process.stdin.write(voice_message)
+                self.llm_assistant_process.stdin.flush()
+                #for character in voice_message:
+                #    print("char: " + str(character))
+                    #self.llm_assistant_process.stdin.write(character.encode("utf-8"))
+                #    self.llm_assistant_process.stdin.write(character)
+                #    time.sleep(0.0025)
+                    
+                self.llm_assistant_response_count += 1
+                
+                self.got_assistant_output = False    
+                already_sent_sentences = []
+                repeated_the_question = False
+                self.llm_assistant_researcher_was_spotted = False
+                
+                
+                if self.DEBUG:
+                    print("STARTING COUNTDOWN")
+                self.last_assistant_output_change_time = os.stat('/tmp/assistant_output.txt').st_mtime
+                for self.assistant_countdown in range(120, 1,-1):
+                    if self.DEBUG:
+                        print(self.assistant_countdown)
+                    sleep(.2)
+                    
+                    now_stamp = time.time()
+                    # If the user interupts, stop speaking.
+                    if now_stamp - self.last_time_stop_spoken < 4:
+                        if self.DEBUG:
+                            print("ABORTING SPEAKING ASSISTANT OUTPUT, user interupted the process")
+                        #self.llm_assistant_response_count += 1
+                        break
+                        
+                    if self.got_assistant_output and now_stamp - self.last_assistant_output_change_time > self.llm_assistant_maximum_no_new_output_duration:
+                        if self.DEBUG:
+                            print("The assistant was speaking, but hasn't said anything new for a while. Breaking.")
+                        break
+                        
+                    #print("x")
+                    stamp = os.stat('/tmp/assistant_output.txt').st_mtime
+                    if stamp != self.last_assistant_output_change_time:
+                        self.last_assistant_output_change_time = stamp
+                        if repeated_the_question == False:
+                            if self.DEBUG:
+                                print("ignoring first output from assistant, since it's likely a repeat of the user's question.")
+                            repeated_the_question = True
+                        else:
+                            self.got_assistant_output = True
+                        self.assistant_loop_counter = 0
+                        #self.lock.acquire()
+                        if self.DEBUG:
+                            print("\n\nstamp changed. ⏰ stopwatch:" + str(time.time() - self.llm_stt_stopwatch_start))
+                        #self.lock.release()
+                
+                
+                        with open('/tmp/assistant_output.txt', "r") as f:
+                            #content = f.readlines()
+                            #full = ''.join(content)
+                            full = f.read() #lines()
+                            full = full.strip()
+                            
+                    
+                            if self.DEBUG:
+                                print("full: " + str(full))
+                    
+                            if '\n\n' in full:
+                                if self.DEBUG:
+                                    print("spotted two consecutive newlines in a row in full STT output")
+                                full = full.split('\n\n')[0]
+                    
+                            if full.startswith('Researcher:'):
+                                full = full[11:]
+                                if self.DEBUG:
+                                    print("Stripped 'Researcher:' from beginning of full:\n" + str(full))
+                                    
+                            if str(self.llm_assistant_name) + ':' in full:
+                                # sometimes the assistant halucinates another question by the user
+                                before_assistant = full.split(str(self.llm_assistant_name) + ':')[0]
+                                if len(original_voice_message) > 1 and not str(original_voice_message[:-1]) in before_assistant:
+                                    if self.DEBUG:
+                                        print("\nWARNING, the assistant might be halucinating a conversation?\n" + str(before_assistant) + "\n")
+                                full = full.split(str(self.llm_assistant_name) + ':')[1]
+                                if self.DEBUG:
+                                    print("Split full to only use the part after '" + str(self.llm_assistant_name) + ":':\n" + str(full))
+                               
+                    
+                    
+                    
+                            if '.' in full:
+                                if self.DEBUG:
+                                    print("BINGO!\nIt seems the response will have more than one sentence. In theory the first sentence could already be sent to the speak_thread")
+                                self.last_command_was_answered_by_assistant = True
+                                
+                                
+                                
+                                lines = full.split('.')
+                                line_count = len(lines)
+                                if self.DEBUG:
+                                    print("line count: " + str(line_count))
+                                    
+                                
+                                
+                                    
+                                if 'Researcher:' in full:
+                                    self.llm_assistant_researcher_was_spotted = True
+                                    line_count += 1
+                                    
+                                if lines[0].strip().endswith(' is not commonly used in English'):
+                                    self.speak("Sorry, could you repeat that?",intent)
+                                    break
+                                    
+                                line_index = 0
+                                for line in lines:
+                                    line_index += 1
+                                    line = line.strip()
+                                    if self.DEBUG:
+                                        print(str(line_index) + ". line: " + str(line))
+                                    if line_index < line_count:
+                                        
+                                        if line in already_sent_sentences:
+                                            if self.DEBUG:
+                                                print("-line was already sent to speak thread.")
+                                        else:
+                                            if self.DEBUG:
+                                                print("-line was not in list of spoken lines yet.")
+                                            if 'Researcher:' in line:
+                                                line = line.split('Researcher:')[0]
+                                                line = line.strip()
+                                            if self.DEBUG:
+                                                print("\nCAN SEND THIS LINE?: " + str(line))
+                                            if len(line) > 1:
+                                                already_sent_sentences.append(line)
+                                                print("SPEAKING IT.\n - already_sent_sentences is now: " + str(already_sent_sentences))
+                                                if self.DEBUG:
+                                                    print("\n⏰\nSTOPWATCH: + " + str(time.time() - self.llm_stt_stopwatch) + ', ' + str(time.time() - self.llm_stt_stopwatch_start))
+                                                self.speak(line,intent)
+                                
+                    
+                                
+                    
+                            #if full.endswith('Researcher:') or full.endswith('Researcher: '):
+                            if 'Researcher:' in full and not full.startswith('Researcher:'):
+                                if self.DEBUG:
+                                    print("RESEARCHER: IN OUTPUT")
+                                
+                                
+                                if self.DEBUG:
+                                    print("DONE!")
+                                break
+                                
+                                #full = full[16:]
+                                #if self.DEBUG:
+                                #    print("clipped full: " + str(full))
+                        
+                                """
+                                if 'Researcher:' in full:
+                                    full = full.split('Researcher:')[0]
+
+                                if self.DEBUG:
+                                    print("ANSWER: " + str(full))
+                                if len(full) > 1:
+                                    if self.DEBUG:
+                                        print("\n⏰\nSTOPWATCH: + " + str(time.time() - self.llm_stt_stopwatch) + ', ' + str(time.time() - self.llm_stt_stopwatch_start))
+                                    self.llm_stt_stopwatch = time.time()
+                                    self.llm_assistant_response_count += 1
+                                    self.speak(full,intent)
+                                    if self.DEBUG:
+                                        print("\n⏰\nSTOPWATCH: + " + str(time.time() - self.llm_stt_stopwatch) + ', ' + str(time.time() - self.llm_stt_stopwatch_start))
+                                    self.llm_stt_stopwatch = time.time()
+                                    if self.DEBUG:
+                                        print("DONE!")
+                                break
+                                """
+                        
+                            #for line in content:
+                            #    line = line.replace("\n", "")
+                            #    print("tail: " + str(line))
+                    
+                    
+                with open(self.llm_assistant_output_file_path, "w") as myfile:
+                    myfile.write("")   
+                    
+                    
+                    
+                    
+                    
+            else:
+                print("YIKES, the assistant has already stopped")
+                
+                with open(self.llm_assistant_output_file_path, "w") as myfile:
+                    myfile.write("")
+            
+            #    self.llm_assistant_process.stdin.flush()
+            
+            #sys.stdin.write(voice_message)
+            #self.llm_assistant_process.stdin.write(bytes(voice_message, 'utf-8'))
+            #self.llm_assistant_process.stdin.write(voice_message)
+            
+            #self.lock.release()
+            #self.llm_assistant_process.communicate(bytes(voice_message, 'utf-8'))
+            #self.llm_assistant_process.communicate(voice_message)
+            #self.llm_assistant_process.stdin.flush()
+            
+            #self.llm_assistant_process.stdin.write(bytes(voice_message, 'utf-8'))
+            #self.llm_assistant_process.stdin.flush()
+        
+        #.encode('utf-8')
+    
+    
+    
     
 
     def ask_ai_assistant_server(self,voice_message=None,intent=None):
