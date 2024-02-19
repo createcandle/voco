@@ -3068,7 +3068,7 @@ class VocoAdapter(Adapter):
             
         except Exception as ex:
             if self.DEBUG:
-                print("Error speaking: " + str(ex))
+                print("Error really speaking: " + str(ex))
 
 
 
@@ -5032,11 +5032,10 @@ class VocoAdapter(Adapter):
                 # TODO: the origin is set as voice, but it might not always be?
                 if self.persistent_data['listening']:
                     
-                    
-                    
                     if 'unknownword' in str(payload['text']) or str(payload['text']) == '':
                         if self.DEBUG:
                             print("textCaptured: satellite: text contained 'unknownword' or was empty string, not passing to main controller. aborting")
+                        #self.try_again_via_stt = True
                     else:
                         if self.DEBUG:
                             print("textCaptured: satellite, so sending captured text to main controller: " + str(payload['text']))
@@ -6146,7 +6145,7 @@ class VocoAdapter(Adapter):
                         try:
                             do_stt_result = ''
                             if self.DEBUG:
-                                do_stt_result = 'What do you need to make cheese?'
+                                do_stt_result = 'Debug: What do you need to make cheese?'
                             
                             if self.llm_stt_started:
                             
@@ -6171,6 +6170,7 @@ class VocoAdapter(Adapter):
                             # Return the STT result back to the satellite
                             if self.DEBUG:
                                 print("do_stt_result: " + str(do_stt_result))
+                                print("publishing result back to:  hermes/voco/" + str(target_site_id) + "/stt_done")
                             self.mqtt_client.publish("hermes/voco/" + str(target_site_id) + "/stt_done", json.dumps( {"stt_result":str(do_stt_result),"siteId":str(target_site_id)} )) # ,"sessionId":str(payload['sessionId']
                             
                         except Exception as ex:
@@ -6260,9 +6260,10 @@ class VocoAdapter(Adapter):
         if self.DEBUG:
             print("\n    ( . . . pong . . . )---\n")
         if self.DEBUG:
-            print('in parse_ping. ping_type: ' + str(ping_type))
-            print("(own site_id: " + str(self.persistent_data['site_id']) + ")")
-            print("- - - payload: " + str(payload))
+            pass
+            #print('in parse_ping. ping_type: ' + str(ping_type))
+            #print("(own site_id: " + str(self.persistent_data['site_id']) + ")")
+            #print("- - - payload: " + str(payload))
             
             #print("- - - message ends in /ping. A Voco server (" + str(payload['hostname']) + "," + str(payload['ip']) + ") is asking for our ip and hostname")
             
@@ -7400,7 +7401,7 @@ class VocoAdapter(Adapter):
                     print("self.llm_assistant_started? " + str(self.llm_assistant_started))
             
             
-                if self.llm_enabled and (voice_message == '' or voice_message.startswith("Sorry, I don't understand") or voice_message.startswith("Sorry, I couldn't find a match")) and self.llm_assistant_started and best_confidence_score != 1:
+                if self.llm_enabled and (voice_message == '' or voice_message.startswith("Sorry, I don't understand") or voice_message.startswith("Sorry, I couldn't find a match")) and (self.llm_assistant_started or (self.persistent_data['is_satellite'] and self.main_controller_has_stt and self.main_controller_has_assistant)) and best_confidence_score != 1:
                     if self.DEBUG:
                         print("The final message was 'Sorry, I don't understand', so the AI assistant can take a shot at it")
                         try:
@@ -10559,9 +10560,10 @@ class VocoAdapter(Adapter):
             if self.DEBUG:
                 print("- try_llm_stt. calling llm_stt: " + str(intent))
             before_time = time.time()
-            self.speak("One moment",intent=intent_message)
+            self.speak("One moment",intent=intent)
             if self.DEBUG:
-                print("try_llm_stt: calling speak to say 'One moment' took this much time: " + str(time.time() - before_time()))
+                print("try_llm_stt: calling speak to say 'One moment' took this much time: " + str(time.time() - before_time))
+                
             self.llm_stt()
 
 
@@ -10576,50 +10578,54 @@ class VocoAdapter(Adapter):
         #    return
         
         if self.llm_enabled and self.llm_stt_enabled and self.llm_stt_started:
+            try:
+                # Check if the LLM STT server is still running OK
+                if self.llm_stt_process == None:
+                    print("llm_stt: WARNING, stt process is none")
+                    self.llm_stt_started = False
+                elif self.llm_stt_process.poll() != None:
+                    print("llm_stt: WARNING, stt process has stopped!")
+                    self.llm_stt_started = False
+                else:
+                    print("llm_stt: stt process seems to be running OK")
+                    self.llm_stt_started = True
             
-            # Check if the LLM STT server is still running OK
-            if self.llm_stt_process == None:
-                print("llm_stt: WARNING, stt process is none")
-                self.llm_stt_started = False
-            elif self.llm_stt_process.poll() != None:
-                print("llm_stt: WARNING, stt process has stopped!")
-                self.llm_stt_started = False
-            else:
-                print("llm_stt: stt process seems to be running OK")
-                self.llm_stt_started = True
+                #self.check_available_memory()
+                if self.DEBUG:
+                    print("self.free_memory: " + str(self.free_memory) + ' ?>? ' + str(self.llm_stt_minimal_memory))
             
-            #self.check_available_memory()
-            if self.DEBUG:
-                print("self.free_memory: " + str(self.free_memory) + ' ?>? ' + str(self.llm_stt_minimal_memory))
+                #if self.free_memory > self.llm_stt_minimal_memory:
             
-            #if self.free_memory > self.llm_stt_minimal_memory:
+                # WORKS: curl http://localhost:8046/inference -H "Content-Type: multipart/form-data" -F file="@/home/pi/.webthings/whis/whisper.cpp-master/samples/jfk.wav" -F temperature="0.0" -F temperature_inc="0.2" -F response_format="json"
             
-            # WORKS: curl http://localhost:8046/inference -H "Content-Type: multipart/form-data" -F file="@/home/pi/.webthings/whis/whisper.cpp-master/samples/jfk.wav" -F temperature="0.0" -F temperature_inc="0.2" -F response_format="json"
+                if self.DEBUG:
+                    print("llm_stt_possible, DOING SPEECH TO TEXT on: " + str(self.last_recording_path))
+                self.llm_stt_skipped = False
+                self.llm_stt_done = False
+                self.llm_stt_sentence = ''
+                #if self.llm_stt_always_use:
+                #    self.intent_received = True
             
-            if self.DEBUG:
-                print("llm_stt_possible, DOING SPEECH TO TEXT on: " + str(self.last_recording_path))
-            self.llm_stt_skipped = False
-            self.llm_stt_done = False
-            self.llm_stt_sentence = ''
-            #if self.llm_stt_always_use:
-            #    self.intent_received = True
+                #./command -m ./models/ggml-tiny.en.bin -ac 768 -t 3 -c 0
             
-            #./command -m ./models/ggml-tiny.en.bin -ac 768 -t 3 -c 0
+                # Direct command input from microphone. Doesnt work because the microphone is already taken. Also, focusses more on a limited list of words/commands.
+                # https://github.com/ggerganov/whisper.cpp/blob/master/examples/command/command.cpp
+                #stt_command = str(os.path.join(self.addon_dir_path,'llm','stt', 'command')) + " -m " + str(os.path.join(self.llm_stt_dir_path, str(self.persistent_data['llm_stt_model']))) + " -ac 768 -t 3 -c 0"
             
-            # Direct command input from microphone. Doesnt work because the microphone is already taken. Also, focusses more on a limited list of words/commands.
-            # https://github.com/ggerganov/whisper.cpp/blob/master/examples/command/command.cpp
-            #stt_command = str(os.path.join(self.addon_dir_path,'llm','stt', 'command')) + " -m " + str(os.path.join(self.llm_stt_dir_path, str(self.persistent_data['llm_stt_model']))) + " -ac 768 -t 3 -c 0"
+                #stt_command = 'curl http://localhost:' + str(self.llm_stt_port) + '/inference -H "Content-Type: multipart/form-data" -F file="@' + str(self.last_recording_path) + '" -F temperature="0.2" -F temperature_inc="0.2" -F response_format="json"'
+                stt_command = 'curl http://localhost:' + str(self.llm_stt_port) + '/inference -H "Content-Type: multipart/form-data" -F file="@' + str(self.last_recording_path) + '" -F temperature="0.2" -F temperature_inc="0.2" -F response_format="json"'  # ' + str(self.persistent_data['main_controller_ip']) + '
+                if self.DEBUG:
+                    print("\n\nVOCO LLM STT CURL COMMAND: " + str(stt_command))
+                    #print("\n⏰\nSTT START STOPWATCH: + " + str(time.time() - self.llm_stt_stopwatch) + ', ' + str(time.time() - self.llm_stt_stopwatch_start))
+                    #self.llm_stt_stopwatch = time.time()  
             
-            #stt_command = 'curl http://localhost:' + str(self.llm_stt_port) + '/inference -H "Content-Type: multipart/form-data" -F file="@' + str(self.last_recording_path) + '" -F temperature="0.2" -F temperature_inc="0.2" -F response_format="json"'
-            stt_command = 'curl http://localhost:' + str(self.llm_stt_port) + '/inference -H "Content-Type: multipart/form-data" -F file="@' + str(self.last_recording_path) + '" -F temperature="0.2" -F temperature_inc="0.2" -F response_format="json"'  # ' + str(self.persistent_data['main_controller_ip']) + '
-            if self.DEBUG:
-                print("\n\nVOCO LLM STT CURL COMMAND: " + str(stt_command))
-                #print("\n⏰\nSTT START STOPWATCH: + " + str(time.time() - self.llm_stt_stopwatch) + ', ' + str(time.time() - self.llm_stt_stopwatch_start))
-                #self.llm_stt_stopwatch = time.time()  
+                stt_result = run_command(stt_command,30) # If this takes more than 30 seconds..
+                #self.llm_stt_stopwatch = time.time() - self.llm_stt_stopwatch
+                self.parse_llm_stt_result(stt_result, intent)
             
-            stt_result = run_command(stt_command,30) # If this takes more than 30 seconds..
-            #self.llm_stt_stopwatch = time.time() - self.llm_stt_stopwatch
-            self.parse_llm_stt_result(stt_result, intent)
+            except Exception as ex:
+                print("llm_stt: Error in curl-querying STT: " + str(ex))
+            
             
         
        
@@ -10636,19 +10642,25 @@ class VocoAdapter(Adapter):
             if self.DEBUG:
                 print("sending audio recording to main controller for STT via /do_stt: " + str(self.last_recording_path))
                 
-            f=open(str(self.last_recording_path), "rb")
-            fileContent = f.read()
+            try:
+                f=open(str(self.last_recording_path), "rb")
+                fileContent = f.read()
             
-            #message_bytes = fileContent.encode('ascii')
-            base64_bytes = base64.b64encode(fileContent)
-            base64_message = base64_bytes.decode('ascii')
+                #message_bytes = fileContent.encode('ascii')
+                base64_bytes = base64.b64encode(fileContent)
+                base64_message = base64_bytes.decode('ascii')
             
-            mqtt_path = "hermes/voco/" + str(self.persistent_data['main_site_id']) + '/do_stt'
-            #byteArr = bytearray(fileContent)
-            #self.mqtt_client.publish("/hermes/voco/" + str(self.persistent_data['main_site_id']) + '/do_sst', byteArr, 0)
-            if self.DEBUG:
-                print("publishing to: " + str(mqtt_path) + ", base64: " + str(type(base64_message)) + ', length: ' + str(len(base64_message)))
-            self.mqtt_client.publish(mqtt_path, json.dumps({'siteId':str(self.persistent_data['site_id']), 'wav':str(base64_message)}) )
+                mqtt_path = "hermes/voco/" + str(self.persistent_data['main_site_id']) + '/do_stt'
+                #byteArr = bytearray(fileContent)
+                #self.mqtt_client.publish("/hermes/voco/" + str(self.persistent_data['main_site_id']) + '/do_sst', byteArr, 0)
+                if self.DEBUG:
+                    print("publishing to: " + str(mqtt_path) + ", base64: " + str(type(base64_message)) + ', length: ' + str(len(base64_message)))
+                self.mqtt_client.publish(mqtt_path, json.dumps({'siteId':str(self.persistent_data['site_id']), 'wav':str(base64_message)}) )
+                
+            except Exception as ex:
+                print("llm_stt: Error passing voice recording to main controller: " + str(ex))
+                
+            
         
         else:
             if self.DEBUG:
