@@ -449,10 +449,10 @@ class VocoAdapter(Adapter):
                                 'model_url':'',
                                 'downloaded':True
                             },
-            'TinyMistral 248M':{'model':'TinyLlama-1.1B-Chat-v1.0.Q2_K.gguf',
-                                'size':500,
-                                'description':'This is a minuscule AI model of just 500Mb in size. It makes many mistakes and does not contain a lot of knowledge, but it might be fun to try on low-memory systems.',
-                                'model_url':'https://huggingface.co/afrideva/TinyMistral-248M-GGUF/resolve/main/tinymistral-248m.q4_k_m.gguf',
+            'TinyMistral 248M SFT v4':{'model':'TinyMistral-248M-SFT-v4.Q4_K_M.gguf',
+                                'size':156,
+                                'description':'This is a minuscule AI model of just 156Mb in size. It will likely produce useless answers to your questions.',
+                                'model_url':'https://huggingface.co/Felladrin/gguf-TinyMistral-248M-SFT-v4/resolve/main/TinyMistral-248M-SFT-v4.Q4_K_M.gguf',
                                 'prompts':{
                                     'system':'<|im_start|>system\n{system_message}<|im_end|>',
                                     'user':'<|im_start|>user\n{prompt}<|im_end|>',
@@ -6000,6 +6000,7 @@ class VocoAdapter(Adapter):
                         if self.DEBUG:
                             print("Forcing STT first")
                         self.try_again_via_stt = True
+                        self.try_llm_stt()
                     else:
                         if self.DEBUG:
                             print("Not forcing STT first, sending intent message to master_intent_callback")
@@ -6423,7 +6424,7 @@ class VocoAdapter(Adapter):
 
 
         
-    def query_intent(self, sentence='', session_id=None):
+    def query_intent(self, sentence='', intent=None, session_id=None):
         if self.DEBUG:
             print("in query_intent")
             print(" - session_id: " + str(session_id))
@@ -6439,7 +6440,7 @@ class VocoAdapter(Adapter):
                     "input": str(sentence),
                     "id": query_id,
                     "sessionId": str(self.current_snips_session_id),
-                    "customData": "This_is_a_custom_data_test"
+                    "customData": {"test":"This_is_a_custom_data_test"}
                 }
                 #
                     #'intentFilter': ['createcandle:stop_timer', 'createcandle:get_time', 'createcandle:set_timer', 'createcandle:get_timer_count', 'createcandle:get_value', 'createcandle:list_timers', 'createcandle:get_boolean', 'createcandle:set_state', 'createcandle:set_value'],
@@ -6541,7 +6542,7 @@ class VocoAdapter(Adapter):
                 print("confidence threshold: " + str(self.confidence_score_threshold))
                 print("\nBEST confidenceScore: " + str(best_confidence_score) + '  -> ' + str(most_likely_intent))
             
-            if self.persistent_data['is_satellite'] and most_likely_intent in ['get_time','set_timer','get_timer_count','list_timers','stop_timer']:
+            if self.persistent_data['is_satellite'] and most_likely_intent in ['set_timer','get_timer_count','list_timers','stop_timer']: # 'get_time',  # get_time could easily be handled locally
                 if self.DEBUG:
                     print("SATELLITE: master_intent_callback: NOT HANDLING TIMERS - not adding most_likely_intent to list of intents to try")
                 #return
@@ -6602,15 +6603,20 @@ class VocoAdapter(Adapter):
         if len(all_possible_intents) == 0 and self.persistent_data['is_satellite'] == False:
             if self.DEBUG:
                 print("POSSIBLE INTENTS LIST IS EMPTY")
+            """
             if self.llm_stt_always_use:
                 if self.DEBUG:
                     print("llm_stt_always_use was True, so sending sentence directly to ask_ai_assistant")
                 # TODO: in theory retrying via llm_tts could also be attempted first
-                self.ask_ai_assistant(sentence,intent_message)
+                #self.ask_ai_assistant(sentence,intent_message)
+                self.try_again_via_assistant = True
+                self.try_llm_stt()
             else:
                 if self.DEBUG:
                     print("setting try_again_via_assistant to True and returning")
-                self.try_again_via_assistant = True
+            """
+            self.try_again_via_assistant = True
+            self.try_llm_stt()
             return
         else:
             if self.DEBUG:
@@ -6705,8 +6711,9 @@ class VocoAdapter(Adapter):
                             if self.DEBUG:
                                 print("\n⏰\nSTOPWATCH: + " + str(time.time() - self.llm_stt_stopwatch) + ', ' + str(time.time() - self.llm_stt_stopwatch_start))
                                 print("Setting try_again_via_stt to True")
-                            self.speak("One moment",intent=intent_message)
+                            #self.speak("One moment",intent=intent_message)
                             self.try_again_via_stt = True
+                            self.try_llm_stt()
                         else:
                             # Show the heard sentence in a popup
                             if self.DEBUG or self.popup_heard_sentence:
@@ -6717,7 +6724,8 @@ class VocoAdapter(Adapter):
                             self.try_again_via_stt = False    
                     else:
                         if self.DEBUG:
-                            print("this is not origin site. Aborting.")
+                            print("master_intent_callback: unkownword in sentenca, and this is not origin site. Aborting.")
+                        self.try_again_via_stt = False
                     return
                 
                 else:
@@ -6779,6 +6787,7 @@ class VocoAdapter(Adapter):
             
         if all_possible_intents_count == 0:
             self.try_again_via_assistant = True
+            #self.try_llm_stt() # this will be handled naturally lower down because the voice message is empty
             
         for x in range( all_possible_intents_count ):
             #if self.DEBUG:
@@ -7380,7 +7389,7 @@ class VocoAdapter(Adapter):
             
             if self.persistent_data['is_satellite'] and this_is_origin_site == False and found_thing_on_satellite == False and voice_message.startswith('Sorry'):
                 if self.DEBUG:
-                    print("I am a satellite that handles thing intents, but couldn't find a good thing match, so I won't ask the main controller to speak my sorry message")
+                    print("\n\nI am a satellite that handles thing intents, but couldn't find a good thing match, so I won't ask the main controller to speak my sorry message\n\nEND\n\n")
                 # this is a satellite, and the voice request did not originate here, and checking for a matching thing failed here
                 # TODO: maybe satellites that handle things should be restricted to exact uniquely named things or perfect things+property matches? 
                 # Maybe the satellites could also track which devices are on the main controller, and not do a thing scan if the desired title was in the list of things on the main controller.
@@ -7401,19 +7410,23 @@ class VocoAdapter(Adapter):
                         except Exception as ex:
                             print("Error showing final message choice details: " + str(ex))
                             
-                    if 'siteId' in intent_message and intent_message['siteId'] != self.persistent_data['site_id']:
-                        self.speak(voice_message,intent=intent_message)
+                    # TODO: does this cause things to be spoken too often? added satellite check.
+                    #if 'siteId' in intent_message and intent_message['siteId'] != self.persistent_data['site_id'] and self.persistent_data['is_satellite'] == False:
+                    #    self.speak(voice_message,intent=intent_message)
                         
+                    # if the intent's sentence has already been genered why STT, then the sentence can be piped to the assistant straight away.
                     if self.llm_stt_always_use == True or ('siteId' in intent_message and intent_message['siteId'].startswith('llm_stt-')):
                         if self.DEBUG:
                             print("an intent that was based on LLM STT fell through, so it can be routed directly to the assistant")
                         self.ask_ai_assistant(sentence,intent=intent_message)
                         
+                    # same as above. The LLM STT process has already been performed.
                     elif 'id' in intent_message and intent_message['id'].endswith('fafafafa'):
                         if self.DEBUG:
                             print("spotted a retried intent query. It's sentence will be routed directly to the assistant")
                         self.ask_ai_assistant(sentence,intent=intent_message)
                         
+                    # If the origin of the sentence is text chat, then there is no need to perform STT first. The sentence can be piped into the assistant.
                     elif isinstance(intent_message,dict) and 'origin' in intent_message and intent_message['origin'] != 'voice':
                         if self.DEBUG:
                             print("intent was not of type voice (so text input), sending sentence directly to assistant: " + str(sentence))
@@ -7421,7 +7434,9 @@ class VocoAdapter(Adapter):
                         
                         self.ask_ai_assistant(sentence,intent=intent_message)
                     
-                    elif self.llm_stt_done == False:
+                    # self.llm_stt_done is no longer needed. It was used as a flag when the STT process started in paralel, as soon as the audio recording was complete.
+                    # TODO: also check if main controller has assistant up and running? Then it could handle that too if an assistant is not available locally.
+                    elif (self.llm_stt_started or (self.persistent_data['is_satellite'] and self.main_controller_has_stt)) and self.llm_stt_done == False:
                         if self.DEBUG:
                             print("intent has undefined origin, or origin was voice. setting self.try_again_via_assistant to true")
                         #if self.try_again_via_stt == True:
@@ -7433,14 +7448,20 @@ class VocoAdapter(Adapter):
                         #        print(" try_again_via_stt was false, so going directly to ask_ai_assistant with sentence: " + str(sentence))
                         #    self.try_again_via_assistant = True
                             #self.ask_ai_assistant(sentence,intent_message)
-                        self.speak("One moment",intent=intent_message)
                         self.try_again_via_assistant = True
+                        self.try_llm_stt()
                     
                     elif self.llm_stt_started == False:
                         if self.DEBUG:
                             print("llm_stt has not started (or has crashed), so that avenue is not available. Falling back to just speaking the voice_message: " + str(voice_message))
-                        self.last_command_was_answered_by_assistant = False
-                        self.speak(voice_message,intent=intent_message)
+                        
+                        # TODO: why only speak if the intent's siteId is not this site_id?
+                        #if 'siteId' in intent_message and intent_message['siteId'] != self.persistent_data['site_id'] and self.persistent_data['is_satellite'] == False:
+                        if self.persistent_data['is_satellite'] == False:
+                            self.speak(voice_message,intent=intent_message)
+                        
+                            self.last_command_was_answered_by_assistant = False
+                        #self.speak(voice_message,intent=intent_message)
                         
                     else:
                         if self.DEBUG:
@@ -7460,7 +7481,7 @@ class VocoAdapter(Adapter):
                     if self.DEBUG:
                         print("no need to use LLM Assistant. voice_message: " + str(voice_message))
                     self.last_command_was_answered_by_assistant = False
-                    if voice_message != '':
+                    if self.persistent_data['is_satellite'] == False:
                         self.speak(voice_message,intent=intent_message)
                         
         except Exception as ex:
@@ -10171,8 +10192,7 @@ class VocoAdapter(Adapter):
                 # TODO: potentially pad the recording with some silence
                 # https://superuser.com/questions/579008/add-1-second-of-silence-to-audio-through-ffmpeg
                 # ffmpeg -i jfk-short.wav -af "apad=pad_dur=1" jfk-padded.wav
-            
-                self.llm_stt()
+
             except Exception as ex:
                 print("Error closing audio recording: " + str(ex))
         else:
@@ -10183,6 +10203,7 @@ class VocoAdapter(Adapter):
             
         #self.recording_state = 0
         #self.record_running = False
+
 
     def delete_recordings(self):
         if self.DEBUG:
@@ -10451,7 +10472,7 @@ class VocoAdapter(Adapter):
         
         if self.llm_models['tts']['active'] == None:
             if self.DEBUG:
-                print("\n\nERROR, tts active model was still None. Aborting.")
+                print("\n\nstart_llm_tts: ERROR, tts active model was still None. Aborting start of STT server.\n\n")
             self.llm_tts_started = False
             return
         
@@ -10527,6 +10548,21 @@ class VocoAdapter(Adapter):
 #
 #  LLM STT
 #
+
+
+
+    def try_llm_stt(self,intent=None):
+        if self.DEBUG:
+            print("in try_llm_stt. intent: " + str(intent))
+            
+        if self.llm_enabled and self.llm_stt_enabled and (self.llm_stt_started or (self.persistent_data['is_satellite'] and self.main_controller_has_stt)) and (self.try_again_via_stt or self.try_again_via_assistant):
+            if self.DEBUG:
+                print("- try_llm_stt. calling llm_stt: " + str(intent))
+            before_time = time.time()
+            self.speak("One moment",intent=intent_message)
+            if self.DEBUG:
+                print("try_llm_stt: calling speak to say 'One moment' took this much time: " + str(time.time() - before_time()))
+            self.llm_stt()
 
 
     def llm_stt(self,intent=None):
@@ -10638,13 +10674,13 @@ class VocoAdapter(Adapter):
             self.delete_recordings()
         
         if self.DEBUG:
-            print("\n\nVOCO LLM STT RESULT: " + str(stt_result))
+            print("\n\nVOCO LLM STT RESULT:  type, stt_result:" + str(type(stt_result)) + ', ' + str(stt_result))
             print("\n⏰\nSTT DONE STOPWATCH: + " + str(time.time() - self.llm_stt_stopwatch) + ', ' + str(time.time() - self.llm_stt_stopwatch_start))
             self.llm_stt_stopwatch = time.time()
             print(" - - self.try_again_via_stt: " + str(self.try_again_via_stt))
             print(" - - self.try_again_via_assistant: " + str(self.try_again_via_assistant))
             
-        if stt_result == None:
+        if stt_result == None or stt_result == 'None':
             if self.DEBUG:
                 print("STT output was None\n\n")
             if self.llm_stt_always_use or self.try_again_via_assistant:
@@ -10658,6 +10694,7 @@ class VocoAdapter(Adapter):
             
                 if stt_output == '':
                     if self.DEBUG: # or self.llm_stt_always_use:
+                        print("stt_result was empty string. Aborting.")
                         self.speak("debug, I heard nothing",intent=intent)
                     self.send_pairing_prompt( "AI heard nothing")
                     return
@@ -10700,7 +10737,7 @@ class VocoAdapter(Adapter):
                     self.last_text_command = str(stt_output)
                     #self.parse_text(site_id=self.persistent_data['site_id'],origin="llm_stt")
                     self.llm_stt_sentence = stt_output
-                    self.query_intent(stt_output)
+                    self.query_intent(stt_output,intent=intent)
                     
                 else:
                     self.llm_stt_sentence = ''
