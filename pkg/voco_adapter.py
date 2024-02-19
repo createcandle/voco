@@ -6604,7 +6604,7 @@ class VocoAdapter(Adapter):
             if self.persistent_data['is_satellite'] and most_likely_intent in ['set_timer','get_timer_count','list_timers','stop_timer']: # 'get_time',  # get_time could easily be handled locally
                 if self.DEBUG:
                     print("SATELLITE: master_intent_callback: NOT HANDLING TIMERS - not adding most_likely_intent to list of intents to try")
-                #return
+                return
             
             elif best_confidence_score > self.confidence_score_threshold:
                 if self.llm_assistant_started and most_likely_intent == 'get_time' and 'time' not in sentence and best_confidence_score < 0.9:

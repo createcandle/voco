@@ -978,7 +978,6 @@
 		        	setTimeout(do_overlay_poll,2000);
 				})
 			}
-			/overlay_poll
 		}
 	
 	    
@@ -1746,14 +1745,17 @@
 							const model_name = llm_details.model;
 							
 							let required_memory = 0;
+							console.log("llm_details.memory: ", typeof llm_details.memory);
+							console.log("llm_details.size: ", typeof llm_details.size);
+							
 							if(typeof llm_details.memory != 'undefined'){
 								if(llm_details.memory != null && llm_details.memory != 0){
 									required_memory = llm_details.memory;
 								}
 							}
 							else if(typeof llm_details.size != 'undefined'){
-								if(llm_details.size != null && llm_details.size != 0){
-									required_memory = Math.round(llm_details.size * 1.2);
+								if(llm_details.size != null && parseInt(llm_details.size) != 0){
+									required_memory = Math.round(parseInt(llm_details.size) * 1.2);
 								}
 							}
 							if (required_memory > this.device_total_memory){
@@ -1761,7 +1763,7 @@
 								llm_item_el.classList.add('extension-voco-llm-not-possible');
 							}
 							
-							
+							console.log("required_memory: ", typeof required_memory, required_memory);
 	  						
 						
 							let radio_el = document.createElement('input');
@@ -1777,7 +1779,7 @@
 							}
 							let llm_memory = '<span class="extension-voco-llm-model-memory"></span>';
 							if(required_memory != 0){
-								llm_memory = '<span class="extension-voco-llm-model-memory"><span>Memory use: </span>' + llm_details.memory + '<span>Mb</span></span>';
+								llm_memory = '<span class="extension-voco-llm-model-memory"><span>Memory use: </span>' + required_memory + '<span>Mb</span></span>';
 							}
 							let downloaded = '<span class="extension-voco-llm-model-downloaded">Not downloaded</span>';
 							if(typeof llm_details.downloaded != 'undefined'){
