@@ -10844,6 +10844,8 @@ class VocoAdapter(Adapter):
                 #'--audio_ctx',
                 #'0',
         
+                 
+        
                 # suppress_non_speech_tokens
         
                 #stt_command = str(self.llm_stt_binary_path) + ' -m ' + str(os.path.join(self.llm_stt_dir_path, str(self.persistent_data['llm_stt_model']))) + ' -t 3 --host 0.0.0.0 --port ' + str(self.llm_stt_port)
@@ -10852,12 +10854,14 @@ class VocoAdapter(Adapter):
                     '-m',
                     str(os.path.join(self.llm_stt_dir_path, str(self.persistent_data['llm_stt_model']))),
                     '-t',
-                    '2',
+                    '3',
                     '--host',
-                    '0.0.0.0',
+                    'localhost',
                     '--port',
                     str(self.llm_stt_port)
                 ]
+                #host was '0.0.0.0',
+                
                 if self.DEBUG:
                     print("STT_COMMAND: " + str(' '.join(stt_command)))
         
