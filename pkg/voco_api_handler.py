@@ -90,14 +90,12 @@ class VocoAPIHandler(APIHandler):
                     return APIResponse(status=404)
 
             elif request.method == 'POST':
-                if request.path == '/init' or request.path == '/poll' or request.path == '/parse' or request.path == '/update' or request.path == '/ajax':
+                if request.path == '/init' or request.path == '/poll' or request.path == '/overlay_poll' or request.path == '/parse' or request.path == '/update' or request.path == '/ajax':
 
                     try:
                         if self.DEBUG2:
                             print("API handler is being called: " + str(request.path))
                     
-                        
-                        
                         if request.path == '/ajax':
                             
                             action = str(request.body['action'])    
@@ -334,6 +332,8 @@ class VocoAPIHandler(APIHandler):
                                 if self.DEBUG:
                                     print('ajax handling llm init')
                                 
+                                self.adapter.check_available_memory()
+                                
                                 return APIResponse(
                                   status=200,
                                   content_type='application/json',
@@ -343,6 +343,8 @@ class VocoAPIHandler(APIHandler):
                                           'llm_enabled':self.adapter.llm_enabled,
                                           
                                           'device_model': self.adapter.device_model,
+                                          'device_total_memory': self.adapter.total_memory,
+                                          'device_free_memory': self.adapter.free_memory,
                                     
                                           'llm_not_enough_disk_space':self.adapter.llm_not_enough_disk_space,
                                           'llm_busy_downloading_models':self.adapter.llm_busy_downloading_models,
@@ -372,7 +374,7 @@ class VocoAPIHandler(APIHandler):
                             elif action == 'set_llm':
                                 state = False
                                 if self.DEBUG:
-                                    print('ajax handling set llm')
+                                    print('ajax handling set_llm')
                                 try:
                                     if 'llm_tts_model' in request.body:
                                         
@@ -404,6 +406,42 @@ class VocoAPIHandler(APIHandler):
                                   content_type='application/json',
                                   content=json.dumps({'state' : state}),
                                 )
+                                
+                                
+                            # Delete specific LLM model files
+                            elif action == 'delete_llm':
+                                state = False
+                                if self.DEBUG:
+                                    print('ajax handling delete_llm')
+                                try:
+                                    if 'model_type' in request.body and 'model_name' in request.body:
+                                        
+                                        model_path = os.path.join(self.adapter.llm_data_dir_path, str(request.body['model_type']), str(request.body['model_name']))
+                                        if os.path.exists(str(model_path)):
+                                            if self.DEBUG:
+                                                print("found model file to delete: " + str(model_path))
+                                            os.system('rm ' + str(model_path))
+                                            if os.path.exists(str(model_path)):
+                                                if self.DEBUG:
+                                                    print("ERROR, failed to delete the model")
+                                            else:
+                                                if self.DEBUG:
+                                                    print("model was deleted succesfully")
+                                                state = True
+                                                
+                                    # Active models cannot be deleted, but could perhaps do a download of models just to be safe?
+                                    # self.adapter.llm_should_download = True
+                                                
+                                except Exception as ex:
+                                    print("Error in delete_llm: " + str(ex))
+                                    
+                                return APIResponse(
+                                  status=200,
+                                  content_type='application/json',
+                                  content=json.dumps({'state' : state}),
+                                )
+                                
+                                
                                 
                                 
                             elif action == 'llm_generate_text':
@@ -666,6 +704,7 @@ class VocoAPIHandler(APIHandler):
                                                         'text_response':self.adapter.last_text_response,
                                                         'llm_busy_generating':self.adapter.llm_busy_generating,
                                                         'llm_generated_text':self.adapter.llm_generated_text,
+                                                        'info_to_show': self.adapter.info_to_show,
                                                         'initial_injection_completed':self.adapter.initial_injection_completed,
                                                         'missing_microphone':self.adapter.missing_microphone, 
                                                         'matrix_started':self.adapter.matrix_started,
@@ -694,6 +733,19 @@ class VocoAPIHandler(APIHandler):
                                     content=json.dumps({'state' : False, 'update': "Poll error", 'items' : [], 'current_time':0}),
                                 )
                        
+                    
+                    
+                        elif request.path == '/overlay_poll':
+                            if self.DEBUG2:
+                                print("Getting the overlay_poll data")
+                    
+                            return APIResponse(
+                                status=200,
+                                content_type='application/json',
+                                content=json.dumps({
+                                                    'info_to_show': self.adapter.info_to_show
+                                                    })
+                            )
                     
                     
                     

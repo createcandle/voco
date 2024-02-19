@@ -1067,6 +1067,43 @@ f
 	display:block;
 }
 
+
+
+.extension-voco-llm-not-possible{
+	background-color:red!important;
+	opacity:.2;
+	pointer-events:none;
+}
+
+
+#extension-voco-info-overlay{
+	position:fixed;
+	top:9rem;
+	left:2rem;
+	bottom:2rem;
+	right:2rem;
+	z-index:9999999;
+}
+#extension-voco-info-overlay > pre{
+	white-space: pre-wrap;
+	overflow:auto;
+	height:100%;
+	width:100%;
+	padding:2rem;
+	padding-bottom:9rem;
+	background-color:#333;
+	color:white;
+	border-radius:1rem;
+	border:3px solid #888;
+}
+
+#extension-voco-info-overlay-close-button{
+	position:fixed;
+	bottom:2rem;
+	right:12rem;
+}
+
+
 /*  spinner  */
 
 #extension-voco-loading{

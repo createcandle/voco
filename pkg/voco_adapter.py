@@ -280,6 +280,7 @@ class VocoAdapter(Adapter):
         self.got_assistant_output = False # only briefly becomes true while the assistant is outputting text
         self.llm_assistant_maximum_no_new_output_duration = 1 # Sometimes an assistant doesn't render the "Researcher:" response. As a fall-back, if the assistant goes quiet for over a second, assume it's done talking.
         self.main_controller_has_assistant = False
+        self.info_to_show = 'test recipe';
         
         # Assistant playground
         self.llm_busy_generating = False
@@ -422,12 +423,14 @@ class VocoAdapter(Adapter):
             'Basic + Average':{'model':'ggml-base.en.bin',
                                 'size': 150,
                                 'memory':430,
+                                'minimal_pi':5,
                                 'description':'A base English language speech recognition model with a small vocabulary. The default.',
                                 'model_url':'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.en.bin'
                             },
             'Basic + Good':{'model':'ggml-small.en.bin',
                                 'size': 470,
                                 'memory':1000,
+                                'minimal_pi':5,
                                 'description':'A small but more capable English language speech recognition model.',
                                 'model_url':'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.en.bin'
                             }
@@ -488,7 +491,7 @@ class VocoAdapter(Adapter):
                                 }
                             },
             'Rocket 3B':{'model':'rocket-3b.Q5_K_M.gguf',
-                                'size':1650,
+                                'size':2000,
                                 'description':'Named after the small but powerful Rocket in the Guardians of the Galaxy movies.',
                                 'model_url':'https://huggingface.co/TheBloke/rocket-3B-GGUF/resolve/main/rocket-3b.Q5_K_M.gguf',
                                 'prompts':{
@@ -580,8 +583,6 @@ class VocoAdapter(Adapter):
                              }
                          }
         }
-        
-        
         
         
         self.llm_models = { 
@@ -992,7 +993,7 @@ class VocoAdapter(Adapter):
         self.last_sound_activity = 0
         self.last_text_command = "" # for text input instead of voice input
         self.last_text_response = ""
-        self.stop_snips_on_microphone_unplug = True
+        self.stop_snips_on_microphone_unplug = False # should remain active for handling text messages
         self.popup_heard_sentence = False # show the sentence that voco heard in a quick popup
         self.last_time_stop_spoken = 0 # avoid rambling on when the user says "stop"
         
@@ -2797,6 +2798,11 @@ class VocoAdapter(Adapter):
                 if self.DEBUG:
                     print("- speak: intent was not set, so setting siteId to own siteId (speaking it here)")
                 intent = {'siteId':self.persistent_data['site_id']}
+            
+            if 'siteId' in intent and intent['siteId'].endswith(self.persistent_data['site_id']) and str(voice_message).lower().startswith('show '):
+                if self.DEBUG:
+                    print("voice message starts with 'show '. ")
+                self.info_to_show = voice_message;
             
             #with self.voice_messages_queue.mutex:
             self.voice_messages_queue.put({'voice_message':str(voice_message),'intent':intent})
@@ -5265,9 +5271,7 @@ class VocoAdapter(Adapter):
                     # record audio?
                     if ((self.llm_enabled and self.llm_stt_enabled and self.llm_models['stt']['active'] != None and self.llm_stt_possible) or self.persistent_data['is_satellite'] == True):
                         #pass
-                        #self.mqtt_client.subscribe('hermes/audioServer/default/audioFrame')
-                    
-                    
+                        
                         # TEST TO START RECORDING EARLIER
                     
                         try:
@@ -5457,7 +5461,7 @@ class VocoAdapter(Adapter):
 
 
     def run_mqtt(self):
-        # Create mqtt client
+        # Create first mqtt client, which is connected to the main Voco controller.
         if self.DEBUG:
             print("in run_mqtt")
             print("mqtt_server: " + str(self.persistent_data['mqtt_server']))
@@ -5662,7 +5666,7 @@ class VocoAdapter(Adapter):
                 if self.DEBUG:
                     print("mqtt_client: on_connect: currently_scanning_for_missing_mqtt_server was True, setting to false")
             self.currently_scanning_for_missing_mqtt_server = False
-                
+            
             ###self.run_snips()
                 
             # if this is a satellite, then connecting to MQTT could just be a test of going over multiple controllers in an attempt to find the main one
@@ -5719,6 +5723,8 @@ class VocoAdapter(Adapter):
                 
                 #if self.DEBUG:
                 
+                # was used to verify that no audio frames are being sent aronud the network
+                #self.mqtt_client.subscribe("hermes/audioServer/#")
                 
                 
                 
@@ -5744,6 +5750,12 @@ class VocoAdapter(Adapter):
 
     # Process an mqtt message as it arrives
     def on_message(self, client, userdata, msg):
+        
+        # Used to verify that no audio frame messages were being sent around the network
+        #if msg.topic.startswith('hermes/audioServer') and not msg.topic.startswith(self.audio_frame_topic):
+        #    print("AUDIOserver odd message on: " + str(msg.topic))
+        #    return
+        
         
         if self.DEBUG2:
             if self.persistent_data['is_satellite']:
@@ -5981,18 +5993,23 @@ class VocoAdapter(Adapter):
                 # Deal with the user's command
                 
                 # This is an imperfect way of handling the situation when the main controller and a satellite both hear a voice command. Oddly, in theory this "echo" problem should already be handled by Snips.
-                if time.time() - self.previous_intent_callback_time < 3 and intent_message['origin'] == 'voice' and not intent_message['siteId'].startswith('llm_tts-') and not intent_message['siteId'].startswith('text-') and not intent_message['siteId'].startswith('matrix-'):
+                if time.time() - self.previous_intent_callback_time < 3 and intent_message['origin'] == 'voice' and not intent_message['siteId'].endswith(self.persistent_data['site_id']) and not intent_message['siteId'].startswith('llm_tts-') and not intent_message['siteId'].startswith('text-') and not intent_message['siteId'].startswith('matrix-'):
                     if self.DEBUG:
                         print("master_intent_callback ran less than 4 seconds ago, ignoring this one, likely an echo.. time delta: " + str(time.time() - self.previous_intent_callback_time))
                         self.speak('echo')
                     return
                     
-                if 'origin' in intent_message and intent_message['origin'] == 'voice' and self.persistent_data['listening'] == False:
+                if 'origin' in intent_message and intent_message['origin'] == 'voice' and self.persistent_data['listening'] == False and intent_message['siteId'].endswith(self.persistent_data['site_id']):
                     if self.DEBUG:
-                        print("Not handling voice intent menssage because listening is set to False. Almost slipped through.")
+                        print("Not handling voice intent menssage that originated here because listening is set to False. Almost slipped through.")
                 else:
-                    self.previous_intent_callback_time = time.time()
-                
+                    
+                    # TODO: doesn't this defeat the purpose of avoiding doing things twice when two controllers both hear the command?
+                    if not intent_message['siteId'].endswith(self.persistent_data['site_id']):
+                        self.previous_intent_callback_time = time.time()
+                        
+                    if self.DEBUG:
+                        print("resetting self.alternatives_counter")
                     self.alternatives_counter = -1
                     
                     if self.llm_stt_always_use and intent_message['siteId'].startswith('llm_stt-') == False:
@@ -6171,6 +6188,9 @@ class VocoAdapter(Adapter):
                             if self.DEBUG:
                                 print("do_stt_result: " + str(do_stt_result))
                                 print("publishing result back to:  hermes/voco/" + str(target_site_id) + "/stt_done")
+                                if do_stt_result == None:
+                                    do_stt_result = '{"text":"Debug: Speech to text on main controller timed out"}'
+                                
                             self.mqtt_client.publish("hermes/voco/" + str(target_site_id) + "/stt_done", json.dumps( {"stt_result":str(do_stt_result),"siteId":str(target_site_id)} )) # ,"sessionId":str(payload['sessionId']
                             
                         except Exception as ex:
@@ -6649,7 +6669,7 @@ class VocoAdapter(Adapter):
             
             if intent_message['siteId'] == self.persistent_data['site_id']:
                 if self.DEBUG:
-                    print("handling intent at the site where it was spoken")
+                    print("master_intent_callback: got intent at the site where it was spoken/created")
                 this_is_origin_site = True
             
             for i in sentence: 
@@ -6661,31 +6681,34 @@ class VocoAdapter(Adapter):
             if word_count == 1:
                 
                 #if sentence == 'hello' or sentence == 'allow' or sentence == 'alarm':
-                if 'hello' in sentence or 'allow' in sentence or 'alarm' in sentence:
+                if 'hello' in sentence.lower() or 'allow' in sentence or 'alarm' in sentence:
                     #print("hello intent_message: " + str(intent_message))
                     if this_is_origin_site:
                         self.speak("Hello",intent=intent_message)
                         return
                         
-                elif 'goodbye' in sentence:
+                elif 'goodbye' in sentence.lower():
                     #print("hello intent_message: " + str(intent_message))
                     if this_is_origin_site:
                         self.speak("Goodbye",intent=intent_message)
                         return
                 
-                elif 'stop' in sentence:
+                elif 'stop' in sentence.lower():
                     if self.DEBUG:
                         print("stopping speaking and clearing the queue to be spoken")
                     self.last_time_stop_spoken = time.time()
+                    self.info_to_show = ''
                     #with self.voice_messages_queue.mutex:
                     self.voice_messages_queue.queue.clear()
-                    os.system("pkill -f aplay")
-                    os.system('pkill -f ' + str(self.llm_tts_binary_name))
+                    os.system("sudo pkill -f aplay")
+                    os.system('sudo pkill -f ' + str(self.llm_tts_binary_name))
+                    if self.DEBUG:
+                        self.speak("Debug. Was asked to stop speaking. ",intent=intent_message)
                 
                 else: 
                     if self.DEBUG:
                         print("Heard just one word, but not 'hello'. Ignoring.")
-                        self.speak("Heard just one word",intent=intent_message)
+                        self.speak("Debug. Heard just one word. ",intent=intent_message)
                     #pass
                     #self.speak("I didn't get that",intent=intent_message)
                 
@@ -7437,7 +7460,7 @@ class VocoAdapter(Adapter):
                     
                     # self.llm_stt_done is no longer needed. It was used as a flag when the STT process started in paralel, as soon as the audio recording was complete.
                     # TODO: also check if main controller has assistant up and running? Then it could handle that too if an assistant is not available locally.
-                    elif (self.llm_stt_started or (self.persistent_data['is_satellite'] and self.main_controller_has_stt)) and self.llm_stt_done == False:
+                    elif (self.llm_stt_started or (self.persistent_data['is_satellite'] and self.main_controller_has_stt)): # and self.llm_stt_done == False:
                         if self.DEBUG:
                             print("intent has undefined origin, or origin was voice. setting self.try_again_via_assistant to true")
                         #if self.try_again_via_stt == True:
@@ -9595,10 +9618,10 @@ class VocoAdapter(Adapter):
         # messages can be returned to the web interface (text), or to the matrix chat room (matrix)
         if self.last_text_command != "":
             self.last_text_command = self.last_text_command.strip()
-            if self.DEBUG:
-                print("in parse_text. Sending text input to snips: " + str(self.last_text_command))
+            
             if self.mqtt_connected:
-                
+                if self.DEBUG:
+                    print("in parse_text. MQTT connected, so sending text input to snips: " + str(self.last_text_command))
                 modified_site_id = str(site_id)
                 if origin != None:
                     if origin != 'voice':
@@ -9626,7 +9649,7 @@ class VocoAdapter(Adapter):
                         
                     else:
                         if self.DEBUG:
-                            print("parse_text called with this device's ID, and an not a satellite. So this is a normal parse_text command probably from text/matrix input.")
+                            print("parse_text called with this device's ID, and am not a satellite. So this is a normal parse_text command probably from text/matrix input.")
                         self.mqtt_client.publish("hermes/dialogueManager/startSession",json.dumps({"init":{"type":"action","canBeEnqueued": True},"siteId":modified_site_id }))
                             
                         #{'input': 'what time is it', 'asrTokens': [{'value': 'what', 'confidence': 1.0, 'rangeStart': 0, 'rangeEnd': 4, 'time': {'start': 0.0, 'end': 1.8000001}}, {'value': 'time', 'confidence': 1.0, 'rangeStart': 5, 'rangeEnd': 9, 'time': {'start': 1.8000001, 'end': 1.83}}, {'value': 'is', 'confidence': 1.0, 'rangeStart': 10, 'rangeEnd': 12, 'time': {'start': 1.83, 'end': 2.04}}, {'value': 'it', 'confidence': 1.0, 'rangeStart': 13, 'rangeEnd': 15, 'time': {'start': 2.04, 'end': 2.73}}], 'intentFilter': ['createcandle:stop_timer', 'createcandle:get_time', 'createcandle:set_timer', 'createcandle:get_timer_count', 'createcandle:get_value', 'createcandle:list_timers', 'createcandle:get_boolean', 'createcandle:set_state', 'createcandle:set_value'], 'id': '16ebc483-714e-4112-af69-2a1eb45af57f', 'sessionId': 'edbdd5e8-013f-4ce9-a844-a7dad3cfa88f'}
@@ -10680,7 +10703,7 @@ class VocoAdapter(Adapter):
     def parse_llm_stt_result(self, stt_result=None, intent=None):
         if self.DEBUG:
             print("in parse_llm_stt_result")
-        self.llm_stt_done = True
+        #self.llm_stt_done = True
         
         if not self.DEBUG:
             self.delete_recordings()
