@@ -8,5 +8,6 @@ pycryptodome
 python-olm
 matrix-nio[e2e]
 Pillow
+openwakeword
 pyaudio
 numpy
