@@ -231,7 +231,7 @@ class VocoAdapter(Adapter):
         
         # Open Wakeword
         
-        self.use_open_wakeword = True
+        self.use_open_wakeword = False
         self.wakeword_thread = None
         self.wakeword_started = False
         self.restart_wakeword = False
