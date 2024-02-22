@@ -11,6 +11,8 @@
 			this.attempts = 0;
             this.busy_polling = false;
             this.busy_polling_count = 0;
+			
+			this.overlay_poll_done = true;
 
 	      	this.content = '';
 			this.item_elements = []; //['thing1','property1'];
@@ -245,9 +247,6 @@
 		        }).catch((e) => {
 		  			console.log("Error getting Voco Matrix init data: " , e);
 		        });	
-                    
-                
-                
                 
                 
                 
@@ -311,7 +310,7 @@
 								//console.log("satellite_targets in body: " + body['satellite_targets']);
 								if(Object.keys(body['satellite_targets']).length > 0){
 									if(this.debug){
-                                        console.log("Voco: at least one potential main voco controller detected");
+                                        console.log("Voco: at least one potential main voco controller detected: ", body['satellite_targets']);
                                     }
 									if('is_satellite' in body){
 										//console.log("is_satellite: " + body['is_satellite']);
@@ -333,7 +332,12 @@
 										if(body['satellite_targets'][key] == body['main_controller_hostname'] || Object.keys(body['satellite_targets']).length == 1){
 											checked_value = 'checked="checked"';
 										}
-										list_html += '<div class="extension-voco-radio-select-item"><input type="radio" name="main_controller_hostname" value="' + body['satellite_targets'][key] + '" ' + checked_value + ' /><span>' + body['satellite_targets'][key] + '</span></div>';
+										
+										var fastest_class = "";
+										if(typeof body['fastest_device_id'] != 'undefined' && body['satellite_targets'][key] == body['fastest_device_id']){
+											fastest_class = "extension-voco-satellite-item-fastest";
+										}
+										list_html += '<div class="extension-voco-radio-select-item ' + fastest_class + '"><input type="radio" name="main_controller_hostname" value="' + body['satellite_targets'][key] + '" ' + checked_value + ' /><span>' + body['satellite_targets'][key] + '</span></div>';
 									}
 									document.getElementById('extension-voco-server-list').innerHTML = list_html;
 								}
@@ -932,6 +936,7 @@
 		// Some responses to LLM Assistant question can be shown on an attached display
 		do_overlay_poll(){
 			if(this.overlay_poll_done){
+				this.overlay_poll_done = false;
 		        window.API.postJson(
 	                `/extensions/${this.id}/api/overlay_poll`
 		        ).then((body) => {
@@ -970,11 +975,13 @@
 							}
 						}
 					}
-					setTimeout(do_overlay_poll,2000);
+					//setTimeout(do_overlay_poll,2000);
 				}).catch((e) => {
 					console.error("voco: error in call to /overlay_poll: ", e);
 					//setTimeout(do_overlay_poll,2000);
 				}).then((body) => {
+					console.log("\n\n\nVoco: final then is working!\n\n\n");
+					this.overlay_poll_done = true;
 		        	setTimeout(do_overlay_poll,2000);
 				})
 			}
@@ -1461,8 +1468,6 @@
 								clone.querySelectorAll('.extension-voco-change' )[0].appendChild(s);
 							}
 							
-							
-							
 						}
 						catch(e){
 							console.log("error handling Voco change data: " + e);
@@ -1475,8 +1480,6 @@
 					//console.log(type);
 					//console.log(sentence);
 				
-
-
 					// Add delete button click event
 					const delete_button = clone.querySelectorAll('.extension-voco-item-delete-button')[0];
 					delete_button.addEventListener('click', (event) => {
@@ -1561,8 +1564,9 @@
 				console.error("Voco: error in regenerate items: ", e); // pass exception object to error handler
 			}
 		}
+		
         
-        
+       
         // Creates a list of satellites that have recently connected to this controller and regard it as their main controller
         show_connected_satellites(connected_satellites, is_satellite){
             try{
@@ -1600,8 +1604,6 @@
     				}
                     
                 }
-                
-                
                 
             }
 			catch (e) {
@@ -1897,7 +1899,7 @@
 	  					  	llm_details_el.innerHTML = '<h3>' + llm_name + '</h3>';
 							llm_details_el.innerHTML += '<p>' + llm_details.description + '</p>';
 							llm_details_el.innerHTML += '<div class="extension-voco-llm-model-details"><span class="extension-voco-llm-model-filename"><span>Model: </span>' + llm_details.model + '</span>' + llm_size + llm_memory + downloaded + '</div>';
-							if(llm_type == 'tts'){
+							if(llm_type == 'tts' && llm_details.model != 'custom'){
 								llm_details_el.innerHTML += '<audio controls><source src="/extensions/voco/audio/' + llm_details.model + '.wav" type="audio/wav"></audio>';
 							}
 							llm_item_el.appendChild(llm_details_el);

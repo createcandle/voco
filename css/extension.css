@@ -1067,7 +1067,12 @@ f
 	display:block;
 }
 
-
+.extension-voco-satellite-item-fastest{
+	border:2px dashed green;
+}
+.extension-voco-satellite-item-fastest:after{
+	content:'FASTEST DEVICE';
+}
 
 .extension-voco-llm-not-possible{
 	background-color:red!important;

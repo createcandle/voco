@@ -593,6 +593,7 @@ class VocoAPIHandler(APIHandler):
                                                         'matrix_username': matrix_username,
                                                         'has_matrix_token': has_matrix_token,
                                                         'device_model': self.adapter.device_model,
+                                                        'hardware_score': self.adapter.hardware_score,
                                                         'debug':self.adapter.DEBUG
                                                         }),
                                 )
@@ -720,7 +721,8 @@ class VocoAPIHandler(APIHandler):
                                                         'llm_busy_downloading_models':self.adapter.llm_busy_downloading_models,
                                                         'llm_folder_size':llm_folder_size,
                                                         'llm_not_enough_disk_space':self.adapter.llm_not_enough_disk_space,
-                                                        'free_memory':self.adapter.free_memory
+                                                        'free_memory':self.adapter.free_memory,
+                                                        'fastest_device_id':self.adapter.fastest_device_id
                                                         })
                                 )
                                 

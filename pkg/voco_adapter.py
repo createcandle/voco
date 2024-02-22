@@ -103,6 +103,8 @@ from .util import *
 from .voco_device import *
 from .voco_notifier import *
 
+#from .wakeword import *
+
 try:
     #from gateway_addon import APIHandler, APIResponse
     from .voco_api_handler import * #CandleManagerAPIHandler
@@ -116,6 +118,16 @@ except Exception as ex:
 # Record audio from stream
 import struct
 import wave
+
+
+# Wakeword
+
+import pyaudio
+import numpy as np
+from openwakeword.model import Model
+
+
+
 
 # OpenAI
 #from openai import OpenAI
@@ -158,7 +170,7 @@ class VocoAdapter(Adapter):
         #print(str( os.path.join(os.path.dirname(os.path.abspath(__file__)), 'lib') ))
         self.pairing = False
         self.DEBUG = False
-        self.DEBUG2 = True # TODO: TEMPORARY EXTRA DEBUG INFO
+        self.DEBUG2 = False # TODO: TEMPORARY EXTRA DEBUG INFO
         self.DEV = False # not used anymore?
         self.addon_name = 'voco'
         self.name = self.__class__.__name__ # VocoAdapter
@@ -190,6 +202,8 @@ class VocoAdapter(Adapter):
         
         #print("self.pipewire_data:" + json.dumps(self.pipewire_data,indent=4))
         
+        self.hardware_score = 0 # describes how powerful the hardware is
+        
         # Check is system is 32 or 64 bit
         self.bits = int(run_command('getconf LONG_BIT'))
         #print("system bits: " + str(self.bits))
@@ -197,7 +211,9 @@ class VocoAdapter(Adapter):
         self.bit_extension = ""
         if self.bits == 64:
             self.bit_extension = "64"
-
+        else:
+            self.hardware_score = -100 # avoid 32 it systems
+            
         #print("self.manager_proxy = " + str(self.manager_proxy))
         #print("self.user_profile: " + str(self.user_profile))
 
@@ -205,7 +221,20 @@ class VocoAdapter(Adapter):
         self.snips_path = os.path.join(self.user_profile['addonsDir'] ,self.addon_name, 'snips' + self.bit_extension)
         os.environ["LD_LIBRARY_PATH"] = str(self.snips_path)
 
-        self.lock = threading.Lock()
+
+        
+        #self.lock = threading.Lock() # Not currently used, but can help threads print to stdout, for example.
+
+        self.threads = [] # Hold wakeword thread, maybe more in future?
+
+        
+        
+        # Open Wakeword
+        
+        self.use_open_wakeword = True
+        self.wakeword_thread = None
+        self.wakeword_started = False
+        self.restart_wakeword = False
 
 
         # LLM AI
@@ -222,6 +251,8 @@ class VocoAdapter(Adapter):
         self.llm_busy_downloading_models = 0
         self.llm_not_enough_disk_space = False
         #self.llm_downloaded_models = {'tts':[],'stt':[],'assistant':[]} # is this still used?
+        self.fastest_device_id = None # which Voco device in the network has the fastest hardware and should ideally be used to run LLM models
+        
         
         
         # TTS
@@ -309,6 +340,12 @@ class VocoAdapter(Adapter):
         
         self.device_model = run_command("cat /proc/device-tree/model")
         print("self.device_model: " + str(self.device_model))
+        self.device_pi_version = 3
+        if 'aspberry' in self.device_model:
+            self.device_pi_version = int(self.device_model.split()[2])
+        print("Rasbperry Pi version: " + str(self.device_pi_version))
+        self.hardware_score = self.device_pi_version * 5
+        
         # Could try to generate audio files for common voice responses, to speed up these parts.
         
         # This is not really a good option since aplay doesn't allow for volume control. Perhaps ffplay could be used instead, but that's slower, which negates the whole point.
@@ -916,6 +953,9 @@ class VocoAdapter(Adapter):
         self.certificate_path = os.path.join(self.ssl_folder, 'certificate.pem')
         self.privatekey_path = os.path.join(self.ssl_folder, 'privatekey.pem')
 
+
+        self.fastest_device_id = self.persistent_data['site_id']
+        
         self.running = True
         #self.internal_clock_started = False
 
@@ -971,16 +1011,7 @@ class VocoAdapter(Adapter):
         self.snips_clear_injections_first = False
         self.snips_satellite_parts = ['snips-audio-server','snips-hotword'] # No longer needed, as the satellite now runs the full monty
         #self.snips_parts = ['snips-hotword','snips-audio-server','snips-tts','snips-nlu','snips-injection','snips-dialogue','snips-asr']
-        self.snips_parts = [
-                            
-                            'snips-dialogue',
-                            'snips-audio-server',
-                            'snips-tts',
-                            'snips-asr',
-                            'snips-nlu',
-                            'snips-injection',
-                            'snips-hotword'
-                            ]
+       
         
         #self.snips_main_site_id = None
         self.custom_assistant_url = None
@@ -1091,6 +1122,14 @@ class VocoAdapter(Adapter):
         self.addon_dir_path = os.path.join(self.user_profile['addonsDir'], self.addon_name)
         self.data_dir_path = os.path.join(self.user_profile['dataDir'], self.addon_name)
         
+        
+        
+        
+        # WAKE WORD
+        self.hey_candle_wakeword_model_path = os.path.join(self.addon_dir_path,'llm','wakeword','hey_candle.onnx')
+        print("self.hey_candle_wakeword_model_path: " + str(self.hey_candle_wakeword_model_path))
+        if not os.path.exists(self.hey_candle_wakeword_model_path):
+            print("\nERROR, missing wakeword model")
         
         # LLM AI PATHS
         self.recording_dir_path = os.path.join(self.data_dir_path, 'recording')
@@ -1229,8 +1268,11 @@ class VocoAdapter(Adapter):
         self.free_memory = 0
         self.check_available_memory()
         
+        #print("\n\n\n\nself.total_memory: " + str(self.total_memory))
         
-        
+        self.hardware_score = self.hardware_score + math.floor(self.total_memory / 1000)
+        self.fastest_device_score = 0
+        #print("self.hardware_score: " + str(self.hardware_score))
         
         
         
@@ -1341,6 +1383,27 @@ class VocoAdapter(Adapter):
             print("Error loading config: " + str(ex))
             
         #self.DEBUG = False
+        
+        self.snips_parts = [
+                            'snips-dialogue',
+                            'snips-audio-server',
+                            'snips-tts',
+                            'snips-asr',
+                            'snips-nlu',
+                            'snips-injection',
+                            'snips-hotword'
+                            ]
+        
+        
+        if self.use_open_wakeword == False:
+            if self.DEBUG:
+                print("Using old Hey Snips wakeword")
+            #self.snips_parts.append('snips-hotword')
+        else:
+            if self.DEBUG:
+                print("Using new Hey Candle wakeword")
+        
+        
         
         if self.DEBUG:
             print("self.persistent_data is now:")
@@ -2119,10 +2182,13 @@ class VocoAdapter(Adapter):
         # Hey Candle
         try:
             if 'Hey Candle' in config:
+                self.use_open_wakeword = bool(config['Hey Candle'])
                 if bool(config['Hey Candle']) == True:
-                    self.toml_path = os.path.join(self.models_path,"candle.toml")
+                    self.toml_path = os.path.join(self.models_path,"candle.toml") # this is hot snips-wakeword
                     if self.DEBUG:
                         print("-Hey Candle is enabled")
+                    
+                        
                         
             if 'Mute the radio' in config:
                 self.kill_ffplay_before_speaking = bool(config['Mute the radio'])
@@ -2587,7 +2653,7 @@ class VocoAdapter(Adapter):
         if self.pipewire_enabled:
             sound_command = ["aplay", str(file_path)]
         else:
-            sound_command = ["aplay", str(file_path),"-D", output_device_string]
+            sound_command = ["aplay", str(file_path),"-D", output_device_string,'&']
         if self.DEBUG:
             print("aplay command: " + str( ' '.join(sound_command) ))
         subprocess.run(sound_command, capture_output=True, shell=False, check=False, encoding=None, errors=None, text=None, env=None, universal_newlines=None)
@@ -3277,6 +3343,8 @@ class VocoAdapter(Adapter):
             # Start the snips parts
             for unique_command in commands:
                 
+                if self.DEBUG:
+                    print("\n" + str(unique_command))
                 if unique_command in snips_check_output:
                     if self.DEBUG:
                         print("This part of snips seems to already be running? It was in snips_check_output: " + str(unique_command))
@@ -3369,6 +3437,26 @@ class VocoAdapter(Adapter):
                     
                 #    extra_dialogue_manager_command = command.copy()
                 #    extra_dialogue_manager_command = extra_dialogue_manager_command + ["--mqtt",mqtt_ip]
+                
+                if self.use_open_wakeword and unique_command == 'snips-hotword':
+                    if self.DEBUG:
+                        print("run_snips: starting wakeword thread")
+                        
+                    if self.wakeword_started:
+                        self.restart_wakeword = True
+                        time.sleep(.1)
+                    if self.wakeword_started:
+                       if self.DEBUG:
+                           print("\nERROR, wakeword was still running after having been given time to stop")
+                    
+                    self.wakeword_thread = None
+                    self.wakeword_thread = threading.Thread(target=self.run_wakeword) #, args=(self.voice_messages_queue,))
+                    self.wakeword_thread.daemon = True
+                    self.wakeword_thread.start()
+                    if self.DEBUG:
+                        print("run_snips: started wakeword thread")
+                    continue
+                
                 
                 # Add IP and port
                 command = command + ["--mqtt",local_mqtt_ip]
@@ -3518,6 +3606,134 @@ class VocoAdapter(Adapter):
             self.last_time_snips_started = int(time.time())
         """
         return
+
+
+    
+
+    def run_wakeword(self):
+        if self.DEBUG:
+            print("in run_wakeword")
+        
+        # Get microphone stream
+        FORMAT = pyaudio.paInt16
+        CHANNELS = 1
+        RATE = 16000
+        #CHUNK = 1280
+        CHUNK = 4096
+        py_audio = pyaudio.PyAudio()
+
+        
+        info = py_audio.get_host_api_info_by_index(0)
+        numdevices = info.get('deviceCount')
+        
+        #for each audio device, determine if is an input or an output and add it to the appropriate list and dictionary
+        #for i in range(py_audio.get_device_count()):
+        for i in range (0,numdevices):
+            
+            
+            #print("Number of audio devices:", p.get_device_count())
+            
+            dev = py_audio.get_device_info_by_index(i)
+            print("Device index:", i)
+            print("Device name:", dev.get('name'))
+            print("Input channels:", dev.get('maxInputChannels'))
+            print("Output channels:", dev.get('maxOutputChannels'))
+            print("Default Sample Rate:", dev.get('defaultSampleRate'))
+            print("---------------------------------------")
+            
+            
+            if py_audio.get_device_info_by_host_api_device_index(0,i).get('maxInputChannels')>0:
+                if self.DEBUG:
+                    print("Input Device id ", i, " - ", py_audio.get_device_info_by_host_api_device_index(0,i).get('name'))
+
+            if py_audio.get_device_info_by_host_api_device_index(0,i).get('maxOutputChannels')>0:
+                if self.DEBUG:
+                    print("Output Device id ", i, " - ", py_audio.get_device_info_by_host_api_device_index(0,i).get('name'))
+
+        devinfo = py_audio.get_device_info_by_index(1)
+        if self.DEBUG:
+            print("Selected microphone is ",devinfo.get('name'))
+        if py_audio.is_format_supported(48000.0, input_device=devinfo["index"],input_channels=devinfo['maxInputChannels'],input_format=pyaudio.paInt16): #44100
+            if self.DEBUG:
+                print('run_wakeword: found valid microphone')
+                print("self.hotword_sensitivity: " + str(self.hotword_sensitivity))
+
+
+            mic_stream = py_audio.open(format=FORMAT, channels=CHANNELS, rate=RATE, input=True, frames_per_buffer=CHUNK)
+
+            # Load pre-trained openwakeword models
+            owwModel = Model(wakeword_models=[self.hey_candle_wakeword_model_path], inference_framework="onnx") # alternative is "onnx" or "tflite"
+
+            n_models = len(owwModel.models.keys())
+        
+            self.wakeword_started = True
+            while self.running and not self.restart_wakeword:
+                
+                # Get audio
+                audio = np.frombuffer(mic_stream.read(CHUNK, exception_on_overflow = False), dtype=np.int16)
+
+                # Feed to openWakeWord model
+                prediction = owwModel.predict(audio)
+
+                # Column titles
+                #n_spaces = 16
+                #output_string_header = """
+                #    Model Name         | Score | Wakeword Status
+                #    --------------------------------------
+                #    """
+
+                for mdl in owwModel.prediction_buffer.keys():
+                    # Add scores in formatted table
+                    scores = list(owwModel.prediction_buffer[mdl])
+                    #print("scores: " + str(scores))
+                    #curr_score = format(scores[-1], '.20f').replace("-", "")
+                    #print("\033[F" + "curr_score: " + str(curr_score))
+                    
+                    #print("type: " + str(type(scores[-1])))
+                    
+                    if scores[-1] > self.hotword_sensitivity:
+                        print("\n\n" + str(mdl) + " - " + str(scores[-1]) + " (sensitivity: " + str(self.hotword_sensitivity) + ")\n\n")
+                        millis = int(round(time.time() * 1000))
+                        payload = {
+                            "modelId": mdl,
+                            "modelVersion": "",
+                            "modelType": "universal",
+                            
+                            "detectionSignalMs": millis,
+                            "endSignalMs":millis,
+                            "currentSensitivity": self.hotword_sensitivity,
+                            "siteId": self.persistent_data['site_id'],
+                            "sessionId": None,
+                            "sendAudioCaptured": None,
+                            "lang": None,
+                            "customEntities": {'origin':'voice'},
+                        }
+                        if(self.mqtt_second_client != None):
+                            self.mqtt_second_client.publish(f"hermes/hotword/{mdl}/detected", json.dumps(payload))
+                            print(f"run_wakeword: Published wakeword {mdl}, siteId {self.persistent_data['site_id']} to main controller")
+                            self.play_sound()
+                        continue
+                    #output_string_header += f"""{mdl}{" "*(n_spaces - len(mdl))}   | {curr_score[0:5]} | {"--"+" "*20 if scores[-1] <= 0.5 else "Wakeword Detected!"}
+                    #"""
+
+                # Print results table
+                #print("\033[F"*(4*n_models+1))
+                #print(output_string_header, "                             ", end='\r')
+            
+            
+            if self.self.restart_wakeword:
+                self.self.restart_wakeword = False
+        
+        else:
+            if self.DEBUG:
+                print("\n Wakeword failed to start! No valid microphone detected")
+
+        self.wakeword_started = False
+        py_audio.terminate()
+        
+            
+            
+
 
 
 
@@ -3739,7 +3955,7 @@ class VocoAdapter(Adapter):
                                         
                                         
                                         if self.persistent_data['main_site_id'] != self.persistent_data['site_id']: # Once the main controller has been connected to (received pong), these values are no longer the same
-                                            if self.DEBUG:
+                                            if self.DEBUG2:
                                                 print('satellite, so sending ping to stay in touch.')
                                             self.send_mqtt_ping()
                                         else:
@@ -3757,7 +3973,7 @@ class VocoAdapter(Adapter):
                                         self.inject_updated_things_into_snips() # this will figure out if there are any changes necessitating an actual injection
                                         
                                     elif self.satellite_should_act_on_intent:
-                                        if self.DEBUG:
+                                        if self.DEBUG2:
                                             print("Clock: satellite, but should_act_on_intent, so calling inject_updated_things_into_snips")
                                         self.inject_updated_things_into_snips()
                                 
@@ -4919,6 +5135,8 @@ class VocoAdapter(Adapter):
             
             self.mqtt_connected = True
         
+            self.mqtt_second_client.subscribe("hermes/#")
+            """
             self.mqtt_second_client.subscribe("hermes/hotword/#")
             #self.mqtt_second_client.subscribe("hermes/intent/#")
             
@@ -4942,6 +5160,8 @@ class VocoAdapter(Adapter):
             #if self.llm_enabled: # Moved to the other client
             #    print("subscribing to audioFrame topic on second mqtt client")
             #    self.mqtt_second_client.subscribe(self.audio_frame_topic)
+                
+            """
                 
             if self.is_snips_running() == False:
                 self.run_snips()
@@ -5041,7 +5261,7 @@ class VocoAdapter(Adapter):
                     
                     if 'unknownword' in str(payload['text']) or str(payload['text']) == '':
                         if self.DEBUG:
-                            print("textCaptured: satellite: text contained 'unknownword' or was empty string, not passing to main controller. aborting")
+                            print("textCaptured: I am satellite, but text contained 'unknownword' or was empty string, so not passing to main controller via hermes/voco/parse.")
                         #self.try_again_via_stt = True
                     else:
                         if self.DEBUG:
@@ -5157,11 +5377,31 @@ class VocoAdapter(Adapter):
                 if self.DEBUG:
                     print("\n\nNOTE: this may be an opportunity to send the text to the assistant.")
                     print("- payload: " + str(payload))
-                if self.llm_enabled and self.llm_assistant_enabled and self.llm_assistant_started:
-                    if self.llm_stt_sentence != '':
-                        self.ask_ai_assistant(self.llm_stt_sentence)
-                    #else:
+                    
+                
+                if 'input' in payload and 'unknownword' in payload['input']:
+                    if self.DEBUG:
+                        print("intentNotRecognized: will try_llm_stt")
+                    self.try_llm_stt(payload['input'], payload)
+                    #if self.llm_enabled and self.llm_stt_enabled and self.llm_stt_started:
+
+                    
+                elif self.llm_stt_sentence != '':
+                    if self.DEBUG:
+                        print("intentNotRecognized: will try to ask any available assistant: " + str(self.llm_stt_sentence))
+                    self.ask_ai_assistant(self.llm_stt_sentence)
+                    #if self.llm_enabled and self.llm_assistant_enabled and self.llm_assistant_started:
+                    #    self.ask_ai_assistant(self.llm_stt_sentence)
+                    #else
+                        
+                    #elif 'input' in payload and payload['input'] != '':
+                    #    self.ask_ai_assistant(self.llm_stt_sentence)
+                    
+                else:
+                    if self.DEBUG:
+                        print("\nintentNotRecognized: fell through\n")
                     #    self.ask_ai_assistant(payload['input'])
+                
         
         if msg.topic.startswith('hermes/injection/perform'):
             
@@ -5862,7 +6102,7 @@ class VocoAdapter(Adapter):
                     if payload['siteId'].startswith("llm_stt-"):
                         print("\nLLM STT siteId detected")
                     
-                    if payload['siteId'].startswith("text-") or payload['siteId'].startswith("matrix-") or payload['siteId'].startswith("llm_stt-") or self.persistent_data['is_satellite']: 
+                    if self.last_text_command != '' and payload['siteId'].startswith("text-") or payload['siteId'].startswith("matrix-") or payload['siteId'].startswith("llm_stt-") or self.persistent_data['is_satellite']: 
                         if self.DEBUG:
                             print("Creating faux textcaptured. self.last_text_command:\n\n (FAUX)-> " + str(self.last_text_command))
                             print("\n")
@@ -5886,7 +6126,8 @@ class VocoAdapter(Adapter):
                     
                     else:
                         if self.DEBUG:
-                            print("was a voice start? or not a satellite? Not sending faux textCaptured.")
+                            print("was a voice start? or not a satellite? Or self.last_text_command was empty string? Not sending faux textCaptured.")
+                            print(" - self.last_text_command: " + str(self.last_text_command))
                             print(" - payload['siteId']: " + str(payload['siteId']))
                             print(" - self.persistent_data['is_satellite']: " + str(self.persistent_data['is_satellite']))
                             
@@ -5918,10 +6159,11 @@ class VocoAdapter(Adapter):
                 
                 self.intent_received = True # Used to create a 'no voice input received' sound effect if no intent was heard.
                 if self.DEBUG:
-                    print("\n----------------------------------- I N T E N T ----------------------------")
+                    print("\n----------------------------------- hermes/I N T E N T ----------------------------")
+                    print("message topic: " + str(msg.topic))
                     print(">> Received intent message.")
                     print("message received: "  + str(msg.payload.decode("utf-8")))
-                    print("message topic: " + str(msg.topic))
+                    #print("message topic: " + str(msg.topic))
                     
                 intent_name = os.path.basename(os.path.normpath(msg.topic))
                 if self.DEBUG:
@@ -6138,7 +6380,7 @@ class VocoAdapter(Adapter):
                         
                 
                 elif msg.topic.endswith('/pong'):
-                    if self.DEBUG:
+                    if self.DEBUG2:
                         print("- - - message ends in /pong. A voco server is responding with IP and site_id combination")
                     
                     self.parse_ping(payload,ping_type="pong")
@@ -6265,13 +6507,12 @@ class VocoAdapter(Adapter):
         #print(str(msg))
 
 
-
     def send_mqtt_ping(self, broadcast=False, ping_type="ping",target_site_id=None):
         if self.DEBUG2:
             print("- - - About to ping or pong. Broadcast flag = " + str(broadcast))
             
-        if self.DEBUG:
-            print("- - - self.llm_stt_started: " + str(self.llm_stt_started))
+        #if self.DEBUG:
+        #    print("- - - self.llm_stt_started: " + str(self.llm_stt_started))
     
         self.update_network_info()
         if self.mqtt_connected and self.ip_address != None:
@@ -6285,7 +6526,7 @@ class VocoAdapter(Adapter):
                 
                 elif self.persistent_data['is_satellite']:
                     mqtt_ping_path = "hermes/voco/" + str(self.persistent_data['main_site_id']) + "/" + str(ping_type)
-                    if self.DEBUG:
+                    if self.DEBUG2:
                         print("- - -  sending connection check: " + str(ping_type) + " to: " + str(self.persistent_data['main_site_id']) + " at: " + str(self.persistent_data['mqtt_server']) )
                         print("\n    ---( . . . ping . . . )\n")
                         
@@ -6298,7 +6539,8 @@ class VocoAdapter(Adapter):
                             'satellite_intent_handling':self.satellite_should_act_on_intent,
                             'thing_titles':self.persistent_data['local_thing_titles'],
                             'has_stt':self.llm_stt_started,
-                            'has_assistant':self.llm_assistant_started
+                            'has_assistant':self.llm_assistant_started,
+                            'hardware_score':self.hardware_score
                             }))
                 
                 if self.DEBUG2:
@@ -6315,9 +6557,9 @@ class VocoAdapter(Adapter):
 
 
     def parse_ping(self,payload,ping_type="ping"):
-        if self.DEBUG:
+        if self.DEBUG2:
             print("\n    ( . . . pong . . . )---\n")
-        if self.DEBUG:
+        if self.DEBUG2:
             pass
             #print('in parse_ping. ping_type: ' + str(ping_type))
             #print("(own site_id: " + str(self.persistent_data['site_id']) + ")")
@@ -6336,7 +6578,24 @@ class VocoAdapter(Adapter):
             # If the message came from another controller
             if payload['siteId'] != self.persistent_data['site_id']:
             
-            
+                # find the fastest device that has LLM abilities on the network
+                if 'hardware_score' in payload and payload['hardware_score'] > self.fastest_device_score and 'has_stt' in payload and payload['has_stt'] == True and 'has_assistant' in payload and payload['has_assistant'] == True:
+                    self.fastest_device_score = payload['hardware_score']
+                    
+                    if self.llm_stt_started and self.llm_assistant_started and self.fastest_device_score < self.hardware_score:
+                        if self.DEBUG:
+                            print("setting initial fastest_device_score to my own: " + str(self.hardware_score))
+                        self.fastest_device_score = self.hardware_score
+                    
+                    if self.llm_stt_started and self.llm_assistant_started and self.fastest_device_score > self.hardware_score + 4:
+                        if self.DEBUG:
+                            print("While I have LLM features, I found a MUCH better Rasbperry Pi in the network, with a score of " + str(payload['hardware_score']) + ", it's ID is: " + str(payload['siteId']))
+                        self.fastest_device_id = payload['siteId']
+                    else:
+                        if self.DEBUG:
+                            print("Found a faster Rasbperry Pi in the network, with a score of " + str(payload['hardware_score']) + ", it's ID is: " + str(payload['siteId']))
+                
+                
                 #
                 # Learning the main_site_id of the main controller
                 #
@@ -6349,23 +6608,23 @@ class VocoAdapter(Adapter):
                 
                     #if payload['ip'] != self.ip_address and payload['ip'] == self.persistent_data['mqtt_server'] and self.persistent_data['main_site_id'] == self.persistent_data['site_id']:
                     if payload['ip'] != self.ip_address and payload['hostname'] == self.persistent_data['main_controller_hostname']: # and self.persistent_data['main_site_id'] == self.persistent_data['site_id']: # and self.persistent_data['main_site_id'] == self.persistent_data['site_id']:
-                        if self.DEBUG:
+                        if self.DEBUG2:
                             print("broadcast pong was from intented main MQTT server. This has supplied the intended main_site_id: " + str(payload['siteId']) )
                         self.persistent_data['main_controller_ip'] = payload['ip']
                         
                         if 'has_stt' in payload:
                             self.main_controller_has_stt = payload['has_stt']
-                            if self.DEBUG:
+                            if self.DEBUG2:
                                 print("self.main_controller_has_stt: " + str(self.main_controller_has_stt))
                         
                         if 'has_assistant' in payload:
                             self.main_controller_has_assistant = payload['has_assistant']
-                            if self.DEBUG:
+                            if self.DEBUG2:
                                 print("self.main_controller_has_assistant: " + str(self.main_controller_has_assistant))
                         
                         if self.persistent_data['main_site_id'] != payload['siteId']:
                             self.save_to_persistent_data = True
-                            if self.DEBUG:
+                            if self.DEBUG2:
                                 print("received the new main_site_id. Saving it.")
                                 
                         self.persistent_data['main_site_id'] = payload['siteId']
@@ -6378,7 +6637,7 @@ class VocoAdapter(Adapter):
                 #
                 
                 if payload['siteId'] == self.persistent_data['main_site_id'] and self.persistent_data['main_site_id'] != self.persistent_data['site_id']:
-                    if self.DEBUG:
+                    if self.DEBUG2:
                         print("good response from main controller")
                     
                     if self.periodic_voco_attempts > 4:
@@ -6561,7 +6820,7 @@ class VocoAdapter(Adapter):
         voice_message = ""
         word_count = 1
         
-        print("\n\n\n     ---- INTENT ----")
+        print("\n\n\n     ---- In MASTER INTENT CALLBACK ----")
         print(str(intent_message))
         print("\n\n\n")
         print("intent_message['origin']: " + str(intent_message['origin']))
@@ -6604,7 +6863,7 @@ class VocoAdapter(Adapter):
             if self.persistent_data['is_satellite'] and most_likely_intent in ['set_timer','get_timer_count','list_timers','stop_timer']: # 'get_time',  # get_time could easily be handled locally
                 if self.DEBUG:
                     print("SATELLITE: master_intent_callback: NOT HANDLING TIMERS - not adding most_likely_intent to list of intents to try")
-                return
+                
             
             elif best_confidence_score > self.confidence_score_threshold:
                 if self.llm_assistant_started and most_likely_intent == 'get_time' and 'time' not in sentence and best_confidence_score < 0.9:
@@ -10000,23 +10259,24 @@ class VocoAdapter(Adapter):
                     print("Snips actual process count mismatch. Setting should_restart_snips to True")
                 self.should_restart_snips = True
         
-                if snips_actual_processes_count > 7:
+                if snips_actual_processes_count > len(self.snips_parts):
                     if self.DEBUG:
                         print("DOING EMERGENCY KILL OF SNIPS, TOO MANY REAL PROCESSES")
                     self.set_status_on_thing("Error, too many processes")
                     os.system("pkill -f snips")
         
-            if self.persistent_data['is_satellite'] and len(self.external_processes) == 4:
-                if self.DEBUG:
-                    print("too many orphaned snips satellite processes.. something is wrong. Setting should_restart_snips to True")
-                self.should_restart_snips = True
-        
-            if len(self.external_processes) == 14:
+            # satellites now run same number of snips processes as the main controller, thanks to Raspberry Pi Zero 2.
+            #if self.persistent_data['is_satellite'] and len(self.external_processes) == 4:
+            #    if self.DEBUG:
+            #        print("too many orphaned snips satellite processes.. something is wrong. Setting should_restart_snips to True")
+            #    self.should_restart_snips = True
+            
+            if len(self.external_processes) == len(self.snips_parts) * 2:
                 if self.DEBUG:
                     print("too many orphaned snips processes.. something is wrong. Setting should_restart_snips to True")
                 self.should_restart_snips = True
             
-            if len(self.external_processes) >= 28:
+            if len(self.external_processes) >= len(self.snips_parts) * 4:
                 print("ERROR. Voco seems to be stuck in a loop where it is unable to start properly. Will try to restart the addon.")
                 self.close_proxy() #restart the addon
 
@@ -10626,7 +10886,7 @@ class VocoAdapter(Adapter):
                 print("- try_llm_stt. calling llm_stt: " + str(intent))
             before_time = time.time()
             
-            if intent != None: # and 'siteId' in intent and intent['siteId'] == self.persistent_data['site_id']: 
+            if intent != None and 'siteId' in intent and intent['siteId'] == self.persistent_data['site_id']: 
                 self.speak("One moment",intent=intent)
                 
             if self.DEBUG:
@@ -10709,7 +10969,7 @@ class VocoAdapter(Adapter):
         # TODO: these might be to stringent checks:
         elif self.llm_stt_started == False and self.mqtt_client != None and self.mqtt_connected and self.persistent_data['main_site_id'] != self.persistent_data['site_id'] and self.persistent_data['is_satellite'] == True and self.main_controller_has_stt:
             if self.DEBUG:
-                print("sending audio recording to main controller for STT via /do_stt: " + str(self.last_recording_path))
+                print("\nD O _ S T T\nsending audio recording to main controller for STT via /do_stt: " + str(self.last_recording_path))
                 
             try:
                 f=open(str(self.last_recording_path), "rb")
@@ -11279,6 +11539,8 @@ class VocoAdapter(Adapter):
                                 if len(original_voice_message) > 1 and not str(original_voice_message[:-1]) in before_assistant:
                                     if self.DEBUG:
                                         print("\nWARNING, the assistant might be halucinating a conversation?\n" + str(before_assistant) + "\n")
+                                    return
+                                        
                                 full = full.split(str(self.llm_assistant_name) + ':')[1]
                                 if self.DEBUG:
                                     print("Split full to only use the part after '" + str(self.llm_assistant_name) + ":':\n" + str(full))
