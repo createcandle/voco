@@ -387,6 +387,8 @@ class VocoAPIHandler(APIHandler):
                                             print("set_llm: wakeword")
                                         if str(self.adapter.persistent_data['llm_wakeword_model']) != str(request.body['llm_wakeword_model']):
                                             self.adapter.persistent_data['llm_wakeword_model'] = str(request.body['llm_wakeword_model'])
+                                            if self.DEBUG:
+                                                print("self.adapter.persistent_data['llm_wakeword_model'] is now: " + str(self.adapter.persistent_data['llm_wakeword_model']))
                                             self.adapter.llm_should_download = True
                                             self.adapter.restart_wakeword = True
                                     

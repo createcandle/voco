@@ -29,6 +29,8 @@
 			
 			this.previous_llm_folder_size = 0;
 			
+			this.llm_wakeword_model = 'hey_candle.tflite';
+			
 			this.llm_tts_model = null;
 			this.llm_tts_models = {};
 			
@@ -1628,7 +1630,7 @@
 
 	        ).then((body) => {
 				if(this.debug){
-                    console.log("Voco llm init response: ", body);
+                    console.log("Voco LLM init response: ", body);
                 }
 				//console.log("Voco llm init response: ", body);
 	
