@@ -58,7 +58,7 @@
         
 		<div id="extension-voco-text-commands-container" style="display:none">
 			<div id="extension-voco-text-input-container">
-				<input id="extension-voco-text-input-field" placeholder="What time is it?"/>
+				<textarea id="extension-voco-text-input-field" placeholder="What time is it?"></textarea>
 				<button id="extension-voco-text-input-send-button" class="text-button">Send</button>
 			</div>
 
@@ -381,31 +381,38 @@
 						</div>
 						-->
 						
-						<div id="extension-voco-main-llm-tts-not-running" class="extension-voco-vlak extension-voco-orange-bg">
-							<p style="text-align:center"><span class="extension-voco-unicode-icon-medium">💬</span> Text-to-Speech is not running<span id="extension-voco-main-llm-tts-error"></span></p>
-						</div>
-						<div id="extension-voco-main-llm-tts-running" class="extension-voco-vlak extension-voco-hidden extension-voco-green-bg">
-							<p style="text-align:center"><span class="extension-voco-unicode-icon-medium">💬</span> Text-to-Speech is running</p>
-						</div>
+						<div id="extension-voco-main-llm-tts-running-panel">
+							<div data-extension-voco-href="#extension-voco-main-llm-tts">
+								<div id="extension-voco-main-llm-tts-not-running" class="extension-voco-vlak extension-voco-orange-bg">
+									<p><span class="extension-voco-unicode-icon-medium">💬</span>Text-to-Speech<br/>is not running<span id="extension-voco-main-llm-tts-error"></span></p>
+								</div>
+								<div id="extension-voco-main-llm-tts-running" class="extension-voco-vlak extension-voco-green-bg">
+									<p><span class="extension-voco-unicode-icon-medium">💬</span>Text-to-Speech<br/>is running</p>
+								</div>
+							</div>
+							
+							<div data-extension-voco-href="#extension-voco-main-llm-stt">
+								<div id="extension-voco-main-llm-stt-not-running" class="extension-voco-vlak extension-voco-orange-bg">
+									<p><span class="extension-voco-unicode-icon-medium">👂</span>Speech-to-Text<br/>is not running<span id="extension-voco-main-llm-stt-error"></span></p>
+								</div>
+								<div id="extension-voco-main-llm-stt-running" class="extension-voco-vlak extension-voco-green-bg">
+									<p><span class="extension-voco-unicode-icon-medium">👂</span>Speech-to-Text<br/>is running</p>
+								</div>
+							</div>
 						
-						<div id="extension-voco-main-llm-stt-not-running" class="extension-voco-vlak extension-voco-orange-bg">
-							<p style="text-align:center"><span class="extension-voco-unicode-icon-medium">👂</span> Speech-to-Text is not running<span id="extension-voco-main-llm-stt-error"></span></p>
+							<div data-extension-voco-href="#extension-voco-main-llm-assistant">
+								<div id="extension-voco-main-llm-assistant-not-running" class="extension-voco-vlak extension-voco-orange-bg">
+									<p><span class="extension-voco-unicode-icon-medium">👾</span>AI Assistant<br/>is not running<span id="extension-voco-main-llm-assistant-error"></span></p>
+								</div>
+								<div id="extension-voco-main-llm-assistant-running" class="extension-voco-vlak extension-voco-green-bg">
+									<p><span class="extension-voco-unicode-icon-medium">👾</span>AI assistant<br/>is running</p>
+								</div>
+							</div>
 						</div>
-						<div id="extension-voco-main-llm-stt-running" class="extension-voco-vlak extension-voco-hidden extension-voco-green-bg">
-							<p style="text-align:center"><span class="extension-voco-unicode-icon-medium">👂</span> Speech-to-Text is running</p>
-						</div>
-						
-						<div id="extension-voco-main-llm-assistant-not-running" class="extension-voco-vlak extension-voco-orange-bg">
-							<p style="text-align:center"><span class="extension-voco-unicode-icon-medium">👾</span> The AI assistant is not running<span id="extension-voco-main-llm-assistant-error"></span></p>
-						</div>
-						<div id="extension-voco-main-llm-assistant-running" class="extension-voco-vlak extension-voco-hidden extension-voco-green-bg">
-							<p style="text-align:center"><span class="extension-voco-unicode-icon-medium">👾</span> The AI assistant is running</p>
-						</div>
-						
 						
 						<div id="extension-voco-main-llm-playground" class="extension-voco-vlak">
 							<h3>Playground</h3>
-							<p>The AI can do more than just chat.</p>
+							<p>The AI assistant can do more than just chat.</p>
 							
 							<div class="extension-voco-vlak">
 								<h4>Write or summarize text</h4>
@@ -427,6 +434,7 @@
 						
 						<p>&nbsp;</p>
 						
+						<a name="extension-voco-main-llm-tts"></a>
 						<div class="extension-voco-vlak">
                             
     						<h2>Voice synthesis</h2>
@@ -442,7 +450,7 @@
 							</ul>
 						</div>
 						
-                        
+                        <a name="extension-voco-main-llm-stt"></a>
 						<div class="extension-voco-vlak">
                             
     						<h2>Speech recognition</h2>
@@ -460,7 +468,7 @@
 
 						</div>
 						
-						
+						<a name="extension-voco-main-llm-assistant"></a>
 						<div class="extension-voco-vlak">
                             
     						<h2>AI assistant</h2>

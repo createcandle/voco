@@ -1329,8 +1329,8 @@ class VocoAdapter(Adapter):
                                 'description':'This is a minuscule AI model of just 156Mb in size. It will likely produce useless answers to your questions.',
                                 'model_url':'https://huggingface.co/Felladrin/gguf-TinyMistral-248M-SFT-v4/resolve/main/TinyMistral-248M-SFT-v4.Q4_K_M.gguf',
                                 'prompts':{
-                                    'system':'<|im_start|>system{system_message}<|im_end|>',
-                                    'user':'<|im_start|>user{user_prompt}<|im_end|>',
+                                    'system':'<|im_start|>system\\n{system_message}<|im_end|>',
+                                    'user':'<|im_start|>user\\n{user_prompt}<|im_end|>',
                                     'reverse':'<|im_start|>{assistant_name}',
                                     'end':'<|im_end|>'
                                 }
@@ -5131,8 +5131,7 @@ class VocoAdapter(Adapter):
                 if self.DEBUG:
                     print("Persistence file existed. Will try to save to it.")
                     print("self.persistent_data: " + str(self.persistent_data))
-                
-
+            
             test = json.dumps(self.persistent_data) # if this fails, then bad data won't be written to the persistent data file
 
             with open(self.persistence_file_path) as f:
@@ -5342,7 +5341,7 @@ class VocoAdapter(Adapter):
                 self.stop_recording()
             else:
                  if self.DEBUG:
-                     print("textCaptured -> would normally call stop recording, but audio is not being recorded? Likely a faux message. payload: " + str(payload))
+                     print("\ntextCaptured -> would normally call stop recording, but audio is not being recorded? Likely a faux message. payload: " + str(payload) + "\n")
             
             if self.persistent_data['is_satellite']:
                 #if self.DEBUG:
@@ -6403,7 +6402,7 @@ class VocoAdapter(Adapter):
         if msg.topic.startswith("hermes/voco/gettime"):
             if not self.persistent_data['is_satellite']:
                 if self.DEBUG:
-                    print("returning time to AtomEcho")
+                    print("provide time in milliseconds to AtomEcho")
                 self.mqtt_client.publish("hermes/voco/time", int(round(time.time() * 1000)))    
         
         
@@ -6966,9 +6965,9 @@ class VocoAdapter(Adapter):
                 print("confidence threshold: " + str(self.confidence_score_threshold))
                 print("\nBEST confidenceScore: " + str(best_confidence_score) + '  -> ' + str(most_likely_intent))
             
-            if self.persistent_data['is_satellite'] and most_likely_intent in ['set_timer','get_timer_count','list_timers','stop_timer']: # 'get_time',  # get_time could easily be handled locally
-                if self.DEBUG:
-                    print("SATELLITE: master_intent_callback: NOT HANDLING TIMERS - not adding most_likely_intent to list of intents to try")
+            #if self.persistent_data['is_satellite'] and most_likely_intent in ['set_timer','get_timer_count','list_timers','stop_timer']: # 'get_time',  # get_time could easily be handled locally
+            #    if self.DEBUG:
+            #        print("SATELLITE: master_intent_callback: NOT HANDLING TIMERS - not adding most_likely_intent to list of intents to try")
                 
             
             elif best_confidence_score > self.confidence_score_threshold:
@@ -6976,11 +6975,13 @@ class VocoAdapter(Adapter):
                     if self.DEBUG:
                         print("Skipping testing get_time intent that doesn't have the word 'time' in it because the assistant is running")
                 else:
-                    if self.persistent_data['is_satellite'] and most_likely_intent in ['get_time','set_timer','get_timer_count','list_timers','stop_timer']:
-                        if self.DEBUG:
-                            print("SATELLITE: master_intent_callback: NOT HANDLING most likely timer-related intent") # TODO: even though doing so would make sense..
-                    else:
-                        all_possible_intents.append(most_likely_intent)
+                    #if self.persistent_data['is_satellite'] and most_likely_intent in ['get_time','set_timer','get_timer_count','list_timers','stop_timer']:
+                    #    if self.DEBUG:
+                    #        print("SATELLITE: master_intent_callback: NOT HANDLING most likely timer-related intent") # TODO: even though doing so would make sense..
+                    #else:
+                    #    all_possible_intents.append(most_likely_intent)
+                    
+                    all_possible_intents.append(most_likely_intent)
             
             if 'alternatives' in intent_message:
                 index = 0
@@ -6995,13 +6996,15 @@ class VocoAdapter(Adapter):
                             if self.DEBUG:
                                 print("Skipping get_time intent that doesn't have the word 'time' in it because the assistant is running")
                         elif alt_intent_name != 'None':
-                            if self.persistent_data['is_satellite'] and alt_intent_name in ['get_time','set_timer','get_timer_count','list_timers','stop_timer']:
-                                if self.DEBUG:
-                                    print("SATELLITE: master_intent_callback: NOT HANDLING alt TIMERS") # TODO: but handling them if the most likely intent??
-                            else:
-                                if self.DEBUG:
-                                    print(" -  adding to list of intents to test")
-                                all_possible_intents.append( alt_intent_name )
+                            #if self.persistent_data['is_satellite'] and alt_intent_name in ['get_time','set_timer','get_timer_count','list_timers','stop_timer']:
+                            #    if self.DEBUG:
+                            #        print("SATELLITE: master_intent_callback: NOT HANDLING alt TIMERS") # TODO: but handling them if the most likely intent??
+                            #else:
+                            #    if self.DEBUG:
+                            #        print(" -  adding to list of intents to test")
+                            #    all_possible_intents.append( alt_intent_name )
+                            all_possible_intents.append( alt_intent_name )
+                            
                         else:
                             if self.DEBUG:
                                 print("Strange, intent is None?")
@@ -11046,7 +11049,7 @@ class VocoAdapter(Adapter):
         
         
         
-        if self.llm_enabled and self.llm_stt_enabled and self.llm_stt_started:
+        elif self.llm_enabled and self.llm_stt_enabled and self.llm_stt_started:
             try:
                 # Check if the LLM STT server is still running OK
                 if self.llm_stt_process == None:
@@ -11080,7 +11083,7 @@ class VocoAdapter(Adapter):
                 # Direct command input from microphone. Doesnt work because the microphone is already taken. Also, focusses more on a limited list of words/commands.
                 # https://github.com/ggerganov/whisper.cpp/blob/master/examples/command/command.cpp
                 #stt_command = str(os.path.join(self.addon_dir_path,'llm','stt', 'command')) + " -m " + str(os.path.join(self.llm_stt_dir_path, str(self.persistent_data['llm_stt_model']))) + " -ac 768 -t 3 -c 0"
-            
+                
                 #stt_command = 'curl http://localhost:' + str(self.llm_stt_port) + '/inference -H "Content-Type: multipart/form-data" -F file="@' + str(self.last_recording_path) + '" -F temperature="0.2" -F temperature_inc="0.2" -F response_format="json"'
                 stt_command = 'curl http://localhost:' + str(self.llm_stt_port) + '/inference -H "Content-Type: multipart/form-data" -F file="@' + str(self.last_recording_path) + '" -F temperature="0.2" -F temperature_inc="0.2" -F response_format="json"'  # ' + str(self.persistent_data['main_controller_ip']) + '
                 if self.DEBUG:
@@ -11088,9 +11091,13 @@ class VocoAdapter(Adapter):
                     #print("\n⏰\nSTT START STOPWATCH: + " + str(time.time() - self.llm_stt_stopwatch) + ', ' + str(time.time() - self.llm_stt_stopwatch_start))
                     #self.llm_stt_stopwatch = time.time()  
             
-                stt_result = run_command(stt_command,30) # If this takes more than 30 seconds..
-                #self.llm_stt_stopwatch = time.time() - self.llm_stt_stopwatch
-                self.parse_llm_stt_result(stt_result, intent)
+                if os.path.exists(str(self.last_recording_path)):
+                    stt_result = run_command(stt_command,30) # If this takes more than 30 seconds..
+                    #self.llm_stt_stopwatch = time.time() - self.llm_stt_stopwatch
+                    self.parse_llm_stt_result(stt_result, intent)
+                else:
+                    if self.DEBUG:
+                        print("\nERROR, STT wanted to parse an audio file that does not exist: " + str(self.last_recording_path))
             
             except Exception as ex:
                 print("llm_stt: Error in curl-querying STT: " + str(ex))
@@ -11236,6 +11243,7 @@ class VocoAdapter(Adapter):
         except Exception as ex:
             if self.DEBUG:
                 print("Error parsing STT server result, invalid json? Error: " + str(ex))
+                print("- intent: " + str(intent))
             self.llm_stt_sentence = ''
             if self.try_again_via_stt or self.try_again_via_assistant:
                 if intent != None and 'siteId' in intent and intent['siteId'] != self.persistent_data['site_id']:
@@ -11369,24 +11377,30 @@ class VocoAdapter(Adapter):
             #os.killpg(os.getpgid(self.llm_assistant_process.pid), signal.SIGTERM)
             #time.sleep(1)
             
-            if self.llm_assistant_process.poll() == None:
+            
+            
+            
+            try: 
+                outs, errs = self.llm_assistant_process.communicate(timeout=3)
+            except Exception as ex:
                 if self.DEBUG:
-                    print("\n\nERROR, AI ASSISTANT PROCESS IS STILL ALIVE\n\n")
-                
+                    print("start_ai_assistant: attempt to nicely stop existing assistant process failed with ERROR: " + str(ex))
                 try: 
-                    outs, errs = self.llm_assistant_process.communicate(timeout=3)
-                except TimeoutExpired:
-                    if self.DEBUG:
-                        print("AI ASSISTANT PROCESS COMMUNICATE TIMED OUT")
                     self.llm_assistant_process.kill()
                     outs, errs = self.llm_assistant_process.communicate(timeout=1)
+                except Exception as ex:
+                    if self.DEBUG:
+                        print("Second follow-up attempt to less nicely stop existing assistant process also failed, with error: " + str(ex))
                 
+            if self.llm_assistant_process.poll() == None:
+                if self.DEBUG:
+                    print("start_ai_assistant: using pkill to stop existing assistant process...")
+                os.system('pkill -f ' + str(self.llm_assistant_binary_name))
             else:
                 if self.DEBUG:
                     print("AI ASSISTANT PROCESS SEEMS TO HAVE STOPPED PROPERLY")
-                self.llm_assistant_process = None
-                
-        os.system('pkill -f ' + str(self.llm_assistant_binary_name))
+            
+            self.llm_assistant_process = None
         
         self.llm_assistant_response_count = 0
         

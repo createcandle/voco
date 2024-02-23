@@ -627,6 +627,7 @@ body #extension-voco-view .extension-voco-tab-selected{
 
 #extension-voco-text-input-field{
     margin:0;
+	height:2.8rem;
 	padding: 1rem 1.3rem;
 	font-size: 2rem;
 	min-width:20rem;
@@ -635,6 +636,7 @@ body #extension-voco-view .extension-voco-tab-selected{
 	border-bottom-left-radius: .5rem;
 	border: none;
 	outline: none;
+	font-family:inherit;
 }
 
 
@@ -1060,6 +1062,15 @@ f
 	display:none;
 }
 
+
+#extension-voco-main-llm-tts-running,
+#extension-voco-main-llm-stt-running,
+#extension-voco-main-llm-assistant-running{
+	display:none;
+}
+
+
+
 .extension-voco-tts-running #extension-voco-main-llm-tts-running,
 .extension-voco-stt-running #extension-voco-main-llm-stt-running,
 .extension-voco-assistant-running #extension-voco-main-llm-assistant-running,
@@ -1107,6 +1118,30 @@ f
 	bottom:2rem;
 	right:12rem;
 }
+
+
+
+
+#extension-voco-main-llm-tts-running-panel{
+	display:flex;
+	justify-content:space-between;
+}
+#extension-voco-main-llm-tts-running-panel > div{
+	position:relative;
+	overflow:hidden;
+}
+#extension-voco-main-llm-tts-running-panel > div:not(:last-of-type){
+	margin-left:1rem;
+}
+#extension-voco-main-llm-tts-running-panel .extension-voco-unicode-icon-medium{
+    position: absolute;
+    opacity: .2;
+    left: 0;
+    top: 7rem;
+    font-size: 13rem;
+}
+
+
 
 
 /*  spinner  */
