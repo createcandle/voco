@@ -79,6 +79,9 @@ mkdir -p lib package
 #pip3 install -r requirements.txt -t lib --no-binary :all: --prefix "" --default-timeout=180 --upgrade
 pip3 install -r requirements.txt -t lib --no-cache-dir --prefix "" --default-timeout=180 --upgrade
 
+mkdir -p ./lib/openwakeword/resources/models
+cp ./llm/wakeword/open_wake_word/* ./lib/openwakeword/resources/models/
+
 # Remove local cffi so that the globally installed version doesn't clash
 #rm -rf ./lib/cffi*
 
