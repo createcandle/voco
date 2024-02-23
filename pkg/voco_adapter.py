@@ -171,7 +171,7 @@ class VocoAdapter(Adapter):
         #print(str( os.path.join(os.path.dirname(os.path.abspath(__file__)), 'lib') ))
         self.pairing = False
         self.DEBUG = False
-        self.DEBUG2 = False # TODO: TEMPORARY EXTRA DEBUG INFO
+        self.DEBUG2 = True # TODO: TEMPORARY EXTRA DEBUG INFO
         self.DEV = False # not used anymore?
         self.addon_name = 'voco'
         self.name = self.__class__.__name__ # VocoAdapter
@@ -349,8 +349,10 @@ class VocoAdapter(Adapter):
         self.device_pi_version = 3
         if 'aspberry' in self.device_model:
             self.device_pi_version = int(self.device_model.split()[2])
+            print("self.device_pi_version: " + str(self.device_pi_version))
         #print("Rasbperry Pi version: " + str(self.device_pi_version))
         self.hardware_score = self.device_pi_version * 5
+        print("pi model based hardware_score: " + str(self.hardware_score))
         
         # Could try to generate audio files for common voice responses, to speed up these parts.
         
@@ -6670,6 +6672,8 @@ class VocoAdapter(Adapter):
             if payload['siteId'] != self.persistent_data['site_id']:
                 
                 if str(payload['siteId']) == str(self.fastest_device_id):
+                    if self.DEBUG:
+                        print("got ping from fastest device: " + str(payload['siteId']))
                     self.fastest_device_last_ping_time = time.time()
                 
                 # find the fastest device that has LLM abilities on the network
@@ -6678,7 +6682,7 @@ class VocoAdapter(Adapter):
                     
                     if self.llm_stt_started and self.llm_assistant_started and self.fastest_device_score < self.hardware_score:
                         if self.DEBUG:
-                            print("setting initial fastest_device_score to my own: " + str(self.hardware_score))
+                            print("The other device is slower. setting initial fastest_device_score to my own: " + str(self.hardware_score))
                         self.fastest_device_score = self.hardware_score
                     
                     if self.llm_stt_started and self.llm_assistant_started and self.fastest_device_score > self.hardware_score + 4:
@@ -6827,6 +6831,7 @@ class VocoAdapter(Adapter):
             #    self.save_persistent_data()
 
             if self.DEBUG:
+                print("self.hardware_score: " + str(self.hardware_score))
                 print("self.fastest_device_score: " + str(self.fastest_device_score))
 
             # TODO: trigger the injection mechanism here, so that new names are learnt as quickly as possible? Maybe turn of the timed injection from the clock in that case (if is_satellite or if at lest one satellites is connected in case of being a main controller)
@@ -11398,6 +11403,8 @@ class VocoAdapter(Adapter):
                 if self.llm_models['assistant']['prompts'] and 'system' in self.llm_models['assistant']['prompts']:
                     
                     assistant_prompt = self.llm_models['assistant']['prompts']['system'].replace('{system_message}', assistant_prompt)
+                    
+                    assistant_prompt = "'" + assistant_prompt + "'"
                     
                     #self.llm_assistant_prompt = "'The following is a conversation between a curious Researcher and their helpful AI assistant called " + str(self.llm_assistant_name) + ", which is a large language model trained on the sum of human knowledge. \n\n Researcher: What is the capital of Germany? \n" + str(self.llm_assistant_name) +": Berlin is the capital of Germany. \nResearcher:'"
                 
