@@ -10970,7 +10970,7 @@ class VocoAdapter(Adapter):
             self.llm_tts_process = Popen(tts_command, env=my_env, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,bufsize=1,shell=True) # ,preexec_fn=os.setsid
             if self.llm_tts_process.poll() == None:
                 if self.DEBUG:
-                    print("LLM TTS PROCESS STARTED SUCCESFULLY")
+                    print("\n\n\n[OK]\nLLM TTS PROCESS STARTED SUCCESFULLY")
                 self.llm_tts_started = True
 
             else:
@@ -11319,7 +11319,7 @@ class VocoAdapter(Adapter):
                 if self.llm_stt_process.poll() == None:
                     self.llm_stt_started = True
                     if self.DEBUG:
-                        print("\n\n\nLLM STT process started succesfully\n\n\n")
+                        print("\n\n\n[OK]\nLLM STT process started succesfully\n\n\n")
                 else:
                     if self.DEBUG:
                         print("\n\n\nLLM STT process immediately crashed! return code: " + str(self.llm_stt_process.returncode) + "\n\n\n")
@@ -11494,7 +11494,7 @@ class VocoAdapter(Adapter):
                     time.sleep(.1)
                     if self.llm_assistant_process.poll() == None:
                         if self.DEBUG:
-                            print("\n\n\nLLM Assistant process started succesfully\n\n\n")
+                            print("\n\n\n[OK]\nLLM Assistant process started succesfully\n\n\n")
                         self.llm_assistant_started = True
                     else:
                         if self.DEBUG:
