@@ -333,7 +333,7 @@ class VocoAPIHandler(APIHandler):
                                     print('ajax handling llm init')
                                 
                                 self.adapter.check_available_memory()
-                                self.adapter.check_possible_wakewords()
+                                #self.adapter.check_possible_wakewords()
                                 
                                 
                                 return APIResponse(
@@ -383,14 +383,16 @@ class VocoAPIHandler(APIHandler):
                                 try:
                                     
                                     if 'llm_wakeword_model' in request.body:
-                                        
+                                        if self.DEBUG:
+                                            print("set_llm: wakeword")
                                         if str(self.adapter.persistent_data['llm_wakeword_model']) != str(request.body['llm_wakeword_model']):
                                             self.adapter.persistent_data['llm_wakeword_model'] = str(request.body['llm_wakeword_model'])
                                             self.adapter.llm_should_download = True
                                             self.adapter.restart_wakeword = True
                                     
                                     if 'llm_tts_model' in request.body:
-                                        
+                                        if self.DEBUG:
+                                            print("set_llm: TTS")
                                         if self.adapter.persistent_data['llm_tts_model'] != str(request.body['llm_tts_model']):
                                             self.adapter.persistent_data['llm_tts_model'] = str(request.body['llm_tts_model'])
                                             self.adapter.llm_should_download = True
@@ -398,10 +400,14 @@ class VocoAPIHandler(APIHandler):
                                             #self.adapter.download_llm_models()
                                     
                                     if 'llm_stt_model' in request.body:
+                                        if self.DEBUG:
+                                            print("set_llm: STT")
                                         self.adapter.persistent_data['llm_stt_model'] = str(request.body['llm_stt_model'])
                                         self.adapter.llm_should_download = True
                                         
                                     if 'llm_assistant_model' in request.body:
+                                        if self.DEBUG:
+                                            print("set_llm: Assistant")
                                         self.adapter.persistent_data['llm_assistant_model'] = str(request.body['llm_assistant_model'])
                                         self.adapter.llm_should_download = True
                                     

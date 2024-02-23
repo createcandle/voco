@@ -3690,10 +3690,10 @@ class VocoAdapter(Adapter):
 
     
     
-    def check_possible_wakewords(self):
-        self.possible_wakewords = [
-            os.path.join()
-        ]
+    #def check_possible_wakewords(self):
+    #    self.possible_wakewords = [
+    #        os.path.join()
+    #    ]
         
         
 
