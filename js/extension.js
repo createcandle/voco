@@ -1032,7 +1032,7 @@
             }
             else{
                 //console.log("starting poll");
-                document.getElementById('extension-voco-main-controller-not-responding').style.display = 'none';
+                
             }
             
             var refresh_chat_members = false
@@ -1055,10 +1055,14 @@
                     console.log("Voco: debug: interval: poll response: ", body);
                 }
 				this.attempts = 0;
+				document.getElementById('extension-voco-main-controller-not-responding').style.display = 'none';
+				
 				//console.log(body['items']);
 				if(body['state'] == true){
 					this.items_list = body['items'];
 					this.current_time = body['current_time'];
+					
+					
 					
                     if(body['is_satellite'] == false){
                         if(body['initial_injection_completed']){
@@ -1314,7 +1318,10 @@
 				if(typeof body.llm_not_enough_disk_space != 'undefined'){
 					const low_disk_el = document.getElementById('extension-voco-main-low-disk-space-warning');
 					if(low_disk_el){
-						if(body.llm_not_enough_disk_space){
+						if(body.llm_not_enough_disk_space == true){
+							if(this.debug){
+								console.warn("Not enough free disk space to download LLM models");
+							}
 							low_disk_el.style.display = 'block';
 						}
 						else{

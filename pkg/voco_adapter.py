@@ -895,7 +895,7 @@ class VocoAdapter(Adapter):
         self.custom_wakeword_model_path = os.path.join(self.wakeword_data_dir,'custom.tflite')
         #print("self.hey_candle_wakeword_model_path: " + str(self.hey_candle_wakeword_model_path))
         
-        if not os.path.exists(self.wakeword_data_dir):
+        if not os.path.isdir(self.wakeword_data_dir):
             os.system('mkdir -p ' + str(self.wakeword_data_dir))
         if not os.path.exists(self.hey_candle_wakeword_model_path):
             print("\nERROR, missing hey_candle wakeword model")
@@ -1122,7 +1122,6 @@ class VocoAdapter(Adapter):
         if 'token' in self.persistent_data:
             self.token = self.persistent_data['token']
         
-        
         if 'chatting' not in self.persistent_data:
             self.persistent_data['chatting'] = True
         
@@ -1169,7 +1168,7 @@ class VocoAdapter(Adapter):
         
         if self.use_open_wakeword == False:
             if self.DEBUG:
-                print("Using openwakeword")
+                print("Not using openwakeword")
             #self.snips_parts.append('snips-hotword')
         else:
             if self.DEBUG:
@@ -1330,9 +1329,9 @@ class VocoAdapter(Adapter):
                                 'description':'This is a minuscule AI model of just 156Mb in size. It will likely produce useless answers to your questions.',
                                 'model_url':'https://huggingface.co/Felladrin/gguf-TinyMistral-248M-SFT-v4/resolve/main/TinyMistral-248M-SFT-v4.Q4_K_M.gguf',
                                 'prompts':{
-                                    'system':'<|im_start|>system\n{system_message}<|im_end|>',
-                                    'user':'<|im_start|>user\n{prompt}<|im_end|>',
-                                    'reverse':'<|im_start|>assistant\n',
+                                    'system':'<|im_start|>system{system_message}<|im_end|>',
+                                    'user':'<|im_start|>user{user_prompt}<|im_end|>',
+                                    'reverse':'<|im_start|>{assistant_name}',
                                     'end':'<|im_end|>'
                                 }
                             },
@@ -1346,9 +1345,9 @@ class VocoAdapter(Adapter):
                                 'description':'This is a minuscule AI model of just 500Mb in size. It makes many mistakes and does not contain a lot of knowledge, but it might be fun to try on low-memory systems.',
                                 'model_url':'https://huggingface.co/jartine/TinyLlama-1.1B-Chat-v1.0-GGUF/resolve/main/TinyLlama-1.1B-Chat-v1.0.Q2_K.gguf',
                                 'prompts':{
-                                    'system':'<|im_start|>system\n{system_message}<|im_end|>',
-                                    'user':'<|im_start|>user\n{prompt}<|im_end|>',
-                                    'reverse':'<|im_start|>assistant\n',
+                                    'system':'<|im_start|>system{system_message}<|im_end|>',
+                                    'user':'<|im_start|>user{user_prompt}<|im_end|>',
+                                    'reverse':'<|im_start|>{assistant_name}',
                                     'end':'<|im_end|>'
                                 }
                             },
@@ -1357,9 +1356,9 @@ class VocoAdapter(Adapter):
                                 'description':'A 700Mb model which contains slightly more knowledge. The default.',
                                 'model_url':'https://huggingface.co/TheBloke/TinyLlama-1.1B-1T-OpenOrca-GGUF/resolve/main/tinyllama-1.1b-1t-openorca.Q4_K_M.gguf',
                                 'prompts':{
-                                    'system':'<|im_start|>system\n{system_message}<|im_end|>',
-                                    'user':'<|im_start|>user\n{prompt}<|im_end|>',
-                                    'reverse':'<|im_start|>assistant\n',
+                                    'system':'<|im_start|>system{system_message}<|im_end|>',
+                                    'user':'<|im_start|>user{user_prompt}<|im_end|>',
+                                    'reverse':'<|im_start|>{assistant_name}',
                                     'end':'<|im_end|>'
                                 }
                             },
@@ -1368,9 +1367,9 @@ class VocoAdapter(Adapter):
                                 'description':'Named after the small but powerful Rocket in the Guardians of the Galaxy movies.',
                                 'model_url':'https://huggingface.co/TheBloke/rocket-3B-GGUF/resolve/main/rocket-3b.Q5_K_M.gguf',
                                 'prompts':{
-                                    'system':'<|im_start|>system\n{system_message}<|im_end|>',
-                                    'user':'<|im_start|>user\n{prompt}<|im_end|>',
-                                    'reverse':'<|im_start|>assistant\n',
+                                    'system':'<|im_start|>system{system_message}<|im_end|>',
+                                    'user':'<|im_start|>user{user_prompt}<|im_end|>',
+                                    'reverse':'<|im_start|>{assistant_name}',
                                     'end':'<|im_end|>'
                                 }
                             },
@@ -1391,9 +1390,9 @@ class VocoAdapter(Adapter):
                                 'description':'Based on the Phi-2 model made by Microsoft. It was mostly trained on educational textbooks, so it could help with school homework. It might give long-winded answers.',
                                 'model_url':'https://huggingface.co/TheBloke/dolphin-2_6-phi-2-GGUF/resolve/main/dolphin-2_6-phi-2.Q4_K_M.gguf',
                                 'prompts':{
-                                    'system':'<|im_start|>system\n{system_message}<|im_end|>',
-                                    'user':'<|im_start|>user\n{prompt}<|im_end|>',
-                                    'reverse':'<|im_start|>assistant\n',
+                                    'system':'<|im_start|>system{system_message}<|im_end|>',
+                                    'user':'<|im_start|>user{user_prompt}<|im_end|>',
+                                    'reverse':'<|im_start|>{assistant_name}',
                                     'end':'<|im_end|>'
                                 }
                             },
@@ -1414,9 +1413,9 @@ class VocoAdapter(Adapter):
                                 'description':'The OpenHermes version of the popular Mistral 7B model. Supposedly contains a lot of useful information.',
                                 'model_url':'https://huggingface.co/TheBloke/OpenHermes-2.5-Mistral-7B-GGUF/resolve/main/openhermes-2.5-mistral-7b.Q4_K_M.gguf',
                                 'prompts':{
-                                    'system':'<|im_start|>system\n{system_message}<|im_end|>',
-                                    'user':'<|im_start|>user\n{prompt}<|im_end|>',
-                                    'reverse':'<|im_start|>assistant\n',
+                                    'system':'<|im_start|>system{system_message}<|im_end|>',
+                                    'user':'<|im_start|>user{user_prompt}<|im_end|>',
+                                    'reverse':'<|im_start|>{assistant_name}',
                                     'end':'<|im_end|>'
                                 }
                             },
@@ -1449,9 +1448,9 @@ class VocoAdapter(Adapter):
                              'description':'Advanced users may provide a link to a .GUFF model that supports ChatML in the addon settings, and Voco will download it. You will need to make sure there is enough available disk space and memory yourself.',
                              'model_url':'custom',
                              'prompts':{
-                                 'system':'<|im_start|>system\n{system_message}<|im_end|>',
-                                 'user':'<|im_start|>user\n{prompt}<|im_end|>',
-                                 'reverse':'<|im_start|>assistant\n',
+                                 'system':'<|im_start|>system{system_message}<|im_end|>',
+                                 'user':'<|im_start|>user{user_prompt}<|im_end|>',
+                                 'reverse':'<|im_start|>{assistant_name}',
                                  'end':'<|im_end|>'
                              }
                          }
@@ -1460,12 +1459,7 @@ class VocoAdapter(Adapter):
         
         
         
-        self.llm_models = { 
-                            'wakeword': {'list':self.llm_wakeword_models,'active':None},
-                            'tts': {'list':self.llm_tts_models,'active':None},
-                            'stt': {'list':self.llm_stt_models,'active':None},
-                            'assistant': {'list':self.llm_assistant_models,'active':None,'prompts':self.llm_assistant_models['Custom']['prompts']}
-                        }
+        
                         
                         
                         
@@ -1475,6 +1469,13 @@ class VocoAdapter(Adapter):
                 print("Detected custom wakeword")
             self.llm_wakeword_models['Custom']['downloaded'] = True
         
+        
+        self.llm_models = { 
+                            'wakeword': {'list':self.llm_wakeword_models,'active':None},
+                            'tts': {'list':self.llm_tts_models,'active':None},
+                            'stt': {'list':self.llm_stt_models,'active':None},
+                            'assistant': {'list':self.llm_assistant_models,'active':None,'prompts':self.llm_assistant_models['Custom']['prompts']}
+                        }
         
         
         if self.DEBUG:
@@ -2849,12 +2850,12 @@ class VocoAdapter(Adapter):
             else:
                 if self.llm_tts_process == None or (self.llm_tts_process != None and self.llm_tts_process.poll() != None):
                     if self.DEBUG:
-                        print("LLM TTS Process needs to be (re)started first")
+                        print("llm_speak: LLM TTS Process needs to be (re)started first")
                     self.start_llm_tts()
                 
                 if self.llm_tts_process.poll() == None:
                     if self.DEBUG:
-                        print("LLM TTS Process is running")
+                        print("llm_speak: LLM TTS Process is running")
                     json_voice_message = '{ "text": "' + str(voice_message).replace('"', '\\"') + '","volume_level":"' + str( int(self.persistent_data['speaker_volume'])/100) + '"}\n'
                     if self.DEBUG: 
                         print("piping json into Piper: " + str(json_voice_message))
@@ -10681,14 +10682,14 @@ class VocoAdapter(Adapter):
                 
                 #self.current_model_paths[key] = None #self['llm_' + key + '_model'] = None
                 
-                self.llm_models[key]['active'] = None
+                #self.llm_models[key]['active'] = None
                 
                 # get url to download
                 #for tts_name, tts_details in self.llm_tts_models.items():
                 for model_name in self.llm_models[key]['list']:
                     model_file_test_path = os.path.join(self.llm_data_dir_path, key, self.llm_models[key]['list'][model_name]['model'])
                     if self.DEBUG:
-                        print("\nmodel_file_test_path: " + str(model_file_test_path))
+                        print("\n" + str(key) + ", model_file_test_path: " + str(model_file_test_path))
                     model_file_size = 1000
                     if 'size' in self.llm_models[key]['list'][model_name]:
                         model_file_size = self.llm_models[key]['list'][model_name]['size']
@@ -10706,8 +10707,12 @@ class VocoAdapter(Adapter):
                             print(key + " uses voco only")
                         self.llm_models[key]['active'] = None
                     else:
+                        if self.DEBUG:
+                            print("download_llm_models: checking model: " + str(self.llm_models[key]['list'][model_name]['model']) + " =?= " + str(self.persistent_data[persistent_key]))
                         if self.llm_models[key]['list'][model_name]['model'] == str(self.persistent_data[persistent_key]) and self.llm_models[key]['list'][model_name]['model_url'].startswith('http'):
                             if not os.path.exists(model_file_test_path):
+                                if self.DEBUG:
+                                    print("Prefered LLM model has not been downloaded (yet): " + str(model_file_test_path))
                                 if self.free_disk_space > model_file_size:
                                     if self.DEBUG:
                                         print("DOWNLOADING MODEL: " + str(model_file_test_path))
@@ -10806,6 +10811,7 @@ class VocoAdapter(Adapter):
                 
             
             # TODO: satellites should be allowed to run their own STT and Assistant if they are powerful enough.
+            """
             if self.persistent_data['is_satellite'] == True:
                 if self.llm_stt_started:
                     
@@ -10817,6 +10823,7 @@ class VocoAdapter(Adapter):
                 if self.DEBUG:
                     print("BREAKING OUT OF LLM SERVERS WHILE LOOP")
                 break
+            """
                 
             self.assistant_loop_counter += 1
             if self.assistant_loop_counter == self.llm_servers_watchdog_interval:
@@ -11279,7 +11286,8 @@ class VocoAdapter(Adapter):
         
         if self.llm_enabled and self.llm_stt_enabled:
             if self.free_memory > self.llm_stt_minimal_memory:
-            
+                if self.DEBUG:
+                    print("- Enough memory to start STT server")
                 my_env = os.environ.copy()
         
                 #'--audio_ctx',
@@ -11399,12 +11407,18 @@ class VocoAdapter(Adapter):
         if self.llm_enabled and self.llm_assistant_enabled:
             if self.free_memory > self.llm_assistant_minimal_memory:
         
-                assistant_prompt = self.llm_assistant_prompt.replace("{assistant_name}", self.llm_assistant_name)
+                if self.llm_models['assistant']['active'] == None:
+                    if self.DEBUG:
+                        print("\nError, active assistant model was set to None, cannot start assistant\n")
+                    return
+                
                 if self.llm_models['assistant']['prompts'] and 'system' in self.llm_models['assistant']['prompts']:
                     
+                    assistant_prompt = self.llm_assistant_prompt.replace("{assistant_name}", self.llm_assistant_name)
                     assistant_prompt = self.llm_models['assistant']['prompts']['system'].replace('{system_message}', assistant_prompt)
-                    
                     assistant_prompt = "'" + assistant_prompt + "'"
+                    
+                    reverse_prompt = self.llm_models['assistant']['prompts']['reverse'].replace("{assistant_name}", self.llm_assistant_name)
                     
                     #self.llm_assistant_prompt = "'The following is a conversation between a curious Researcher and their helpful AI assistant called " + str(self.llm_assistant_name) + ", which is a large language model trained on the sum of human knowledge. \n\n Researcher: What is the capital of Germany? \n" + str(self.llm_assistant_name) +": Berlin is the capital of Germany. \nResearcher:'"
                 
@@ -11450,7 +11464,7 @@ class VocoAdapter(Adapter):
                         "--in-suffix",
                         "'" + str(self.llm_assistant_name) + ":'",
                         "--reverse-prompt",
-                        "'" + str(self.llm_models['assistant']['prompts']['reverse']) + "'"
+                        "'" + str(reverse_prompt) + "'"
                     ]
                     # "--silent-prompt",
 
@@ -11473,7 +11487,7 @@ class VocoAdapter(Adapter):
         
                     assistant_command = ' '.join(assistant_command)
                     if self.DEBUG:
-                        print("llamafile assistant_command: " + str(assistant_command))
+                        print("\nLLM assistant_command: " + str(assistant_command))
         
                 
                     self.llm_assistant_process = Popen(assistant_command, env=my_env, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,bufsize=100,shell=True) # preexec_fn=os.setsid
@@ -11583,7 +11597,7 @@ class VocoAdapter(Adapter):
             
         if self.llm_models['assistant']['prompts']:
             if 'user' in self.llm_models['assistant']['prompts']:
-                voice_message = self.llm_models['assistant']['prompts']['user'].replace('{prompt}', voice_message)
+                voice_message = self.llm_models['assistant']['prompts']['user'].replace('{user_prompt}', voice_message)
         
         #if self.llm_assistant_reverse_prompt_was_spotted == False:
         #    if self.DEBUG:
@@ -11685,7 +11699,8 @@ class VocoAdapter(Adapter):
                             print("\n\nstamp changed. ⏰ stopwatch:" + str(time.time() - self.llm_stt_stopwatch_start))
                         #self.lock.release()
                 
-                
+                        reverse_prompt = str(self.llm_models['assistant']['prompts']['reverse'].replace("{assistant_name}", self.llm_assistant_name))
+                        
                         with open('/tmp/assistant_output.txt', "r") as f:
                             #content = f.readlines()
                             #full = ''.join(content)
@@ -11701,10 +11716,10 @@ class VocoAdapter(Adapter):
                                     print("spotted two consecutive newlines in a row in full STT output")
                                 full = full.split('\n\n')[0]
                     
-                            if str(self.llm_models['assistant']['prompts']['reverse']) != '' and full.startswith(str(self.llm_models['assistant']['prompts']['reverse'])):
-                                full = full[len(str(self.llm_models['assistant']['prompts']['reserve'])):]
+                            if reverse_prompt != '' and full.startswith(reverse_prompt):
+                                full = full[len(reverse_prompt):]
                                 if self.DEBUG:
-                                    print("Stripped '" + str(self.llm_models['assistant']['prompts']['user']) + "' from beginning of full:\n" + str(full))
+                                    print("Stripped '" + str(reverse_prompt) + "' from beginning of full:\n" + str(full))
                                     
                             if str(self.llm_assistant_name) + ':' in full:
                                 # sometimes the assistant halucinates another question by the user
@@ -11733,7 +11748,7 @@ class VocoAdapter(Adapter):
                                 if self.DEBUG:
                                     print("line count: " + str(line_count))
                                     
-                                if str(self.llm_models['assistant']['prompts']['reverse']) in full:
+                                if reverse_prompt in full:
                                     self.llm_assistant_reverse_prompt_was_spotted = True
                                     line_count += 1
                                     
@@ -11749,11 +11764,13 @@ class VocoAdapter(Adapter):
                                         print(str(line_index) + ". line: " + str(line))
                                     if line_index < line_count:
                                         
-                                        if str(self.llm_models['assistant']['prompts']['reverse']) in line:
-                                            line = line.split(str(self.llm_models['assistant']['prompts']['reverse']))[0]
+                                        if reverse_prompt in line:
+                                            line = line.split(reverse_prompt)[0]
                                             line = line.strip()
                                         
                                         if str(self.llm_models['assistant']['prompts']['end']) in line:
+                                            if self.DEBUG:
+                                                print("\nSPOTTED END OF LLM ASSISTANT RESPONSE IN LINE: " + str(self.llm_models['assistant']['prompts']['end']))
                                             line = line.split(str(self.llm_models['assistant']['prompts']['end']))[0]
                                             line = line.strip()
                                         
@@ -11777,9 +11794,9 @@ class VocoAdapter(Adapter):
                                 
                     
                             #if full.endswith('Researcher:') or full.endswith('Researcher: '):
-                            if str(self.llm_models['assistant']['prompts']['reverse']) in full and not full.startswith(str(self.llm_models['assistant']['prompts']['reverse'])):
+                            if reverse_prompt in full and not full.startswith(reverse_prompt):
                                 if self.DEBUG:
-                                    print("REVERSE PROMPT IN OUTPUT")
+                                    print("REVERSE PROMPT IN OUTPUT (but not at the beginning of the response, which is good)")
                                     print("DONE!")
                                 break
                                 
@@ -11945,7 +11962,7 @@ class VocoAdapter(Adapter):
                     
                     if self.llm_models['assistant']['prompts']:
                         if 'user' in self.llm_models['assistant']['prompts']:
-                            prompt = self.llm_models['assistant']['prompts']['user'].replace('{prompt}',prompt)
+                            prompt = self.llm_models['assistant']['prompts']['user'].replace('{user_prompt}',prompt)
                     
                     generate_text_command = [
                         str(self.llm_assistant_binary_path),
