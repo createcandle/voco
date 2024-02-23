@@ -121,11 +121,12 @@ import wave
 
 
 # Wakeword
-
-import pyaudio
-import numpy as np
-from openwakeword.model import Model
-
+try:
+    import pyaudio
+    import numpy as np
+    from openwakeword.model import Model
+except Exception as ex:
+    print("Unable to load openwakeword modules: " + str(ex))
 
 
 
@@ -225,18 +226,19 @@ class VocoAdapter(Adapter):
         
         #self.lock = threading.Lock() # Not currently used, but can help threads print to stdout, for example.
 
-        self.threads = [] # Hold wakeword thread, maybe more in future?
+        #self.threads = [] # Hold wakeword thread, maybe more in future?
 
         
         
         # Open Wakeword
-        
         self.use_open_wakeword = False
+        if self.bit_extension == "64":
+            self.use_open_wakeword = True
         self.wakeword_thread = None
         self.wakeword_started = False
         self.restart_wakeword = False
 
-
+        
         # LLM AI
         self.llm_enabled = True
         
@@ -251,8 +253,9 @@ class VocoAdapter(Adapter):
         self.llm_busy_downloading_models = 0
         self.llm_not_enough_disk_space = False
         #self.llm_downloaded_models = {'tts':[],'stt':[],'assistant':[]} # is this still used?
-        self.fastest_device_id = None # which Voco device in the network has the fastest hardware and should ideally be used to run LLM models
         
+        self.fastest_device_id = None # which Voco device in the network has the fastest hardware and should ideally be used to run LLM models
+        self.fastest_device_last_ping_time = 0
         
         
         # TTS
@@ -301,13 +304,16 @@ class VocoAdapter(Adapter):
         self.llm_assistant_started = False
         self.llm_assistant_process = None
         self.llm_assistant_port = 8047
+        self.llm_assistant_prompt = ''        
         self.llm_assistant_name = 'Digital Athena'
+        self.llm_assistant_prompt = "The following is a conversation between a curious researcher and their helpful AI assistant called {assistant_name}, which is a large language model trained on the sum of human knowledge."
+        # \n\n Researcher: What is the capital of Germany? \n" + str(self.llm_assistant_name) +": Berlin is the capital of Germany. \nResearcher:'
         self.last_command_was_answered_by_assistant = False # becomes string of actual last response from assistant
         self.assistant_loop_counter = 0
         self.llm_assistant_response_count = 0
         self.last_assistant_output_change_time = 0
         self.llm_assistant_conversation_seconds_threshold = 30 # If another intent comes it with X seconds after the previous assistant interaction, take it as a strong hint that this is a dialogue to be continued.
-        self.llm_assistant_researcher_was_spotted = True # sometimes assistants don't end a response with the "Researcher:" reverse prompt
+        self.llm_assistant_reverse_prompt_was_spotted = True # sometimes assistants don't end a response with the "Researcher:" reverse prompt
         self.got_assistant_output = False # only briefly becomes true while the assistant is outputting text
         self.llm_assistant_maximum_no_new_output_duration = 1 # Sometimes an assistant doesn't render the "Researcher:" response. As a fall-back, if the assistant goes quiet for over a second, assume it's done talking.
         self.main_controller_has_assistant = False
@@ -339,11 +345,11 @@ class VocoAdapter(Adapter):
         # A chat between a curious user and an artificial intelligence assistant. The assistant gives helpful, detailed, and polite answers to the user's questions. USER: {prompt} ASSISTANT:
         
         self.device_model = run_command("cat /proc/device-tree/model")
-        print("self.device_model: " + str(self.device_model))
+        #print("self.device_model: " + str(self.device_model))
         self.device_pi_version = 3
         if 'aspberry' in self.device_model:
             self.device_pi_version = int(self.device_model.split()[2])
-        print("Rasbperry Pi version: " + str(self.device_pi_version))
+        #print("Rasbperry Pi version: " + str(self.device_pi_version))
         self.hardware_score = self.device_pi_version * 5
         
         # Could try to generate audio files for common voice responses, to speed up these parts.
@@ -372,261 +378,16 @@ class VocoAdapter(Adapter):
             "0"
         ]
         
-
-        
-        self.llm_tts_models = {
-            'Basic':{'model':'voco',
-                                'description':'Always use the basic voice. This assures the fastest response times, but may sound less natural.',
-                                'model_url':'',
-                                'downloaded':True
-                            },
-            'American default':{'model':'en_US-lessac-medium.onnx',
-                                'size':61,
-                                'description':'A default male American voice. Technically the highest quality, but requires more memory and may also be slower to generate.',
-                                'model_url':'https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/en/en_US/lessac/medium/en_US-lessac-medium.onnx'
-                            },
-            'Southern English':{'model':'en_GB-southern_english_female-low.onnx',
-                                'size':61,
-                                'description':'A female Southern-english voice. Lower quality, but sounds great.',
-                                'model_url':'https://huggingface.co/rhasspy/piper-voices/blob/main/en/en_GB/southern_english_female/low/en_GB-southern_english_female-low.onnx'
-                            },
-            'British Alan':{'model':'en_GB-alan-low.onnx',
-                                'description':'A slower speaking British male. Low quality, so may be slightly faster to generate.',
-                                'model_url':'https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_GB/alan/low/en_GB-alan-low.onnx'
-                            },
-            'Custom':{'model':'custom',
-                                'description':'You can provide a link to a ONNX voice model of your choice in the addon settings, and Voco will download it for you. You can find models at https://rhasspy.github.io/piper-samples/',
-                                'model_url':'custom'
-                            }
-            
-        }
-        
-        """
-        
-        'Dutch':{'model':'nl_NL-mls_5809-low.onnx',
-                            'size':61,
-                            'description':'A small model designed to speak Dutch.',
-                            'model_url':'https://huggingface.co/rhasspy/piper-voices/resolve/main/nl/nl_NL/mls_5809/low/nl_NL-mls_5809-low.onnx'
-                        },
-        'German':{'model':'de_DE-pavoque-low.onnx',
-                            'description':'A small model designed to speak German.',
-                            'model_url':'https://huggingface.co/rhasspy/piper-voices/resolve/main/de/de_DE/pavoque/low/de_DE-pavoque-low.onnx'
-                        },
-        'French':{'model':'fr_FR-upmc-medium.onnx',
-                            'description':'A medium sized model designed to speak French.',
-                            'model_url':'https://huggingface.co/rhasspy/piper-voices/resolve/main/fr/fr_FR/upmc/medium/fr_FR-upmc-medium.onnx'
-                        },
-        'Spanish':{'model':'es_ES-carlfm-x_low.onnx',
-                            'description':'A tiny model designed to speak Spanish.',
-                            'model_url':'https://huggingface.co/rhasspy/piper-voices/resolve/main/es/es_ES/carlfm/x_low/es_ES-carlfm-x_low.onnx'
-                        },
-        'Swahili':{'model':'sw_CD-lanfrica-medium.onnx',
-                            'description':'A tiny model designed to speak Spanish.',
-                            'model_url':'https://huggingface.co/rhasspy/piper-voices/resolve/main/sw/sw_CD/lanfrica/medium/sw_CD-lanfrica-medium.onnx'
-                        },
-        """
-        
         
 
-        #'American male 2':{'model':'en_US-hfc_male-medium','description':'A default male American voice. Technically the best quality, but may also be slower to generate.'},
-        
-
-        """
-        self.llm_stt_model_urls = {
-            'ggml-tiny.bin': 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.bin',
-            'ggml-base.bin': 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin',
-            'ggml-small.bin': 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.bin',
-            'ggml-medium.bin': 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-medium.bin',
-            'ggml-large.bin': 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large.bin',
-        }
-        """
-        
-        
-        # memory use is listed here:
-        # https://github.com/ggerganov/ggml
-        
-        self.llm_stt_models = {
-            'Basic':{'model':'voco',
-                                'description':'Use only the very basic AI.',
-                                'model_url':'',
-                                'downloaded':True
-                            },
-            'Basic + Fast':{'model':'ggml-tiny.en.bin',
-                                'size': 75,
-                                'memory':280,
-                                'description':'A tiny English language model that can run on low-end hardware, but makes a lot of mistakes.',
-                                'model_url':'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.en.bin'
-                            },
-            'Basic + Average':{'model':'ggml-base.en.bin',
-                                'size': 150,
-                                'memory':430,
-                                'minimal_pi':5,
-                                'description':'A base English language speech recognition model with a small vocabulary. The default.',
-                                'model_url':'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.en.bin'
-                            },
-            'Basic + Good':{'model':'ggml-small.en.bin',
-                                'size': 470,
-                                'memory':1000,
-                                'minimal_pi':5,
-                                'description':'A small but more capable English language speech recognition model.',
-                                'model_url':'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.en.bin'
-                            }
-        }
+       
 
 
-
-
-
-        # ASSISTANT MODELS
-
-        # nice comparison or Mistral-based models:
-        # https://www.reddit.com/r/LocalLLaMA/comments/178nf6i/mistral_llm_comparisontest_instruct_openorca/
         
         
-        self.llm_assistant_models = {
-            'Basic':{'model':'voco',
-                                'description':'Do not use any assistant AI. If voice recognition (speech-to-text) it still enabled, that will only be used to atttempt to understand what you said again if it is unclear.',
-                                'model_url':'',
-                                'downloaded':True
-                            },
-            'TinyMistral 248M SFT v4':{'model':'TinyMistral-248M-SFT-v4.Q4_K_M.gguf',
-                                'size':156,
-                                'description':'This is a minuscule AI model of just 156Mb in size. It will likely produce useless answers to your questions.',
-                                'model_url':'https://huggingface.co/Felladrin/gguf-TinyMistral-248M-SFT-v4/resolve/main/TinyMistral-248M-SFT-v4.Q4_K_M.gguf',
-                                'prompts':{
-                                    'system':'<|im_start|>system\n{system_message}<|im_end|>',
-                                    'user':'<|im_start|>user\n{prompt}<|im_end|>',
-                                    'reverse':'<|im_start|>assistant\n',
-                                    'end':'<|im_end|>'
-                                }
-                            },
-                            
-                            
-                            
-                            
-                            
-            'TinyLlama 1.1B Q2 Chat':{'model':'TinyLlama-1.1B-Chat-v1.0.Q2_K.gguf',
-                                'size':500,
-                                'description':'This is a minuscule AI model of just 500Mb in size. It makes many mistakes and does not contain a lot of knowledge, but it might be fun to try on low-memory systems.',
-                                'model_url':'https://huggingface.co/jartine/TinyLlama-1.1B-Chat-v1.0-GGUF/resolve/main/TinyLlama-1.1B-Chat-v1.0.Q2_K.gguf',
-                                'prompts':{
-                                    'system':'<|im_start|>system\n{system_message}<|im_end|>',
-                                    'user':'<|im_start|>user\n{prompt}<|im_end|>',
-                                    'reverse':'<|im_start|>assistant\n',
-                                    'end':'<|im_end|>'
-                                }
-                            },
-            'TinyLlama 1.1B Q4 OpenOrca':{'model':'tinyllama-1.1b-1t-openorca.Q4_K_M.gguf',
-                                'size':700,
-                                'description':'A 700Mb model which contains slightly more knowledge. The default.',
-                                'model_url':'https://huggingface.co/TheBloke/TinyLlama-1.1B-1T-OpenOrca-GGUF/resolve/main/tinyllama-1.1b-1t-openorca.Q4_K_M.gguf',
-                                'prompts':{
-                                    'system':'<|im_start|>system\n{system_message}<|im_end|>',
-                                    'user':'<|im_start|>user\n{prompt}<|im_end|>',
-                                    'reverse':'<|im_start|>assistant\n',
-                                    'end':'<|im_end|>'
-                                }
-                            },
-            'Rocket 3B':{'model':'rocket-3b.Q5_K_M.gguf',
-                                'size':2000,
-                                'description':'Named after the small but powerful Rocket in the Guardians of the Galaxy movies.',
-                                'model_url':'https://huggingface.co/TheBloke/rocket-3B-GGUF/resolve/main/rocket-3b.Q5_K_M.gguf',
-                                'prompts':{
-                                    'system':'<|im_start|>system\n{system_message}<|im_end|>',
-                                    'user':'<|im_start|>user\n{prompt}<|im_end|>',
-                                    'reverse':'<|im_start|>assistant\n',
-                                    'end':'<|im_end|>'
-                                }
-                            },
-            'Phi 2':{'model':'phi-2.Q4_K_S.gguf',
-                                'size':1650,
-                                'developer':True,
-                                'description':'A model made by Microsoft. It was mostly trained on educational textbooks, so it can help with school homework, but might give long-winded answers.',
-                                'model_url':'https://huggingface.co/TheBloke/phi-2-GGUF/resolve/main/phi-2.Q4_K_S.gguf',
-                                'prompts':{
-                                    'system':'',
-                                    'user':'Alice: {prompt}\nBob: ',
-                                    'reverse':'Alice:',
-                                    'end':''
-                                }
-                            },
-            'Dolphin 2.6 Phi 2':{'model':'dolphin-2_6-phi-2.Q4_K_M.gguf',
-                                'size':1800,
-                                'description':'Based on the Phi-2 model made by Microsoft. It was mostly trained on educational textbooks, so it could help with school homework. It might give long-winded answers.',
-                                'model_url':'https://huggingface.co/TheBloke/dolphin-2_6-phi-2-GGUF/resolve/main/dolphin-2_6-phi-2.Q4_K_M.gguf',
-                                'prompts':{
-                                    'system':'<|im_start|>system\n{system_message}<|im_end|>',
-                                    'user':'<|im_start|>user\n{prompt}<|im_end|>',
-                                    'reverse':'<|im_start|>assistant\n',
-                                    'end':'<|im_end|>'
-                                }
-                            },
-            'Mistral 7B Instruct':{'model':'mistral-7b-instruct-v0.1.Q4_K_M.gguf',
-                                'size':4000,
-                                'developer':True,
-                                'description':'A popular model which requires quite a bit of memory.',
-                                'model_url':'https://huggingface.co/TheBloke/Mistral-7B-Instruct-v0.1-GGUF/resolve/main/mistral-7b-instruct-v0.1.Q4_K_M.gguf',
-                                'prompts':{
-                                    'system':'<s>[INST] What is your favourite condiment? [/INST]\nWell, I am quite partial to a good squeeze of fresh lemon juice. It adds just the right amount of zesty flavour to whatever I am cooking up in the kitchen!</s> ',
-                                    'user':'[INST]{prompt}[/INST]',
-                                    'reverse':'',
-                                    'end':''
-                                }
-                            },
-            'Openhermes 2.5 Mistral 7b':{'model':'openhermes-2.5-mistral-7b.Q4_K_M.gguf',
-                                'size':4000,
-                                'description':'The OpenHermes version of the popular Mistral 7B model. Supposedly contains a lot of useful information.',
-                                'model_url':'https://huggingface.co/TheBloke/OpenHermes-2.5-Mistral-7B-GGUF/resolve/main/openhermes-2.5-mistral-7b.Q4_K_M.gguf',
-                                'prompts':{
-                                    'system':'<|im_start|>system\n{system_message}<|im_end|>',
-                                    'user':'<|im_start|>user\n{prompt}<|im_end|>',
-                                    'reverse':'<|im_start|>assistant\n',
-                                    'end':'<|im_end|>'
-                                }
-                            },
-            'Programming':{'model':'stable-code-3b-Q5_K_M.gguf',
-                                'size':2000,
-                                'developer':True,
-                                'description':'A model designed around writing programming code.',
-                                'model_url':'https://huggingface.co/stabilityai/stable-code-3b/resolve/main/stable-code-3b-Q5_K_M.gguf'
-                            },
-            'Sauerkraut':{'model':'sauerkrautlm-3b-v1.Q4_0.gguf',
-                                'size':2000,
-                                'developer':True,
-                                'description':'A German language model.',
-                                'model_url':'https://huggingface.co/TheBloke/SauerkrautLM-3B-v1-GGUF/resolve/main/sauerkrautlm-3b-v1.Q4_0.gguf'
-                            },
-            'Geitje':{'model':'geitje-7b-chat.Q4_K_M.gguf',
-                                'size':4300,
-                                'developer':True,
-                                'description':'A Dutch language model.',
-                                'model_url': 'https://huggingface.co/TheBloke/GEITje-7B-chat-GGUF/resolve/main/geitje-7b-chat.Q4_K_M.gguf'
-                            },
-            'Medicine':{'model':'medicine-llm.Q4_K_S.gguf',
-                                'size':3900,
-                                'developer':True,
-                                'description':'A model designed around medical data. It should speak for itself that this does not replace talking to a real doctor!',
-                                'model_url':'https://huggingface.co/TheBloke/medicine-LLM-GGUF/resolve/main/medicine-llm.Q4_K_S.gguf'
-                            },
-            'Custom':{'model':'custom',
-                             'developer':False,
-                             'description':'Advanced users may provide a link to a .GUFF model that supports ChatML in the addon settings, and Voco will download it. You will need to make sure there is enough available disk space and memory yourself.',
-                             'model_url':'custom',
-                             'prompts':{
-                                 'system':'<|im_start|>system\n{system_message}<|im_end|>',
-                                 'user':'<|im_start|>user\n{prompt}<|im_end|>',
-                                 'reverse':'<|im_start|>assistant\n',
-                                 'end':'<|im_end|>'
-                             }
-                         }
-        }
         
         
-        self.llm_models = { 
-                            'tts': {'list':self.llm_tts_models,'active':None},
-                            'assistant': {'list':self.llm_assistant_models,'active':None},
-                            'stt': {'list':self.llm_stt_models,'active':None}
-                        }
+        
                 
         
         # MATRIX CHAT
@@ -798,7 +559,7 @@ class VocoAdapter(Adapter):
             print("Error fixing audio input in persistent data: " + str(ex))
             self.persistent_data['audio_input'] = None
         
-        print("\n self.persistent_data['audio_input']: " + str(self.persistent_data['audio_input']))
+        #print("\n self.persistent_data['audio_input']: " + str(self.persistent_data['audio_input']))
         
         
         try:
@@ -1121,15 +882,21 @@ class VocoAdapter(Adapter):
         # Some paths
         self.addon_dir_path = os.path.join(self.user_profile['addonsDir'], self.addon_name)
         self.data_dir_path = os.path.join(self.user_profile['dataDir'], self.addon_name)
-        
+        self.llm_data_dir_path = os.path.join(self.data_dir_path, 'llm')
         
         
         
         # WAKE WORD
-        self.hey_candle_wakeword_model_path = os.path.join(self.addon_dir_path,'llm','wakeword','hey_candle.onnx')
-        print("self.hey_candle_wakeword_model_path: " + str(self.hey_candle_wakeword_model_path))
+        self.wakeword_models_dir_path = os.path.join(self.addon_dir_path,'llm','wakeword')
+        self.wakeword_data_dir =  os.path.join(self.llm_data_dir_path,'wakeword')
+        self.hey_candle_wakeword_model_path = os.path.join(self.wakeword_models_dir_path,'hey_candle.tflite')
+        self.custom_wakeword_model_path = os.path.join(self.wakeword_data_dir,'custom.tflite')
+        #print("self.hey_candle_wakeword_model_path: " + str(self.hey_candle_wakeword_model_path))
+        
+        if not os.path.exists(self.wakeword_data_dir):
+            os.system('mkdir -p ' + str(self.wakeword_data_dir))
         if not os.path.exists(self.hey_candle_wakeword_model_path):
-            print("\nERROR, missing wakeword model")
+            print("\nERROR, missing hey_candle wakeword model")
         
         # LLM AI PATHS
         self.recording_dir_path = os.path.join(self.data_dir_path, 'recording')
@@ -1140,7 +907,7 @@ class VocoAdapter(Adapter):
         else:
             self.delete_recordings()
         
-        self.llm_data_dir_path = os.path.join(self.data_dir_path, 'llm')
+        
         
         
         # TTS
@@ -1230,7 +997,10 @@ class VocoAdapter(Adapter):
         self.arm_libs_path = os.path.join(self.addon_dir_path,"snips","arm-linux-gnueabihf") # arm32 #TODO: in some places this is still loaded as an environment path in the 64 bit version. Should check if that causes issues.
         self.assistant_path = os.path.join(self.models_path,"assistant")
         self.work_path = os.path.join(self.user_profile['dataDir'],'voco','work')
-        self.toml_path = os.path.join(self.models_path,"snips.toml")
+
+        #self.toml_path = os.path.join(self.models_path,"snips.toml")
+        self.toml_path = os.path.join(self.models_path,"candle.toml") # let Snips also respond to 'hey Candle'
+        
         self.hotword_path = os.path.join(self.snips_path,"snips-hotword")
         #self.mosquitto_path = os.path.join(self.snips_path,"mosquitto")
         self.g2p_models_path = os.path.join(self.models_path,"g2p-models")
@@ -1370,9 +1140,9 @@ class VocoAdapter(Adapter):
             if self.free_memory > self.llm_assistant_minimal_memory + 500:
                 self.persistent_data['llm_assistant_model'] = 'tinyllama-1.1b-1t-openorca.Q4_K_M.gguf'
         
-       
-            
-        
+        if 'llm_wakeword_model' not in self.persistent_data:
+            self.persistent_data['llm_wakeword_model'] = [self.hey_candle_wakeword_model_path]
+
         
         
         
@@ -1397,11 +1167,311 @@ class VocoAdapter(Adapter):
         
         if self.use_open_wakeword == False:
             if self.DEBUG:
-                print("Using old Hey Snips wakeword")
+                print("Using openwakeword")
             #self.snips_parts.append('snips-hotword')
         else:
             if self.DEBUG:
-                print("Using new Hey Candle wakeword")
+                print("Using openwakeword")
+        
+        
+        self.llm_wakeword_models = {
+            'Hey Candle':{'model':'hey_candle.tflite',
+                                'size':2,
+                                'description':'Start a voice command by saying "Hey Candle. The default."',
+                                'downloaded':True,
+                                'model_path':str(os.path.join(self.wakeword_models_dir_path,'hey_candle.tflite'))
+                            },
+            'Hey Voco':{'model':'hey_voco.tflite',
+                                'size':2,
+                                'description':'Start a voice command by saying "Hey Voco"',
+                                'downloaded':True,
+                                'model_path':str(os.path.join(self.wakeword_models_dir_path,'hey_voco.tflite'))
+                            },
+            'Hey Snips':{'model':'hey_snips.tflite',
+                                'size':2,
+                                'description':'Start a voice command by saying "Hey Snips"',
+                                'downloaded':True,
+                                'model_path':str(os.path.join(self.wakeword_models_dir_path,'hey_snips.tflite'))
+                            },
+            'Hey Jarvis':{'model':'hey_jarvis.tflite',
+                                'size':2,
+                                'description':'Start a voice command by saying "Hey Jarvis"',
+                                'downloaded':True,
+                                'model_path':str(os.path.join(self.wakeword_models_dir_path,'hey_jarvis.tflite'))
+                            },
+            'Custom':{'model':'custom.tflite',
+                                'size':2,
+                                'description':'You can provide a link to a .tflite wakeword model of your choice in the addon settings, and Voco will download it for you. You can learn how to make your own model at: https://colab.research.google.com/drive/1q1oe2zOyZp7UsB3jJiQ1IFn8z5YfjwEb?usp=sharing#scrollTo=1cbqBebHXjFD',
+                                'downloaded':False,
+                                'model_path':str(self.custom_wakeword_model_path)
+                            },
+        }
+        
+        
+        self.llm_tts_models = {
+            'Basic':{'model':'voco',
+                                'description':'Always use the basic voice. This assures the fastest response times, but may sound less natural.',
+                                'model_url':'',
+                                'downloaded':True
+                            },
+            'American default':{'model':'en_US-lessac-medium.onnx',
+                                'size':61,
+                                'description':'A default male American voice. Technically the highest quality, but requires more memory and may also be slower to generate.',
+                                'model_url':'https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/en/en_US/lessac/medium/en_US-lessac-medium.onnx'
+                            },
+            'Southern English':{'model':'en_GB-southern_english_female-low.onnx',
+                                'size':61,
+                                'description':'A female Southern-english voice. Lower quality, but sounds great.',
+                                'model_url':'https://huggingface.co/rhasspy/piper-voices/blob/main/en/en_GB/southern_english_female/low/en_GB-southern_english_female-low.onnx'
+                            },
+            'British Alan':{'model':'en_GB-alan-low.onnx',
+                                'description':'A slower speaking British male. Low quality, so may be slightly faster to generate.',
+                                'model_url':'https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_GB/alan/low/en_GB-alan-low.onnx'
+                            },
+            'Custom':{'model':'custom',
+                                'description':'You can provide a link to a ONNX voice model of your choice in the addon settings, and Voco will download it for you. You can find models at https://rhasspy.github.io/piper-samples/',
+                                'model_url':'custom'
+                            }
+        }
+        
+        
+        """
+        
+        'Dutch':{'model':'nl_NL-mls_5809-low.onnx',
+                            'size':61,
+                            'description':'A small model designed to speak Dutch.',
+                            'model_url':'https://huggingface.co/rhasspy/piper-voices/resolve/main/nl/nl_NL/mls_5809/low/nl_NL-mls_5809-low.onnx'
+                        },
+        'German':{'model':'de_DE-pavoque-low.onnx',
+                            'description':'A small model designed to speak German.',
+                            'model_url':'https://huggingface.co/rhasspy/piper-voices/resolve/main/de/de_DE/pavoque/low/de_DE-pavoque-low.onnx'
+                        },
+        'French':{'model':'fr_FR-upmc-medium.onnx',
+                            'description':'A medium sized model designed to speak French.',
+                            'model_url':'https://huggingface.co/rhasspy/piper-voices/resolve/main/fr/fr_FR/upmc/medium/fr_FR-upmc-medium.onnx'
+                        },
+        'Spanish':{'model':'es_ES-carlfm-x_low.onnx',
+                            'description':'A tiny model designed to speak Spanish.',
+                            'model_url':'https://huggingface.co/rhasspy/piper-voices/resolve/main/es/es_ES/carlfm/x_low/es_ES-carlfm-x_low.onnx'
+                        },
+        'Swahili':{'model':'sw_CD-lanfrica-medium.onnx',
+                            'description':'A tiny model designed to speak Spanish.',
+                            'model_url':'https://huggingface.co/rhasspy/piper-voices/resolve/main/sw/sw_CD/lanfrica/medium/sw_CD-lanfrica-medium.onnx'
+                        },
+        """
+        
+        
+
+        #'American male 2':{'model':'en_US-hfc_male-medium','description':'A default male American voice. Technically the best quality, but may also be slower to generate.'},
+        
+
+        """
+        self.llm_stt_model_urls = {
+            'ggml-tiny.bin': 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.bin',
+            'ggml-base.bin': 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin',
+            'ggml-small.bin': 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.bin',
+            'ggml-medium.bin': 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-medium.bin',
+            'ggml-large.bin': 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large.bin',
+        }
+        """
+        
+        
+        # memory use is listed here:
+        # https://github.com/ggerganov/ggml
+        
+        self.llm_stt_models = {
+            'Basic':{'model':'voco',
+                                'description':'Use only the very basic AI.',
+                                'model_url':'',
+                                'downloaded':True
+                            },
+            'Basic + Fast':{'model':'ggml-tiny.en.bin',
+                                'size': 75,
+                                'memory':280,
+                                'description':'A tiny English language model that can run on low-end hardware, but makes a lot of mistakes.',
+                                'model_url':'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.en.bin'
+                            },
+            'Basic + Average':{'model':'ggml-base.en.bin',
+                                'size': 150,
+                                'memory':430,
+                                'minimal_pi':5,
+                                'description':'A base English language speech recognition model with a small vocabulary. The default.',
+                                'model_url':'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.en.bin'
+                            },
+            'Basic + Good':{'model':'ggml-small.en.bin',
+                                'size': 470,
+                                'memory':1000,
+                                'minimal_pi':5,
+                                'description':'A small but more capable English language speech recognition model.',
+                                'model_url':'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.en.bin'
+                            }
+        }
+
+
+
+
+
+        # ASSISTANT MODELS
+
+        # nice comparison or Mistral-based models:
+        # https://www.reddit.com/r/LocalLLaMA/comments/178nf6i/mistral_llm_comparisontest_instruct_openorca/
+        
+        
+        self.llm_assistant_models = {
+            'Basic':{'model':'voco',
+                                'description':'Do not use any assistant AI. If voice recognition (speech-to-text) it still enabled, that will only be used to atttempt to understand what you said again if it is unclear.',
+                                'model_url':'',
+                                'downloaded':True
+                            },
+            'TinyMistral 248M SFT v4':{'model':'TinyMistral-248M-SFT-v4.Q4_K_M.gguf',
+                                'size':156,
+                                'description':'This is a minuscule AI model of just 156Mb in size. It will likely produce useless answers to your questions.',
+                                'model_url':'https://huggingface.co/Felladrin/gguf-TinyMistral-248M-SFT-v4/resolve/main/TinyMistral-248M-SFT-v4.Q4_K_M.gguf',
+                                'prompts':{
+                                    'system':'<|im_start|>system\n{system_message}<|im_end|>',
+                                    'user':'<|im_start|>user\n{prompt}<|im_end|>',
+                                    'reverse':'<|im_start|>assistant\n',
+                                    'end':'<|im_end|>'
+                                }
+                            },
+                            
+                            
+                            
+                            
+                            
+            'TinyLlama 1.1B Q2 Chat':{'model':'TinyLlama-1.1B-Chat-v1.0.Q2_K.gguf',
+                                'size':500,
+                                'description':'This is a minuscule AI model of just 500Mb in size. It makes many mistakes and does not contain a lot of knowledge, but it might be fun to try on low-memory systems.',
+                                'model_url':'https://huggingface.co/jartine/TinyLlama-1.1B-Chat-v1.0-GGUF/resolve/main/TinyLlama-1.1B-Chat-v1.0.Q2_K.gguf',
+                                'prompts':{
+                                    'system':'<|im_start|>system\n{system_message}<|im_end|>',
+                                    'user':'<|im_start|>user\n{prompt}<|im_end|>',
+                                    'reverse':'<|im_start|>assistant\n',
+                                    'end':'<|im_end|>'
+                                }
+                            },
+            'TinyLlama 1.1B Q4 OpenOrca':{'model':'tinyllama-1.1b-1t-openorca.Q4_K_M.gguf',
+                                'size':700,
+                                'description':'A 700Mb model which contains slightly more knowledge. The default.',
+                                'model_url':'https://huggingface.co/TheBloke/TinyLlama-1.1B-1T-OpenOrca-GGUF/resolve/main/tinyllama-1.1b-1t-openorca.Q4_K_M.gguf',
+                                'prompts':{
+                                    'system':'<|im_start|>system\n{system_message}<|im_end|>',
+                                    'user':'<|im_start|>user\n{prompt}<|im_end|>',
+                                    'reverse':'<|im_start|>assistant\n',
+                                    'end':'<|im_end|>'
+                                }
+                            },
+            'Rocket 3B':{'model':'rocket-3b.Q5_K_M.gguf',
+                                'size':2000,
+                                'description':'Named after the small but powerful Rocket in the Guardians of the Galaxy movies.',
+                                'model_url':'https://huggingface.co/TheBloke/rocket-3B-GGUF/resolve/main/rocket-3b.Q5_K_M.gguf',
+                                'prompts':{
+                                    'system':'<|im_start|>system\n{system_message}<|im_end|>',
+                                    'user':'<|im_start|>user\n{prompt}<|im_end|>',
+                                    'reverse':'<|im_start|>assistant\n',
+                                    'end':'<|im_end|>'
+                                }
+                            },
+            'Phi 2':{'model':'phi-2.Q4_K_S.gguf',
+                                'size':1650,
+                                'developer':True,
+                                'description':'A model made by Microsoft. It was mostly trained on educational textbooks, so it can help with school homework, but might give long-winded answers.',
+                                'model_url':'https://huggingface.co/TheBloke/phi-2-GGUF/resolve/main/phi-2.Q4_K_S.gguf',
+                                'prompts':{
+                                    'system':'',
+                                    'user':'Alice: {prompt}\nBob: ',
+                                    'reverse':'Alice:',
+                                    'end':''
+                                }
+                            },
+            'Dolphin 2.6 Phi 2':{'model':'dolphin-2_6-phi-2.Q4_K_M.gguf',
+                                'size':1800,
+                                'description':'Based on the Phi-2 model made by Microsoft. It was mostly trained on educational textbooks, so it could help with school homework. It might give long-winded answers.',
+                                'model_url':'https://huggingface.co/TheBloke/dolphin-2_6-phi-2-GGUF/resolve/main/dolphin-2_6-phi-2.Q4_K_M.gguf',
+                                'prompts':{
+                                    'system':'<|im_start|>system\n{system_message}<|im_end|>',
+                                    'user':'<|im_start|>user\n{prompt}<|im_end|>',
+                                    'reverse':'<|im_start|>assistant\n',
+                                    'end':'<|im_end|>'
+                                }
+                            },
+            'Mistral 7B Instruct':{'model':'mistral-7b-instruct-v0.1.Q4_K_M.gguf',
+                                'size':4000,
+                                'developer':True,
+                                'description':'A popular model which requires quite a bit of memory.',
+                                'model_url':'https://huggingface.co/TheBloke/Mistral-7B-Instruct-v0.1-GGUF/resolve/main/mistral-7b-instruct-v0.1.Q4_K_M.gguf',
+                                'prompts':{
+                                    'system':'<s>[INST] What is your favourite condiment? [/INST]\nWell, I am quite partial to a good squeeze of fresh lemon juice. It adds just the right amount of zesty flavour to whatever I am cooking up in the kitchen!</s> ',
+                                    'user':'[INST]{prompt}[/INST]',
+                                    'reverse':'',
+                                    'end':''
+                                }
+                            },
+            'Openhermes 2.5 Mistral 7b':{'model':'openhermes-2.5-mistral-7b.Q4_K_M.gguf',
+                                'size':4000,
+                                'description':'The OpenHermes version of the popular Mistral 7B model. Supposedly contains a lot of useful information.',
+                                'model_url':'https://huggingface.co/TheBloke/OpenHermes-2.5-Mistral-7B-GGUF/resolve/main/openhermes-2.5-mistral-7b.Q4_K_M.gguf',
+                                'prompts':{
+                                    'system':'<|im_start|>system\n{system_message}<|im_end|>',
+                                    'user':'<|im_start|>user\n{prompt}<|im_end|>',
+                                    'reverse':'<|im_start|>assistant\n',
+                                    'end':'<|im_end|>'
+                                }
+                            },
+            'Programming':{'model':'stable-code-3b-Q5_K_M.gguf',
+                                'size':2000,
+                                'developer':True,
+                                'description':'A model designed around writing programming code.',
+                                'model_url':'https://huggingface.co/stabilityai/stable-code-3b/resolve/main/stable-code-3b-Q5_K_M.gguf'
+                            },
+            'Sauerkraut':{'model':'sauerkrautlm-3b-v1.Q4_0.gguf',
+                                'size':2000,
+                                'developer':True,
+                                'description':'A German language model.',
+                                'model_url':'https://huggingface.co/TheBloke/SauerkrautLM-3B-v1-GGUF/resolve/main/sauerkrautlm-3b-v1.Q4_0.gguf'
+                            },
+            'Geitje':{'model':'geitje-7b-chat.Q4_K_M.gguf',
+                                'size':4300,
+                                'developer':True,
+                                'description':'A Dutch language model.',
+                                'model_url': 'https://huggingface.co/TheBloke/GEITje-7B-chat-GGUF/resolve/main/geitje-7b-chat.Q4_K_M.gguf'
+                            },
+            'Medicine':{'model':'medicine-llm.Q4_K_S.gguf',
+                                'size':3900,
+                                'developer':True,
+                                'description':'A model designed around medical data. It should speak for itself that this does not replace talking to a real doctor!',
+                                'model_url':'https://huggingface.co/TheBloke/medicine-LLM-GGUF/resolve/main/medicine-llm.Q4_K_S.gguf'
+                            },
+            'Custom':{'model':'custom',
+                             'developer':False,
+                             'description':'Advanced users may provide a link to a .GUFF model that supports ChatML in the addon settings, and Voco will download it. You will need to make sure there is enough available disk space and memory yourself.',
+                             'model_url':'custom',
+                             'prompts':{
+                                 'system':'<|im_start|>system\n{system_message}<|im_end|>',
+                                 'user':'<|im_start|>user\n{prompt}<|im_end|>',
+                                 'reverse':'<|im_start|>assistant\n',
+                                 'end':'<|im_end|>'
+                             }
+                         }
+        }
+        
+        
+        
+        
+        self.llm_models = { 
+                            'wakeword': {'list':self.llm_wakeword_models,'active':None},
+                            'tts': {'list':self.llm_tts_models,'active':None},
+                            'stt': {'list':self.llm_stt_models,'active':None},
+                            'assistant': {'list':self.llm_assistant_models,'active':None,'prompts':self.llm_assistant_models['Custom']['prompts']}
+                        }
+                        
+                        
+                        
+                        
+        if os.path.exists(self.custom_wakeword_model_path):
+            if self.DEBUG:
+                print("Detected custom wakeword")
+            self.llm_wakeword_models['Custom']['downloaded'] = True
         
         
         
@@ -1462,11 +1532,8 @@ class VocoAdapter(Adapter):
         self.matrix_invite_queue = queue.Queue()
         self.matrix_kick_queue = queue.Queue()
 
-        #
-        # Create UI
-        #
-        # Even if the user doesn't want to see a UI, it may be the case that the HTML is still loaded somewhere. So the API should be available regardless.
         
+        # START API
         try:
             self.extension = VocoAPIHandler(self, verbose=True)
             #self.manager_proxy.add_api_handler(self.extension)
@@ -2179,12 +2246,12 @@ class VocoAdapter(Adapter):
             if self.DEBUG:
                 print("Error loading sound detection preference from settings: " + str(ex))
       
-        # Hey Candle
+        # TODO Hey Candle - currently doesn't do anything anymore
         try:
             if 'Hey Candle' in config:
-                self.use_open_wakeword = bool(config['Hey Candle'])
+                #self.use_open_wakeword = bool(config['Hey Candle'])
                 if bool(config['Hey Candle']) == True:
-                    self.toml_path = os.path.join(self.models_path,"candle.toml") # this is hot snips-wakeword
+                    
                     if self.DEBUG:
                         print("-Hey Candle is enabled")
                     
@@ -2252,17 +2319,28 @@ class VocoAdapter(Adapter):
             
         # LLM AI options
         try:
-            if 'Custom AI voice synthesis model url' in config:
-                if str(config['Custom AI voice synthesis model url']).startswith('http'):
-                    self.llm_tts_models['Custom']['model_url'] = str(config['Custom AI voice synthesis model url'])
-                if self.DEBUG:
-                    print("-Custom AI voice synthesis model url is present in the config data: " + str(self.llm_tts_models['Custom']['model_url']))
+            
+            if 'Custom wakeword model URL' in config:
+                if str(config[ 'Custom wakeword model URL']).startswith('http') and (str(config[ 'Custom wakeword model URL']).endswith('.tflite') or str(config[ 'Custom wakeword model URL']).endswith('.TFLITE')):
+                    self.llm_wakeword_models['Custom']['model_url'] = str(config['Custom wakeword model URL'])
+                    if self.DEBUG:
+                        print("-Custom wakeword model URL is present in the config data: " + str(self.llm_wakeword_models['Custom']['model_url']))
+                    if not os.path.exists(self.llm_wakeword_models['Custom']['model_url']):
+                        if self.DEBUG:
+                            print("Attempting download of custom wakeword model from: " + str(self.llm_wakeword_models['Custom']['model_url']))
+                        os.system('wget ' + str(self.llm_wakeword_models['Custom']['model_url']) + ' -O ' + str(self.custom_wakeword_model_path) )   
 
-            if 'Custom AI assistant model url' in config:
-                if str(config['Custom AI assistant model url']).startswith('http'):
-                    self.llm_assistant_models['Custom']['model_url'] = str(config['Custom AI assistant model url'])
+            if 'Custom AI voice synthesis model URL' in config:
+                if str(config['Custom AI voice synthesis model URL']).startswith('http'):
+                    self.llm_tts_models['Custom']['model_url'] = str(config['Custom AI voice synthesis model URL'])
                 if self.DEBUG:
-                    print("-Custom AI assistant model url is present in the config data: " + str(self.llm_assistant_models['Custom']['model_url']))
+                    print("-Custom AI voice synthesis model URL is present in the config data: " + str(self.llm_tts_models['Custom']['model_url']))
+
+            if 'Custom AI assistant model URL' in config:
+                if str(config['Custom AI assistant model URL']).startswith('http'):
+                    self.llm_assistant_models['Custom']['model_url'] = str(config['Custom AI assistant model URL'])
+                if self.DEBUG:
+                    print("-Custom AI assistant model URL is present in the config data: " + str(self.llm_assistant_models['Custom']['model_url']))
                     
             # Disabled (for now?), as to improve speed Voco currently runs Llamafile as a subprocess instead of as a webserver.
             if 'Make AI assistant available on network' in config:
@@ -3609,127 +3687,142 @@ class VocoAdapter(Adapter):
 
 
     
+    
+    def check_possible_wakewords(self):
+        self.possible_wakewords = [
+            os.path.join()
+        ]
+        
+        
 
     def run_wakeword(self):
         if self.DEBUG:
             print("in run_wakeword")
         
-        # Get microphone stream
-        FORMAT = pyaudio.paInt16
-        CHANNELS = 1
-        RATE = 16000
-        #CHUNK = 1280
-        CHUNK = 4096
-        py_audio = pyaudio.PyAudio()
+        try:
+            
+            # Get microphone stream
+            FORMAT = pyaudio.paInt16
+            CHANNELS = 1
+            RATE = 16000
+            #CHUNK = 1280
+            CHUNK = 4096
+            py_audio = pyaudio.PyAudio()
 
         
-        info = py_audio.get_host_api_info_by_index(0)
-        numdevices = info.get('deviceCount')
+            info = py_audio.get_host_api_info_by_index(0)
+            numdevices = info.get('deviceCount')
         
-        #for each audio device, determine if is an input or an output and add it to the appropriate list and dictionary
-        #for i in range(py_audio.get_device_count()):
-        for i in range (0,numdevices):
+            #for each audio device, determine if is an input or an output and add it to the appropriate list and dictionary
+            #for i in range(py_audio.get_device_count()):
+            for i in range (0,numdevices):
             
             
-            #print("Number of audio devices:", p.get_device_count())
+                #print("Number of audio devices:", p.get_device_count())
             
-            dev = py_audio.get_device_info_by_index(i)
-            print("Device index:", i)
-            print("Device name:", dev.get('name'))
-            print("Input channels:", dev.get('maxInputChannels'))
-            print("Output channels:", dev.get('maxOutputChannels'))
-            print("Default Sample Rate:", dev.get('defaultSampleRate'))
-            print("---------------------------------------")
+                dev = py_audio.get_device_info_by_index(i)
+                print("Device index:", i)
+                print("Device name:", dev.get('name'))
+                print("Input channels:", dev.get('maxInputChannels'))
+                print("Output channels:", dev.get('maxOutputChannels'))
+                print("Default Sample Rate:", dev.get('defaultSampleRate'))
+                print("---------------------------------------")
             
             
-            if py_audio.get_device_info_by_host_api_device_index(0,i).get('maxInputChannels')>0:
-                if self.DEBUG:
-                    print("Input Device id ", i, " - ", py_audio.get_device_info_by_host_api_device_index(0,i).get('name'))
+                if py_audio.get_device_info_by_host_api_device_index(0,i).get('maxInputChannels')>0:
+                    if self.DEBUG:
+                        print("Input Device id ", i, " - ", py_audio.get_device_info_by_host_api_device_index(0,i).get('name'))
 
-            if py_audio.get_device_info_by_host_api_device_index(0,i).get('maxOutputChannels')>0:
-                if self.DEBUG:
-                    print("Output Device id ", i, " - ", py_audio.get_device_info_by_host_api_device_index(0,i).get('name'))
+                if py_audio.get_device_info_by_host_api_device_index(0,i).get('maxOutputChannels')>0:
+                    if self.DEBUG:
+                        print("Output Device id ", i, " - ", py_audio.get_device_info_by_host_api_device_index(0,i).get('name'))
 
-        devinfo = py_audio.get_device_info_by_index(1)
-        if self.DEBUG:
-            print("Selected microphone is ",devinfo.get('name'))
-        if py_audio.is_format_supported(48000.0, input_device=devinfo["index"],input_channels=devinfo['maxInputChannels'],input_format=pyaudio.paInt16): #44100
+            devinfo = py_audio.get_device_info_by_index(1)
             if self.DEBUG:
-                print('run_wakeword: found valid microphone')
-                print("self.hotword_sensitivity: " + str(self.hotword_sensitivity))
+                print("Selected microphone is ",devinfo.get('name'))
+            if py_audio.is_format_supported(48000.0, input_device=devinfo["index"],input_channels=devinfo['maxInputChannels'],input_format=pyaudio.paInt16): #44100
+                if self.DEBUG:
+                    print('run_wakeword: found valid microphone')
+                    print("self.hotword_sensitivity: " + str(self.hotword_sensitivity))
 
 
-            mic_stream = py_audio.open(format=FORMAT, channels=CHANNELS, rate=RATE, input=True, frames_per_buffer=CHUNK)
+                mic_stream = py_audio.open(format=FORMAT, channels=CHANNELS, rate=RATE, input=True, frames_per_buffer=CHUNK)
 
-            # Load pre-trained openwakeword models
-            owwModel = Model(wakeword_models=[self.hey_candle_wakeword_model_path], inference_framework="onnx") # alternative is "onnx" or "tflite"
+                # Load pre-trained openwakeword models
+                owwModel = Model(wakeword_models=self.persistent_data['llm_wakeword_model'], inference_framework="tflite") # alternative is "onnx" or "tflite"
 
-            n_models = len(owwModel.models.keys())
+                n_models = len(owwModel.models.keys())
         
-            self.wakeword_started = True
-            while self.running and not self.restart_wakeword:
+                self.wakeword_started = True
+                while self.running and not self.restart_wakeword:
                 
-                # Get audio
-                audio = np.frombuffer(mic_stream.read(CHUNK, exception_on_overflow = False), dtype=np.int16)
+                    # Get audio
+                    audio = np.frombuffer(mic_stream.read(CHUNK, exception_on_overflow = False), dtype=np.int16)
 
-                # Feed to openWakeWord model
-                prediction = owwModel.predict(audio)
+                    # Feed to openWakeWord model
+                    prediction = owwModel.predict(audio)
 
-                # Column titles
-                #n_spaces = 16
-                #output_string_header = """
-                #    Model Name         | Score | Wakeword Status
-                #    --------------------------------------
-                #    """
+                    # Column titles
+                    #n_spaces = 16
+                    #output_string_header = """
+                    #    Model Name         | Score | Wakeword Status
+                    #    --------------------------------------
+                    #    """
 
-                for mdl in owwModel.prediction_buffer.keys():
-                    # Add scores in formatted table
-                    scores = list(owwModel.prediction_buffer[mdl])
-                    #print("scores: " + str(scores))
-                    #curr_score = format(scores[-1], '.20f').replace("-", "")
-                    #print("\033[F" + "curr_score: " + str(curr_score))
+                    for mdl in owwModel.prediction_buffer.keys():
+                        # Add scores in formatted table
+                        scores = list(owwModel.prediction_buffer[mdl])
+                        #print("scores: " + str(scores))
+                        #curr_score = format(scores[-1], '.20f').replace("-", "")
+                        #print("\033[F" + "curr_score: " + str(curr_score))
                     
-                    #print("type: " + str(type(scores[-1])))
+                        #print("type: " + str(type(scores[-1])))
                     
-                    if scores[-1] > self.hotword_sensitivity:
-                        print("\n\n" + str(mdl) + " - " + str(scores[-1]) + " (sensitivity: " + str(self.hotword_sensitivity) + ")\n\n")
-                        millis = int(round(time.time() * 1000))
-                        payload = {
-                            "modelId": mdl,
-                            "modelVersion": "",
-                            "modelType": "universal",
-                            
-                            "detectionSignalMs": millis,
-                            "endSignalMs":millis,
-                            "currentSensitivity": self.hotword_sensitivity,
-                            "siteId": self.persistent_data['site_id'],
-                            "sessionId": None,
-                            "sendAudioCaptured": None,
-                            "lang": None,
-                            "customEntities": {'origin':'voice'},
-                        }
-                        if(self.mqtt_second_client != None):
-                            self.mqtt_second_client.publish(f"hermes/hotword/{mdl}/detected", json.dumps(payload))
-                            print(f"run_wakeword: Published wakeword {mdl}, siteId {self.persistent_data['site_id']} to main controller")
-                            self.play_sound()
-                        continue
-                    #output_string_header += f"""{mdl}{" "*(n_spaces - len(mdl))}   | {curr_score[0:5]} | {"--"+" "*20 if scores[-1] <= 0.5 else "Wakeword Detected!"}
-                    #"""
+                        if scores[-1] > self.hotword_sensitivity:
+                            print("\n\n" + str(mdl) + " - " + str(scores[-1]) + " (sensitivity: " + str(self.hotword_sensitivity) + ")\n\n")
+                            millis = int(round(time.time() * 1000))
+                            payload = {
+                                "modelId": mdl,
+                                "modelVersion": "",
+                                "modelType": "universal",
+                                "detectionSignalMs": millis,
+                                "endSignalMs":millis,
+                                "currentSensitivity": self.hotword_sensitivity,
+                                "siteId": self.persistent_data['site_id'],
+                                "sessionId": None,
+                                "sendAudioCaptured": None,
+                                "lang": None,
+                                "customEntities": {'origin':'voice'},
+                            }
+                            if(self.mqtt_second_client != None):
+                                self.mqtt_second_client.publish(f"hermes/hotword/{mdl}/detected", json.dumps(payload))
+                                print(f"run_wakeword: Published wakeword {mdl}, siteId {self.persistent_data['site_id']} to main controller")
+                                self.play_sound()
+                            continue
+                        #output_string_header += f"""{mdl}{" "*(n_spaces - len(mdl))}   | {curr_score[0:5]} | {"--"+" "*20 if scores[-1] <= 0.5 else "Wakeword Detected!"}
+                        #"""
 
-                # Print results table
-                #print("\033[F"*(4*n_models+1))
-                #print(output_string_header, "                             ", end='\r')
+                    # Print results table
+                    #print("\033[F"*(4*n_models+1))
+                    #print(output_string_header, "                             ", end='\r')
             
             
-            if self.self.restart_wakeword:
-                self.self.restart_wakeword = False
+                if self.restart_wakeword:
+                    if self.DEBUG:
+                        print("wakeword thread: self.restart_wakeword was True, setting back to False")
+                    self.restart_wakeword = False
         
-        else:
-            if self.DEBUG:
-                print("\n Wakeword failed to start! No valid microphone detected")
+            else:
+                if self.DEBUG:
+                    print("\n Wakeword failed to start! No valid microphone detected")
 
-        self.wakeword_started = False
-        py_audio.terminate()
+            self.wakeword_started = False
+            py_audio.terminate()
+            
+        except Exception as ex:
+            print("run_wakeword: ERROR: " + str(ex))
+        
+        
         
             
             
@@ -5736,8 +5829,6 @@ class VocoAdapter(Adapter):
             if self.mqtt_client != None:
                 print("MQTT Client already existed. Not stopping and restarting it, it will keep trying by itself.")
                 
-                
-                
                 if self.should_restart_mqtt:
                     try:
                         #if self.mqtt_connected:
@@ -6577,7 +6668,10 @@ class VocoAdapter(Adapter):
             
             # If the message came from another controller
             if payload['siteId'] != self.persistent_data['site_id']:
-            
+                
+                if str(payload['siteId']) == str(self.fastest_device_id):
+                    self.fastest_device_last_ping_time = time.time()
+                
                 # find the fastest device that has LLM abilities on the network
                 if 'hardware_score' in payload and payload['hardware_score'] > self.fastest_device_score and 'has_stt' in payload and payload['has_stt'] == True and 'has_assistant' in payload and payload['has_assistant'] == True:
                     self.fastest_device_score = payload['hardware_score']
@@ -6732,9 +6826,13 @@ class VocoAdapter(Adapter):
             #if self.save_to_persistent_data:
             #    self.save_persistent_data()
 
+            if self.DEBUG:
+                print("self.fastest_device_score: " + str(self.fastest_device_score))
+
             # TODO: trigger the injection mechanism here, so that new names are learnt as quickly as possible? Maybe turn of the timed injection from the clock in that case (if is_satellite or if at lest one satellites is connected in case of being a main controller)
         else:
-            print("ping message was missing parts")
+            if self.DEBUG:
+                print("ping message was missing parts")
     
     
 
@@ -6748,7 +6846,8 @@ class VocoAdapter(Adapter):
             print(" - session_id: " + str(session_id))
         if sentence != '':
             sentence = sentence.strip()
-            print(" - sentence: " + str(sentence))
+            if self.DEBUG:
+                print(" - sentence: " + str(sentence))
             if session_id == None and self.current_snips_session_id != '':
                 session_id = self.current_snips_session_id
 
@@ -6820,10 +6919,11 @@ class VocoAdapter(Adapter):
         voice_message = ""
         word_count = 1
         
-        print("\n\n\n     ---- In MASTER INTENT CALLBACK ----")
-        print(str(intent_message))
-        print("\n\n\n")
-        print("intent_message['origin']: " + str(intent_message['origin']))
+        if self.DEBUG:
+            print("\n\n\n     ---- In MASTER INTENT CALLBACK ----")
+            print(str(intent_message))
+            print("\n\n\n")
+            print("intent_message['origin']: " + str(intent_message['origin']))
         
         try:
             if try_alternative == False:
@@ -10560,6 +10660,9 @@ class VocoAdapter(Adapter):
             
             for key in self.llm_models.keys():
                 key = str(key)
+                if key == 'wakeword':
+                    continue
+                
                 self.llm_busy_downloading_models += 1
                 
                 if self.DEBUG:
@@ -10905,6 +11008,32 @@ class VocoAdapter(Adapter):
         #        print("llm_stt: no active model defined yet")
         #    return
         
+        if self.mqtt_client != None and self.mqtt_connected and self.fastest_device_id != self.persistent_data['site_id'] and self.fastest_device_last_ping_time + 60 > time.time():
+            if self.DEBUG:
+                print("\nD O _ S T T\nsending audio recording to _fastest_ controller for STT via /do_stt: " + str(self.last_recording_path))
+            
+            try:
+                f=open(str(self.last_recording_path), "rb")
+                fileContent = f.read()
+            
+                #message_bytes = fileContent.encode('ascii')
+                base64_bytes = base64.b64encode(fileContent)
+                base64_message = base64_bytes.decode('ascii')
+            
+                mqtt_path = "hermes/voco/" + str(self.fastest_device_id) + '/do_stt'
+                #byteArr = bytearray(fileContent)
+                #self.mqtt_client.publish("/hermes/voco/" + str(self.persistent_data['main_site_id']) + '/do_sst', byteArr, 0)
+                if self.DEBUG:
+                    print("publishing to: " + str(mqtt_path) + ", base64: " + str(type(base64_message)) + ', length: ' + str(len(base64_message)))
+                self.mqtt_client.publish(mqtt_path, json.dumps({'siteId':str(self.persistent_data['site_id']), 'wav':str(base64_message)}) )
+
+            except Exception as ex:
+                print("llm_stt: Error passing voice recording to main controller: " + str(ex))
+        
+        
+        
+        
+        
         if self.llm_enabled and self.llm_stt_enabled and self.llm_stt_started:
             try:
                 # Check if the LLM STT server is still running OK
@@ -11198,6 +11327,20 @@ class VocoAdapter(Adapter):
                 print("LLM or STT server DISABLED\n")
 
 
+
+
+
+
+
+
+
+
+
+
+#
+# LLM ASSISTANT
+#
+
     
         
     def start_ai_assistant(self):
@@ -11250,93 +11393,107 @@ class VocoAdapter(Adapter):
         
         if self.llm_enabled and self.llm_assistant_enabled:
             if self.free_memory > self.llm_assistant_minimal_memory:
+        
+                assistant_prompt = self.llm_assistant_prompt.replace("{assistant_name}", self.llm_assistant_name)
+                if self.llm_models['assistant']['prompts'] and 'system' in self.llm_models['assistant']['prompts']:
+                    
+                    assistant_prompt = self.llm_models['assistant']['prompts']['system'].replace('{system_message}', assistant_prompt)
+                    
+                    #self.llm_assistant_prompt = "'The following is a conversation between a curious Researcher and their helpful AI assistant called " + str(self.llm_assistant_name) + ", which is a large language model trained on the sum of human knowledge. \n\n Researcher: What is the capital of Germany? \n" + str(self.llm_assistant_name) +": Berlin is the capital of Germany. \nResearcher:'"
                 
-                my_env = os.environ.copy()
+                    #if self.llm_models['assistant']['prompts']:
+                    #    if 'user' in self.llm_models['assistant']['prompts']:
+                    #        voice_message = self.llm_models['assistant']['prompts']['user'].replace('{prompt}', voice_message)
+                
+                    my_env = os.environ.copy()
         
-                with open(self.llm_assistant_output_file_path, "w") as myfile:
-                    myfile.write("")
-                self.last_assistant_output_change_time = time.time()
+                    with open(self.llm_assistant_output_file_path, "w") as myfile:
+                        myfile.write("")
+                    self.last_assistant_output_change_time = time.time()
         
-                self.llm_assistant_researcher_was_spotted = True
+                    self.llm_assistant_reverse_prompt_was_spotted = True
         
-                #"sh",
-                #    "-c",
-                #
+                    #"sh",
+                    #    "-c",
+                    #
         
-                assistant_command = [
+                    assistant_command = [
             
-                    str(self.llm_assistant_binary_path),
-                    "-m",
-                    str(self.llm_models['assistant']['active']),
-                    "-p",
-                    "'The following is a conversation between a curious Researcher and their helpful AI assistant called " + str(self.llm_assistant_name) + ", which is a large language model trained on the sum of human knowledge. \n\n Researcher: What is the capital of Germany? \n" + str(self.llm_assistant_name) +": Berlin is the capital of Germany. \nResearcher:'",
-                    "--interactive",
-                    #"--simple-io",
-                    "--batch_size",
-                    "1024",
-                    "--ctx_size",
-                    "1024",
-                    "--keep",
-                    "-1",
-                    "--log-disable",
-                    "--temp",
-                    "0",
-                    "--mirostat",
-                    "2",
-                    "--in-prefix",
-                    "' '",
-                    "--interactive-first",
-                    "--in-suffix",
-                    "'" + str(self.llm_assistant_name) + ":'",
-                    "--reverse-prompt",
-                    "'Researcher:'"
-                ]
-                # "--silent-prompt",
+                        str(self.llm_assistant_binary_path),
+                        "-m",
+                        str(self.llm_models['assistant']['active']),
+                        "-p",
+                        str(assistant_prompt),
+                        "--interactive",
+                        #"--simple-io",
+                        "--batch_size",
+                        "1024",
+                        "--ctx_size",
+                        "1024",
+                        "--keep",
+                        "-1",
+                        "--log-disable",
+                        "--temp",
+                        "0",
+                        "--mirostat",
+                        "2",
+                        "--in-prefix",
+                        "' '",
+                        "--interactive-first",
+                        "--in-suffix",
+                        "'" + str(self.llm_assistant_name) + ":'",
+                        "--reverse-prompt",
+                        "'" + str(self.llm_models['assistant']['prompts']['reverse']) + "'"
+                    ]
+                    # "--silent-prompt",
 
-                #"--prompt-cache",
-                #str(self.llm_assistant_prompt_cache_path),
+                    #"--prompt-cache",
+                    #str(self.llm_assistant_prompt_cache_path),
         
-                assistant_command_part2 = [
-                    "-t",
-                    "3",
-                    #">>",
-                    #"-"
-                    ">>",
-                    str(self.llm_assistant_output_file_path)
-                    #"2>&1",
-                    #"|",
-                    #"cat"
-                ]
+                    assistant_command_part2 = [
+                        "-t",
+                        "3",
+                        #">>",
+                        #"-"
+                        ">>",
+                        str(self.llm_assistant_output_file_path)
+                        #"2>&1",
+                        #"|",
+                        #"cat"
+                    ]
         
-                assistant_command = assistant_command + assistant_command_part2
+                    assistant_command = assistant_command + assistant_command_part2
         
-                assistant_command = ' '.join(assistant_command)
-                if self.DEBUG:
-                    print("llamafile assistant_command: " + str(assistant_command))
+                    assistant_command = ' '.join(assistant_command)
+                    if self.DEBUG:
+                        print("llamafile assistant_command: " + str(assistant_command))
         
                 
-                self.llm_assistant_process = Popen(assistant_command, env=my_env, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,bufsize=100,shell=True) # preexec_fn=os.setsid
-                time.sleep(.1)
-                if self.llm_assistant_process.poll() == None:
-                    if self.DEBUG:
-                        print("\n\n\nLLM Assistant process started succesfully\n\n\n")
-                    self.llm_assistant_started = True
-                else:
-                    if self.DEBUG:
-                        print("\n\n\nLLM Assistant process immediately crashed! return code: " + str(self.llm_assistant_process.returncode) + "\n\n\n")
-                    self.llm_assistant_started = False
-                    if self.llm_assistant_process.returncode == 0:
-                        #print(p.stdout # + '\n' + "Command success" #.decode('utf-8')
-                        print("assistant process : starting error. stdout: " + str(self.llm_assistant_process.stdout))
+                    self.llm_assistant_process = Popen(assistant_command, env=my_env, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,bufsize=100,shell=True) # preexec_fn=os.setsid
+                    time.sleep(.1)
+                    if self.llm_assistant_process.poll() == None:
+                        if self.DEBUG:
+                            print("\n\n\nLLM Assistant process started succesfully\n\n\n")
+                        self.llm_assistant_started = True
                     else:
+                        if self.DEBUG:
+                            print("\n\n\nLLM Assistant process immediately crashed! return code: " + str(self.llm_assistant_process.returncode) + "\n\n\n")
+                        self.llm_assistant_started = False
+                        if self.llm_assistant_process.returncode == 0:
+                            #print(p.stdout # + '\n' + "Command success" #.decode('utf-8')
+                            print("assistant process : starting error. stdout: " + str(self.llm_assistant_process.stdout))
+                        else:
+                            if self.llm_assistant_process.stderr:
+                                print("assistant process: starting error. stderr: " + str(self.llm_assistant_process.stderr)) # + '\n' + "Command failed"   #.decode('utf-8'))
+                
+                        if self.llm_assistant_process.stdout:
+                            print("assistant process: starting error. stdout: " + str(self.llm_assistant_process.stdout))
                         if self.llm_assistant_process.stderr:
                             print("assistant process: starting error. stderr: " + str(self.llm_assistant_process.stderr)) # + '\n' + "Command failed"   #.decode('utf-8'))
-                
-                    if self.llm_assistant_process.stdout:
-                        print("assistant process: starting error. stdout: " + str(self.llm_assistant_process.stdout))
-                    if self.llm_assistant_process.stderr:
-                        print("assistant process: starting error. stderr: " + str(self.llm_assistant_process.stderr)) # + '\n' + "Command failed"   #.decode('utf-8'))
                     
+                else:
+                    if self.DEBUG:
+                        print("\n\nERROR, could not find assistant model's prompts structure\n\n")
 
             else:
                 if self.DEBUG:
@@ -11374,8 +11531,13 @@ class VocoAdapter(Adapter):
         #self.mqtt_client.publish('hermes/dialogueManager/endSession', json.dumps({"text": "", "sessionId": str(self.current_snips_session_id)}))
         
         try:
+            
+            if self.mqtt_client != None and self.mqtt_connected and self.fastest_device_id != self.persistent_data['site_id'] and self.fastest_device_last_ping_time + 60 > time.time():
+                mqtt_path = "hermes/voco/" + str(self.fastest_device_id) + '/do_assistant'
+                self.mqtt_client.publish(mqtt_path, json.dumps({'siteId':str(self.persistent_data['site_id']), 'text':str(voice_message)}) )
+            
             #if self.llm_assistant_started and self.openai_client != None and self.llm_assistant_process != None and voice_message != None and len(voice_message) > 4:
-            if self.llm_assistant_started and self.llm_assistant_process != None and voice_message != None and len(voice_message) > 4:
+            elif self.llm_assistant_started and self.llm_assistant_process != None and voice_message != None and len(voice_message) > 4:
                 self.really_ask_ai_assistant(voice_message,intent=intent)
                 
             
@@ -11412,14 +11574,16 @@ class VocoAdapter(Adapter):
                 voice_message = voice_message[:-1]
             voice_message = voice_message + "?"
             
-        voice_message = " " + voice_message + "\n"
+        if self.llm_models['assistant']['prompts']:
+            if 'user' in self.llm_models['assistant']['prompts']:
+                voice_message = self.llm_models['assistant']['prompts']['user'].replace('{prompt}', voice_message)
         
-        if self.llm_assistant_researcher_was_spotted == False:
-            if self.DEBUG:
-                print("ask_ai_assistant: WARNING\n -> Adding missing 'Researcher: ' to beginning of voice message\n") # experiment
-            voice_message = '\nResearcher:' + voice_message
+        #if self.llm_assistant_reverse_prompt_was_spotted == False:
+        #    if self.DEBUG:
+        #        print("ask_ai_assistant: WARNING\n -> Adding missing 'Researcher: ' to beginning of voice message\n") # experiment
+        #    voice_message = '\nResearcher:' + voice_message
         if self.DEBUG:
-            print("to stdin: " + str(voice_message))
+            print("really_ask_ai_assistant: to stdin: " + str(voice_message))
         
         #print(self.llm_assistant_process.communicate(input=voice_message)[0])
         if self.llm_assistant_process != None: # and self.llm_assistant_process.poll() == None:
@@ -11457,6 +11621,8 @@ class VocoAdapter(Adapter):
                 if self.DEBUG:
                     print("\n⏰\nSTOPWATCH: + " + str(time.time() - self.llm_stt_stopwatch) + ', ' + str(time.time() - self.llm_stt_stopwatch_start))
                 self.llm_stt_stopwatch = time.time()
+                
+                
                 if self.DEBUG:
                     print("SENDING \nSENDING \nSENDING\n" + str(voice_message))
                 self.llm_assistant_process.stdin.write(voice_message)
@@ -11472,7 +11638,7 @@ class VocoAdapter(Adapter):
                 self.got_assistant_output = False    
                 already_sent_sentences = []
                 repeated_the_question = False
-                self.llm_assistant_researcher_was_spotted = False
+                self.llm_assistant_reverse_prompt_was_spotted = False
                 
                 
                 if self.DEBUG:
@@ -11528,10 +11694,10 @@ class VocoAdapter(Adapter):
                                     print("spotted two consecutive newlines in a row in full STT output")
                                 full = full.split('\n\n')[0]
                     
-                            if full.startswith('Researcher:'):
-                                full = full[11:]
+                            if str(self.llm_models['assistant']['prompts']['reverse']) != '' and full.startswith(str(self.llm_models['assistant']['prompts']['reverse'])):
+                                full = full[len(str(self.llm_models['assistant']['prompts']['reserve'])):]
                                 if self.DEBUG:
-                                    print("Stripped 'Researcher:' from beginning of full:\n" + str(full))
+                                    print("Stripped '" + str(self.llm_models['assistant']['prompts']['user']) + "' from beginning of full:\n" + str(full))
                                     
                             if str(self.llm_assistant_name) + ':' in full:
                                 # sometimes the assistant halucinates another question by the user
@@ -11560,11 +11726,8 @@ class VocoAdapter(Adapter):
                                 if self.DEBUG:
                                     print("line count: " + str(line_count))
                                     
-                                
-                                
-                                    
-                                if 'Researcher:' in full:
-                                    self.llm_assistant_researcher_was_spotted = True
+                                if str(self.llm_models['assistant']['prompts']['reverse']) in full:
+                                    self.llm_assistant_reverse_prompt_was_spotted = True
                                     line_count += 1
                                     
                                 if lines[0].strip().endswith(' is not commonly used in English'):
@@ -11579,34 +11742,37 @@ class VocoAdapter(Adapter):
                                         print(str(line_index) + ". line: " + str(line))
                                     if line_index < line_count:
                                         
-                                        if line in already_sent_sentences:
-                                            if self.DEBUG:
-                                                print("-line was already sent to speak thread.")
-                                        else:
-                                            if self.DEBUG:
-                                                print("-line was not in list of spoken lines yet.")
-                                            if 'Researcher:' in line:
-                                                line = line.split('Researcher:')[0]
-                                                line = line.strip()
+                                        if str(self.llm_models['assistant']['prompts']['reverse']) in line:
+                                            line = line.split(str(self.llm_models['assistant']['prompts']['reverse']))[0]
+                                            line = line.strip()
+                                        
+                                        if str(self.llm_models['assistant']['prompts']['end']) in line:
+                                            line = line.split(str(self.llm_models['assistant']['prompts']['end']))[0]
+                                            line = line.strip()
+                                        
+                                        if len(line) > 1:
                                             if self.DEBUG:
                                                 print("\nCAN SEND THIS LINE?: " + str(line))
-                                            if len(line) > 1:
+                                            
+                                            if line in already_sent_sentences:
+                                                if self.DEBUG:
+                                                    print("-line was already sent to speak thread.")
+                                            else:
+                                                if self.DEBUG:
+                                                    print("-line was not in list of spoken lines yet.")
                                                 already_sent_sentences.append(line)
                                                 print("SPEAKING IT.\n - already_sent_sentences is now: " + str(already_sent_sentences))
                                                 if self.DEBUG:
                                                     print("\n⏰\nSTOPWATCH: + " + str(time.time() - self.llm_stt_stopwatch) + ', ' + str(time.time() - self.llm_stt_stopwatch_start))
                                                 self.speak(line,intent)
-                                
+                                            
                     
                                 
                     
                             #if full.endswith('Researcher:') or full.endswith('Researcher: '):
-                            if 'Researcher:' in full and not full.startswith('Researcher:'):
+                            if str(self.llm_models['assistant']['prompts']['reverse']) in full and not full.startswith(str(self.llm_models['assistant']['prompts']['reverse'])):
                                 if self.DEBUG:
-                                    print("RESEARCHER: IN OUTPUT")
-                                
-                                
-                                if self.DEBUG:
+                                    print("REVERSE PROMPT IN OUTPUT")
                                     print("DONE!")
                                 break
                                 
@@ -11768,7 +11934,11 @@ class VocoAdapter(Adapter):
                         pass
             
                     elif action == 'summarize':
-                        prompt = "Please summarize the following text: \n```\n" + prompt + "\n```\n\nSummary:\n"
+                        prompt = 'Please summarize the following text: \n\n"""\n' + prompt + '\n"""\n\nSummary:\n'
+                    
+                    if self.llm_models['assistant']['prompts']:
+                        if 'user' in self.llm_models['assistant']['prompts']:
+                            prompt = self.llm_models['assistant']['prompts']['user'].replace('{prompt}',prompt)
                     
                     generate_text_command = [
                         str(self.llm_assistant_binary_path),

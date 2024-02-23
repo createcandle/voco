@@ -333,6 +333,8 @@ class VocoAPIHandler(APIHandler):
                                     print('ajax handling llm init')
                                 
                                 self.adapter.check_available_memory()
+                                self.adapter.check_possible_wakewords()
+                                
                                 
                                 return APIResponse(
                                   status=200,
@@ -350,6 +352,9 @@ class VocoAPIHandler(APIHandler):
                                           'llm_busy_downloading_models':self.adapter.llm_busy_downloading_models,
                                           
                                           'llm_models':self.adapter.llm_models,
+                                          
+                                          'llm_wakeword_models': self.adapter.llm_wakeword_models,
+                                          'llm_wakeword_model': self.adapter.persistent_data['llm_wakeword_model'],
                                           
                                           'llm_tts_enabled':self.adapter.llm_tts_enabled,
                                           'llm_tts_minimal_memory':self.adapter.llm_tts_minimal_memory,
@@ -376,6 +381,14 @@ class VocoAPIHandler(APIHandler):
                                 if self.DEBUG:
                                     print('ajax handling set_llm')
                                 try:
+                                    
+                                    if 'llm_wakeword_model' in request.body:
+                                        
+                                        if str(self.adapter.persistent_data['llm_wakeword_model']) != str(request.body['llm_wakeword_model']):
+                                            self.adapter.persistent_data['llm_wakeword_model'] = str(request.body['llm_wakeword_model'])
+                                            self.adapter.llm_should_download = True
+                                            self.adapter.restart_wakeword = True
+                                    
                                     if 'llm_tts_model' in request.body:
                                         
                                         if self.adapter.persistent_data['llm_tts_model'] != str(request.body['llm_tts_model']):
@@ -399,8 +412,6 @@ class VocoAPIHandler(APIHandler):
                                 except Exception as ex:
                                     print("Error in set_llm: " + str(ex))
                                     
-                                
-                                
                                 return APIResponse(
                                   status=200,
                                   content_type='application/json',
