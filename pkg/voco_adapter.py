@@ -3553,7 +3553,7 @@ class VocoAdapter(Adapter):
                     self.wakeword_thread.daemon = True
                     self.wakeword_thread.start()
                     if self.DEBUG:
-                        print("run_snips: started wakeword thread")
+                        print("\nrun_snips: started wakeword thread instead of snips-hotword\n")
                     continue
                 
                 
@@ -3730,35 +3730,41 @@ class VocoAdapter(Adapter):
             CHUNK = 4096
             py_audio = pyaudio.PyAudio()
 
-        
-            info = py_audio.get_host_api_info_by_index(0)
-            numdevices = info.get('deviceCount')
-        
-            #for each audio device, determine if is an input or an output and add it to the appropriate list and dictionary
-            #for i in range(py_audio.get_device_count()):
-            for i in range (0,numdevices):
+            try:
+                info = py_audio.get_host_api_info_by_index(0)
+                if self.DEBUG:
+                    print("run_wakeword: info of device at index 0: " + str(info))
+                numdevices = info.get('deviceCount')
+                if self.DEBUG:
+                    if numdevices == 0:
+                        print("run_wakeword: ERROR, no input audio device found at index 0")
+                #for each audio device, determine if is an input or an output and add it to the appropriate list and dictionary
+                #for i in range(py_audio.get_device_count()):
+                for i in range (0,numdevices):
             
             
-                #print("Number of audio devices:", p.get_device_count())
+                    #print("Number of audio devices:", p.get_device_count())
             
-                dev = py_audio.get_device_info_by_index(i)
-                print("Device index:", i)
-                print("Device name:", dev.get('name'))
-                print("Input channels:", dev.get('maxInputChannels'))
-                print("Output channels:", dev.get('maxOutputChannels'))
-                print("Default Sample Rate:", dev.get('defaultSampleRate'))
-                print("---------------------------------------")
+                    dev = py_audio.get_device_info_by_index(i)
+                    print("run_wakeword: Device index:", i)
+                    print("run_wakeword: Device name:", dev.get('name'))
+                    print("run_wakeword: Input channels:", dev.get('maxInputChannels'))
+                    print("run_wakeword: Output channels:", dev.get('maxOutputChannels'))
+                    print("run_wakeword: Default Sample Rate:", dev.get('defaultSampleRate'))
+                    print("---------------------------------------")
             
             
-                if py_audio.get_device_info_by_host_api_device_index(0,i).get('maxInputChannels')>0:
-                    if self.DEBUG:
-                        print("Input Device id ", i, " - ", py_audio.get_device_info_by_host_api_device_index(0,i).get('name'))
+                    if py_audio.get_device_info_by_host_api_device_index(0,i).get('maxInputChannels')>0:
+                        if self.DEBUG:
+                            print("Input Device id ", i, " - ", py_audio.get_device_info_by_host_api_device_index(0,i).get('name'))
 
-                if py_audio.get_device_info_by_host_api_device_index(0,i).get('maxOutputChannels')>0:
-                    if self.DEBUG:
-                        print("Output Device id ", i, " - ", py_audio.get_device_info_by_host_api_device_index(0,i).get('name'))
+                    if py_audio.get_device_info_by_host_api_device_index(0,i).get('maxOutputChannels')>0:
+                        if self.DEBUG:
+                            print("Output Device id ", i, " - ", py_audio.get_device_info_by_host_api_device_index(0,i).get('name'))
+            except Exception as ex:
+                print('Error in pyAudio scan: ' + str(ex))
 
-            devinfo = py_audio.get_device_info_by_index(1)
+            devinfo = py_audio.get_device_info_by_index(self.capture_card_id) # was 1
             if self.DEBUG:
                 print("Selected microphone is ",devinfo.get('name'))
             if py_audio.is_format_supported(48000.0, input_device=devinfo["index"],input_channels=devinfo['maxInputChannels'],input_format=pyaudio.paInt16): #44100
