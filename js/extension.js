@@ -1848,7 +1848,7 @@
 									radio_el.checked = true;
 								}
 							}
-							else if(llm_models[llm_type]['active'].endsWith(model_name)){
+							else if(typeof llm_models[llm_type]['active'] == 'string' && llm_models[llm_type]['active'].endsWith(model_name)){
 								if(this.debug){
 									console.log("Voco: BINGO, spotted the active model");
 								}
@@ -1880,7 +1880,7 @@
 							                }
 								        }).catch((e) => {
 								  			console.error('Error during delete_llm api call: ', e);
-											alert("Could not connect with Voco, the model may not have been deleted");
+											//alert("Could not connect with Voco, the model may not have been deleted");
 								        });
 									
 									});
