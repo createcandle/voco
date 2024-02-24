@@ -919,8 +919,6 @@ class VocoAdapter(Adapter):
         self.llm_tts_cache_dir_path = os.path.join(self.llm_data_dir_path, 'tts_cache')
         
         
-        
-        
         if not os.path.isdir(str(self.llm_tts_dir_path)):
             os.system('mkdir -p ' + str(self.llm_tts_dir_path))
         if not os.path.isdir(str(self.llm_tts_cache_dir_path)):
@@ -1026,6 +1024,9 @@ class VocoAdapter(Adapter):
         
         
         # AI LLM, continued
+        
+        self.kill_llm()
+        time.sleep(.1)
         
         self.audio_frame_topic = 'hermes/audioServer/' + str(self.persistent_data['site_id']) + '/audioFrame'
         
@@ -1178,35 +1179,37 @@ class VocoAdapter(Adapter):
         self.llm_wakeword_models = {
             'Hey Candle':{'model':'hey_candle.tflite',
                                 'size':2,
-                                'description':'Start a voice command by saying "Hey Candle. The default."',
+                                'description':'Start a voice command by saying "Hey Candle". The default.',
                                 'downloaded':True,
                                 'model_path':str(os.path.join(self.wakeword_models_dir_path,'hey_candle.tflite'))
                             },
             'Hey Voco':{'model':'hey_voco.tflite',
                                 'size':2,
-                                'description':'Start a voice command by saying "Hey Voco"',
+                                'description':'Start a voice command by saying "Hey Voco".',
                                 'downloaded':True,
                                 'model_path':str(os.path.join(self.wakeword_models_dir_path,'hey_voco.tflite'))
                             },
             'Hey Snips':{'model':'hey_snips.tflite',
                                 'size':2,
-                                'description':'Start a voice command by saying "Hey Snips"',
+                                'description':'Start a voice command by saying "Hey Snips".',
                                 'downloaded':True,
                                 'model_path':str(os.path.join(self.wakeword_models_dir_path,'hey_snips.tflite'))
                             },
             'Hey Jarvis':{'model':'hey_jarvis.tflite',
                                 'size':2,
-                                'description':'Start a voice command by saying "Hey Jarvis"',
+                                'description':'Start a voice command by saying "Hey Jarvis".',
                                 'downloaded':True,
                                 'model_path':str(os.path.join(self.wakeword_models_dir_path,'hey_jarvis.tflite'))
                             },
             'Custom':{'model':'custom.tflite',
                                 'size':2,
-                                'description':'You can provide a link to a .tflite wakeword model of your choice in the addon settings, and Voco will download it for you. You can learn how to make your own model at: https://colab.research.google.com/drive/1q1oe2zOyZp7UsB3jJiQ1IFn8z5YfjwEb?usp=sharing#scrollTo=1cbqBebHXjFD',
+                                'description':'You can provide a link to a .tflite wakeword model of your choice in the addon settings, and Voco will download it for you.',
                                 'downloaded':False,
                                 'model_path':str(self.custom_wakeword_model_path)
                             },
         }
+        
+        # You can learn how to make your own model at: https://colab.research.google.com/drive/1q1oe2zOyZp7UsB3jJiQ1IFn8z5YfjwEb?usp=sharing#scrollTo=1cbqBebHXjFD
         
         
         self.llm_tts_models = {
@@ -1471,7 +1474,7 @@ class VocoAdapter(Adapter):
         
         
         self.llm_models = { 
-                            'wakeword': {'list':self.llm_wakeword_models,'active':None},
+                            'wakeword': {'list':self.llm_wakeword_models,'active':self.persistent_data['llm_wakeword_model']},
                             'tts': {'list':self.llm_tts_models,'active':None},
                             'stt': {'list':self.llm_stt_models,'active':None},
                             'assistant': {'list':self.llm_assistant_models,'active':None,'prompts':self.llm_assistant_models['Custom']['prompts']}
@@ -4709,20 +4712,9 @@ class VocoAdapter(Adapter):
             
         self.running = False
         
-        os.system('pkill -f ' + str(self.llm_tts_binary_name))
-        os.system('pkill -f ' + str(self.llm_stt_binary_name))
-        os.system('pkill -f ' + str(self.llm_assistant_binary_name))
-        if os.path.exists(str(self.llm_generated_text_file_path)):
-            os.system('rm ' + str(self.llm_generated_text_file_path))
+        self.kill_llm()
         
-        #if os.path.isfile(str(self.last_recording_path)):
-        #    if self.DEBUG:
-        #        print("unload: removed voice audio recording")
-        #    os.system('rm ' + str(self.last_recording_path))
-        self.delete_recordings()
         
-        if self.llm_stt_process != None:
-            self.llm_stt_process.kill()
             
         if self.matrix_started:
             self.matrix_started = False
@@ -4752,6 +4744,25 @@ class VocoAdapter(Adapter):
             print("")
         
         # kill -9 `ps -ef | voco/main.py | grep -v grep | awk '{print $2}'`
+        
+        
+    def kill_llm(self):
+        if self.DEBUG:
+            print("in kill_llm")
+        if self.llm_stt_process != None:
+            self.llm_stt_process.kill()
+            
+        os.system('pkill -f ' + str(self.llm_tts_binary_name))
+        os.system('pkill -f ' + str(self.llm_stt_binary_name))
+        os.system('pkill -f ' + str(self.llm_assistant_binary_name))
+        if os.path.exists(str(self.llm_generated_text_file_path)):
+            os.system('rm ' + str(self.llm_generated_text_file_path))
+        
+        #if os.path.isfile(str(self.last_recording_path)):
+        #    if self.DEBUG:
+        #        print("unload: removed voice audio recording")
+        #    os.system('rm ' + str(self.last_recording_path))
+        self.delete_recordings()
         
     
     def stop_snips(self):

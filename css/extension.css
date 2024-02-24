@@ -40,6 +40,15 @@ body:not(.developer) .extension-voco-show-if-developer{
 }
 
 
+.extension-voco-vlak{
+    padding:2rem;
+    border-radius:.5rem;
+    margin:4rem auto;
+    background-color:rgba(0,0,0,.1);
+    overflow-wrap: break-word;
+    word-wrap: break-word;
+}
+
 
 
 /*  TABS  */
@@ -793,14 +802,7 @@ body #extension-voco-view .extension-voco-tab-selected{
     word-break: break-all;
 }
 
-.extension-voco-vlak{
-    padding:2rem;
-    border-radius:.5rem;
-    margin:4rem auto;
-    background-color:rgba(0,0,0,.1);
-    overflow-wrap: break-word;
-    word-wrap: break-word;
-}
+
 
 .extension-voco-vlak .extension-voco-vlak{
     margin:2rem auto;
@@ -1089,11 +1091,24 @@ f
 
 
 .extension-voco-llm-model-downloaded-delete-button{
-	position:absolute;
-	right:2rem;
-	font-size:6rem;
-	cursor:pointer;
+	position: absolute;
+    right: 2rem;
+    font-size: 2.2rem;
+    border: 2rem;
+    bottom: 2rem;
+    cursor: pointer;
+    padding: 1rem;
+    background: rgba(255,0,0,.6);
+    border-radius: 1rem;
+    display: inline-block;
+    width: 2.5rem;
+    height: 2.5rem;
+    text-align: center;
 }
+.extension-voco-llm-model-downloaded-delete-button:hover{
+	background: rgba(255,0,0,1);
+}
+
 
 .extension-voco-llm-not-possible{
 	background-color:red!important;
@@ -1139,9 +1154,11 @@ f
 #extension-voco-main-llm-tts-running-panel > div{
 	position:relative;
 	overflow:hidden;
+	flex-grow:1;
+	text-align:right;
 }
 #extension-voco-main-llm-tts-running-panel > div:not(:last-of-type){
-	margin-left:1rem;
+	margin-right:2rem;
 }
 #extension-voco-main-llm-tts-running-panel .extension-voco-unicode-icon-medium{
     position: absolute;

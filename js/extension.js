@@ -1855,7 +1855,7 @@
 								radio_el.checked = true;
 							}
 							else if(typeof llm_details.downloaded != 'undefined'){
-								if(llm_details.downloaded){
+								if(llm_details.downloaded && model_name != 'voco' && llm_type != 'wakeword'){
 									let delete_model_button_el = document.createElement('span');
 									delete_model_button_el.classList.add('extension-voco-llm-model-downloaded-delete-button');
 									delete_model_button_el.textContent = '🗑';
