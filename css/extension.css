@@ -646,6 +646,8 @@ body #extension-voco-view .extension-voco-tab-selected{
 	border: none;
 	outline: none;
 	font-family:inherit;
+	background-color:white;
+	color:black;
 }
 
 
@@ -1003,7 +1005,7 @@ f
 .extension-voco-unicode-icon-medium{
 	display:inline-block;
 	font-size:3rem;
-	margin-right:1rem;
+	/*margin-right:1rem;*/
 }
 
 /*
@@ -1059,6 +1061,7 @@ f
 	cursor:pointer;
 }
 
+.extension-voco-wakeword-running #extension-voco-main-llm-wakeword-not-running,
 .extension-voco-tts-running #extension-voco-main-llm-tts-not-running,
 .extension-voco-stt-running #extension-voco-main-llm-stt-not-running,
 .extension-voco-assistant-running #extension-voco-main-llm-assistant-not-running,
@@ -1066,7 +1069,7 @@ f
 	display:none;
 }
 
-
+#extension-voco-main-llm-wakeword-running,
 #extension-voco-main-llm-tts-running,
 #extension-voco-main-llm-stt-running,
 #extension-voco-main-llm-assistant-running{
@@ -1074,11 +1077,11 @@ f
 }
 
 
-
+/*.extension-voco-assistant-running #extension-voco-main-llm-playground,*/
+.extension-voco-wakeword-running #extension-voco-main-llm-wakeword-running,
 .extension-voco-tts-running #extension-voco-main-llm-tts-running,
 .extension-voco-stt-running #extension-voco-main-llm-stt-running,
-.extension-voco-assistant-running #extension-voco-main-llm-assistant-running,
-.extension-voco-assistant-running #extension-voco-main-llm-playground{
+.extension-voco-assistant-running #extension-voco-main-llm-assistant-running{
 	display:block;
 }
 
@@ -1156,10 +1159,13 @@ f
 	overflow:hidden;
 	flex-grow:1;
 	text-align:right;
+	/*height: 8rem;*/
+	min-height:8rem;
 }
 #extension-voco-main-llm-tts-running-panel > div:not(:last-of-type){
 	margin-right:2rem;
 }
+/*
 #extension-voco-main-llm-tts-running-panel .extension-voco-unicode-icon-medium{
     position: absolute;
     opacity: .2;
@@ -1167,8 +1173,26 @@ f
     top: 7rem;
     font-size: 13rem;
 }
+*/
+#extension-voco-main-llm-tts-running-panel .extension-voco-unicode-icon-medium{
+    /*position: absolute;*/
+	display:block;
+	text-align:center;
+    opacity: .4;
+    left: 0;
+    top: 4rem;
+	font-size: 4rem;
+	line-height: 6rem;
+}
 
 
+#extension-voco-main-llm-tts-running-panel .extension-voco-running-panel-name{
+	/*position: absolute;*/
+	right:.5rem;
+	bottom:.5rem;
+	display:block;
+	text-align:center;
+}
 
 
 /*  spinner  */

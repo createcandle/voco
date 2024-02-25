@@ -355,6 +355,7 @@ class VocoAPIHandler(APIHandler):
                                           
                                           'llm_wakeword_models': self.adapter.llm_wakeword_models,
                                           'llm_wakeword_model': self.adapter.persistent_data['llm_wakeword_model'],
+                                          'llm_wakeword_started': self.adapter.llm_wakeword_started,
                                           
                                           'llm_tts_enabled':self.adapter.llm_tts_enabled,
                                           'llm_tts_minimal_memory':self.adapter.llm_tts_minimal_memory,

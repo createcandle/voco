@@ -30,6 +30,7 @@
 			this.previous_llm_folder_size = 0;
 			
 			this.llm_wakeword_model = 'hey_candle.tflite';
+			this.llm_wakeword_started = false;
 			
 			this.llm_tts_model = null;
 			this.llm_tts_models = {};
@@ -1664,6 +1665,16 @@
 				
 				if(typeof body['llm_enabled'] != 'undefined'){
 					this.llm_enabled = body['llm_enabled'];
+				}
+				
+				if(typeof body['llm_wakeword_started'] != 'undefined'){
+					this.llm_wakeword_started = body['llm_wakeword_started'];
+					if(this.llm_wakeword_started){
+						content_container_el.classList.add('extension-voco-wakeword-running');
+					}
+					else{
+						content_container_el.classList.remove('extension-voco-wakeword-running');
+					}
 				}
 				
 				if(typeof body['llm_tts_started'] != 'undefined'){

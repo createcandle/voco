@@ -235,9 +235,9 @@ class VocoAdapter(Adapter):
         if self.bit_extension == "64":
             self.use_open_wakeword = True
         self.wakeword_thread = None
-        self.wakeword_started = False
+        self.llm_wakeword_started = False
         self.restart_wakeword = False
-
+        self.microphone_useful_sample_rate = 0
         
         # LLM AI
         self.llm_enabled = True
@@ -761,6 +761,8 @@ class VocoAdapter(Adapter):
         self.prefer_aplay = True
         self.currently_muted = True
         
+        self.last_times_sound_played = {} # avoid playing the same sound too many times in a row
+        
         # Bluetooth
         self.bluealsa_available = False
         self.kill_ffplay_before_speaking = False
@@ -810,6 +812,7 @@ class VocoAdapter(Adapter):
         self.mqtt_client = None
         self.mqtt_port = 1885
         self.mqtt_connected = False
+        self.mqtt_second_connected = False
         self.voco_connected = True
         self.mqtt_others = {}
         self.should_restart_mqtt = True
@@ -2611,13 +2614,16 @@ class VocoAdapter(Adapter):
             site_id = intent['siteId']
         
             if 'origin' in intent:
+                if self.DEBUG:
+                    print(" - origin: " + str(intent['origin']))
+                
                 if intent['origin'] == 'text':
                     if self.DEBUG:
-                        print("origin was text input, so not playing a sound")
+                        print(" - origin was text input, so not playing a sound")
                     return
                 elif intent['origin'] == 'matrix':
                     if self.DEBUG:
-                        print("origin was matrix chat input, so not playing a sound")
+                        print(" - origin was matrix chat input, so not playing a sound")
                     return
                     
                     
@@ -2628,6 +2634,9 @@ class VocoAdapter(Adapter):
             # helps to avoid triggering voice detection to voco making noise itself
             self.last_sound_activity = time.time() - 1
             
+            
+            
+            
             if site_id != 'default' and not site_id.endswith(self.persistent_data['site_id']):
                 if self.DEBUG:
                     print("Play_sound is forwarding playing a sound to site_id: " + str(site_id))
@@ -2636,6 +2645,16 @@ class VocoAdapter(Adapter):
             if site_id == 'everywhere' or site_id.endswith(self.persistent_data['site_id']):
                 if self.DEBUG:
                     print("playing sound locally. self.persistent_data['audio_output']: " + str(self.persistent_data['audio_output']))
+                
+                # avoid playing a sound to quickly in a row, which can happen with the new openwakeword detector
+                if sound_file in self.last_times_sound_played:
+                    if self.last_times_sound_played[sound_file] > time.time() - 2:
+                        if self.DEBUG:
+                            print("\n\nWARNING: this sound was already played here very recently, aborting. sound_file: " + str(sound_file))
+                        self.last_times_sound_played[sound_file] = time.time()
+                        return
+                
+                self.last_times_sound_played[sound_file] = time.time()
                 
                 sound_file = sound_file + str(self.persistent_data['speaker_volume']) + '.wav'
                 sound_file = os.path.join(self.addon_dir_path,"sounds",sound_file)
@@ -3340,7 +3359,7 @@ class VocoAdapter(Adapter):
                 print("Error: run_snips: called while snips was already in the process of being started")
             return
         
-        if self.mqtt_connected == False and self.still_busy_booting:
+        if self.mqtt_second_connected == False and self.still_busy_booting:
             if self.DEBUG:
                 print("Error, run_snips aborted because MQTT didn't seem to be connected (yet), and it's still booting?")
             return
@@ -3539,21 +3558,11 @@ class VocoAdapter(Adapter):
                 
                 if self.use_open_wakeword and unique_command == 'snips-hotword':
                     if self.DEBUG:
-                        print("run_snips: starting wakeword thread")
+                        print("run_snips: starting wakeword thread instead of snips-hotword")
                         
-                    if self.wakeword_started:
-                        self.restart_wakeword = True
-                        time.sleep(.1)
-                    if self.wakeword_started:
-                       if self.DEBUG:
-                           print("\nERROR, wakeword was still running after having been given time to stop")
-                    
-                    self.wakeword_thread = None
-                    self.wakeword_thread = threading.Thread(target=self.run_wakeword) #, args=(self.voice_messages_queue,))
-                    self.wakeword_thread.daemon = True
-                    self.wakeword_thread.start()
-                    if self.DEBUG:
-                        print("\nrun_snips: started wakeword thread instead of snips-hotword\n")
+                    self.start_wakeword_thread()
+                    #if self.DEBUG:
+                    #    print("\nrun_snips: hopefully started wakeword thread instead of snips-hotword\n")
                     continue
                 
                 
@@ -3709,13 +3718,37 @@ class VocoAdapter(Adapter):
 
     
     
+    
+    #
+    #  WAKEWORD
+    #
+    
     #def check_possible_wakewords(self):
     #    self.possible_wakewords = [
     #        os.path.join()
     #    ]
         
         
+    def start_wakeword_thread(self):
+        if self.DEBUG:
+            print("in start_wakeword_thread")
+            
+        if self.llm_wakeword_started:
+            if self.DEBUG:
+                print("wakeword thread is already running. Attempting to stop it first.")
+            self.restart_wakeword = True
+            time.sleep(.2)
+        if self.llm_wakeword_started:
+           if self.DEBUG:
+               print("\nERROR, wakeword was still running after having been given time to stop")
+        
+        self.wakeword_thread = None
+        self.wakeword_thread = threading.Thread(target=self.run_wakeword) #, args=(self.voice_messages_queue,))
+        self.wakeword_thread.daemon = True
+        self.wakeword_thread.start()
+        
 
+    # actual wakeword thread
     def run_wakeword(self):
         if self.DEBUG:
             print("in run_wakeword")
@@ -3766,16 +3799,47 @@ class VocoAdapter(Adapter):
 
             devinfo = py_audio.get_device_info_by_index(self.capture_card_id) # was 1
             if self.DEBUG:
-                print("Selected microphone is ",devinfo.get('name'))
-            if py_audio.is_format_supported(48000.0, input_device=devinfo["index"],input_channels=devinfo['maxInputChannels'],input_format=pyaudio.paInt16): #44100
+                print("\n\n[MIC]\nSelected microphone is: index: " + str(devinfo["index"]) + ", name: " + str(devinfo.get('name')))
+            if devinfo.get('name') == 'sysdefault':
                 if self.DEBUG:
-                    print('run_wakeword: found valid microphone')
-                    print("self.hotword_sensitivity: " + str(self.hotword_sensitivity))
-                    print("self.persistent_data['llm_wakeword_model']: " + str(self.persistent_data['llm_wakeword_model']))
-
-                mic_stream = py_audio.open(format=FORMAT, channels=CHANNELS, rate=RATE, input=True, frames_per_buffer=CHUNK)
-
+                    print("\n\nWARNING, LIKELY INVALID MICROPHONE: " + str(devinfo.get('name')))
                 
+            self.microphone_useful_sample_rate = 0
+            try:
+                if py_audio.is_format_supported(16000.0, input_device=devinfo["index"],input_channels=devinfo['maxInputChannels'],input_format=pyaudio.paInt16): #44100 48000.0
+                    if self.DEBUG:
+                        print('run_wakeword: found valid microphone with 16000 samplerate')
+                        print("self.hotword_sensitivity: " + str(self.hotword_sensitivity))
+                        print("self.persistent_data['llm_wakeword_model']: " + str(self.persistent_data['llm_wakeword_model']))
+                        self.microphone_useful_sample_rate = 16000
+                else:
+                    if self.DEBUG:
+                        print('run_wakeword: microphone does not support 16000 sample rate natively')
+            except Exception as ex:
+                print("Error testing microphone for 16000 sample rate")
+            
+            
+                
+            try:
+                if self.microphone_useful_sample_rate == 0 and py_audio.is_format_supported(48000.0, input_device=devinfo["index"],input_channels=devinfo['maxInputChannels'],input_format=pyaudio.paInt16): #44100 48000.0
+                    if self.DEBUG:
+                        print('run_wakeword: found valid microphone with 48000 samplerate')
+                        print("self.hotword_sensitivity: " + str(self.hotword_sensitivity))
+                        print("self.persistent_data['llm_wakeword_model']: " + str(self.persistent_data['llm_wakeword_model']))
+                        self.microphone_useful_sample_rate = 48000
+                else:
+                    if self.DEBUG:
+                        print('run_wakeword: microphone does not support 48000 sample rate natively')
+            except Exception as ex:
+                print("Error testing microphone for 48000 sample rate")
+                
+                
+            if self.microphone_useful_sample_rate:
+
+                #channels=self.detector.NumChannels(),
+                #rate=self.detector.SampleRate(),
+                mic_stream = py_audio.open(format=FORMAT, channels=CHANNELS, rate=RATE, input=True, frames_per_buffer=CHUNK)
+                            
                 wakeword_model_path = os.path.join(self.wakeword_models_dir_path,self.persistent_data['llm_wakeword_model'])
                 if self.persistent_data['llm_wakeword_model'] == 'custom':
                     wakeword_model_path = self.custom_wakeword_model_path
@@ -3784,10 +3848,10 @@ class VocoAdapter(Adapter):
                 owwModel = Model(wakeword_models=[wakeword_model_path], inference_framework="tflite") # alternative is "onnx" or "tflite"
 
                 n_models = len(owwModel.models.keys())
-        
-                self.wakeword_started = True
-                while self.running and not self.restart_wakeword:
-                
+    
+                self.llm_wakeword_started = True
+                while self.running and not self.restart_wakeword and self.persistent_data['listening']:
+            
                     # Get audio
                     audio = np.frombuffer(mic_stream.read(CHUNK, exception_on_overflow = False), dtype=np.int16)
 
@@ -3807,9 +3871,9 @@ class VocoAdapter(Adapter):
                         #print("scores: " + str(scores))
                         #curr_score = format(scores[-1], '.20f').replace("-", "")
                         #print("\033[F" + "curr_score: " + str(curr_score))
-                    
+                
                         #print("type: " + str(type(scores[-1])))
-                    
+                
                         if scores[-1] > self.hotword_sensitivity:
                             print("\n\n" + str(mdl) + " - " + str(scores[-1]) + " (sensitivity: " + str(self.hotword_sensitivity) + ")\n\n")
                             millis = int(round(time.time() * 1000))
@@ -3828,7 +3892,7 @@ class VocoAdapter(Adapter):
                             }
                             if(self.mqtt_second_client != None):
                                 self.mqtt_second_client.publish(f"hermes/hotword/{mdl}/detected", json.dumps(payload))
-                                print(f"run_wakeword: Published wakeword {mdl}, siteId {self.persistent_data['site_id']} to main controller")
+                                print(f"run_wakeword: Published wakeword {mdl}, siteId {self.persistent_data['site_id']} to second (local) client")
                                 self.play_sound()
                             continue
                         #output_string_header += f"""{mdl}{" "*(n_spaces - len(mdl))}   | {curr_score[0:5]} | {"--"+" "*20 if scores[-1] <= 0.5 else "Wakeword Detected!"}
@@ -3837,8 +3901,8 @@ class VocoAdapter(Adapter):
                     # Print results table
                     #print("\033[F"*(4*n_models+1))
                     #print(output_string_header, "                             ", end='\r')
-            
-            
+        
+        
                 if self.restart_wakeword:
                     if self.DEBUG:
                         print("wakeword thread: self.restart_wakeword was True, setting back to False")
@@ -3846,13 +3910,14 @@ class VocoAdapter(Adapter):
         
             else:
                 if self.DEBUG:
-                    print("\n Wakeword failed to start! No valid microphone detected")
+                    print("\n Wakeword failed to start! No useable valid microphone detected")
 
-            self.wakeword_started = False
+            self.llm_wakeword_started = False
+            #self.llm_wakeword_failed = True
             py_audio.terminate()
             
         except Exception as ex:
-            print("run_wakeword: ERROR: " + str(ex))
+            print("run_wakeword: general ERROR: " + str(ex))
         
         
         
@@ -4441,7 +4506,12 @@ class VocoAdapter(Adapter):
                                 if self.DEBUG:
                                     print("The microphone has been reconnected: " + str(self.microphone))
                                 self.missing_microphone = False
-                                if self.mqtt_connected == True:
+                                if self.persistent_data['listening'] and self.llm_wakeword_started == False:
+                                    if self.DEBUG:
+                                        print("mic reconnected, and listening, so (re)starting wakeword thread")
+                                    self.start_wakeword_thread()
+                                
+                                if self.mqtt_second_connected == True:
                                     if self.still_busy_booting == False:
                                         self.speak("The microphone has been connected.")
                                     #print("self.mqtt_client = " + str(self.mqtt_client))
@@ -5265,7 +5335,7 @@ class VocoAdapter(Adapter):
             if self.DEBUG:
                 print("good connect by second mqtt client")
             
-            self.mqtt_connected = True
+            self.mqtt_second_connected = True
         
             #self.mqtt_second_client.subscribe("hermes/#")
             
@@ -5307,6 +5377,8 @@ class VocoAdapter(Adapter):
     def on_second_disconnect(self, client, userdata, rc):
         if self.DEBUG:
             print("in on_second_disconnect")
+        
+        self.mqtt_second_connected = False
 
         if rc == 0:
             if self.DEBUG:
@@ -5343,6 +5415,7 @@ class VocoAdapter(Adapter):
             print('\n\n\n===========LOCAL MESSAGE (2nd client)===========')
         
         
+        self.mqtt_second_connected = True
             
         payload = {}
         try:
@@ -6000,7 +6073,8 @@ class VocoAdapter(Adapter):
         # First, close any existing MQTT client
         try:
             if self.mqtt_client != None:
-                print("MQTT Client already existed. Not stopping and restarting it, it will keep trying by itself.")
+                if self.DEBUG:
+                    print("MQTT Client already existed. Not stopping and restarting it, it will keep trying by itself.")
                 
                 if self.should_restart_mqtt:
                     try:
@@ -10226,11 +10300,11 @@ class VocoAdapter(Adapter):
                 #self.mqtt_client.publish("hermes/dialogueManager/startSession",json.dumps({"init":{"type":"action","canBeEnqueued": True},"siteId":modified_site_id, "customData":{'origin':origin} }))
                 
                 
-                # TODO: this is ugly routing. text/matrix input should be routed cleaner.
+                # TODO: this is ugly routing. text/matrix input should be routed more cleanly.
                 if site_id == str(self.persistent_data['site_id']):
                     if self.DEBUG:
                         print("parse_text: local command")
-                    if self.persistent_data['is_satellite'] == True:
+                    if self.persistent_data['is_satellite'] == True and self.mqtt_connected and self.periodic_voco_attempts < 3:
                         
                         if origin == 'text' or origin == 'matrix' or origin == 'llm_stt':
                             if self.DEBUG:
@@ -10243,14 +10317,16 @@ class VocoAdapter(Adapter):
                         
                     else:
                         if self.DEBUG:
-                            print("parse_text called with this device's ID, and am not a satellite. So this is a normal parse_text command probably from text/matrix input.")
-                        self.mqtt_client.publish("hermes/dialogueManager/startSession",json.dumps({"init":{"type":"action","canBeEnqueued": True},"siteId":modified_site_id }))
+                            print("parse_text called with this device's ID, and am not a satellite, or main controller is not responding. So this is a normal parse_text command probably from text/matrix input. Doing startSession on second (local) client.")
+                            print("- modified_site_id: " + str(modified_site_id))
+                            
+                        self.mqtt_second_client.publish("hermes/dialogueManager/startSession",json.dumps({"init":{"type":"action","canBeEnqueued": True},"siteId":modified_site_id }))
                             
                         #{'input': 'what time is it', 'asrTokens': [{'value': 'what', 'confidence': 1.0, 'rangeStart': 0, 'rangeEnd': 4, 'time': {'start': 0.0, 'end': 1.8000001}}, {'value': 'time', 'confidence': 1.0, 'rangeStart': 5, 'rangeEnd': 9, 'time': {'start': 1.8000001, 'end': 1.83}}, {'value': 'is', 'confidence': 1.0, 'rangeStart': 10, 'rangeEnd': 12, 'time': {'start': 1.83, 'end': 2.04}}, {'value': 'it', 'confidence': 1.0, 'rangeStart': 13, 'rangeEnd': 15, 'time': {'start': 2.04, 'end': 2.73}}], 'intentFilter': ['createcandle:stop_timer', 'createcandle:get_time', 'createcandle:set_timer', 'createcandle:get_timer_count', 'createcandle:get_value', 'createcandle:list_timers', 'createcandle:get_boolean', 'createcandle:set_state', 'createcandle:set_value'], 'id': '16ebc483-714e-4112-af69-2a1eb45af57f', 'sessionId': 'edbdd5e8-013f-4ce9-a844-a7dad3cfa88f'}
                         # intentParsed
                             
                             
-                else:
+                elif self.mqtt_second_connected:
                     if self.persistent_data['is_satellite'] == False:
                         if self.DEBUG:
                             print("handling a parse_text with a remote site_id, and I am not a satellite, so it must be a satellite asking me to parse text. Starting faux local session...")
@@ -10258,6 +10334,9 @@ class VocoAdapter(Adapter):
                     else:
                         if self.DEBUG:
                             print("handling parse_text with a remote site_id. I am a satellite. Doing nothing for now.")
+                else:
+                    if self.DEBUG:
+                        print("\nERROR, not connected to second MQTT broker?\n")
                 
                             
             else:
