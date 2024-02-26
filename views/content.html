@@ -395,6 +395,15 @@
 								</div>
 							</div>
 							
+							<div data-extension-voco-href="#extension-voco-main-llm-stt">
+								<div id="extension-voco-main-llm-stt-not-running" class="extension-voco-vlak extension-voco-orange-bg">
+									<p><span class="extension-voco-unicode-icon-medium">💬➠📝</span><span class="extension-voco-running-panel-name">Speech-to-Text<br/>is not running</span><span id="extension-voco-main-llm-stt-error"></span></p>
+								</div>
+								<div id="extension-voco-main-llm-stt-running" class="extension-voco-vlak extension-voco-green-bg">
+									<p><span class="extension-voco-unicode-icon-medium">💬➠📝</span><span class="extension-voco-running-panel-name">Speech-to-Text<br/>is running</span></p>
+								</div>
+							</div>
+							
 							<div data-extension-voco-href="#extension-voco-main-llm-tts">
 								<div id="extension-voco-main-llm-tts-not-running" class="extension-voco-vlak extension-voco-orange-bg">
 									<p><span class="extension-voco-unicode-icon-medium">📝➠📢</span><span class="extension-voco-running-panel-name">Text-to-Speech<br/>is not running</span><span id="extension-voco-main-llm-tts-error"></span></p>
@@ -404,14 +413,7 @@
 								</div>
 							</div>
 							
-							<div data-extension-voco-href="#extension-voco-main-llm-stt">
-								<div id="extension-voco-main-llm-stt-not-running" class="extension-voco-vlak extension-voco-orange-bg">
-									<p><span class="extension-voco-unicode-icon-medium">💬➠📝</span><span class="extension-voco-running-panel-name">Speech-to-Text<br/>is not running</span><span id="extension-voco-main-llm-stt-error"></span></p>
-								</div>
-								<div id="extension-voco-main-llm-stt-running" class="extension-voco-vlak extension-voco-green-bg">
-									<p><span class="extension-voco-unicode-icon-medium">💬➠📝</span><span class="extension-voco-running-panel-name">Speech-to-Text<br/>is running</span></p>
-								</div>
-							</div>
+							
 						
 							<div data-extension-voco-href="#extension-voco-main-llm-assistant">
 								<div id="extension-voco-main-llm-assistant-not-running" class="extension-voco-vlak extension-voco-orange-bg">
@@ -448,80 +450,85 @@
 						<p>&nbsp;</p>
 						
 						
-						<div class="extension-voco-vlak">
-                            
-    						<h2>Wake word</h2>
-                        
-                			<p>What would you prefer to say to start a voice command?</p>
-                           	
-							<ul id="extension-voco-wakeword-models-list" class="extension-voco-llm-models-list">
-								<li>
-				                    <div class="extension-voco-spinner">
-				                        <div></div><div></div><div></div><div></div>
-				                    </div>
-								</li>
-							</ul>
-						</div>
 						
-						
-						<a name="extension-voco-main-llm-tts"></a>
-						<div class="extension-voco-vlak">
-                            
-    						<h2>Voice synthesis</h2>
-                        
-                			<p>More realistic sounding speech can be generated using "Large Language Models". This requires relatively little extra memory. If there is not enough memory, Voco falls back to the basic voice. You can select which voice type you prefer.</p>
-                           	
-							<ul id="extension-voco-tts-models-list" class="extension-voco-llm-models-list">
-								<li>
-				                    <div class="extension-voco-spinner">
-				                        <div></div><div></div><div></div><div></div>
-				                    </div>
-								</li>
-							</ul>
-						</div>
-						
-                        <a name="extension-voco-main-llm-stt"></a>
-						<div class="extension-voco-vlak">
-                            
-    						<h2>Speech recognition</h2>
-                        
-							<p>Voco has a basic speech recognition system, but this can be enhanced by employing so called "Large Language Models". These can understand more words, so they are generally used as a 'second opinion' if the basic system doesn't quite understand what you're saying.</p>
-                            <p>These Large Language Models are, well, large. They require a lot of processing power and sytem memory, and are relatively slow. If you don't want to use them, simply select the 'basic' option.</p>
-							
-							<ul id="extension-voco-stt-models-list" class="extension-voco-llm-models-list">
-								<li>
-				                    <div class="extension-voco-spinner">
-				                        <div></div><div></div><div></div><div></div>
-				                    </div>
-								</li>
-							</ul>
-
-						</div>
-						
-						<a name="extension-voco-main-llm-assistant"></a>
-						<div class="extension-voco-vlak">
-                            
-    						<h2>AI assistant</h2>
-                        
-                            <p>An AI assistant can give answers to simple questions, such as "What is the capital of Portugal?". This feature requires the most memory and disk space, so a Raspberry Pi 5 with 8GB of memory is recommended.</p>
-							<p>Be aware that the models that can run on Candle are not as advanced or powerful as commercial cloud-based versions. The assistant will make mistakes, so don't rely on it for anything serious such as life-threatening situations.</p>
-							
-							<ul id="extension-voco-assistant-models-list" class="extension-voco-llm-models-list">
-								<li>
-				                    <div class="extension-voco-spinner">
-				                        <div></div><div></div><div></div><div></div>
-				                    </div>
-								</li>
-							</ul>
-						   
-						</div>
-						
-						
-						<div>
-							<p style="text-align:center">Total disk space used by AI models: <span id="extension-voco-llm-total-size">?</span></p>
-						</div>
     					
 					</div>
+					
+					
+					<div class="extension-voco-vlak">
+                        
+						<h2>Wake word</h2>
+                    
+            			<p>What would you prefer to say to start a voice command?</p>
+                       	
+						<ul id="extension-voco-wakeword-models-list" class="extension-voco-llm-models-list">
+							<li>
+			                    <div class="extension-voco-spinner">
+			                        <div></div><div></div><div></div><div></div>
+			                    </div>
+							</li>
+						</ul>
+					</div>
+					
+					
+					<a name="extension-voco-main-llm-tts"></a>
+					<div class="extension-voco-vlak">
+                        
+						<h2>Voice synthesis</h2>
+                    
+            			<p>More realistic sounding speech can be generated using "Large Language Models". This requires relatively little extra memory. If there is not enough memory, Voco falls back to the basic voice. You can select which voice type you prefer.</p>
+                       	
+						<ul id="extension-voco-tts-models-list" class="extension-voco-llm-models-list">
+							<li>
+			                    <div class="extension-voco-spinner">
+			                        <div></div><div></div><div></div><div></div>
+			                    </div>
+							</li>
+						</ul>
+					</div>
+					
+                    <a name="extension-voco-main-llm-stt"></a>
+					<div class="extension-voco-vlak">
+                        
+						<h2>Speech recognition</h2>
+                    
+						<p>Voco has a basic speech recognition system, but this can be enhanced by employing so called "Large Language Models". These can understand more words, so they are generally used as a 'second opinion' if the basic system doesn't quite understand what you're saying.</p>
+                        <p>These Large Language Models are, well, large. They require a lot of processing power and sytem memory, and are relatively slow. If you don't want to use them, simply select the 'basic' option.</p>
+						
+						<ul id="extension-voco-stt-models-list" class="extension-voco-llm-models-list">
+							<li>
+			                    <div class="extension-voco-spinner">
+			                        <div></div><div></div><div></div><div></div>
+			                    </div>
+							</li>
+						</ul>
+
+					</div>
+					
+					<a name="extension-voco-main-llm-assistant"></a>
+					<div class="extension-voco-vlak">
+                        
+						<h2>AI assistant</h2>
+                    
+                        <p>An AI assistant can give answers to simple questions, such as "What is the capital of Portugal?". This feature requires the most memory and disk space, so a Raspberry Pi 5 with 8GB of memory is recommended.</p>
+						<p>Be aware that the models that can run on Candle are not as advanced or powerful as commercial cloud-based versions. The assistant will make mistakes, so don't rely on it for anything serious such as life-threatening situations.</p>
+						
+						<ul id="extension-voco-assistant-models-list" class="extension-voco-llm-models-list">
+							<li>
+			                    <div class="extension-voco-spinner">
+			                        <div></div><div></div><div></div><div></div>
+			                    </div>
+							</li>
+						</ul>
+					   
+					</div>
+					
+					
+					<div>
+						<p style="text-align:center">Total disk space used by AI models: <span id="extension-voco-llm-total-size">?</span></p>
+					</div>
+					
+					
 				</div>
 
 			</div>

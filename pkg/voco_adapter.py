@@ -236,6 +236,7 @@ class VocoAdapter(Adapter):
             self.use_open_wakeword = True
         self.wakeword_thread = None
         self.llm_wakeword_started = False
+        self.llm_wakeword_failed = False
         self.restart_wakeword = False
         self.microphone_useful_sample_rate = 0
         
@@ -247,6 +248,7 @@ class VocoAdapter(Adapter):
         
         
         self.llm_servers_watchdog_interval = 40 # should be at least 2
+        self.restart_llm_servers = False
         
         # Downloading models
         self.llm_should_download = True
@@ -895,6 +897,7 @@ class VocoAdapter(Adapter):
         self.wakeword_models_dir_path = os.path.join(self.addon_dir_path,'llm','wakeword')
         self.wakeword_data_dir =  os.path.join(self.llm_data_dir_path,'wakeword')
         self.hey_candle_wakeword_model_path = os.path.join(self.wakeword_models_dir_path,'hey_candle.tflite')
+        self.hey_snips_wakeword_model_path = os.path.join(self.wakeword_models_dir_path,'hey_snips.tflite')
         self.custom_wakeword_model_path = os.path.join(self.wakeword_data_dir,'custom.tflite')
         #print("self.hey_candle_wakeword_model_path: " + str(self.hey_candle_wakeword_model_path))
         
@@ -1180,6 +1183,12 @@ class VocoAdapter(Adapter):
         
         
         self.llm_wakeword_models = {
+            'Basic':{'model':'voco',
+                                'size':0,
+                                'description':'If the Ai wakeword model fails to start, we fall back to the Snips hotword system. In this case voice commands can be initiated by saying "Hey Snips".',
+                                'downloaded':True,
+                                'model_path':str(os.path.join(self.wakeword_models_dir_path,'hey_candle.tflite'))
+                            },
             'Hey Candle':{'model':'hey_candle.tflite',
                                 'size':2,
                                 'description':'Start a voice command by saying "Hey Candle". The default.',
@@ -1191,12 +1200,6 @@ class VocoAdapter(Adapter):
                                 'description':'Start a voice command by saying "Hey Voco".',
                                 'downloaded':True,
                                 'model_path':str(os.path.join(self.wakeword_models_dir_path,'hey_voco.tflite'))
-                            },
-            'Hey Snips':{'model':'hey_snips.tflite',
-                                'size':2,
-                                'description':'Start a voice command by saying "Hey Snips".',
-                                'downloaded':True,
-                                'model_path':str(os.path.join(self.wakeword_models_dir_path,'hey_snips.tflite'))
                             },
             'Hey Jarvis':{'model':'hey_jarvis.tflite',
                                 'size':2,
@@ -1211,6 +1214,16 @@ class VocoAdapter(Adapter):
                                 'model_path':str(self.custom_wakeword_model_path)
                             },
         }
+        
+        """
+
+        'Hey Snips':{'model':'hey_snips.tflite',
+                            'size':2,
+                            'description':'Start a voice command by saying "Hey Snips".',
+                            'downloaded':True,
+                            'model_path':str(os.path.join(self.wakeword_models_dir_path,'hey_snips.tflite'))
+                        },
+        """
         
         # You can learn how to make your own model at: https://colab.research.google.com/drive/1q1oe2zOyZp7UsB3jJiQ1IFn8z5YfjwEb?usp=sharing#scrollTo=1cbqBebHXjFD
         
@@ -2626,7 +2639,6 @@ class VocoAdapter(Adapter):
                         print(" - origin was matrix chat input, so not playing a sound")
                     return
                     
-                    
         except Exception as ex:
             print("Error while preparing to play sound: " + str(ex))
         
@@ -3556,7 +3568,7 @@ class VocoAdapter(Adapter):
                 #    extra_dialogue_manager_command = command.copy()
                 #    extra_dialogue_manager_command = extra_dialogue_manager_command + ["--mqtt",mqtt_ip]
                 
-                if self.use_open_wakeword and unique_command == 'snips-hotword':
+                if unique_command == 'snips-hotword' and self.use_open_wakeword and self.llm_wakeword_failed == False and str(self.persistent_data['llm_wakeword_model']) != 'voco':
                     if self.DEBUG:
                         print("run_snips: starting wakeword thread instead of snips-hotword")
                         
@@ -3763,157 +3775,185 @@ class VocoAdapter(Adapter):
             CHUNK = 4096
             py_audio = pyaudio.PyAudio()
 
-            try:
-                info = py_audio.get_host_api_info_by_index(0)
+            spotted_microphone = -1
+            for x in range(6):
                 if self.DEBUG:
-                    print("run_wakeword: info of device at index 0: " + str(info))
-                numdevices = info.get('deviceCount')
-                if self.DEBUG:
-                    if numdevices == 0:
-                        print("run_wakeword: ERROR, no input audio device found at index 0")
-                #for each audio device, determine if is an input or an output and add it to the appropriate list and dictionary
-                #for i in range(py_audio.get_device_count()):
-                for i in range (0,numdevices):
+                    print("\n\nchecking audio device nr: " + str(x))
             
+                try:
+                    info = py_audio.get_host_api_info_by_index(x)
+                    if self.DEBUG:
+                        print("run_wakeword: info of device at index x: " + str(info))
+                    numdevices = info.get('deviceCount')
+                    if self.DEBUG:
+                        if numdevices == 0:
+                            print("run_wakeword: ERROR, no input audio device found at index 0")
+                    #for each audio device, determine if is an input or an output and add it to the appropriate list and dictionary
+                    #for i in range(py_audio.get_device_count()):
+                    for i in range (0,numdevices):
             
-                    #print("Number of audio devices:", p.get_device_count())
+                        #print("Number of audio devices:", p.get_device_count())
             
-                    dev = py_audio.get_device_info_by_index(i)
-                    print("run_wakeword: Device index:", i)
-                    print("run_wakeword: Device name:", dev.get('name'))
-                    print("run_wakeword: Input channels:", dev.get('maxInputChannels'))
-                    print("run_wakeword: Output channels:", dev.get('maxOutputChannels'))
-                    print("run_wakeword: Default Sample Rate:", dev.get('defaultSampleRate'))
-                    print("---------------------------------------")
+                        dev = py_audio.get_device_info_by_index(i)
+                        print("run_wakeword: Device index:", i)
+                        print("run_wakeword: Device name:", dev.get('name'))
+                        print("run_wakeword: Input channels:", dev.get('maxInputChannels'))
+                        print("run_wakeword: Output channels:", dev.get('maxOutputChannels'))
+                        print("run_wakeword: Default Sample Rate:", dev.get('defaultSampleRate'))
+                        print("---------------------------------------")
             
-            
-                    if py_audio.get_device_info_by_host_api_device_index(0,i).get('maxInputChannels')>0:
-                        if self.DEBUG:
-                            print("Input Device id ", i, " - ", py_audio.get_device_info_by_host_api_device_index(0,i).get('name'))
-
-                    if py_audio.get_device_info_by_host_api_device_index(0,i).get('maxOutputChannels')>0:
-                        if self.DEBUG:
-                            print("Output Device id ", i, " - ", py_audio.get_device_info_by_host_api_device_index(0,i).get('name'))
-            except Exception as ex:
-                print('Error in pyAudio scan: ' + str(ex))
-
-            devinfo = py_audio.get_device_info_by_index(self.capture_card_id) # was 1
+                        if py_audio.get_device_info_by_host_api_device_index(0,i).get('maxOutputChannels')>0:
+                            if self.DEBUG:
+                                print("Output Device id ", i, " - ", py_audio.get_device_info_by_host_api_device_index(0,i).get('name'))
+                                
+                        if py_audio.get_device_info_by_host_api_device_index(0,i).get('maxInputChannels')>0:
+                            if self.DEBUG:
+                                print("Input Device id ", i, " - ", py_audio.get_device_info_by_host_api_device_index(0,i).get('name'))
+                            spotted_microphone = x
+                            if self.DEBUG:
+                                print("\nPY_AUDIO SPOTTED A MICROPHONE\n")
+                            break
+                        
+                
+                except Exception as ex:
+                    print('Error in pyAudio scan: ' + str(ex))
+                
+                if spotted_microphone != -1:
+                    break
+                
             if self.DEBUG:
-                print("\n\n[MIC]\nSelected microphone is: index: " + str(devinfo["index"]) + ", name: " + str(devinfo.get('name')))
-            if devinfo.get('name') == 'sysdefault':
+                print("spotted_microphone: " + str(spotted_microphone))
+
+            if spotted_microphone != -1:
+
+                devinfo = py_audio.get_device_info_by_index(self.capture_card_id) # was 1
                 if self.DEBUG:
-                    print("\n\nWARNING, LIKELY INVALID MICROPHONE: " + str(devinfo.get('name')))
+                    print("\n\n[MIC]\nSelected microphone is: index: " + str(devinfo["index"]) + ", name: " + str(devinfo.get('name')))
+                if devinfo.get('name') == 'sysdefault':
+                    if self.DEBUG:
+                        print("\n\nWARNING, LIKELY INVALID MICROPHONE: " + str(devinfo.get('name')))
                 
-            self.microphone_useful_sample_rate = 0
-            try:
-                if py_audio.is_format_supported(16000.0, input_device=devinfo["index"],input_channels=devinfo['maxInputChannels'],input_format=pyaudio.paInt16): #44100 48000.0
-                    if self.DEBUG:
-                        print('run_wakeword: found valid microphone with 16000 samplerate')
-                        print("self.hotword_sensitivity: " + str(self.hotword_sensitivity))
-                        print("self.persistent_data['llm_wakeword_model']: " + str(self.persistent_data['llm_wakeword_model']))
-                        self.microphone_useful_sample_rate = 16000
-                else:
-                    if self.DEBUG:
-                        print('run_wakeword: microphone does not support 16000 sample rate natively')
-            except Exception as ex:
-                print("Error testing microphone for 16000 sample rate")
+                self.microphone_useful_sample_rate = 0
+                try:
+                    if py_audio.is_format_supported(16000.0, input_device=devinfo["index"],input_channels=devinfo['maxInputChannels'],input_format=pyaudio.paInt16): #44100 48000.0
+                        if self.DEBUG:
+                            print('run_wakeword: found valid microphone with 16000 samplerate')
+                            print("self.hotword_sensitivity: " + str(self.hotword_sensitivity))
+                            print("self.persistent_data['llm_wakeword_model']: " + str(self.persistent_data['llm_wakeword_model']))
+                            self.microphone_useful_sample_rate = 16000
+                    else:
+                        if self.DEBUG:
+                            print('run_wakeword: microphone does not support 16000 sample rate natively')
+                except Exception as ex:
+                    print("Error testing microphone for 16000 sample rate")
             
             
                 
-            try:
-                if self.microphone_useful_sample_rate == 0 and py_audio.is_format_supported(48000.0, input_device=devinfo["index"],input_channels=devinfo['maxInputChannels'],input_format=pyaudio.paInt16): #44100 48000.0
-                    if self.DEBUG:
-                        print('run_wakeword: found valid microphone with 48000 samplerate')
-                        print("self.hotword_sensitivity: " + str(self.hotword_sensitivity))
-                        print("self.persistent_data['llm_wakeword_model']: " + str(self.persistent_data['llm_wakeword_model']))
-                        self.microphone_useful_sample_rate = 48000
-                else:
-                    if self.DEBUG:
-                        print('run_wakeword: microphone does not support 48000 sample rate natively')
-            except Exception as ex:
-                print("Error testing microphone for 48000 sample rate")
+                try:
+                    if self.microphone_useful_sample_rate == 0 and py_audio.is_format_supported(48000.0, input_device=devinfo["index"],input_channels=devinfo['maxInputChannels'],input_format=pyaudio.paInt16): #44100 48000.0
+                        if self.DEBUG:
+                            print('run_wakeword: found valid microphone with 48000 samplerate')
+                            print("self.hotword_sensitivity: " + str(self.hotword_sensitivity))
+                            print("self.persistent_data['llm_wakeword_model']: " + str(self.persistent_data['llm_wakeword_model']))
+                            self.microphone_useful_sample_rate = 48000
+                    else:
+                        if self.DEBUG:
+                            print('run_wakeword: microphone does not support 48000 sample rate natively')
+                except Exception as ex:
+                    print("Error testing microphone for 48000 sample rate")
                 
                 
-            if self.microphone_useful_sample_rate:
+                if self.microphone_useful_sample_rate:
 
-                #channels=self.detector.NumChannels(),
-                #rate=self.detector.SampleRate(),
-                mic_stream = py_audio.open(format=FORMAT, channels=CHANNELS, rate=RATE, input=True, frames_per_buffer=CHUNK)
+                    #channels=self.detector.NumChannels(),
+                    #rate=self.detector.SampleRate(),
+                    mic_stream = py_audio.open(format=FORMAT, channels=CHANNELS, rate=RATE, input=True, frames_per_buffer=CHUNK)
                             
-                wakeword_model_path = os.path.join(self.wakeword_models_dir_path,self.persistent_data['llm_wakeword_model'])
-                if self.persistent_data['llm_wakeword_model'] == 'custom':
-                    wakeword_model_path = self.custom_wakeword_model_path
+                    wakeword_model_path = os.path.join(self.wakeword_models_dir_path,self.persistent_data['llm_wakeword_model'])
+                    if self.persistent_data['llm_wakeword_model'] == 'custom':
+                        wakeword_model_path = self.custom_wakeword_model_path
 
-                # Load pre-trained openwakeword models
-                owwModel = Model(wakeword_models=[wakeword_model_path], inference_framework="tflite") # alternative is "onnx" or "tflite"
+                    # Load pre-trained openwakeword models
+                    # For now "Hey Snips" is also always available as a legacy option
+                    owwModel = Model(wakeword_models=[wakeword_model_path, self.hey_snips_wakeword_model_path], inference_framework="tflite") # alternative is "onnx" or "tflite"
 
-                n_models = len(owwModel.models.keys())
+                    n_models = len(owwModel.models.keys())
     
-                self.llm_wakeword_started = True
-                while self.running and not self.restart_wakeword and self.persistent_data['listening']:
+                    self.llm_wakeword_started = True
+                    while self.running and self.restart_wakeword == False and self.persistent_data['listening'] == True:
             
-                    # Get audio
-                    audio = np.frombuffer(mic_stream.read(CHUNK, exception_on_overflow = False), dtype=np.int16)
+                        # Get audio
+                        audio = np.frombuffer(mic_stream.read(CHUNK, exception_on_overflow = False), dtype=np.int16)
 
-                    # Feed to openWakeWord model
-                    prediction = owwModel.predict(audio)
+                        # Feed to openWakeWord model
+                        prediction = owwModel.predict(audio)
 
-                    # Column titles
-                    #n_spaces = 16
-                    #output_string_header = """
-                    #    Model Name         | Score | Wakeword Status
-                    #    --------------------------------------
-                    #    """
+                        # Column titles
+                        #n_spaces = 16
+                        #output_string_header = """
+                        #    Model Name         | Score | Wakeword Status
+                        #    --------------------------------------
+                        #    """
 
-                    for mdl in owwModel.prediction_buffer.keys():
-                        # Add scores in formatted table
-                        scores = list(owwModel.prediction_buffer[mdl])
-                        #print("scores: " + str(scores))
-                        #curr_score = format(scores[-1], '.20f').replace("-", "")
-                        #print("\033[F" + "curr_score: " + str(curr_score))
+                        for mdl in owwModel.prediction_buffer.keys():
+                            # Add scores in formatted table
+                            scores = list(owwModel.prediction_buffer[mdl])
+                            #print("scores: " + str(scores))
+                            #curr_score = format(scores[-1], '.20f').replace("-", "")
+                            #print("\033[F" + "curr_score: " + str(curr_score))
                 
-                        #print("type: " + str(type(scores[-1])))
+                            #print("type: " + str(type(scores[-1])))
                 
-                        if scores[-1] > self.hotword_sensitivity:
-                            print("\n\n" + str(mdl) + " - " + str(scores[-1]) + " (sensitivity: " + str(self.hotword_sensitivity) + ")\n\n")
-                            millis = int(round(time.time() * 1000))
-                            payload = {
-                                "modelId": mdl,
-                                "modelVersion": "",
-                                "modelType": "universal",
-                                "detectionSignalMs": millis,
-                                "endSignalMs":millis,
-                                "currentSensitivity": self.hotword_sensitivity,
-                                "siteId": self.persistent_data['site_id'],
-                                "sessionId": None,
-                                "sendAudioCaptured": None,
-                                "lang": None,
-                                "customEntities": {'origin':'voice'},
-                            }
-                            if(self.mqtt_second_client != None):
-                                self.mqtt_second_client.publish(f"hermes/hotword/{mdl}/detected", json.dumps(payload))
-                                print(f"run_wakeword: Published wakeword {mdl}, siteId {self.persistent_data['site_id']} to second (local) client")
-                                self.play_sound()
-                            continue
-                        #output_string_header += f"""{mdl}{" "*(n_spaces - len(mdl))}   | {curr_score[0:5]} | {"--"+" "*20 if scores[-1] <= 0.5 else "Wakeword Detected!"}
-                        #"""
+                            if scores[-1] > self.hotword_sensitivity:
+                                print("\n\n" + str(mdl) + " - " + str(scores[-1]) + " (sensitivity: " + str(self.hotword_sensitivity) + ")\n\n")
+                                millis = int(round(time.time() * 1000))
+                                payload = {
+                                    "modelId": mdl,
+                                    "modelVersion": "",
+                                    "modelType": "universal",
+                                    "detectionSignalMs": millis,
+                                    "endSignalMs":millis,
+                                    "currentSensitivity": self.hotword_sensitivity,
+                                    "siteId": self.persistent_data['site_id'],
+                                    "sessionId": None,
+                                    "sendAudioCaptured": None,
+                                    "lang": None,
+                                    "customEntities": {'origin':'voice'},
+                                }
+                                if(self.mqtt_second_client != None):
+                                    self.mqtt_second_client.publish(f"hermes/hotword/{mdl}/detected", json.dumps(payload))
+                                    print(f"run_wakeword: Published wakeword {mdl}, siteId {self.persistent_data['site_id']} to second (local) client")
+                                    self.play_sound()
+                                continue
+                            #output_string_header += f"""{mdl}{" "*(n_spaces - len(mdl))}   | {curr_score[0:5]} | {"--"+" "*20 if scores[-1] <= 0.5 else "Wakeword Detected!"}
+                            #"""
 
-                    # Print results table
-                    #print("\033[F"*(4*n_models+1))
-                    #print(output_string_header, "                             ", end='\r')
+                        # Print results table
+                        #print("\033[F"*(4*n_models+1))
+                        #print(output_string_header, "                             ", end='\r')
         
         
-                if self.restart_wakeword:
+                    if self.restart_wakeword:
+                        if self.DEBUG:
+                            print("wakeword thread: self.restart_wakeword was True, setting back to False")
+                        self.restart_wakeword = False
+        
+                else:
                     if self.DEBUG:
-                        print("wakeword thread: self.restart_wakeword was True, setting back to False")
-                    self.restart_wakeword = False
+                        print("\n Wakeword failed to start! Microphone found, but no useable samplerate detected")
+                    self.llm_wakeword_failed = True
+                    self.should_restart_snips = True
+                    self.adapter.persistent_data['llm_wakeword_model'] = 'voco'
         
             else:
                 if self.DEBUG:
                     print("\n Wakeword failed to start! No useable valid microphone detected")
-
+                self.llm_wakeword_failed = True
+                self.should_restart_snips = True
+                self.adapter.persistent_data['llm_wakeword_model'] = 'voco'
+                
             self.llm_wakeword_started = False
-            #self.llm_wakeword_failed = True
+            
             py_audio.terminate()
             
         except Exception as ex:
@@ -5463,6 +5503,8 @@ class VocoAdapter(Adapter):
                     
                 
                 if self.periodic_voco_attempts > 2:
+                    if self.DEBUG:
+                        print("/textCaptured: satellite: NOT PUBLISHING TO MAIN CONTROLLER - IT SEEMS TO BE DOWN")
                     pass
                     #self.speak('Sorry, the main Voco controller is not responding')
                 else:
@@ -5589,7 +5631,7 @@ class VocoAdapter(Adapter):
                 if 'input' in payload and 'unknownword' in payload['input']:
                     if self.DEBUG:
                         print("intentNotRecognized: will try_llm_stt")
-                    self.try_llm_stt(payload['input'], payload)
+                    self.try_llm_stt(payload)
                     #if self.llm_enabled and self.llm_stt_enabled and self.llm_stt_started:
 
                     
@@ -5668,10 +5710,10 @@ class VocoAdapter(Adapter):
                     
                         if intent_message['siteId'] == self.persistent_data['site_id']: # and self.persistent_data['is_satellite']
                             if self.DEBUG:
-                                print("mqtt /hermes/intent: brute-force end the existing session") #  (NO,TEMPORARILY DISABLED)
+                                print("mqtt /hermes/intent: brute-force end the existing session")
                             # Brute-force end the existing session
                             try:
-                                # TODO: TEMPORARILY DISABLED
+                                # TODO: need to optimize/check this
                             
                                 self.mqtt_client.publish('hermes/dialogueManager/endSession', json.dumps({"text": "", "sessionId": intent_message['sessionId']}))
                                 self.mqtt_client.publish('hermes/dialogueManager/endSession', json.dumps({"text": "", "sessionId": str(self.current_snips_session_id)}))
@@ -6442,7 +6484,7 @@ class VocoAdapter(Adapter):
                     if payload['siteId'].startswith("llm_stt-"):
                         print("\nLLM STT siteId detected")
                     
-                    if self.last_text_command != '' and payload['siteId'].startswith("text-") or payload['siteId'].startswith("matrix-") or payload['siteId'].startswith("llm_stt-") or self.persistent_data['is_satellite']: 
+                    if self.last_text_command != '' and payload['siteId'].startswith("text-") or payload['siteId'].startswith("matrix-") or payload['siteId'].startswith("llm_stt-") or (self.persistent_data['is_satellite'] and self.mqtt_connected and self.periodic_voco_attempts < 3): 
                         if self.DEBUG:
                             print("Creating faux textcaptured. self.last_text_command:\n\n (FAUX)-> " + str(self.last_text_command))
                             print("\n")
@@ -6466,7 +6508,7 @@ class VocoAdapter(Adapter):
                     
                     else:
                         if self.DEBUG:
-                            print("was a voice start? or not a satellite? Or self.last_text_command was empty string? Not sending faux textCaptured.")
+                            print("was a voice start? Or not a satellite? Or self.last_text_command was empty string? Not sending faux textCaptured.") 
                             print(" - self.last_text_command: " + str(self.last_text_command))
                             print(" - payload['siteId']: " + str(payload['siteId']))
                             print(" - self.persistent_data['is_satellite']: " + str(self.persistent_data['is_satellite']))
@@ -6929,7 +6971,7 @@ class VocoAdapter(Adapter):
                     
                     if self.llm_stt_started and self.llm_assistant_started and self.fastest_device_score < self.hardware_score:
                         if self.DEBUG:
-                            print("The other device is slower. setting initial fastest_device_score to my own: " + str(self.hardware_score))
+                            print("The other device also has an LLM assistant, but is slower. Setting initial fastest_device_score to my own: " + str(self.hardware_score))
                         self.fastest_device_score = self.hardware_score
                     
                     if self.llm_stt_started and self.llm_assistant_started and self.fastest_device_score > self.hardware_score + 4:
@@ -7078,8 +7120,9 @@ class VocoAdapter(Adapter):
             #    self.save_persistent_data()
 
             if self.DEBUG:
-                print("self.hardware_score: " + str(self.hardware_score))
-                print("self.fastest_device_score: " + str(self.fastest_device_score))
+                print("self.hardware_score       : " + str(self.hardware_score))
+                print("self.fastest_device_score : " + str(self.fastest_device_score))
+                print("self.fastest_device_id    : " + str(self.fastest_device_id))
 
             # TODO: trigger the injection mechanism here, so that new names are learnt as quickly as possible? Maybe turn of the timed injection from the clock in that case (if is_satellite or if at lest one satellites is connected in case of being a main controller)
         else:
@@ -10272,7 +10315,8 @@ class VocoAdapter(Adapter):
 
     def parse_text(self, origin=None, site_id=None):
         if self.DEBUG:
-            print("in parse_text. origin: " + str(origin) + ", site_id: " + str(site_id))
+            print("\nin PARSE_TEXT.\n - origin: " + str(origin) + "\n - site_id: " + str(site_id))
+            print(" - self.last_text_command: " + str(self.last_text_command))
         
         if site_id == None:
             site_id = str(self.persistent_data['site_id'])
@@ -10308,13 +10352,13 @@ class VocoAdapter(Adapter):
                         
                         if origin == 'text' or origin == 'matrix' or origin == 'llm_stt':
                             if self.DEBUG:
-                                print("satellite, but allowing parse_text to start a local dialogue session (exceptional)")
+                                print("parse_text: satellite, and connected to main controller, so sending start_session there)")
                             self.mqtt_client.publish("hermes/dialogueManager/startSession",json.dumps({"init":{"type":"action","canBeEnqueued": True},"siteId":modified_site_id }))
                             
                         else:
                             if self.DEBUG:
-                                print("satelite, and not a text/matrix origin, so not calling start_session that is targeted to the local site. Satellites should start voice control sessions on the main controller.")    
-                        
+                                print("voice origin, so not doing startSession on main controller")
+                                #print("satelite, and not a text/matrix origin, so not calling start_session that is targeted to the local site. Satellites should start voice control sessions on the main controller.")    
                     else:
                         if self.DEBUG:
                             print("parse_text called with this device's ID, and am not a satellite, or main controller is not responding. So this is a normal parse_text command probably from text/matrix input. Doing startSession on second (local) client.")
@@ -10324,7 +10368,6 @@ class VocoAdapter(Adapter):
                             
                         #{'input': 'what time is it', 'asrTokens': [{'value': 'what', 'confidence': 1.0, 'rangeStart': 0, 'rangeEnd': 4, 'time': {'start': 0.0, 'end': 1.8000001}}, {'value': 'time', 'confidence': 1.0, 'rangeStart': 5, 'rangeEnd': 9, 'time': {'start': 1.8000001, 'end': 1.83}}, {'value': 'is', 'confidence': 1.0, 'rangeStart': 10, 'rangeEnd': 12, 'time': {'start': 1.83, 'end': 2.04}}, {'value': 'it', 'confidence': 1.0, 'rangeStart': 13, 'rangeEnd': 15, 'time': {'start': 2.04, 'end': 2.73}}], 'intentFilter': ['createcandle:stop_timer', 'createcandle:get_time', 'createcandle:set_timer', 'createcandle:get_timer_count', 'createcandle:get_value', 'createcandle:list_timers', 'createcandle:get_boolean', 'createcandle:set_state', 'createcandle:set_value'], 'id': '16ebc483-714e-4112-af69-2a1eb45af57f', 'sessionId': 'edbdd5e8-013f-4ce9-a844-a7dad3cfa88f'}
                         # intentParsed
-                            
                             
                 elif self.mqtt_second_connected:
                     if self.persistent_data['is_satellite'] == False:
@@ -11092,7 +11135,8 @@ class VocoAdapter(Adapter):
             """
                 
             self.assistant_loop_counter += 1
-            if self.assistant_loop_counter == self.llm_servers_watchdog_interval:
+            if self.assistant_loop_counter == self.llm_servers_watchdog_interval or self.restart_llm_servers == True:
+                self.restart_llm_servers = False
                 self.assistant_loop_counter = 0
                 if self.DEBUG:
                     print("at assistant periodic restart check. self.llm_assistant_response_count: " + str(self.llm_assistant_response_count))
@@ -11164,7 +11208,7 @@ class VocoAdapter(Adapter):
                     outs, errs = self.llm_tts_process.communicate(timeout=3)
                 except Exception as ex:
                     if self.DEBUG:
-                        print("start_ai_assistant: attempt to nicely stop existing assistant process failed with ERROR: " + str(ex))
+                        print("start_llm_tts: attempt to nicely stop existing LLM TTS process failed with ERROR: " + str(ex))
                     try: 
                         self.llm_tts_process.kill()
                         outs, errs = self.llm_tts_process.communicate(timeout=1)
@@ -11637,11 +11681,9 @@ class VocoAdapter(Adapter):
 #
 
     
-        
-    def start_ai_assistant(self):
+    def stop_ai_assistant(self):
         if self.DEBUG:
-            print("in start_ai_assistant")
-
+            print("in stop_ai_assistant")
         if self.llm_assistant_process != None and self.llm_assistant_process.poll() == None:
             if self.DEBUG:
                 print("\n\nASSISTANT ALREADY RUNNING, STOPPING IT FIRST\n\n")
@@ -11675,6 +11717,15 @@ class VocoAdapter(Adapter):
         self.llm_assistant_process = None
         
         self.llm_assistant_response_count = 0
+        
+        
+        
+    def start_ai_assistant(self):
+        if self.DEBUG:
+            print("in start_ai_assistant")
+            print("start_ai_assistant: calling stop_ai_assistant first, just to be safe")
+            
+        self.stop_ai_assistant()
         
         #if self.persistent_data['is_satellite'] == True:
         #    if self.DEBUG:
@@ -12013,13 +12064,21 @@ class VocoAdapter(Adapter):
                                 if len(original_voice_message) > 1 and not str(original_voice_message[:-1]) in before_assistant:
                                     if self.DEBUG:
                                         print("\nWARNING, the assistant might be halucinating a conversation?\n" + str(before_assistant) + "\n")
+                                    
+                                    self.stop_ai_assistant()
+                                    self.restart_llm_servers = True
                                     return
                                         
                                 full = full.split(str(self.llm_assistant_name) + ':')[1]
                                 if self.DEBUG:
                                     print("Split full to only use the part after '" + str(self.llm_assistant_name) + ":':\n" + str(full))
                                
-                    
+                            if "is a language model trained on the sum of human knowledge." in full:
+                                if self.DEBUG:
+                                    print("\nWARNING, the assistant might be going off the rails\n" + str(full) + "\n")
+                                self.stop_ai_assistant()
+                                self.restart_llm_servers = True
+                                return
                     
                     
                             if '.' in full:
@@ -12147,7 +12206,7 @@ class VocoAdapter(Adapter):
     
     
     
-
+    # NOT USED
     def ask_ai_assistant_server(self,voice_message=None,intent=None):
         if self.DEBUG:
             print("in ask_ai_assistant. voice_message: " + str(voice_message))
@@ -12206,6 +12265,7 @@ class VocoAdapter(Adapter):
         #self.speak(output,intent)
 
 
+    # TODO: this has to be changed, since it makes no sense to start the assistant a second time.
     def llm_generate_text(self,prompt,action='generate'):
         if self.DEBUG:
             print("in llm_generate_text.")

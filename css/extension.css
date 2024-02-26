@@ -907,6 +907,10 @@ f
 
 /*  LLM AI  */
 
+#extension-voco-tab-ai ul{
+	padding-left:0;
+}
+
 #extension-voco-downloading-models-progress-container{
 	display:none;
 	height:2rem;
@@ -955,12 +959,12 @@ f
     animation: extension-voco-bg-sweep-to-right 2s ease infinite;
 }
 
+/*
 .extension-candleappstore-busy-updating{
     opacity:.3;
-    /*background: linear-gradient(180deg, rgba(0,0,0,0), rgba(0,0,0,.8));*/
     background:transparent;
-    
 }
+*/
 
 @keyframes extension-voco-bg-sweep-to-right { 
   0%{background-position:100% 50%}
@@ -1045,7 +1049,7 @@ f
 	padding:1rem;
 }
 
-.extension-voco-llm-models-list > li:not(.extension-voco-llm-item-downloaded){
+.extension-voco-llm-models-list > li:not(.extension-voco-llm-item-downloaded):not(.extension-voco-llm-not-possible){
 	opacity:.7;
 }
 
@@ -1114,11 +1118,20 @@ f
 
 
 .extension-voco-llm-not-possible{
-	background-color:red!important;
 	opacity:.2;
 	pointer-events:none;
 }
-
+.extension-voco-llm-not-possible:after{
+	content: "Cannot run on this device (not enough memory/space)";
+    display: block;
+    position: absolute;
+    background: black;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    padding: 1rem 2rem;
+    text-align: center;
+}
 
 #extension-voco-info-overlay{
 	position:fixed;
@@ -1165,6 +1178,10 @@ f
 #extension-voco-main-llm-tts-running-panel > div:not(:last-of-type){
 	margin-right:2rem;
 }
+#extension-voco-main-llm-tts-running-panel > div > div{
+	padding:.5rem;
+}
+
 /*
 #extension-voco-main-llm-tts-running-panel .extension-voco-unicode-icon-medium{
     position: absolute;

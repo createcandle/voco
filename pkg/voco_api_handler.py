@@ -392,6 +392,8 @@ class VocoAPIHandler(APIHandler):
                                                 print("self.adapter.persistent_data['llm_wakeword_model'] is now: " + str(self.adapter.persistent_data['llm_wakeword_model']))
                                             self.adapter.llm_should_download = True
                                             self.adapter.restart_wakeword = True
+                                            self.adapter.llm_wakeword_failed = False
+                                            self.adapter.should_restart_snips = True
                                     
                                     if 'llm_tts_model' in request.body:
                                         if self.DEBUG:
