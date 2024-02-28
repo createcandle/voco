@@ -342,6 +342,7 @@ class VocoAPIHandler(APIHandler):
                                   content=json.dumps({
                                           'state' : state, 
                                           'message' : '',
+                                          'mqtt_others': self.adapter.mqtt_others,
                                           'llm_enabled':self.adapter.llm_enabled,
                                           
                                           'device_model': self.adapter.device_model,
@@ -606,6 +607,7 @@ class VocoAPIHandler(APIHandler):
                                                         'has_token':has_token, 
                                                         'is_satellite':is_sat, 
                                                         'main_site_id':self.adapter.persistent_data['main_site_id'],
+                                                        'mqtt_others': self.adapter.mqtt_others,
                                                         'main_controller_hostname':self.adapter.persistent_data['main_controller_hostname'],
                                                         'mqtt_server':self.adapter.persistent_data['mqtt_server'], 
                                                         'mqtt_connected':self.adapter.mqtt_connected, 
@@ -696,7 +698,7 @@ class VocoAPIHandler(APIHandler):
                                         clock['hours'] = hacky_datetime.hour
                                         clock['minutes'] = hacky_datetime.minute
                                         clock['seconds'] = hacky_datetime.second
-                                        clock['seconds_to_go'] = utc_timestamp - self.adapter.current_utc_time
+                                        clock['seconds_to_go'] = utc_timestamp - int(time.time()) #self.adapter.current_utc_time
                                         #print("seconds to go: " + str(clock['seconds_to_go']))
                                         self.adapter.persistent_data['action_times'][i]['clock'] = clock
             
@@ -723,6 +725,7 @@ class VocoAPIHandler(APIHandler):
                                                         'update': '',
                                                         'busy_starting_snips': self.adapter.busy_starting_snips,
                                                         'items': self.adapter.persistent_data['action_times'],
+                                                        'mqtt_others': self.adapter.mqtt_others,
                                                         'current_time':self.adapter.current_utc_time,
                                                         'text_response':self.adapter.last_text_response,
                                                         'llm_busy_generating':self.adapter.llm_busy_generating,

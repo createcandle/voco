@@ -38,6 +38,7 @@ import ssl
 import json
 import time
 import queue
+from fcntl import fcntl, F_GETFL, F_SETFL
 import signal
 import socket
 import base64
@@ -222,7 +223,8 @@ class VocoAdapter(Adapter):
         self.snips_path = os.path.join(self.user_profile['addonsDir'] ,self.addon_name, 'snips' + self.bit_extension)
         os.environ["LD_LIBRARY_PATH"] = str(self.snips_path)
 
-
+        self.snips_fifo_path_file_object = None # receives stderr lines from snips subprocesses
+        
         
         #self.lock = threading.Lock() # Not currently used, but can help threads print to stdout, for example.
 
@@ -239,6 +241,7 @@ class VocoAdapter(Adapter):
         self.llm_wakeword_failed = False
         self.restart_wakeword = False
         self.microphone_useful_sample_rate = 0
+        self.last_time_wakeword_detected = 0
         
         # LLM AI
         self.llm_enabled = True
@@ -306,12 +309,14 @@ class VocoAdapter(Adapter):
         self.llm_assistant_started = False
         self.llm_assistant_process = None
         self.llm_assistant_port = 8047
-        self.llm_assistant_prompt = ''        
-        self.llm_assistant_name = 'Digital Athena'
-        self.llm_assistant_prompt = "The following is a conversation between a curious researcher and their helpful AI assistant called {assistant_name}, which is a large language model trained on the sum of human knowledge."
+        #self.llm_assistant_prompt = ''        
+        self.llm_assistant_name = 'Assistant'
+        #self.llm_assistant_prompt = "The following is a conversation between a curious researcher and their helpful AI assistant called {assistant_name}, which is a large language model trained on the sum of human knowledge."
+        self.llm_assistant_prompt = "<|im_start|>system \\n A conversation between a user and an LLM-based AI assistant. The assistant gives helpful and honest answers. <|im_end|>\\n <|im_start|>user \\n What is the capital of France? <|im_end|> \\n <|im_start|>assistant \\n Paris is the capital of France. \\n <|im_end|> \\n " #"<|im_start|>user \\n "
         # \n\n Researcher: What is the capital of Germany? \n" + str(self.llm_assistant_name) +": Berlin is the capital of Germany. \nResearcher:'
         self.last_command_was_answered_by_assistant = False # becomes string of actual last response from assistant
-        self.assistant_loop_counter = 0
+        #self.assistant_loop_counter = 0
+        self.assistant_loop_counter = self.llm_servers_watchdog_interval - 10
         self.llm_assistant_response_count = 0
         self.last_assistant_output_change_time = 0
         self.llm_assistant_conversation_seconds_threshold = 30 # If another intent comes it with X seconds after the previous assistant interaction, take it as a strong hint that this is a dialogue to be continued.
@@ -892,6 +897,14 @@ class VocoAdapter(Adapter):
         self.llm_data_dir_path = os.path.join(self.data_dir_path, 'llm')
         
         
+        self.snips_fifo_path = os.path.join(self.data_dir_path, 'snips_fifo')
+        
+        #if os.path.exists(str(self.snips_fifo_path)):
+        #    os.system('rm ' + str(self.snips_fifo_path))
+            
+        #os.system('mkfifo ' + str(self.snips_fifo_path))
+        #self.snips_fifo_path_file_object = open(self.snips_fifo_path, "a+", 64)
+        #print("mkfifo file object: " + str(self.snips_fifo_path_file_object))
         
         # WAKE WORD
         self.wakeword_models_dir_path = os.path.join(self.addon_dir_path,'llm','wakeword')
@@ -943,9 +956,16 @@ class VocoAdapter(Adapter):
         self.llm_assistant_binary_system_prompt_path = os.path.join(self.data_dir_path,'llm','assistant_binary_system_prompt.json')
         self.llm_assistant_prompt_cache_path = os.path.join(self.data_dir_path,'assistant_prompt_cache') # file
         #self.llm_generated_text_file_path = os.path.join(self.data_dir_path,'llm','llamafile_generated.txt')
-        self.llm_generated_text_file_path = '/tmp/assistant_generated.txt'
-        self.llm_assistant_output_file_path = '/tmp/assistant_output.txt'
         
+        # Deprecated, should pass complex commands to main model instead
+        self.llm_generated_text_file_path = '/tmp/assistant_generated.txt'
+        
+        self.llm_assistant_output_file_path = os.path.join(self.data_dir_path, 'llm','assistant_fifo')
+        if not os.path.exists(str(self.llm_assistant_output_file_path)):
+            os.system('mkfifo ' + str(self.llm_assistant_output_file_path))
+        
+        #self.llm_assistant_output_file_path = '/tmp/assistant_output.txt'
+        #self.llm_assistant_output_file_path = self.llm_assistant_fifo_path
         
         # STT
         self.llm_stt_dir_path = os.path.join(self.llm_data_dir_path, 'stt')
@@ -1003,6 +1023,7 @@ class VocoAdapter(Adapter):
         self.arm_libs_path = os.path.join(self.addon_dir_path,"snips","arm-linux-gnueabihf") # arm32 #TODO: in some places this is still loaded as an environment path in the 64 bit version. Should check if that causes issues.
         self.assistant_path = os.path.join(self.models_path,"assistant")
         self.work_path = os.path.join(self.user_profile['dataDir'],'voco','work')
+        self.snips_data_injections_dir_path = os.path.join(self.work_path,'injections')
 
         #self.toml_path = os.path.join(self.models_path,"snips.toml")
         self.toml_path = os.path.join(self.models_path,"candle.toml") # let Snips also respond to 'hey Candle'
@@ -1086,7 +1107,7 @@ class VocoAdapter(Adapter):
             print("del_injections_path: " + str(del_injections_path))
             clear_work_dir_command = 'rm -rf ' + str(del_injections_path)
             print("clear_work_dir_command: " + str(clear_work_dir_command))
-            #os.system(clear_work_dir_command)
+            #os.system(clear_work_dir_command) # Too hardcore, use 'snips-nlu clean --all' command instead
             
         
         # create list of human readable audio-only output options for thing property
@@ -3057,6 +3078,7 @@ class VocoAdapter(Adapter):
                 if self.DEBUG:
                     print("\n\nSPEAK: STOPPING A SENTENCE FROM BEING SPOKEN TWICE IN A ROW:" + str(self.last_spoken_sentence) + "\n") # TODO: very crude solution...
                     print("- time delta was: " + str(time.time() - self.last_spoken_sentence_time))
+                    self.speak("echo")
                 dont_speak_twice = True
             else:
                 self.last_spoken_sentence_time = time.time()
@@ -3492,18 +3514,8 @@ class VocoAdapter(Adapter):
                 command = [bin_path,"-u",self.work_path,"-a",self.assistant_path,"-c",self.toml_path]
                 
                 if self.snips_clear_injections_first:
-                    try:
-                        clear_injections_command = command + ["-g",self.g2p_models_path,"clean","--all"]
-                        clear_injections_command2 = 'LD_LIBRARY_PATH=' + str(my_env["LD_LIBRARY_PATH"]) + ' ' + ' '.join(clear_injections_command)
-                        if self.DEBUG:
-                            print("clear_injections_command2: " + str(clear_injections_command2))
-                        os.system(clear_injections_command2)
-                        #Popen(clear_injections_command, env=my_env, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
-                        if self.DEBUG:
-                            print("old snips-injection data should be cleaned from work dir")
-                    except Exception as ex:
-                        if self.DEBUG:
-                            print("error cleaning injection work dir: " + str(ex))
+                    self.snips_clear_injections_first = False
+                    self.clear_snips_nlu()
                 
                 if self.disable_security == False:
                     security_commands = ['--mqtt-username',self.mqtt_username,'--mqtt-password',self.mqtt_password]
@@ -3592,12 +3604,33 @@ class VocoAdapter(Adapter):
                     #    self.external_processes.append( Popen(command, env=my_env, stdout=sys.stdout, stderr=subprocess.STDOUT) )
                     #else:
                     #self.external_processes.append( Popen(command, env=my_env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL) )
-                    if self.DEBUG:
+                    if unique_command == 'snips-nlu':
+                        #out_file = open("stderr.log", "wb", 0)
+                        #if self.snips_fifo_path_file_object == None:
+                        #    if self.DEBUG:
+                        #        print("Opening self.snips_fifo_path_file_object subprocesses FIFO buffer file")   
+                        #    print("self.snips_fifo_path_file_object: " + str(self.snips_fifo_path_file_object))
+                        #self.external_processes.append( Popen(command, env=my_env, stdout=subprocess.DEVNULL, stderr=self.snips_fifo_path_file_object, universal_newlines=True, bufsize=0) )
+                        
+                        #self.external_processes.append(  ) # , universal_newlines=True
+                        
+                        #from fcntl import fcntl, F_GETFL, F_SETFL
+                        #new_process = Popen(command, env=my_env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+                        new_process = Popen(command, env=my_env, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, universal_newlines=True)
+                        flags = fcntl(new_process.stderr, F_GETFL)
+                        if self.DEBUG:
+                            print("run_snips: subprocess.PIPE flags: " + str(flags))
+                        fcntl(new_process.stderr, F_SETFL, flags | os.O_NONBLOCK)
+                        
+                        self.external_processes.append( new_process )
+                        
+                    elif self.DEBUG:
                         self.external_processes.append( Popen(command, env=my_env) )
                         #self.external_processes.append( Popen(command, env=my_env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL) )
                     else:
                         self.external_processes.append( Popen(command, env=my_env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL) )
                         
+                    print("self.external_processes.length: " + str(len(self.external_processes)))
                 except Exception as ex:
                     if self.DEBUG:
                         print("Error starting a snips process: " + str(ex))
@@ -3728,7 +3761,45 @@ class VocoAdapter(Adapter):
         return
 
 
-    
+
+    def clear_snips_injections(self):
+        state = False
+        try:
+            
+            bin_path = os.path.join(self.snips_path, 'snips-injection' + self.bit_extension)
+            os.system('chmod +x ' + str(bin_path))
+            my_env = os.environ.copy()
+            my_env["LD_LIBRARY_PATH"] = '{}'.format(self.snips_path)
+            command = [bin_path,"-u",self.work_path,"-a",self.assistant_path,"-c",self.toml_path] # 
+            clear_injections_command = command + ["clean","--all"]
+            clear_injections_command2 = 'LD_LIBRARY_PATH=' + str(my_env["LD_LIBRARY_PATH"]) + ' ' + ' '.join(clear_injections_command)
+            if self.DEBUG:
+                print("clear_injections_command2: " + str(clear_injections_command2))
+            os.system(clear_injections_command2)
+            if self.DEBUG:
+                print("old snips-injection data should in theory be cleaned")
+            
+            #result_of_check_is_injections_dir_is_empty = run_command('ls ' + str(self.snips_data_injections_dir_path))
+            
+            # Getting the list of directories 
+            injections_dir_contents_list = os.listdir(str(self.snips_data_injections_dir_path)) 
+            
+            
+            # Checking if the list is empty or not 
+            if os.path.exists(self.snips_data_injections_dir_path):
+                print("\nERROR\nself.snips_data_injections_dir_path still exists")
+            else: 
+                print("OK\nself.snips_data_injections_dir_path is empty directory")
+                state = True
+            
+            #Popen(clear_injections_command, env=my_env, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
+            
+                
+        except Exception as ex:
+            if self.DEBUG:
+                print("error cleaning injection work dir: " + str(ex))
+        
+        return state
     
     
     #
@@ -3907,23 +3978,33 @@ class VocoAdapter(Adapter):
                             if scores[-1] > self.hotword_sensitivity:
                                 print("\n\n" + str(mdl) + " - " + str(scores[-1]) + " (sensitivity: " + str(self.hotword_sensitivity) + ")\n\n")
                                 millis = int(round(time.time() * 1000))
-                                payload = {
-                                    "modelId": mdl,
-                                    "modelVersion": "",
-                                    "modelType": "universal",
-                                    "detectionSignalMs": millis,
-                                    "endSignalMs":millis,
-                                    "currentSensitivity": self.hotword_sensitivity,
-                                    "siteId": self.persistent_data['site_id'],
-                                    "sessionId": None,
-                                    "sendAudioCaptured": None,
-                                    "lang": None,
-                                    "customEntities": {'origin':'voice'},
-                                }
-                                if(self.mqtt_second_client != None):
-                                    self.mqtt_second_client.publish(f"hermes/hotword/{mdl}/detected", json.dumps(payload))
-                                    print(f"run_wakeword: Published wakeword {mdl}, siteId {self.persistent_data['site_id']} to second (local) client")
-                                    self.play_sound()
+                                
+                                if millis > self.last_time_wakeword_detected + 2000:
+                                    self.last_time_wakeword_detected = millis
+                                
+                                    payload = {
+                                        "modelId": mdl,
+                                        "modelVersion": "",
+                                        "modelType": "universal",
+                                        "detectionSignalMs": millis,
+                                        "endSignalMs":millis,
+                                        "currentSensitivity": self.hotword_sensitivity,
+                                        "siteId": self.persistent_data['site_id'],
+                                        "sessionId": None,
+                                        "sendAudioCaptured": None,
+                                        "lang": None,
+                                        "customEntities": {'origin':'voice'},
+                                    }
+                                    if(self.mqtt_second_client != None):
+                                        self.mqtt_second_client.publish(f"hermes/hotword/{mdl}/detected", json.dumps(payload))
+                                        print(f"run_wakeword: Published wakeword {mdl}, siteId {self.persistent_data['site_id']} to second (local) client")
+                                        #self.play_sound()
+                                        
+                                        
+                                else:
+                                    if self.DEBUG:
+                                        print("wakeword thread: echo of wakeword, ignoring it")
+                                        
                                 continue
                             #output_string_header += f"""{mdl}{" "*(n_spaces - len(mdl))}   | {curr_score[0:5]} | {"--"+" "*20 if scores[-1] <= 0.5 else "Wakeword Detected!"}
                             #"""
@@ -4045,7 +4126,7 @@ class VocoAdapter(Adapter):
         self.current_utc_time = int(time.time())
         
         previous_action_times_count = 0
-        #previous_injection_time = time.time()
+        #previouxs_injection_time = time.time()
         while self.running:
 
             voice_message = ""
@@ -4054,6 +4135,8 @@ class VocoAdapter(Adapter):
             
             
             if time.time() > self.current_utc_time + 1:
+                #if self.DEBUG:
+                #    print("\n😀\nCLOCK TICK " + str(int(time.time()) % 60) + "\n")
                 self.current_utc_time = int(time.time())
                 
                 
@@ -4084,7 +4167,7 @@ class VocoAdapter(Adapter):
                     self.last_slow_loop_time = time.time()
                     
                     if self.DEBUG:
-                        #print("___\n\n   15 seconds have passed. Time: " + str(int(time.time()) % 60))
+                        #print("___\n\n   Clock: 15 seconds have passed. Time: " + str(int(time.time()) % 60))
                         #print("   self.periodic_voco_attempts: " + str(self.periodic_voco_attempts))
                         pass
                     
@@ -4094,7 +4177,7 @@ class VocoAdapter(Adapter):
                     
                     if self.persistent_data['is_satellite'] and self.persistent_data['main_site_id'] == self.persistent_data['site_id']:
                         if self.DEBUG:
-                            print("this satellite doesn't have a different main_site_id (yet)")
+                            print("clock: this satellite doesn't have a different main_site_id (yet)")
                         self.periodic_voco_attempts += 1
                     
                     try:
@@ -4105,13 +4188,13 @@ class VocoAdapter(Adapter):
                                 pass
                         else:
                             if self.DEBUG:
-                                print("MQTT client object doesn't exist yet.")
+                                print("clock: MQTT client object doesn't exist yet.")
                         
                         
                         if self.should_restart_mqtt:
                             ###self.should_restart_mqtt = False
                             if self.DEBUG:
-                                print("Periodic check: self.should_restart_mqtt was true - will try to run_mqtt")
+                                print("clock: Periodic check: self.should_restart_mqtt was true - will try to run_mqtt")
                             self.run_mqtt() # try connecting again. If Mosquitto is up, then it will create the MQTT client and try to connect.
                                 
                             
@@ -4125,7 +4208,7 @@ class VocoAdapter(Adapter):
                                 
                             # TODO: this doesn't work on satellites. Maybe it now should?
                             if time.time() - self.addon_start_time > 240 and self.initial_injection_completed == False and self.persistent_data['is_satellite'] == False:
-                                print("Error. Voco failed to load properly (initial_injection_completed was false). Attempting reboot of addon by closing proxy.")
+                                print("clock: Error. Voco failed to load properly (initial_injection_completed was false). Attempting reboot of addon by closing proxy.")
                                 self.close_proxy()
                                 #sys.exit()
                                 
@@ -4146,7 +4229,8 @@ class VocoAdapter(Adapter):
                                 
                                 #else:
                                 if self.should_restart_snips == False:
-                                    
+                                    if self.DEBUG:
+                                        print("clock: should_restart_snips is False")
                                     if self.initial_injection_completed == False and self.injection_in_progress == False:
                                         
                                         if self.persistent_data['is_satellite'] == False:
@@ -4155,7 +4239,7 @@ class VocoAdapter(Adapter):
                                             self.inject_updated_things_into_snips(True) # Force a new injection until it sticks
                                         else:
                                             if self.DEBUG:
-                                                print("satellite: injection not complete and was asked to do a forced injection")
+                                                print("clock:satellite: injection not complete and was asked to do a forced injection")
                                     
                                     #print("snips did not need to be restarted")
                                     # Check if hostname has changed. This is extremely rare, but it could happen.
@@ -4163,7 +4247,7 @@ class VocoAdapter(Adapter):
                                     if self.hostname != self.previous_hostname: # If the hostname was changed by the user
                                 
                                         if self.DEBUG:
-                                            print("hostname was changed.")
+                                            print("clock:hostname was changed.")
                                         if not self.persistent_data['is_satellite']:
                                             self.send_mqtt_ping(broadcast=True) #broadcast ping
                                 
@@ -4181,16 +4265,16 @@ class VocoAdapter(Adapter):
                             
                                         if self.voco_connected == False:
                                             if self.DEBUG:
-                                                print("MQTT seems to be up, but main voco server is not responding")
+                                                print("clock: MQTT seems to be up, but main voco server is not responding")
                                         
                                         
                                         if self.persistent_data['main_site_id'] != self.persistent_data['site_id']: # Once the main controller has been connected to (received pong), these values are no longer the same
                                             if self.DEBUG2:
-                                                print('satellite, so sending ping to stay in touch.')
+                                                print('clock: satellite, so sending ping to stay in touch.')
                                             self.send_mqtt_ping()
                                         else:
                                             if self.DEBUG:
-                                                print('satellite, but main_site_id was site_id. Sending broadcast ping to discover site_id of main controller.')
+                                                print('clock: satellite, but main_site_id was site_id. Sending broadcast ping to discover site_id of main controller.')
                                             self.send_mqtt_ping(broadcast=True) # broadcast ping
 
                                         self.periodic_mqtt_attempts += 1
@@ -4216,36 +4300,36 @@ class VocoAdapter(Adapter):
                                         pass
                                     if self.periodic_mqtt_attempts > 5:
                                         if self.DEBUG:
-                                            print("MQTT broker has not responded. It may be down permanently.")
+                                            print("clock: MQTT broker has not responded. It may be down permanently.")
                                         self.mqtt_connected = False
                                         self.set_status_on_thing("Main controller is unavailable")
                                 
                                     if self.periodic_mqtt_attempts%5 == 4:
                                         if self.DEBUG:
-                                            print("Should attempt to find correct MQTT server IP address")
+                                            print("clock: Should attempt to find correct MQTT server IP address")
                                         self.look_for_mqtt_server()
                                         time.sleep(1)
                     
                             
                                     if self.DEBUG:
                                         if self.periodic_voco_attempts > 2:
-                                            print("self.periodic_voco_attempts = " + str(self.periodic_voco_attempts))
+                                            print("clock: self.periodic_voco_attempts = " + str(self.periodic_voco_attempts))
                                         #pass
                                     if self.periodic_voco_attempts > 5:
                                         if self.DEBUG:
-                                            print("main Voco controller has not responded. It may be down permanently.")
+                                            print("clock: main Voco controller has not responded. It may be down permanently.")
                                         self.voco_connected = False
                                         self.set_status_on_thing("Main controller is not responding")
                                 
                                     if self.periodic_voco_attempts%5 == 4:
                                         if self.DEBUG:
-                                            print("Should attempt to reconnect to main voco controller")
+                                            print("clock: Should attempt to reconnect to main voco controller")
                                         #self.look_for_mqtt_server()
                             
                              
                             else:
                                 if self.DEBUG:
-                                    print("still busy booting?? self.mqtt_connected_succesfully_at_least_once?: " + str(self.mqtt_connected_succesfully_at_least_once))
+                                    print("clock: still busy booting?? self.mqtt_connected_succesfully_at_least_once?: " + str(self.mqtt_connected_succesfully_at_least_once))
                                 
                                 if self.injection_in_progress == False and self.mqtt_connected == True:
                                     if self.persistent_data['is_satellite'] == False:
@@ -4258,14 +4342,14 @@ class VocoAdapter(Adapter):
                                         self.inject_updated_things_into_snips(True) # Force a new injection until it sticks
                                     else:
                                         if self.DEBUG:
-                                            print("basic satellite. Setting still_busy_booting to False")
+                                            print("clock: basic satellite. Setting still_busy_booting to False")
                                         self.still_busy_booting = False
                                         self.initial_injection_completed = True
                                         self.speak_welcome_message()
                                         
                         else:
                             if self.DEBUG:
-                                print("WARNING: clock: still no mqtt client?")
+                                print("clock: WARNING: clock: still no mqtt client?")
                     except Exception as ex:
                         if self.DEBUG:
                             print("clock: error in periodic ping to main Voco controller" + str(ex))            
@@ -4273,7 +4357,10 @@ class VocoAdapter(Adapter):
                     #if self.mqtt_connected:
 
                     
-                    
+                if time.time() > self.current_utc_time + 1:
+                    if self.DEBUG:
+                        print("clock: WARNING, THE CLOCK TICK TOOK LONGER THAN A SECOND ALREADY (check 1): " + str(time.time() - self.current_utc_time))
+                    #self.current_utc_time = int(time.time())
 
                 #timer_removed = False
                 try:
@@ -4282,21 +4369,55 @@ class VocoAdapter(Adapter):
                     for index, item in enumerate(self.persistent_data['action_times']):
                         #print("timer item = " + str(item))
 
+                        cosmetic = False
                         if 'cosmetic' in item:
                             if item['cosmetic'] == True:
-                                #if self.DEBUG:
-                                #    print("clock:skipping cosmetic item")
-                                continue
-                        
+                                cosmetic = True
+                                
                         if (self.current_utc_time >= int(item['moment']) and self.current_utc_time < int(item['moment']) + 60) or item['type'] == 'countdown':
                             if self.DEBUG:
                                 print("\nclock: time has come for action item (or is countdown)")
                             try:
                             
+                                
+                                        
+                                            
                             
                                 if 'intent_message' in item:
                                     intent_message = item['intent_message']
+                                    if 'site_id' in 'intent_message':
+                                        if cosmetic:
+                                            if self.DEBUG:
+                                                print("clock: cosmetic item, will check if the other controller that is supposed to handle it is up")
+                                            
+                                            if item['intent_message']['siteId'] == self.persistent_data['site_id']:
+                                                if self.DEBUG:
+                                                    print("\nERROR\ncosmetic item item, but it has this controller's siteID")
+                                                
+                                            spotted = self.check_if_other_controller_was_recently_spotted(item['intent_message']['siteId'])
+                                            if self.DEBUG:
+                                                print("clock: other controller spotted recently? " + str(spotted))
+                                            
+                                            if spotted:
+                                                if self.DEBUG:
+                                                    print("clock: yes, the other controller was recently spotted, it should handle it")
+                                                continue
+                                                
+                                            if item['type'] in ['countdown','timer','wake','alarm','reminder']:
+                                                if self.DEBUG:
+                                                    print("clock: cosmetic timer type")
+                                            
+                                        
+                                    else:
+                                        if self.DEBUG:
+                                            print("clock: WARNING\nvery strange: an item with intent data, but not a siteId")
+                                    
                                 else:
+                                    if cosmetic:
+                                        if self.DEBUG:
+                                            print("clock: WARNING\nvery strange: a cosmetic item (originating from another controller on the network) without intent data spotted")
+                                        #continue
+                                        
                                     intent_message = {'siteId':self.persistent_data['site_id']}
                                     item['intent_message'] = {'siteId':self.persistent_data['site_id']}
                                 
@@ -4309,7 +4430,7 @@ class VocoAdapter(Adapter):
                                             intent_message['origin'] = 'both'
                                             item['origin'] = 'both'
                                             if self.DEBUG:
-                                                print("changed item origin to both")
+                                                print("clock: changed item origin to both")
                                 #    if intent_message['origin'] == 'text':
                                 #        if 'matrix_server' in self.persistent_data:
                                 #            intent_message['origin'] = 'matrix'
@@ -4334,7 +4455,7 @@ class VocoAdapter(Adapter):
                                 # Wake up alarm
                                 if item['type'] == 'wake' and self.current_utc_time >= int(item['moment']) and self.current_utc_time < int(item['moment']) + 60:
                                     if self.DEBUG:
-                                        print("(...) WAKE UP")
+                                        print("clock: (...) WAKE UP")
                                     #timer_removed = True
                                     self.play_sound(self.alarm_sound,intent=intent_message)
                                     self.speak("Good morning, it's time to wake up.",intent=intent_message)
@@ -4342,14 +4463,14 @@ class VocoAdapter(Adapter):
                                 # Normal alarm
                                 elif item['type'] == 'alarm' and self.current_utc_time >= int(item['moment']) and self.current_utc_time < int(item['moment']) + 60:
                                     if self.DEBUG:
-                                        print("(...) ALARM")
+                                        print("clock: (...) ALARM")
                                     self.play_sound(self.alarm_sound,intent=intent_message)
                                     self.speak("This is your alarm notification",intent=intent_message)
 
                                 # Reminder
                                 elif item['type'] == 'reminder' and self.current_utc_time >= int(item['moment']) and self.current_utc_time < int(item['moment']) + 60:
                                     if self.DEBUG:
-                                        print("(...) REMINDER")
+                                        print("clock: (...) REMINDER")
                                     self.play_sound(self.end_of_input_sound,intent=intent_message)
                                     voice_message = "This is a reminder to " + str(item['reminder_text'])
                                     self.speak(voice_message,intent=intent_message)
@@ -4358,7 +4479,7 @@ class VocoAdapter(Adapter):
                                 elif item['type'] == 'boolean_related' and self.current_utc_time >= int(item['moment']) and self.current_utc_time < int(item['moment']) + 60:
                                     if self.DEBUG:
                                         print("origval:" + str(item['original_value']))
-                                        print("(...) TIMED boolean_related SWITCHING")
+                                        print("clock: (...) TIMED boolean_related SWITCHING")
                                     #delayed_action = True
                                     #slots = self.extract_slots(intent_message)
                                 
@@ -4370,7 +4491,7 @@ class VocoAdapter(Adapter):
                                 elif item['type'] == 'value' and self.current_utc_time >= int(item['moment']) and self.current_utc_time < int(item['moment']) + 60:
                                     if self.DEBUG:
                                         print("origval:" + str(item['original_value']))
-                                        print("(...) TIMED SETTING OF A VALUE")
+                                        print("clock: (...) TIMED SETTING OF A VALUE")
                                     #slots = self.extract_slots(intent_message)
                                     self.delayed_intent_player(item)
                                     #found_properties = self.check_things('set_value',item['slots'])
@@ -4429,7 +4550,7 @@ class VocoAdapter(Adapter):
 
                                             elif countdown_delta < 0:
                                                 if self.DEBUG:
-                                                    print("countdown delta was negative, strange.")
+                                                    print("clock: countdown delta was negative, strange.")
                                                 del self.persistent_data['action_times'][index]
                                                 self.save_to_persistent_data = True #self.save_persistent_data()
                                         
@@ -4439,17 +4560,17 @@ class VocoAdapter(Adapter):
                                                 self.speak(voice_message,intent=intent_message)
                                         else:
                                             if self.DEBUG:
-                                                print("removing countdown item")
+                                                print("clock: removing countdown item")
                                             del self.persistent_data['action_times'][index]
                                     except Exception as ex:
                                         if self.DEBUG:
-                                            print("Error updating countdown: " + str(ex))
+                                            print("clock: Error updating countdown: " + str(ex))
 
                                 # Anything without a type will be treated as a normal timer.
-                                elif self.current_utc_time >= int(item['moment']) and self.current_utc_time < int(item['moment']) + 60:
+                                elif self.current_utc_time != 0 and self.current_utc_time >= int(item['moment']) and self.current_utc_time < int(item['moment']) + 60:
                                     self.play_sound(self.end_of_input_sound,intent=intent_message)
                                     if self.DEBUG:
-                                        print("(...) Your timer is finished")
+                                        print("clock: (...) Your timer is finished")
                                     self.speak("Your timer is finished",intent=intent_message)
 
                             except Exception as ex:
@@ -4471,7 +4592,7 @@ class VocoAdapter(Adapter):
                             if int(item['moment']) <= self.current_utc_time:
                                 timer_removed += 1
                                 if self.DEBUG:
-                                    print("removing timer from list")
+                                    print("clock: removing timer from list")
                                 del self.persistent_data['action_times'][index2]
                                 index2 -= 1
                                 
@@ -4479,31 +4600,41 @@ class VocoAdapter(Adapter):
                                 
                         if timer_removed > 0:
                             if self.DEBUG:
-                                print("Amount of timers removed: " + str(timer_removed))
+                                print("clock: Amount of timers removed: " + str(timer_removed))
                                 #self.save_persistent_data()
                     except Exception as ex:
                         if self.DEBUG:
-                            print("Error while removing old timers: " + str(ex))
+                            print("clock: Error while removing old timers: " + str(ex))
 
                 except Exception as ex:
                     if self.DEBUG:
                         print("Clock error: " + str(ex))
 
                 
+                if time.time() > self.current_utc_time + 1:
+                    if self.DEBUG:
+                        print("clock: WARNING, THE CLOCK TICK TOOK LONGER THAN A SECOND ALREADY (check 2): " + str(time.time() - self.current_utc_time))
+                    #self.current_utc_time = int(time.time())
+                
 
                 # Update the persistence data if the number of timers has changed
                 try:
                     if len(self.persistent_data['action_times']) != previous_action_times_count:
                         if self.DEBUG:
-                            print("New total amount of reminders+alarms+timers+countdown: " + str(len(self.persistent_data['action_times'])))
+                            print("clock: New total amount of reminders+alarms+timers+countdown: " + str(len(self.persistent_data['action_times'])))
                         previous_action_times_count = len(self.persistent_data['action_times'])
                         self.update_timer_counts()
                         #self.persistent_data['action_times'] = self.persistent_data['action_times']
                         self.save_to_persistent_data = True #self.save_persistent_data()
                 except Exception as ex:
                     if self.DEBUG:
-                        print("Error updating timer counts from clock: " + str(ex))
+                        print("clock: Error updating timer counts from clock: " + str(ex))
 
+                
+                if time.time() > self.current_utc_time + 1:
+                    if self.DEBUG:
+                        print("clock: WARNING, THE CLOCK TICK TOOK LONGER THAN A SECOND ALREADY (check 3): " + str(time.time() - self.current_utc_time))
+                    #self.current_utc_time = int(time.time())
                 
                 # Check if the microphone has been plugged in or unplugged.
                 
@@ -4518,13 +4649,13 @@ class VocoAdapter(Adapter):
                         #    print("microphone list was empty")
                         if self.missing_microphone == False:
                             if self.DEBUG:
-                                print("microphone was disconnected. List of available microphones is now empty.")
+                                print("clock: microphone was disconnected. List of available microphones is now empty.")
                             self.missing_microphone = True
                             if self.still_busy_booting == False:
                                 self.speak("The microphone has been disconnected.")
                             if self.stop_snips_on_microphone_unplug:
                                 if self.DEBUG:
-                                    print("microphone was disconnected. Stopping Snips.")
+                                    print("clock: microphone was disconnected. Stopping Snips.")
                                 self.stop_snips()
                     else:
                         #if self.DEBUG:
@@ -4537,14 +4668,14 @@ class VocoAdapter(Adapter):
                                 self.set_status_on_thing("restarting")
                                 self.run_snips()
                             if self.DEBUG:
-                                print("Microphone was auto-detected. Set to: " + str(self.microphone))
+                                print("clock: Microphone was auto-detected. Set to: " + str(self.microphone))
                             #if self.still_busy_booting == False:
                             #    self.speak("A microphone has been connected.")
                                 
                         elif self.microphone in self.capture_devices: # A mic is currenty plugged in
                             if self.missing_microphone:
                                 if self.DEBUG:
-                                    print("The microphone has been reconnected: " + str(self.microphone))
+                                    print("clock: The microphone has been reconnected: " + str(self.microphone))
                                 self.missing_microphone = False
                                 if self.persistent_data['listening'] and self.llm_wakeword_started == False:
                                     if self.DEBUG:
@@ -4567,7 +4698,7 @@ class VocoAdapter(Adapter):
                         else: # Previously selected mic is not in list of microphones
                             if self.missing_microphone == False:
                                 if self.DEBUG:
-                                    print("The microphone has been disconnected: " + str(self.microphone))
+                                    print("clock: The microphone has been disconnected: " + str(self.microphone))
                                 self.missing_microphone = True
                                 if self.still_busy_booting == False:
                                     self.speak("The microphone has been disconnected")
@@ -4578,7 +4709,7 @@ class VocoAdapter(Adapter):
                                 
                 except Exception as ex:
                     if self.DEBUG:
-                        print("Error checking if microphone has been re- or disconnected: " + str(ex))
+                        print("clock: Error checking if microphone has been re- or disconnected: " + str(ex))
                 
                 
                 # Switch 'sound detected' back to off after a while (if the feature is enabled)
@@ -4586,6 +4717,11 @@ class VocoAdapter(Adapter):
                 if self.sound_detection:
                     if int(self.last_sound_activity) == self.current_utc_time - 10:
                         self.set_sound_detected(False)
+
+                if time.time() > self.current_utc_time + 1:
+                    if self.DEBUG:
+                        print("clock: WARNING, THE CLOCK TICK TOOK LONGER THAN A SECOND ALREADY (check 4): " + str(time.time() - self.current_utc_time))
+                    #self.current_utc_time = int(time.time())
 
                 if self.should_restart_snips == True:
                     if self.DEBUG:
@@ -4597,7 +4733,7 @@ class VocoAdapter(Adapter):
                     
                     if self.missing_microphone == True and self.stop_snips_on_microphone_unplug:
                         if self.DEBUG:
-                            print("missing microphone, and stop_snips_on_microphone_unplug is true, so not restarting Snips.")
+                            print("clock: missing microphone, and stop_snips_on_microphone_unplug is true, so not restarting Snips.")
                         pass
                         #if self.DEBUG:
                         #    print("will not restart snips since snips should be disabled while microphone is missing.")
@@ -4641,9 +4777,10 @@ class VocoAdapter(Adapter):
                                         #    print("subprocess poll_result: " + str(poll_result) )
                                         if poll_result != None:
                                             if self.DEBUG:
-                                                print("clock poll_result was not None. A subprocess stopped? It was: " + str(poll_result))
+                                                print("clock: poll_result was not None. A subprocess stopped? It was: " + str(poll_result))
                                             poll_error_count += 1
                                             
+                                        
                                             
                                             
                                 #            process.terminate()
@@ -4655,7 +4792,7 @@ class VocoAdapter(Adapter):
                                 
                                     except Exception as ex:
                                         if self.DEBUG:
-                                            print("subprocess poll error: " + str(ex))
+                                            print("clock: subprocess poll error: " + str(ex))
                                 #if subprocess_running_ok == False:
                                 #    self.run_snips() # restart snips if any of its processes have ended/crashed
 
@@ -4669,12 +4806,77 @@ class VocoAdapter(Adapter):
                                     if alternative_process_counter < len(self.snips_parts):
                                         self.should_restart_snips = True
                                         if self.DEBUG:
-                                            print("conclusion: too few snips parts are up, snips coordinator should be restarted")
+                                            print("clock: conclusion: too few snips parts are up, snips coordinator should be restarted")
                             else:
                                 pass
                                 #if self.DEBUG:
                                 #    print("only checking if snips is running once every 3 seconds")
+                        else:
+                            if self.DEBUG:
+                                print("clock: injection not yet complete, checking snips stdout/stderr every 3 seconds")
                             
+                            for process in self.external_processes:
+                                #if self.DEBUG:
+                                #    print("clock: checking subprocess")
+                                if process.poll() is None:
+                                    #if self.DEBUG:
+                                    #    print("poll was none")
+                                    try:
+                                        if process.stderr != None:
+                                            #if self.DEBUG:
+                                            #    print("stdout was not None")
+                                            snips_stderr = str(os.read(process.stderr.fileno(), 10240))
+                                            if self.DEBUG:
+                                                print("clock: snips_stderr: " + str(snips_stderr))
+                                            
+                                            #if 'Loading stemmer' in snips_stderr:
+                                            #    print("Loading stemmer spotted")
+                                            
+                                            if 'ERROR:snips_nlu' in str(snips_stderr) and 'No such file or directory' in str(snips_stderr):
+                                                if self.DEBUG:
+                                                    print("\n\nSNIPS NLU FAILED TO START!\n\n") 
+                                                    print("clock: snips_stderr read: " + str(snips_stderr))
+                                        
+                                                if self.clear_snips_injections():
+                                                    if self.DEBUG:
+                                                        print("clock:Clearing snips injections directory was successful")
+                                                    self.should_restart_snips = True
+                                                    process.stderr.flush()
+                                                else:
+                                                    if self.DEBUG:
+                                                        print("\nclock: ERROR, self.clear_snips_injections failed\n")
+                                            
+                                        #else:
+                                        #    print("process.stdout was None")
+                                    except OSError:
+                                        # the os throws an exception if there is no data
+                                        #print('[No more data]')
+                                        #break
+                                        continue
+                                else:
+                                    print("Error, process poll was not None")
+                                    
+                            """
+                            try:
+                                if self.snips_fifo_path_file_object != None:
+                                    lines = self.snips_fifo_path_file_object.readlines()
+                                    if self.DEBUG:
+                                        print("\n\n\n$\nSTDERR LINES: " + str(lines))
+                                    self.snips_fifo_path_file_object.truncate(0)
+                                    self.snips_fifo_path_file_object.seek(0)
+                                else:
+                                    if self.DEBUG:
+                                        print("Error, self.snips_fifo_path_file_object was None")
+                                    
+                            except Exception as ex:
+                                print("Error in trying to read subprocess mkfifo stderr buffer file: " + str(ex))
+                            """
+                            
+                if time.time() > self.current_utc_time + 1:
+                    if self.DEBUG:
+                        print("clock: WARNING, THE CLOCK TICK TOOK LONGER THAN A SECOND (final check): " + str(time.time() - self.current_utc_time))
+                    #self.current_utc_time = int(time.time())
+
 
 #
 #  THINGS PROPERTIES
@@ -4700,6 +4902,24 @@ class VocoAdapter(Adapter):
             countdown_active = False
             for index, item in enumerate(self.persistent_data['action_times']):
                 current_type = item['type']
+                #if 'cosmetic' in item and item['cosmetic'] == True:
+                #    continue
+                try:
+                    
+                    if 'intent' in item and 'siteId' in item['intent']:
+                        
+                        # TODO: implement 'involved' system so a varying mix of controllers can share action items
+                        if 'involved' in item and not self.persistent_data['side_id'] in item['intent']['involved']:
+                            if self.DEBUG:
+                                print("This action item has an involved list: " + str(item['involved']))
+                            continue
+                        elif item['intent']['siteId'] != self.persistent_data['side_id']:
+                            if self.DEBUG:
+                                print("this timer is not owned by this site. Not that it matters really.")
+                        
+                except Exception as ex:
+                    print("update_timer_counts: error checking timer item intent: " + str(ex))
+                    
                 #print(str(current_type))
                 if current_type == "countdown":
                     #print("Spotted a countdown object")
@@ -4782,7 +5002,14 @@ class VocoAdapter(Adapter):
 
 
 
+    def check_if_other_controller_was_recently_spotted(self,site_id):
+        state = False
+        if self.DEBUG:
+            print("in check_if_other_controller_was_recently_spotted.  site_id: " + str(site_id))
+        for controller in self.mqtt_others:
+            print("controller in self.mqtt_others: " + str(controller))
 
+        return state
 
 
 #
@@ -4874,6 +5101,8 @@ class VocoAdapter(Adapter):
         if os.path.exists(str(self.llm_generated_text_file_path)):
             os.system('rm ' + str(self.llm_generated_text_file_path))
         
+        if os.path.exists(str(self.llm_assistant_output_file_path)):
+            os.system('rm ' + str(self.llm_assistant_output_file_path))
         #if os.path.isfile(str(self.last_recording_path)):
         #    if self.DEBUG:
         #        print("unload: removed voice audio recording")
@@ -5608,6 +5837,14 @@ class VocoAdapter(Adapter):
             if 'id' in payload and payload['id'].endswith('fafafafa'): # self.llm_stt_always_use and
                 self.intent_received = True
                 
+                intent_message = json.loads(msg.payload.decode("utf-8"))
+                intent_message['origin'] = 'voice'
+                #intent_message['destination'] = 'voice'
+                if not 'siteId' in intent_message:
+                    if self.DEBUG:
+                        print("Warning, incoming mqtt payload to hermes/nlu/intentNotRecognized did not contain siteId")
+                    intent_message['siteId'] = self.persistent_data['site_id']
+                
                 if self.DEBUG:
                     print("intentNotRecognized: intent_message['sessionId']: " + str(intent_message['sessionId']))
                     print("intentNotRecognized: self.current_snips_session_id: " + str(self.current_snips_session_id))
@@ -5826,63 +6063,17 @@ class VocoAdapter(Adapter):
                     self.initial_injection_completed = True
                     self.speak_welcome_message()
            """
-        elif msg.topic.startswith('hermes/hotword/' + self.persistent_data['site_id']):
-            
-            if msg.topic.endswith('/detected'):
-                self.intent_received = False # Used to create a 'no voice input received' sound effect if no intent was heard.
-                #self.llm_stt_done = False
-                self.llm_stt_sentence = ''
-                
-                if self.DEBUG:
-                    print("(...) Hotword detected")
-                
-                # pre-load TTS
-                self.start_llm_tts()
-                
-                if 'siteId' in payload:
-                    #print("site_id was in hotword detected payload: " + str(payload['siteId']))
-                    if payload['siteId'] == self.persistent_data['site_id'] or payload['siteId'] == 'default' or payload['siteId'] == 'everywhere':
-                        if self.persistent_data['listening'] == True:
-                            if self.DEBUG:
-                                print("I should play a detected sound")
-                    
-                            if payload['siteId'].endswith(self.persistent_data['site_id']):
-                                self.assistant_countdown = 0
-                    
-                            if self.persistent_data['feedback_sounds'] == True:
-                                self.play_sound( str(self.start_of_input_sound) )
-                                
-                                
-                                # TEST TO START RECORDING EARLIER
-                                
-                                
-                                
-                                
-                    
-                    
-                    else:
-                        if self.DEBUG:
-                            print("Not me, but the satelite '" + str(payload['siteId']) + "' should play a detected sound")
-                        self.mqtt_client.publish("hermes/voco/" + str(payload['siteId']) + "/play",json.dumps({"sound_file":"start_of_input"}))
-                    
-            if msg.topic.endswith('/loaded'):
-                if self.DEBUG:
-                    print("Received loaded message on topic: " + str(msg.topic))
-                if self.persistent_data['is_satellite']:
-                    if self.DEBUG:
-                        print("sending normal mqtt ping in response to mqtt loaded message")
-                    time.sleep(.5)
-                    self.inject_updated_things_into_snips(True) # force snips to learn all the names
-                    self.send_mqtt_ping() # send  the list of things this satellite manages to the main voice controller
-                    
-                    
+        
 
         # TODO: what happens if the main controller and the satellite both hear the command in this new situation?
         elif msg.topic == 'hermes/hotword/toggleOff':
-            if self.persistent_data['listening'] == True:
+            if self.DEBUG:
+                print("second client MQTT message at hermes/hotword/toggleOff. Listening? " + str(self.persistent_data['listening']))
+            
+            if self.persistent_data['listening'] == False:
                 if self.DEBUG:
-                    print("MQTT message at hermes/hotword/toggleOff")
-                
+                    print("Ignoring message to hermes/hotword/toggleOff because listening is disabled")
+            else:
                 if 'sessionId' in payload:
                     self.current_snips_session_id = payload['sessionId']
                     if self.DEBUG:
@@ -5891,7 +6082,7 @@ class VocoAdapter(Adapter):
                 if self.persistent_data['listening'] == True:
                     
                     # record audio?
-                    if ((self.llm_enabled and self.llm_stt_enabled and self.llm_models['stt']['active'] != None and self.llm_stt_possible) or self.persistent_data['is_satellite'] == True):
+                    if ((self.llm_enabled and self.llm_stt_enabled and self.llm_models['stt']['active'] != None and self.llm_stt_possible) or self.fastest_device_id != None and self.fastest_device_last_ping_time > time.time() - 60): #self.persistent_data['is_satellite'] == True
                         #pass
                         
                         # TEST TO START RECORDING EARLIER
@@ -5902,7 +6093,12 @@ class VocoAdapter(Adapter):
                                     print("toggleOff: siteId starts with llm_stt-, so not starting audio recording.")
                         
                             elif 'siteId' in payload and payload['siteId'] == self.persistent_data['site_id']:
+                                if self.DEBUG:
+                                    print("toggleOff: calling start_recording")
                                 self.start_recording()
+                            else:
+                                if self.DEBUG:
+                                    print("ERROR\nrecording should be started, but /toggleOff fell through")
                             
                         except Exception as ex:
                             print("Error in toggleOff start_recording check: " + str(ex))
@@ -6040,6 +6236,55 @@ class VocoAdapter(Adapter):
         
         
  
+        elif msg.topic.startswith('hermes/hotword/'): # + self.persistent_data['site_id']):
+            
+            if msg.topic.endswith('/detected'):
+                self.intent_received = False # Used to create a 'no voice input received' sound effect if no intent was heard.
+                #self.llm_stt_done = False
+                self.llm_stt_sentence = ''
+                
+                if self.DEBUG:
+                    print("(...) Hotword detected")
+                
+                # pre-load TTS
+                self.start_llm_tts()
+                
+                if 'siteId' in payload:
+                    #print("site_id was in hotword detected payload: " + str(payload['siteId']))
+                    if payload['siteId'] == self.persistent_data['site_id'] or payload['siteId'] == 'default' or payload['siteId'] == 'everywhere':
+                        if self.persistent_data['listening'] == True:
+                            if self.DEBUG:
+                                print("I should play a detected sound")
+                    
+                            if payload['siteId'].endswith(self.persistent_data['site_id']):
+                                self.assistant_countdown = 0
+                    
+                            if self.persistent_data['feedback_sounds'] == True:
+                                self.play_sound( str(self.start_of_input_sound) )
+                                
+                                
+                                # TEST TO START RECORDING EARLIER
+                                
+                                
+                                
+                                
+                    
+                    
+                    else:
+                        if self.DEBUG:
+                            print("Not me, but the satelite '" + str(payload['siteId']) + "' should play a detected sound")
+                        self.mqtt_client.publish("hermes/voco/" + str(payload['siteId']) + "/play",json.dumps({"sound_file":"start_of_input"}))
+                    
+            if msg.topic.endswith('/loaded'):
+                if self.DEBUG:
+                    print("Received loaded message on topic: " + str(msg.topic))
+                if self.persistent_data['is_satellite']:
+                    if self.DEBUG:
+                        print("sending normal mqtt ping in response to mqtt loaded message")
+                    time.sleep(.5)
+                    self.inject_updated_things_into_snips(True) # force snips to learn all the names
+                    self.send_mqtt_ping() # send  the list of things this satellite manages to the main voice controller
+                    
             
     
             
@@ -6811,7 +7056,12 @@ class VocoAdapter(Adapter):
                                 if self.DEBUG:
                                     print("\n\nVOCO LLM DO_STT CURL COMMAND: " + str(do_stt_command))
                                 do_stt_result = run_command(do_stt_command,30) # If this takes more than 30 seconds..
-                        
+                            
+                            if os.path.exists(str(do_stt_wav_file_path)):
+                                if self.DEBUG:
+                                    print("deleting old voice file: " + str(do_stt_wav_file_path))
+                                os.system('rm ' + str(do_stt_wav_file_path))
+                                
                             # Return the STT result back to the satellite
                             if self.DEBUG:
                                 print("\n[+]\ndo_stt_result: " + str(do_stt_result))
@@ -6864,12 +7114,17 @@ class VocoAdapter(Adapter):
                         print("message to hermes/voco ends in /do_assistant")
                     if 'siteId' in payload and 'text' in payload:
                         voice_message = str(payload['text'])
+                        if self.DEBUG:
+                            print(" - voice_message: " + str(voice_message))
+                            print(" - self.llm_assistant_started: " + str(self.llm_assistant_started))
                         if self.llm_assistant_started and self.llm_assistant_process != None and voice_message != None and len(voice_message) > 4:
+                            if self.DEBUG:
+                                print("/do_assistant: calling really_ask_ai_assistant.  voice_message: " + str(voice_message))
                             self.really_ask_ai_assistant(voice_message,intent=payload)
                         else:
                             if self.DEBUG:
-                                print("incoming MQTT message to /do_assistant, but assistant not started, so cannot handle it")
-                            self.speak("Sorry, the assistant on the main controller has not started",intent=payload)
+                                print("incoming MQTT message to /do_assistant, but cannot handle it")
+                                self.speak("Debug. The assistant cannot be used",intent=payload)
                     else:
                         if self.DEBUG:
                             print("incoming MQTT message to /do_assistant has invalid payload: " + str(payload))
@@ -6917,7 +7172,7 @@ class VocoAdapter(Adapter):
                             'siteId':self.persistent_data['site_id'],
                             'hostname':str(self.hostname),
                             'satellite':self.persistent_data['is_satellite'],
-                            'main_controller': self.persistent_data['main_site_id'],
+                            'main_controller':self.persistent_data['main_site_id'],
                             'satellite_intent_handling':self.satellite_should_act_on_intent,
                             'thing_titles':self.persistent_data['local_thing_titles'],
                             'has_stt':self.llm_stt_started,
@@ -6964,7 +7219,7 @@ class VocoAdapter(Adapter):
                     if self.DEBUG:
                         print("got ping from fastest device: " + str(payload['siteId']))
                     self.fastest_device_last_ping_time = time.time()
-                
+
                 # find the fastest device that has LLM abilities on the network
                 if 'hardware_score' in payload and payload['hardware_score'] > self.fastest_device_score and 'has_stt' in payload and payload['has_stt'] == True and 'has_assistant' in payload and payload['has_assistant'] == True:
                     self.fastest_device_score = payload['hardware_score']
@@ -7090,10 +7345,11 @@ class VocoAdapter(Adapter):
                 #
                 
                 # save to others list, to show main controllers that can be connected to in the UI
-                if payload['satellite'] == False: # TODO: why this check? Not needed anymore? Satellites should also have all the information up to date now. 
+                #if payload['satellite'] == False: # TODO: why this check? Not needed anymore? Satellites should also have all the information up to date now. 
                 # Ah, I guess to avoid showing controllers to connect to in the UI that are already in satellite mode. That's useful.. Messy, since in some places this check doesn't exist at the moment
-                    self.mqtt_others[payload['ip']] = payload['hostname']
-                
+                #if payload['siteId'] != self.persistent_data['site_id']:
+                self.mqtt_others[payload['ip']] = payload #{'hostname':str(payload['hostname']), 'ip':payload['ip', 'last_seen':int(time.time()),'main_controller':payload['main_controller']]
+                self.mqtt_others[payload['ip']]['last_seen'] = int(time.time())
                 
                 # Save other controller's thing titles
                 
@@ -8126,10 +8382,18 @@ class VocoAdapter(Adapter):
                     print("\n(...) " + str(voice_message))
                     print("self.llm_assistant_started? " + str(self.llm_assistant_started))
             
-            
-                if self.llm_enabled and (voice_message == '' or voice_message.startswith("Sorry, I don't understand") or voice_message.startswith("Sorry, I couldn't find a match")) and (self.llm_assistant_started or (self.persistent_data['is_satellite'] and self.main_controller_has_stt and self.main_controller_has_assistant)) and best_confidence_score != 1:
+                # (self.persistent_data['is_satellite'] and self.main_controller_has_stt and self.main_controller_has_assistant) or
+                if (best_confidence_score != 1 
+                    and self.llm_enabled 
+                    and (voice_message == '' 
+                        or voice_message.startswith("Sorry, I don't understand") 
+                        or voice_message.startswith("Sorry, I couldn't find a match")) 
+                    and (self.llm_assistant_started 
+                        or (self.fastest_device_id != None and self.fastest_device_last_ping_time > time.time() - 60))
+                    ): 
+                    
                     if self.DEBUG:
-                        print("The final message was empty or 'Sorry, I don't understand', so the AI assistant can take a shot at it")
+                        print("\nThe final message was empty or 'Sorry, I don't understand', and an assistant is available, so the AI assistant can take a shot at it\n")
                         try:
                             print(" - intent_message: " + str(intent_message))
                             #print(" - intent_message['siteId']: " + str(intent_message['siteId']))
@@ -10791,7 +11055,7 @@ class VocoAdapter(Adapter):
 
     # Record audio from MQTT stream
     def start_record(self,msg):
-        #print("in start_recording")
+        #print("in self.start_record")
     	#global self.record_running
     	#global record
         
@@ -11413,6 +11677,11 @@ class VocoAdapter(Adapter):
                     stt_result = run_command(stt_command,30) # If this takes more than 30 seconds..
                     #self.llm_stt_stopwatch = time.time() - self.llm_stt_stopwatch
                     self.parse_llm_stt_result(stt_result, intent)
+                    
+                    if self.DEBUG:
+                        print("llm_stt: deleting old voice file: " + str(self.last_recording_path))
+                    os.system('rm ' + str(self.last_recording_path))
+                        
                 else:
                     if self.DEBUG:
                         print("\nERROR, STT wanted to parse an audio file that does not exist: " + str(self.last_recording_path))
@@ -11751,11 +12020,13 @@ class VocoAdapter(Adapter):
                 
                 if self.llm_models['assistant']['prompts'] and 'system' in self.llm_models['assistant']['prompts']:
                     
-                    assistant_prompt = self.llm_assistant_prompt.replace("{assistant_name}", self.llm_assistant_name)
-                    assistant_prompt = self.llm_models['assistant']['prompts']['system'].replace('{system_message}', assistant_prompt)
-                    assistant_prompt = "'" + assistant_prompt + "'"
+                    #assistant_prompt = self.llm_assistant_prompt.replace("{assistant_name}", self.llm_assistant_name)
+                    #assistant_prompt = self.llm_models['assistant']['prompts']['system'].replace('{system_message}', assistant_prompt)
+                    #assistant_prompt = "'" + assistant_prompt + "'"
+                    assistant_prompt = "'" + self.llm_assistant_prompt + "'" # TODO: currently hardcoded to chatML
+                    #reverse_prompt = self.llm_models['assistant']['prompts']['reverse'].replace("{assistant_name}", self.llm_assistant_name)
                     
-                    reverse_prompt = self.llm_models['assistant']['prompts']['reverse'].replace("{assistant_name}", self.llm_assistant_name)
+                    # "<|im_start|>system \n A conversation between a user and an LLM-based AI assistant. The assistant gives helpful and honest answers. <|im_end|>\n <|im_start|>user \n What is the capital of France? <|im_end|> \n <|im_start|>assistant \n Paris is the capital of France. \n <|im_end|> \n <|im_start|>user \n "
                     
                     #self.llm_assistant_prompt = "'The following is a conversation between a curious Researcher and their helpful AI assistant called " + str(self.llm_assistant_name) + ", which is a large language model trained on the sum of human knowledge. \n\n Researcher: What is the capital of Germany? \n" + str(self.llm_assistant_name) +": Berlin is the capital of Germany. \nResearcher:'"
                 
@@ -11783,11 +12054,19 @@ class VocoAdapter(Adapter):
                         "-p",
                         str(assistant_prompt),
                         "--interactive",
+                        "--interactive-first",
+                        #"--silent-prompt",
                         #"--simple-io",
                         "--batch_size",
-                        "1024",
+                        "512",
                         "--ctx_size",
                         "1024",
+                        "-ngl",
+                        "1024",
+                        "--repeat_penalty",
+                        "1.1",
+                        "-n",
+                        "-1",
                         "--keep",
                         "-1",
                         "--log-disable",
@@ -11797,12 +12076,15 @@ class VocoAdapter(Adapter):
                         "2",
                         "--in-prefix",
                         "' '",
-                        "--interactive-first",
                         "--in-suffix",
-                        "'" + str(self.llm_assistant_name) + ":'",
+                        "'<|im_end|>'",
                         "--reverse-prompt",
-                        "'" + str(reverse_prompt) + "'"
+                        "'<|im_end|>'"
                     ]
+                    # 
+                    #    "'" + str(reverse_prompt) + "'"
+                    
+                    # "'" + str(self.llm_assistant_name) + ":'",
                     # "--silent-prompt",
 
                     #"--prompt-cache",
@@ -11891,26 +12173,29 @@ class VocoAdapter(Adapter):
         try:
             
             if self.mqtt_client != None and self.mqtt_connected and self.fastest_device_id != self.persistent_data['site_id'] and self.fastest_device_last_ping_time + 60 > time.time():
+                
                 mqtt_path = "hermes/voco/" + str(self.fastest_device_id) + '/do_assistant'
+                if self.DEBUG:
+                    print(" - ask_ai_assistant: passing LLM Assistant voice command to fastest controller.  mqtt_path: " + str(mqtt_path))
                 self.mqtt_client.publish(mqtt_path, json.dumps({'siteId':str(self.persistent_data['site_id']), 'text':str(voice_message)}) )
             
             #if self.llm_assistant_started and self.openai_client != None and self.llm_assistant_process != None and voice_message != None and len(voice_message) > 4:
             elif self.llm_assistant_started and self.llm_assistant_process != None and voice_message != None and len(voice_message) > 4:
+                if self.DEBUG:
+                    print(" - ask_ai_assistant: passing voice command to locally running LLM Assistant: " + str(voice_message))
                 self.really_ask_ai_assistant(voice_message,intent=intent)
                 
-            
             elif self.mqtt_client != None and self.mqtt_connected and self.persistent_data['is_satellite'] and self.main_controller_has_assistant:
-                if self.DEBUG:
-                    print("sending voice message to assistant process on main controller")
                 mqtt_path = "hermes/voco/" + str(self.persistent_data['main_site_id']) + '/do_assistant'
+                if self.DEBUG:
+                    print("sending voice message to assistant process on main controller.  mqtt_path: " + str(mqtt_path))
+                
                 self.mqtt_client.publish(mqtt_path, json.dumps({'siteId':str(self.persistent_data['site_id']), 'text':str(voice_message)}) )
             
             else:
                 if self.DEBUG:
                     print("\n\nDEAD END - cannot send voice message to an assistant\n\n")
                     
-                
-                
         except Exception as ex:
             print("Caught error in ask_ai_assistant: " + str(ex))
     
@@ -11950,11 +12235,11 @@ class VocoAdapter(Adapter):
                 print("CLEARING ASSISTANT_OUTPUT.TXT")
             #with open(self.llm_assistant_output_file_path, "a") as myfile:
             #    myfile.write(voice_message)
-            with open(self.llm_assistant_output_file_path, "w") as myfile:
+            with open(str(self.llm_assistant_output_file_path), "w") as myfile:
                 myfile.write("")
                 
-            if os.path.exists('/tmp/assistant_output.txt'):
-                self.last_assistant_output_change_time = os.stat('/tmp/assistant_output.txt').st_mtime
+            if os.path.exists(str(self.llm_assistant_output_file_path)):
+                self.last_assistant_output_change_time = os.stat(str(self.llm_assistant_output_file_path)).st_mtime
             if self.DEBUG:
                 print("self.last_assistant_output_change_time: " + str(self.last_assistant_output_change_time))
             
@@ -12001,7 +12286,7 @@ class VocoAdapter(Adapter):
                 
                 if self.DEBUG:
                     print("STARTING COUNTDOWN")
-                self.last_assistant_output_change_time = os.stat('/tmp/assistant_output.txt').st_mtime
+                self.last_assistant_output_change_time = os.stat(str(self.llm_assistant_output_file_path)).st_mtime
                 for self.assistant_countdown in range(120, 1,-1):
                     if self.DEBUG:
                         print(self.assistant_countdown)
@@ -12021,7 +12306,7 @@ class VocoAdapter(Adapter):
                         break
                         
                     #print("x")
-                    stamp = os.stat('/tmp/assistant_output.txt').st_mtime
+                    stamp = os.stat(str(self.llm_assistant_output_file_path)).st_mtime
                     if stamp != self.last_assistant_output_change_time:
                         self.last_assistant_output_change_time = stamp
                         if repeated_the_question == False:
@@ -12038,7 +12323,7 @@ class VocoAdapter(Adapter):
                 
                         reverse_prompt = str(self.llm_models['assistant']['prompts']['reverse'].replace("{assistant_name}", self.llm_assistant_name))
                         
-                        with open('/tmp/assistant_output.txt', "r") as f:
+                        with open(str(self.llm_assistant_output_file_path), "r") as f:
                             #content = f.readlines()
                             #full = ''.join(content)
                             full = f.read() #lines()

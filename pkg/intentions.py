@@ -169,7 +169,8 @@ def intent_set_timer(self, slots, intent_message):
         if slots['duration'] != None:
             moment = slots['duration']
         elif slots['end_time'] != None:
-            moment = slots['end_time'] 
+            moment = slots['end_time']
+        
         else:
             if self.DEBUG:
                 print("The spoken sentence did not contain a time")
@@ -352,7 +353,7 @@ def intent_get_timer_count(self, slots, intent_message):
         
         if slots['timer_type'] == None:
             if self.DEBUG:
-                print("No timer type set, cancelling")
+                print("ERROR, intent_get_timer_count: no timer type set, cancelling")
             voice_message = "Sorry, I don't understand. "
             #self.play_sound(self.error_sound,intent=intent_message)
             #return
@@ -1567,10 +1568,14 @@ def intent_set_state(self, slots, intent_message, found_properties, delayed_acti
                                         if api_result['succes'] == True:
                                             #print("PUT was succesfull")
                                             if slots['period'] == 'for' and delayed_action == None:
+                                                if self.DEBUG:
+                                                    print("intent_set_state: passing, as it will be switched on for a while")
                                                 # The property will be switched to the desired state for a while and then turned off again.
                                                 # In this case the voice message just needs to state that it will be turned off again, and this has already been done at this point.
                                                 pass
                                             else:
+                                                if self.DEBUG:
+                                                    print("intent_set_state: returning voice message about changing the state")
                                                 #if len(found_properties) > 1:
                                                 if str(found_property['property']) == 'on/off':
                                                     found_property['property'] = 'power'
@@ -1581,7 +1586,7 @@ def intent_set_state(self, slots, intent_message, found_properties, delayed_acti
                                                         voice_message +=  " of " + str(found_property['thing']) 
                                                     voice_message += str(back) + " to " + str(human_readable_desired_state)
                                                     if self.DEBUG:
-                                                        print(str(voice_message))
+                                                        print("intent_set_state: voice message is now: " + str(voice_message))
                                                 #else:
                                                 #    voice_message += " Setting " + str(found_property['thing']) + back + " to " + str(human_readable_desired_state)
                                                                                                     # should the 'thing' above be property?
@@ -1624,7 +1629,8 @@ def intent_set_state(self, slots, intent_message, found_properties, delayed_acti
         #self.speak(voice_message,intent=intent_message)
         
     except Exception as ex:
-        print("Error in intent_set_state: " + str(ex))
+        if self.DEBUG:
+            print("Error in intent_set_state: " + str(ex))
         voice_message = "Sorry, an error occured"
 
     return voice_message

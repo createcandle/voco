@@ -1430,7 +1430,7 @@
         
 	
 		//
-		//  REGENERATE ACTION TIME ITEMS
+		//  REGENERATE ACTION TIMER ITEMS
 		//
 	
 		regenerate_items(){
@@ -1458,6 +1458,7 @@
 					const clock = items[item][ 'clock' ];
 					const moment = items[item][ 'moment' ];
 					const type = items[item][ 'type' ];
+					const cosmetic = items[item][ 'cosmetic' ];
 					const sentence = items[item][ 'slots' ]['sentence'];
 					
 					if( type == 'value' || type == 'boolean_related' ){
@@ -1520,6 +1521,10 @@
 				  	});
 					
 					clone.classList.add('extension-voco-type-' + type);
+					if(cosmetic){
+						clone.classList.add('extension-voco-timer-item-cosmetic');
+					}
+					
 					//clone.querySelectorAll('.extension-voco-type' )[0].classList.add('extension-voco-icon-' + type);
 					clone.querySelectorAll('.extension-voco-sentence' )[0].innerHTML = sentence;
 

@@ -50,6 +50,11 @@ body:not(.developer) .extension-voco-show-if-developer{
 }
 
 
+body.developer .extension-voco-timer-item-cosmetic:after{
+	content:"Owned by other controller";
+	display:block;
+}
+
 
 /*  TABS  */
 
