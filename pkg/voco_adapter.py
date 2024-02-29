@@ -4292,9 +4292,9 @@ class VocoAdapter(Adapter):
                     except Exception as ex:
                         print("other type of exception: " + str(ex))
                 
-                else:
-                    if self.DEBUG:
-                        print("clock: assistant subprocess was not ok")
+                #else:
+                #    if self.DEBUG:
+                #        print("clock: assistant subprocess was not ok")
                 #self.lock.acquire()
                 #print("UTC: " + str(self.current_utc_time))
                 #self.lock.release()
@@ -11281,7 +11281,7 @@ class VocoAdapter(Adapter):
         else:
             self.llm_assistant_possible = False
         
-        if self.DEBUG:
+        if self.DEBUG2:
         #    print("check_available_memory: total_memory: " + str(self.total_memory))
         #    print("check_available_memory: used_memory: " + str(self.used_memory))
             print("check_available_memory: free_memory: " + str(self.free_memory))
@@ -11690,33 +11690,33 @@ class VocoAdapter(Adapter):
             if self.assistant_loop_counter == self.llm_servers_watchdog_interval or self.restart_llm_servers == True:
                 self.restart_llm_servers = False
                 self.assistant_loop_counter = 0
-                if self.DEBUG:
+                if self.DEBUG2:
                     print("at assistant periodic restart check. self.llm_assistant_response_count: " + str(self.llm_assistant_response_count))
                 
                 if self.llm_tts_enabled:
                     if self.llm_tts_process == None or (self.llm_tts_process != None and self.llm_tts_process.poll() != None):
-                        if self.DEBUG:
-                            print("\nLLM servers thread: TTS server seems to have crashed. Attempting restart\n")
+                        if self.DEBUG2:
+                            print("\nLLM servers thread: TTS server doesn't seem to be running. Attempting restart\n")
                         self.llm_tts_started = False
                         self.start_llm_tts()
                         
                 if self.llm_stt_enabled:
                     if self.llm_stt_process == None or (self.llm_stt_process != None and self.llm_stt_process.poll() != None):
-                        if self.DEBUG:
-                            print("\nLLM servers thread: STT server seems to have crashed. Attempting restart\n")
+                        if self.DEBUG2:
+                            print("\nLLM servers thread: STT server doesn't seem to be running. Attempting restart\n")
                         self.llm_stt_started = False
                         self.start_llm_stt_server()
                 
                 if self.llm_assistant_enabled:
                     if self.llm_assistant_process == None or (self.llm_assistant_process != None and self.llm_assistant_process.poll() != None):
-                        if self.DEBUG:
-                            print("\nLLM servers thread: assistant seems to have crashed. Attempting restart\n")
+                        if self.DEBUG2:
+                            print("\nLLM servers thread: assistant doesn't seem to be running. Attempting restart\n")
                         self.llm_assistant_started = False
                         self.last_assistant_output_change_time = time.time()
                         self.start_ai_assistant()
                 
                     elif self.llm_assistant_response_count > 2 and (time.time() - self.llm_assistant_reset_delay) > self.last_assistant_output_change_time:
-                        if self.DEBUG:
+                        if self.DEBUG2:
                             print("\no\noo\nooo\nLLM servers thread: attemping to restart assistant process\nooo\noo\no\n")
                         self.llm_assistant_started = False
                         self.last_assistant_output_change_time = time.time()
@@ -11741,7 +11741,7 @@ class VocoAdapter(Adapter):
 
     # start long running TTS process
     def start_llm_tts(self,restart=False):
-        if self.DEBUG:
+        if self.DEBUG2:
             print("in start_llm_tts. restart: " + str(restart))
         
         if self.llm_tts_process != None and self.llm_tts_process.poll() == None:
@@ -11788,7 +11788,7 @@ class VocoAdapter(Adapter):
         self.last_tts_speaking_offset = 0
         
         if self.llm_models['tts']['active'] == None:
-            if self.DEBUG:
+            if self.DEBUG2:
                 print("\n\nstart_llm_tts: ERROR, tts active model was still None. Aborting start of STT server.\n\n")
             self.llm_tts_started = False
             return
@@ -12144,7 +12144,7 @@ class VocoAdapter(Adapter):
     
 
     def start_llm_stt_server(self):
-        if self.DEBUG:
+        if self.DEBUG2:
             print("in start_llm_stt_server")
         
         if self.llm_stt_process != None or (self.llm_stt_process != None and self.llm_stt_process.poll() == None):
@@ -12211,8 +12211,8 @@ class VocoAdapter(Adapter):
                     
                         
             else:
-                if self.DEBUG:
-                    print("ERROR, not enough memory to start STT server")
+                if self.DEBUG2:
+                    print("WARNING, not enough memory to start STT server")
                 self.llm_stt_not_enough_memory = True
                 
         else:
@@ -12236,7 +12236,7 @@ class VocoAdapter(Adapter):
 
     
     def stop_ai_assistant(self):
-        if self.DEBUG:
+        if self.DEBUG2:
             print("in stop_ai_assistant")
         if self.llm_assistant_process != None and self.llm_assistant_process.poll() == None:
             if self.DEBUG:
@@ -12264,7 +12264,7 @@ class VocoAdapter(Adapter):
                 print("start_ai_assistant: using pkill to stop existing assistant process...")
             os.system('pkill -f ' + str(self.llm_assistant_binary_name))
         else:
-            if self.DEBUG:
+            if self.DEBUG2:
                 print("AI ASSISTANT PROCESS SEEMS TO HAVE STOPPED PROPERLY")
         
         self.llm_assistant_process = None
@@ -12275,10 +12275,13 @@ class VocoAdapter(Adapter):
         
     def start_ai_assistant(self):
         if self.DEBUG:
-            print("\n\nin start_ai_assistant")
-            print("start_ai_assistant: calling stop_ai_assistant first, just to be safe")
+            print("in start_ai_assistant")
             
-        self.stop_ai_assistant()
+            
+        if self.llm_assistant_process != None:
+            if self.DEBUG:
+                print("start_ai_assistant: calling stop_ai_assistant first")
+            self.stop_ai_assistant()
         
         #if self.persistent_data['is_satellite'] == True:
         #    if self.DEBUG:
@@ -12449,8 +12452,8 @@ class VocoAdapter(Adapter):
                         print("\n\nERROR, could not find assistant model's prompts structure\n\n")
 
             else:
-                if self.DEBUG:
-                    print("\n\nWARNING, not enough memory to start Assistant\n\n")
+                if self.DEBUG2:
+                    print("\nWARNING, not enough memory to start Assistant\n")
                 self.llm_assistant_not_enough_memory = True
                 
         else:

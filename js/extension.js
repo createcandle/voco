@@ -1765,6 +1765,21 @@
 					}
 				}
 				
+				if(typeof body.llm_tts_not_enough_memory != 'undefined'){
+					if(body.llm_tts_not_enough_memory){
+						document.getElementById('extension-voco-main-llm-tts-error').textContent = 'Not enough memory';
+					}
+				}
+				if(typeof body.llm_stt_not_enough_memory != 'undefined'){
+					if(body.llm_stt_not_enough_memory){
+						document.getElementById('extension-voco-main-llm-stt-error').textContent = 'Not enough memory';
+					}
+				}
+				if(typeof body.llm_assistant_not_enough_memory != 'undefined'){
+					if(body.llm_assistant_not_enough_memory){
+						document.getElementById('extension-voco-main-llm-assistant-error').textContent = 'Not enough memory';
+					}
+				}
 				
 				if(typeof body['device_model'] != 'undefined'){
 					if(body['device_model'].startsWith('Raspberry Pi 3')){
