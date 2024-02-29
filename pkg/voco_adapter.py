@@ -7223,6 +7223,7 @@ class VocoAdapter(Adapter):
                                 return
                                 
                         payload['customData']['parsed'] = True
+                        payload['customData']['backup_siteId'] = self.persistent_data['site_id']
                 
                         #self.last_text_command = payload['text']
                         #self.parse_text(site_id=payload['siteId'],origin=payload['origin'])
@@ -7612,6 +7613,7 @@ class VocoAdapter(Adapter):
             sentence = sentence.strip()
             if self.DEBUG:
                 print(" - sentence: " + str(sentence))
+            
             if session_id == None and self.current_snips_session_id != '':
                 session_id = self.current_snips_session_id
 
@@ -7626,11 +7628,20 @@ class VocoAdapter(Adapter):
             if intent != None:
                 if 'customData' in intent and intent['customData'] != None:
                     query['customData'] = intent['customData']
+                
                 if 'origin' in intent:
                     query['origin'] = intent['origin']
+                
                 if 'siteId' in intent:
                     query['siteId'] = intent['siteId']
-                    
+                
+                if 'sessionId' in intent:
+                    query['sessionId'] = intent['sessionId']
+                elif session_id != None:
+                    query['sessionId'] = session_id
+                else:
+                    if self.DEBUG:
+                        print("query_intent: cannot set sessionId")
                 #
                     #'intentFilter': ['createcandle:stop_timer', 'createcandle:get_time', 'createcandle:set_timer', 'createcandle:get_timer_count', 'createcandle:get_value', 'createcandle:list_timers', 'createcandle:get_boolean', 'createcandle:set_state', 'createcandle:set_value'],
                     
@@ -8494,6 +8505,12 @@ class VocoAdapter(Adapter):
                             if message_passed_to_main_controller == False:
                                 message_passed_to_main_controller = True
                                 
+                                session_id = None
+                                if 'sessionId' in intent_message:
+                                    session_id = intent_message['sessionId']
+                                elif self.current_snips_session_id != None and self.current_snips_session_id != '':
+                                    session_id = self.current_snips_session_id
+                                
                                 origin = 'voice'
                                 if 'origin' in intent_message:
                                     origin = intent_message['origin']
@@ -8501,7 +8518,7 @@ class VocoAdapter(Adapter):
                                     mqtt_path = "hermes/voco/" + str(satellite_id) + "/parse"
                                     if self.DEBUG:
                                         print("telling other Voco controller about this command:\n - mqtt_path: " + str(mqtt_path) + "\n - origin: " + str(origin) + "\n - sentence: " + str(sentence))
-                                    self.mqtt_client.publish(mqtt_path,json.dumps({ "siteId":str(self.persistent_data['site_id']),"text": sentence, 'origin':origin }))
+                                    self.mqtt_client.publish(mqtt_path,json.dumps({ "siteId":str(self.persistent_data['site_id']),"text": sentence, 'origin':origin, 'sessionId': session_id}))
                         else:
                             if self.DEBUG:
                                 print("should pass command on to main/other controller, but primary MQTT client seems to be disconnected");
