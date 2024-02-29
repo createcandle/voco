@@ -7628,7 +7628,9 @@ class VocoAdapter(Adapter):
                     query['customData'] = intent['customData']
                 if 'origin' in intent:
                     query['origin'] = intent['origin']
-                
+                if 'siteId' in intent:
+                    query['siteId'] = intent['siteId']
+                    
                 #
                     #'intentFilter': ['createcandle:stop_timer', 'createcandle:get_time', 'createcandle:set_timer', 'createcandle:get_timer_count', 'createcandle:get_value', 'createcandle:list_timers', 'createcandle:get_boolean', 'createcandle:set_state', 'createcandle:set_value'],
                     
@@ -8496,9 +8498,10 @@ class VocoAdapter(Adapter):
                                 if 'origin' in intent_message:
                                     origin = intent_message['origin']
                                 for satellite_id in satellites_with_the_thing:
+                                    mqtt_path = "hermes/voco/" + str(satellite_id) + "/parse"
                                     if self.DEBUG:
-                                        print("telling other Voco controller about this command: " + str(satellite_id) + ", origin: " + str(origin))
-                                    self.mqtt_client.publish("hermes/voco/" + str(satellite_id) + "/parse",json.dumps({ "siteId":str(self.persistent_data['site_id']),"text": sentence, 'origin':origin }))
+                                        print("telling other Voco controller about this command:\n - mqtt_path: " + str(mqtt_path) + "\n - origin: " + str(origin) + "\n - sentence: " + str(sentence))
+                                    self.mqtt_client.publish(mqtt_path,json.dumps({ "siteId":str(self.persistent_data['site_id']),"text": sentence, 'origin':origin }))
                         else:
                             if self.DEBUG:
                                 print("should pass command on to main/other controller, but primary MQTT client seems to be disconnected");
