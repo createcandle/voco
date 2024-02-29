@@ -29,7 +29,7 @@
 			
 			this.previous_llm_folder_size = 0;
 			
-			this.llm_wakeword_model = 'hey_candle.tflite';
+			this.llm_wakeword_model = 'hey_candle';
 			this.llm_wakeword_started = false;
 			
 			this.llm_tts_model = null;
@@ -1342,6 +1342,55 @@
                 document.getElementById('extension-voco-unavailable').style.display = 'none';
                 document.getElementById('extension-voco-text-commands-container').style.display = 'block';
                 
+				
+				// TODO: this code is double, also checked doing /llm_init
+				if(typeof body['llm_wakeword_started'] != 'undefined'){
+					this.llm_wakeword_started = body['llm_wakeword_started'];
+					if(this.llm_wakeword_started){
+						content_container_el.classList.add('extension-voco-wakeword-running');
+					}
+					else{
+						content_container_el.classList.remove('extension-voco-wakeword-running');
+					}
+				}
+				
+				if(typeof body['llm_tts_started'] != 'undefined'){
+					this.llm_tts_started = body['llm_tts_started'];
+					if(this.llm_tts_started){
+						content_container_el.classList.add('extension-voco-tts-running');
+					}
+					else{
+						content_container_el.classList.remove('extension-voco-tts-running');
+					}
+				}
+				
+				if(typeof body['llm_stt_started'] != 'undefined'){
+					this.llm_stt_started = body['llm_stt_started'];
+					if(this.llm_stt_started){
+						content_container_el.classList.add('extension-voco-stt-running');
+						//document.getElementById('extension-voco-main-llm-stt-running').classList.remove('extension-voco-hidden');
+						//document.getElementById('extension-voco-main-llm-stt-not-running').style.display = 'none';
+					}
+					else{
+						content_container_el.classList.remove('extension-voco-stt-running');
+						//document.getElementById('extension-voco-main-llm-stt-running').classList.add('extension-voco-hidden');
+						//document.getElementById('extension-voco-main-llm-stt-not-running').style.display = 'block';
+					}
+				}
+				
+				if(typeof body['llm_assistant_started'] != 'undefined'){
+					this.llm_assistant_started = body['llm_assistant_started'];
+					if(this.llm_assistant_started){
+						content_container_el.classList.add('extension-voco-assistant-running');
+					}
+					else{
+						content_container_el.classList.remove('extension-voco-assistant-running');
+					}
+				}
+				
+				
+				
+				
 
 	        }).catch((e) => {
 	  			//console.log("Error getting timer items: " , e);
@@ -1769,7 +1818,7 @@
 	  						let llm_item_el = document.createElement('li');
 							llm_item_el.classList.add('extension-voco-vlak');
 							
-							const model_name = llm_details.model;
+							let model_name = llm_details.model;
 							
 							let required_memory = 0;
 							console.log("llm_details.memory: ", typeof llm_details.memory);
@@ -1836,9 +1885,9 @@
 							
 							radio_el.addEventListener('change', () => {
 								//console.log("checkbox changed to: ", model_name);
-							
+								
 								let action_dict = {'action':'set_llm'};
-								action_dict['llm_' + llm_type + '_model'] = model_name;
+								action_dict['llm_' + llm_type + '_model'] = model_name.replace('.tflite','');
 								//console.log("voco: action_dict: ", action_dict);
 						        window.API.postJson(
 						          `/extensions/${this.id}/api/ajax`,action_dict

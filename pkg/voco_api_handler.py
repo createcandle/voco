@@ -747,7 +747,11 @@ class VocoAPIHandler(APIHandler):
                                                         'llm_folder_size':llm_folder_size,
                                                         'llm_not_enough_disk_space':self.adapter.llm_not_enough_disk_space,
                                                         'free_memory':self.adapter.free_memory,
-                                                        'fastest_device_id':self.adapter.fastest_device_id
+                                                        'fastest_device_id':self.adapter.fastest_device_id,
+                                                        'llm_tts_started': self.adapter.llm_tts_started,
+                                                        'llm_stt_started': self.adapter.llm_stt_started,
+                                                        'llm_wakeword_started': self.adapter.llm_wakeword_started,
+                                                        'llm_assistant_started': self.adapter.llm_assistant_started
                                                         })
                                 )
                                 
