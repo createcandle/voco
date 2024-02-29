@@ -3077,9 +3077,9 @@ class VocoAdapter(Adapter):
                     except Exception as ex:
                         print("speak_thread: tts_stdout: other type of exception: " + str(ex))
                 
-                else:
-                    if self.DEBUG:
-                        print("speak_thread: tts subprocess was not ok")
+                #else:
+                #    if self.DEBUG:
+                #        print("speak_thread: tts subprocess was not ok")
                 
             except Exception as ex:
                 print("Caught error getting STDOUT from LLM TTS proces: " + str(ex))
@@ -4967,8 +4967,8 @@ class VocoAdapter(Adapter):
                                 #if self.DEBUG:
                                 #    print("only checking if snips is running once every 3 seconds")
                         else:
-                            if self.DEBUG:
-                                print("clock: injection not yet complete, checking snips stdout/stderr every 3 seconds")
+                            #if self.DEBUG:
+                            #    print("clock: injection not yet complete, checking snips stdout/stderr every 3 seconds")
                             
                             for process in self.external_processes:
                                 #if self.DEBUG:
