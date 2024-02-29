@@ -12802,7 +12802,7 @@ class VocoAdapter(Adapter):
                                     if self.DEBUG:
                                         print("Set info_to_display to full assistant reply: \n\n==========================\n" + str(self.info_to_display) + "\n==========================\n\n")
                                     
-                                if self.llm_assistant_continue_conversations and intent != None and 'origin' in intent and intent['origin'] == 'voice':
+                                if self.llm_assistant_continue_conversations and intent != None and 'origin' in intent and intent['origin'] == 'voice' and self.llm_wakeword_started:
                                     if self.DEBUG:
                                         print("setting self.llm_assistant_continue_conversation to True")
                                     self.llm_assistant_continue_conversation = 2
