@@ -5879,6 +5879,7 @@ class VocoAdapter(Adapter):
             
             
             # TODO: the code below has been hollowed out and no longer does anything
+            """
             if self.persistent_data['is_satellite']:
                 #if self.DEBUG:
                 #    print("stored asr payload")
@@ -5908,7 +5909,7 @@ class VocoAdapter(Adapter):
                 #'message' in payload and 'intent' in payload:
                 #self.mqtt_client.publish("hermes/voco/" + str(self.persistent_data['main_site_id']) + "/speak",json.dumps({'message':'What the fuck!', 'intent':'default', }))
 
-
+            """
         
         
         """
@@ -7620,8 +7621,14 @@ class VocoAdapter(Adapter):
                     "input": str(sentence),
                     "id": query_id,
                     "sessionId": str(self.current_snips_session_id),
-                    "customData": {"test":"This_is_a_custom_data_test"}
                 }
+                
+            if intent != None:
+                if 'customData' in intent and intent['customData'] != None:
+                    query['customData'] = intent['customData']
+                if 'origin' in intent:
+                    query['origin'] = intent['origin']
+                
                 #
                     #'intentFilter': ['createcandle:stop_timer', 'createcandle:get_time', 'createcandle:set_timer', 'createcandle:get_timer_count', 'createcandle:get_value', 'createcandle:list_timers', 'createcandle:get_boolean', 'createcandle:set_state', 'createcandle:set_value'],
                     
@@ -12274,7 +12281,7 @@ class VocoAdapter(Adapter):
         
         
     def start_ai_assistant(self):
-        if self.DEBUG:
+        if self.DEBUG2:
             print("in start_ai_assistant")
             
             
