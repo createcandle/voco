@@ -7528,15 +7528,14 @@ class VocoAdapter(Adapter):
 
 
     def parse_ping(self,payload,ping_type="ping"):
-        if self.DEBUG:
+        if self.DEBUG2:
             print("\n    ( . . . pong . . . )---\n")
-        if self.DEBUG:
-            pass
+        if self.DEBUG2:
             #print('in parse_ping. ping_type: ' + str(ping_type))
             #print("(own site_id: " + str(self.persistent_data['site_id']) + ")")
             print("- - - payload: " + str(json.dumps(payload,indent=4)))
-            
             #print("- - - message ends in /ping. A Voco server (" + str(payload['hostname']) + "," + str(payload['ip']) + ") is asking for our ip and hostname")
+            pass
             
         # TODO: there is a lot of partitioning into ping vs pong route here, but in many cases that doesn't matter. As long as it comes from another controller, it can be useful, no matter if its ping or pong
         # Could also technically disable satellite mode if the main controller reports that it's itself a satellite    
@@ -7566,7 +7565,7 @@ class VocoAdapter(Adapter):
                     
                     # Is if the fastest controller?
                     if str(payload['siteId']) == str(self.fastest_controller_id):
-                        if self.DEBUG:
+                        if self.DEBUG2:
                             print("parse_ping: got ping from fastest controller: " + str(payload['siteId']))
                         self.fastest_controller_last_ping_time = time.time()
                         
@@ -7575,9 +7574,9 @@ class VocoAdapter(Adapter):
                         self.fastest_controller_score = payload['hardware_score']
 
                         if self.DEBUG:
-                            print("parse_ping: got ping from a even faster controller: " + str(payload['siteId']))
+                            print("parse_ping: got ping from an even faster controller: " + str(payload['siteId']))
                         
-                        if self.llm_stt_started and self.llm_assistant_started and self.fastest_controller_score < self.hardware_score:
+                        if self.llm_stt_started and self.llm_assistant_started and self.fastest_controller_score <= self.hardware_score:
                             if self.DEBUG:
                                 print("parse_ping: The other controller also has an LLM assistant, but is slower. Setting initial fastest_controller_score to my own: " + str(self.hardware_score))
                             self.fastest_controller_score = self.hardware_score
