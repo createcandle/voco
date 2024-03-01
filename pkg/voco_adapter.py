@@ -7562,6 +7562,13 @@ class VocoAdapter(Adapter):
         if 'ip' in payload and 'siteId' in payload and 'hostname' in payload and 'satellite' in payload and 'main_controller' in payload and 'thing_titles' in payload:
             
             
+            # Is it the fastest controller?
+            if str(payload['siteId']) == str(self.fastest_controller_id):
+                if self.DEBUG2:
+                    print("parse_ping: got ping from fastest controller: " + str(payload['siteId']))
+                self.fastest_controller_last_ping_time = time.time()
+                
+            
             # If the message came from another controller
             if payload['siteId'] != self.persistent_data['site_id']:
                 
@@ -7580,12 +7587,6 @@ class VocoAdapter(Adapter):
                     
                     # A controller is alive and well
                     
-                    # Is if the fastest controller?
-                    if str(payload['siteId']) == str(self.fastest_controller_id):
-                        if self.DEBUG2:
-                            print("parse_ping: got ping from fastest controller: " + str(payload['siteId']))
-                        self.fastest_controller_last_ping_time = time.time()
-                        
                     # find the fastest device that has LLM abilities on the network
                     if 'hardware_score' in payload and payload['hardware_score'] > self.fastest_controller_score and 'has_stt' in payload and payload['has_stt'] == True and 'has_assistant' in payload and payload['has_assistant'] == True:
                         self.fastest_controller_score = payload['hardware_score']
@@ -7597,12 +7598,12 @@ class VocoAdapter(Adapter):
                             if self.DEBUG:
                                 print("parse_ping: The other controller also has an LLM assistant, but is slower. Setting initial fastest_controller_score to my own: " + str(self.hardware_score))
                             self.fastest_controller_score = self.hardware_score
-                            self.fastest_controller_id = self.persistent_data['site_id']
+                            #self.fastest_controller_id = self.persistent_data['site_id']
                     
                         if self.llm_stt_started and self.llm_assistant_started and self.fastest_controller_score < self.hardware_score + 4:
                             if self.DEBUG:
                                 print("parse_ping: I have LLM features myself, and the other Rasbperry Pi in the network isn't that much better")
-                            self.fastest_controller_id = self.persistent_data['site_id']
+                            #self.fastest_controller_id = self.persistent_data['site_id']
                         else:
                             if self.DEBUG:
                                 print("parse_ping: Found a faster Rasbperry Pi in the network, with a score of " + str(payload['hardware_score']) + ", it's ID is: " + str(payload['siteId']))
@@ -7909,9 +7910,9 @@ class VocoAdapter(Adapter):
                 
             
             if best_confidence_score > self.confidence_score_threshold:
-                if self.llm_assistant_started and most_likely_intent == 'get_time' and 'time' not in sentence and best_confidence_score < 0.9:
+                if (self.llm_assistant_started or (self.fastest_controller_id != None and self.fastest_controller_last_ping_time > time.time() - 60)) and most_likely_intent == 'get_time' and 'time' not in sentence and best_confidence_score < 0.9:
                     if self.DEBUG:
-                        print("Skipping testing get_time intent that doesn't have the word 'time' in it because the assistant is running")
+                        print("Skipping testing get_time intent that doesn't have the word 'time' in it because an assistant is available")
                 else:
                     #if self.persistent_data['is_satellite'] and most_likely_intent in ['get_time','set_timer','get_timer_count','list_timers','stop_timer']:
                     #    if self.DEBUG:
@@ -12742,7 +12743,8 @@ class VocoAdapter(Adapter):
 
         if self.assistant_countdown > 0:
             if self.DEBUG:
-                print("\n\nASSISTANT IS ALREADY BUSY. ABORTING. \n\n")
+                print("\n\nASSISTANT IS ALREADY BUSY. ABORTING. self.assistant_countdown: " + str(self.assistant_countdown) + " \n\n")
+            self.speak("Sorry, the assistant busy. ",intent)
             return
 
         voice_message = voice_message.strip()
@@ -13001,11 +13003,13 @@ class VocoAdapter(Adapter):
 
                             #if full.endswith('Researcher:') or full.endswith('Researcher: '):
                             if reverse_prompt in full and not full.startswith(reverse_prompt):
+                                self.assistant_countdown = 0
+                                
                                 if self.DEBUG:
                                     print("REVERSE PROMPT IN OUTPUT (but not at the beginning of the response, which is good)")
                                     print("DONE!")
                                     print("intent: " + str(intent))
-
+                                    
                                 if display:
                                     self.info_to_display = full.replace(reverse_prompt,'')
                                     if self.DEBUG:
