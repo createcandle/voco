@@ -1,19 +1,19 @@
-#extension-voco-icon{
-  display: inline-block;
-  width: 3rem;
-  height: 2rem;
-  background-image: url('../images/menu-icon.svg');
-  background-size: contain;
-  background-size: 2rem;
-  background-repeat: no-repeat;
-  background-position: 0;
+#extension-voco-icon {
+    display: inline-block;
+    width: 3rem;
+    height: 2rem;
+    background-image: url('../images/menu-icon.svg');
+    background-size: contain;
+    background-size: 2rem;
+    background-repeat: no-repeat;
+    background-position: 0;
 }
 
-#extension-voco-title{
-	text-align:left;
-	font-family: 'Open Sans', sans-serif;
-	font-weight: normal;
-	font-size:1.8rem;
+#extension-voco-title {
+    text-align: left;
+    font-family: 'Open Sans', sans-serif;
+    font-weight: normal;
+    font-size: 1.8rem;
     margin: 0 auto;
     display: block;
     padding: 1rem;
@@ -23,36 +23,36 @@
     background-repeat: no-repeat;
     background-position: 0;
     background-image: url('../images/menu-icon.svg');
-	width:8rem;
-	margin:0 auto;
+    width: 8rem;
+    margin: 0 auto;
 }
 
-.extension-voco-hidden{
-    display:none!important;
+.extension-voco-hidden {
+    display: none !important;
 }
 
-body:not(.developer).extension-voco-developer-only{
-	display:none;
+body:not(.developer).extension-voco-developer-only {
+    display: none;
 }
 
-body:not(.developer) .extension-voco-show-if-developer{
-    display:none!important;
+body:not(.developer) .extension-voco-show-if-developer {
+    display: none !important;
 }
 
 
-.extension-voco-vlak{
-    padding:2rem;
-    border-radius:.5rem;
-    margin:4rem auto;
-    background-color:rgba(0,0,0,.1);
+.extension-voco-vlak {
+    padding: 2rem;
+    border-radius: .5rem;
+    margin: 4rem auto;
+    background-color: rgba(0, 0, 0, .1);
     overflow-wrap: break-word;
     word-wrap: break-word;
 }
 
 
-body.developer .extension-voco-timer-item-cosmetic:after{
-	content:"Owned by other controller";
-	display:block;
+body.developer .extension-voco-timer-item-cosmetic:after {
+    content: "Owned by other controller";
+    display: block;
 }
 
 
@@ -65,33 +65,33 @@ body.developer .extension-voco-timer-item-cosmetic:after{
 }
 
 .extension-voco-tab-buttons {
-    background-color: rgba(255,255,255,.1);
+    background-color: rgba(255, 255, 255, .1);
     border-radius: 0.7rem;
     overflow: hidden;
     font-size: 0;
-    width:80%;
+    width: 80%;
     max-width: 50rem;
     margin: 4rem auto 0 auto;
-    display:flex;
+    display: flex;
 }
 
 #extension-voco-view .extension-voco-tab-buttons button {
     background-color: transparent;
-    border-right: 1px solid rgba(0,0,0,.05);
+    border-right: 1px solid rgba(0, 0, 0, .05);
     color: #eee;
     cursor: pointer;
     font-size: 1.8rem;
-    flex-grow:1;
+    flex-grow: 1;
 }
 
-#extension-voco-view .extension-voco-tab-buttons button:hover{
-    background-color: rgba(0,0,0,0.1);
+#extension-voco-view .extension-voco-tab-buttons button:hover {
+    background-color: rgba(0, 0, 0, 0.1);
     color: white;
 }
 
 body #extension-voco-view .extension-voco-tab-selected {
     color: white;
-    background-color: rgba(0,0,0,0.18)!important;
+    background-color: rgba(0, 0, 0, 0.18) !important;
 }
 
 
@@ -110,48 +110,49 @@ body #extension-voco-view .extension-voco-tab-selected {
 
 #extension-voco-tutorial h2,
 #extension-voco-tutorial h3,
-#extension-voco-tutorial h4{
-    margin-top:8rem;
+#extension-voco-tutorial h4 {
+    margin-top: 8rem;
 }
 
 
 
-#extension-voco-view button{
-	font-size: 1.6rem;
-	padding: 1rem;
-	border: none;
+#extension-voco-view button {
+    font-size: 1.6rem;
+    padding: 1rem;
+    border: none;
 }
-#extension-voco-view button:focus{
+
+#extension-voco-view button:focus {
     outline: none;
 }
 
-#extension-voco-view a{
-	color:white;
-	font-weight:bold;
+#extension-voco-view a {
+    color: white;
+    font-weight: bold;
 }
 
 #extension-voco-view ul,
-#extension-voco-view p{
+#extension-voco-view p {
     line-height: 2.7rem;
 }
 
 
-.extension-voco-italic{
-	font-style:italic;
+.extension-voco-italic {
+    font-style: italic;
 }
 
 
-#extension-voco-content-container{
-    width:100%;
-    max-width:80rem;
+#extension-voco-content-container {
+    width: 100%;
+    max-width: 80rem;
     margin: 0 auto;
 }
 
 /*  DELETE  */
 
 
-.extension-voco-item-delete-button{
-	background: url(/images/delete-button.png);
+.extension-voco-item-delete-button {
+    background: url(/images/delete-button.png);
     background-size: 3.6rem;
     width: 3.6rem;
     height: 3.6rem;
@@ -160,166 +161,168 @@ body #extension-voco-view .extension-voco-tab-selected {
     border-radius: 50%;
     border: 1px solid #979797;
     cursor: pointer;
-	display:inline-block;
-	opacity:.5;
+    display: inline-block;
+    opacity: .5;
 }
 
-.extension-voco-item-delete-button:hover{
-	opacity:1;
-	box-shadow: 0 3px 6px rgba(0,0,0,0.16), 0 3px 6px rgba(0,0,0,0.23);
-}
-
-
-
-.extension-voco-item{
-	padding: 0;
-	display: flex;
-    background-color:rgba(0,0,0,.2);
-	border-radius:.5rem;
-	border-radius: .5rem;
-	position: relative;
-	width:100%;
-	margin-bottom: 4rem;
+.extension-voco-item-delete-button:hover {
+    opacity: 1;
+    box-shadow: 0 3px 6px rgba(0, 0, 0, 0.16), 0 3px 6px rgba(0, 0, 0, 0.23);
 }
 
 
-.extension-voco-item-left{
-	margin-bottom: 2rem;
-}
 
-.extension-voco-item-setter{
-	color:white;
-	font-size: 1.8rem;
-	border-right: 1px solid rgba(255,255,255,.3);
-	width:100%;
-	padding:2rem;
-	overflow: hidden;
-	display:flex;
-	flex-wrap:wrap;
-    box-sizing:border-box;
-}
-.extension-voco-item-right{
-	text-align:center;
-}
-
-#extension-voco-server-list{
-	width:calc(100% - 8rem);
-}
-
-#extension-voco-server-list-toggle{
-	border-top: 1px solid rgba(255,255,255,.3);
-}
-
-#extension-voco-view .rule-switch{
-	padding-right:0;
-    padding-top:1rem;
+.extension-voco-item {
+    padding: 0;
+    display: flex;
+    background-color: rgba(0, 0, 0, .2);
+    border-radius: .5rem;
+    border-radius: .5rem;
+    position: relative;
+    width: 100%;
+    margin-bottom: 4rem;
 }
 
 
-.extension-voco-item-menu{
-	display: flex;
-	flex-direction:column;
-	justify-content:space-around;
-	padding:2rem;
+.extension-voco-item-left {
+    margin-bottom: 2rem;
+}
+
+.extension-voco-item-setter {
+    color: white;
+    font-size: 1.8rem;
+    border-right: 1px solid rgba(255, 255, 255, .3);
+    width: 100%;
+    padding: 2rem;
+    overflow: hidden;
+    display: flex;
+    flex-wrap: wrap;
+    box-sizing: border-box;
+}
+
+.extension-voco-item-right {
+    text-align: center;
+}
+
+#extension-voco-server-list {
+    width: calc(100% - 8rem);
+}
+
+#extension-voco-server-list-toggle {
+    border-top: 1px solid rgba(255, 255, 255, .3);
+}
+
+#extension-voco-view .rule-switch {
+    padding-right: 0;
+    padding-top: 1rem;
 }
 
 
-#extension-voco-view .extension-voco-limit{
-	width: 8rem;
-	font-size: 1.8rem;
-	padding:.5rem 1rem;
-	margin: .5rem;
-	background-color: #4d8bb7;
-	color:white;
+.extension-voco-item-menu {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-around;
+    padding: 2rem;
 }
 
 
-.extension-voco-item-setter > span{
-	display:inline-block;
+#extension-voco-view .extension-voco-limit {
+    width: 8rem;
+    font-size: 1.8rem;
+    padding: .5rem 1rem;
+    margin: .5rem;
+    background-color: #4d8bb7;
+    color: white;
 }
 
 
-#extension-voco-list{
-	width:auto;
-	display:flex;
-	flex-wrap:wrap;
-    flex-direction:column;
-    margin:4rem auto;
+.extension-voco-item-setter>span {
+    display: inline-block;
 }
 
 
-#extension-voco-original-item{
-	opacity:.3;
-	display:none;
+#extension-voco-list {
+    width: auto;
+    display: flex;
+    flex-wrap: wrap;
+    flex-direction: column;
+    margin: 4rem auto;
 }
 
 
-#extension-voco-view select{
-	display: inline-block;
-	font-size: 1.8rem;
-	color:white;
-	line-height: 1.3;
-	padding:.5rem 1rem;
-	border-radius: 0.5rem;
-	box-sizing: border-box;
-	margin: .5rem;
-	border: none;
-	background-color: #4d8bb7;
-	-moz-appearance: none;
-	-webkit-appearance: none;
-	appearance: none;
-	background-image: url(/images/select-arrow.svg);
-	background-repeat: no-repeat;
-	background-size: 1.25rem;
-	background-position: calc(100% - 1rem);
-	padding-right: 3.5rem;
+#extension-voco-original-item {
+    opacity: .3;
+    display: none;
+}
+
+
+#extension-voco-view select {
+    display: inline-block;
+    font-size: 1.8rem;
+    color: white;
+    line-height: 1.3;
+    padding: .5rem 1rem;
+    border-radius: 0.5rem;
+    box-sizing: border-box;
+    margin: .5rem;
+    border: none;
+    background-color: #4d8bb7;
+    -moz-appearance: none;
+    -webkit-appearance: none;
+    appearance: none;
+    background-image: url(/images/select-arrow.svg);
+    background-repeat: no-repeat;
+    background-size: 1.25rem;
+    background-position: calc(100% - 1rem);
+    padding-right: 3.5rem;
 }
 
 #main-menu #extension-voco-menu-item {
-  	background-image: url('../images/menu-icon.svg');
+    background-image: url('../images/menu-icon.svg');
 }
 
 #extension-voco-view {
-  	height: 100%; /*calc(100% - 7.6rem);*/
-  	box-sizing: border-box;
-	overflow: auto;
-	position: absolute;
-	top: 7.6rem;
-	left: 0;
-	padding: 2rem;
+    height: 100%;
+    /*calc(100% - 7.6rem);*/
+    box-sizing: border-box;
+    overflow: auto;
+    position: absolute;
+    top: 7.6rem;
+    left: 0;
+    padding: 2rem;
 }
 
 
 #extension-voco-content {
-	display:flex;
-	flex-direction: column;
-	flex-direction: column;
-	overflow: auto;
-  	position: relative;
-  	text-align: left;
-  	font-size: 1.6rem;
-  	color: #fff;
-	height:auto;
+    display: flex;
+    flex-direction: column;
+    flex-direction: column;
+    overflow: auto;
+    position: relative;
+    text-align: left;
+    font-size: 1.6rem;
+    color: #fff;
+    height: auto;
 }
 
-#extension-voco-content img{
-	max-width:100%;
+#extension-voco-content img {
+    max-width: 100%;
 }
 
-.extension-voco-response-data{
-	text-align:center;
+.extension-voco-response-data {
+    text-align: center;
 }
 
 
 /*  TABS  */
 
-.extension-voco-hidden{
-    display:none!important;
+.extension-voco-hidden {
+    display: none !important;
 }
 
-body #extension-voco-view .extension-voco-tab-selected{
+body #extension-voco-view .extension-voco-tab-selected {
     color: white;
-    background-color: rgba(0,0,0,0.18)!important;
+    background-color: rgba(0, 0, 0, 0.18) !important;
 }
 
 /*
@@ -333,29 +336,30 @@ body #extension-voco-view .extension-voco-tab-selected{
 */
 
 
-.extension-voco-tab-buttons{
-	background-color: rgba(255,255,255,.1);
-	border-radius: .7rem;
-	overflow: hidden;
-	font-size:0;
+.extension-voco-tab-buttons {
+    background-color: rgba(255, 255, 255, .1);
+    border-radius: .7rem;
+    overflow: hidden;
+    font-size: 0;
     /*max-width: 60rem;*/
     margin: 4rem auto 0 auto;
 }
 
-#extension-voco-view .extension-voco-tab-buttons button{
-	background-color: transparent;
-	border-right: 1px solid rgba(0,0,0,.05);
-	color: #eee;
-	cursor:pointer;
-	font-size:1.8rem;
-}
-#extension-voco-view .extension-voco-tab-buttons button:last-child{
-	float:right;
+#extension-voco-view .extension-voco-tab-buttons button {
+    background-color: transparent;
+    border-right: 1px solid rgba(0, 0, 0, .05);
+    color: #eee;
+    cursor: pointer;
+    font-size: 1.8rem;
 }
 
-#extension-voco-view .extension-voco-tab-buttons button:hover{
-	background-color: rgba(0,0,0,0.1);
-	color:white;
+#extension-voco-view .extension-voco-tab-buttons button:last-child {
+    float: right;
+}
+
+#extension-voco-view .extension-voco-tab-buttons button:hover {
+    background-color: rgba(0, 0, 0, 0.1);
+    color: white;
 }
 
 
@@ -384,11 +388,12 @@ body #extension-voco-view .extension-voco-tab-selected{
 /*   VOCO please change hostname  */
 
 
-.extension-voco-change-hostname-target{
-	display:none;
+.extension-voco-change-hostname-target {
+    display: none;
 }
-.extension-voco-change-hostname .extension-voco-change-hostname-target{
-	display:block;
+
+.extension-voco-change-hostname .extension-voco-change-hostname-target {
+    display: block;
 }
 
 
@@ -396,41 +401,46 @@ body #extension-voco-view .extension-voco-tab-selected{
 
 
 
-#extension-voco-add-token{
-	display:none;
-	padding:4rem;
-	max-width:80rem;
-	background-color:rgba(0,0,0,.2);
-	margin:4rem auto;
+#extension-voco-add-token {
+    display: none;
+    padding: 4rem;
+    max-width: 80rem;
+    background-color: rgba(0, 0, 0, .2);
+    margin: 4rem auto;
 }
 
-.extension-voco-add-token #extension-voco-add-token{
-	display:block;
+.extension-voco-add-token #extension-voco-add-token {
+    display: block;
 }
 
-#extension-voco-token-input{
-	width:100%;
-	height:10rem;
-	padding: 1rem;
-	font-size: 1.4rem;
+#extension-voco-token-input {
+    width: 100%;
+    height: 10rem;
+    padding: 1rem;
+    font-size: 1.4rem;
 }
 
-#extension-voco-token-save-button{
-	cursor:pointer;
+#extension-voco-token-save-button {
+    cursor: pointer;
 }
 
-#extension-voco-add-token-message{
-	padding-left:2rem;
+#extension-voco-add-token-message {
+    padding-left: 2rem;
 }
 
-.extension-voco-fade-out{
-	animation: extension-voco-fadeOut 3s linear;
+.extension-voco-fade-out {
+    animation: extension-voco-fadeOut 3s linear;
 }
 
 @keyframes extension-voco-fadeOut {
-   0% {opacity: 1;}
-   100% {opacity: 0;} 
-} 
+    0% {
+        opacity: 1;
+    }
+
+    100% {
+        opacity: 0;
+    }
+}
 
 
 /*   VOCO  Timers   */
@@ -449,9 +459,9 @@ body #extension-voco-view .extension-voco-tab-selected{
 	margin: 4rem auto;
 }
 */
-.extension-voco-centered-error{
-	text-align:center;
-    padding:2rem;
+.extension-voco-centered-error {
+    text-align: center;
+    padding: 2rem;
 }
 
 /*
@@ -461,172 +471,170 @@ body #extension-voco-view .extension-voco-tab-selected{
 */
 
 
-.extension-voco-type{
-	width:4rem;
-	height:4rem;
-	background-repeat:no-repeat;
-	background-position:center;
+.extension-voco-type {
+    width: 4rem;
+    height: 4rem;
+    background-repeat: no-repeat;
+    background-position: center;
 }
 
 
 .extension-voco-radio-select-item,
 .extension-voco-time,
-.extension-voco-change:not(:empty){
-	background-color:rgba(255,255,255,.07);
-	border-radius:.5rem;
-	padding:1rem 1.5rem;
-	margin:1rem 0;
-	display:inline-block;
+.extension-voco-change:not(:empty) {
+    background-color: rgba(255, 255, 255, .07);
+    border-radius: .5rem;
+    padding: 1rem 1.5rem;
+    margin: 1rem 0;
+    display: inline-block;
 }
 
-.extension-voco-radio-select-item{
-	width:100%;
-	display:block;
-	box-sizing: border-box;
+.extension-voco-radio-select-item {
+    width: 100%;
+    display: block;
+    box-sizing: border-box;
 }
 
 
-.extension-voco-radio-select-item span{
-	margin-left:1rem;
+.extension-voco-radio-select-item span {
+    margin-left: 1rem;
     text-transform: capitalize;
 }
 
-.extension-voco-radio-select-item input[type="radio"]{
-	transform:scale(2);
+.extension-voco-radio-select-item input[type="radio"] {
+    transform: scale(2);
 }
 
-.extension-voco-line2{
-	display:flex;
-	flex-wrap:wrap;
-	justify-content:space-between;
-	width:100%;
+.extension-voco-line2 {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    width: 100%;
 }
 
-.extension-voco-line2 > div{
-	width:100%;
+.extension-voco-line2>div {
+    width: 100%;
 }
 
-.extension-voco-thing:not(:empty):after{
-	content:' → ';
+.extension-voco-thing:not(:empty):after {
+    content: ' → ';
 }
 
-.extension-voco-sentence{
-	width:100%;
+.extension-voco-sentence {
+    width: 100%;
     min-width: 160px;
     font-style: italic;
     padding-bottom: 2rem;
     opacity: .8;
     flex-grow: 1;
-    background-color: rgba(0,0,0,.07);
+    background-color: rgba(0, 0, 0, .07);
     padding: 1rem 2rem;
     box-sizing: border-box;
     border-radius: .5rem;
 }
 
-.extension-voco-sentence:first-letter{
-  text-transform: capitalize
+.extension-voco-sentence:first-letter {
+    text-transform: capitalize
 }
 
 
-.extension-voco-time{
-	
+.extension-voco-time {}
+
+.extension-voco-icon {
+    width: 4rem;
+    height: 4rem;
+    margin-right: 2rem;
+    margin-bottom: 1rem;
+    background-size: 3rem;
+    background-position: center;
+    background-repeat: no-repeat;
+    flex-shrink: 0;
 }
 
-.extension-voco-icon{
-	width:4rem;
-	height:4rem;
-	margin-right:2rem;
-	margin-bottom:1rem;
-	background-size:3rem;
-	background-position:center;
-	background-repeat:no-repeat;
-	flex-shrink: 0;
+.extension-voco-type-timer .extension-voco-icon {
+    background-image: url('../images/timer.svg');
 }
 
-.extension-voco-type-timer .extension-voco-icon{
-	background-image:url('../images/timer.svg');
+.extension-voco-type-alarm .extension-voco-icon {
+    background-image: url('../images/alarm.svg');
 }
 
-.extension-voco-type-alarm .extension-voco-icon{
-	background-image:url('../images/alarm.svg');
+.extension-voco-type-wake .extension-voco-icon {
+    background-image: url('../images/wake.svg');
 }
 
-.extension-voco-type-wake .extension-voco-icon{
-	background-image:url('../images/wake.svg');
+.extension-voco-type-reminder .extension-voco-icon {
+    background-image: url('../images/reminder.svg');
 }
 
-.extension-voco-type-reminder .extension-voco-icon{
-	background-image:url('../images/reminder.svg');
-}
-
-.extension-voco-type-countdown .extension-voco-icon{
-	background-image:url('../images/countdown.svg');
+.extension-voco-type-countdown .extension-voco-icon {
+    background-image: url('../images/countdown.svg');
 }
 
 .extension-voco-type-boolean_related .extension-voco-icon,
-.extension-voco-type-actuator .extension-voco-icon{
-	background-image:url('../images/actuator.svg');
+.extension-voco-type-actuator .extension-voco-icon {
+    background-image: url('../images/actuator.svg');
 }
 
-.extension-voco-type-value .extension-voco-icon{
-	background-image:url('../images/value.svg');
+.extension-voco-type-value .extension-voco-icon {
+    background-image: url('../images/value.svg');
 }
 
-.extension-voco-month:after{
-	content:' ';
-}
-.extension-voco-day:after{
-	content:' ';
+.extension-voco-month:after {
+    content: ' ';
 }
 
-.extension-voco-hours-to-go:after{
-	content:'h ';
+.extension-voco-day:after {
+    content: ' ';
 }
 
-.extension-voco-hours:after{
-	content:':';
+.extension-voco-hours-to-go:after {
+    content: 'h ';
 }
 
-.extension-voco-minutes-to-go:after{
-	content:'m ';
+.extension-voco-hours:after {
+    content: ':';
 }
 
-.extension-voco-seconds-to-go:after{
-	content:'s ';
+.extension-voco-minutes-to-go:after {
+    content: 'm ';
+}
+
+.extension-voco-seconds-to-go:after {
+    content: 's ';
 }
 
 
-.extension-voco-time > div{
-	display:inline-block;
+.extension-voco-time>div {
+    display: inline-block;
 }
 
-.extension-voco-time > div:first-of-type{
-	font-weight:bold;
+.extension-voco-time>div:first-of-type {
+    font-weight: bold;
 }
 
-.extension-voco-date{
-	margin-right:1rem;
+.extension-voco-date {
+    margin-right: 1rem;
 }
 
-.extension-voco-short-time{
-	display: inline-block;
+.extension-voco-short-time {
+    display: inline-block;
 }
 
-.extension-voco-time-to-go{
-	font-style:italic;
-	margin-left:4rem;
+.extension-voco-time-to-go {
+    font-style: italic;
+    margin-left: 4rem;
 }
 
-.extension-voco-to-go{
-}
+.extension-voco-to-go {}
 
 
 
 /*  Text input */
 
-#extension-voco-text-commands-container{
-    margin-top:4rem;
-    background-color: rgba(0,0,0,.1);
+#extension-voco-text-commands-container {
+    margin-top: 4rem;
+    background-color: rgba(0, 0, 0, .1);
     padding: 2rem;
     border-radius: 0.5rem;
     /*max-width: 60rem;*/
@@ -634,106 +642,108 @@ body #extension-voco-view .extension-voco-tab-selected{
     box-sizing: border-box;
 }
 
-#extension-voco-text-input-container{
-	display:flex;
-	margin-top:0;
+#extension-voco-text-input-container {
+    display: flex;
+    margin-top: 0;
 }
 
-#extension-voco-text-input-field{
-    margin:0;
-	height:2.8rem;
-	padding: 1rem 1.3rem;
-	font-size: 2rem;
-	min-width:20rem;
-	flex-grow:1;
-	border-top-left-radius: .5rem;
-	border-bottom-left-radius: .5rem;
-	border: none;
-	outline: none;
-	font-family:inherit;
-	background-color:white;
-	color:black;
+#extension-voco-text-input-field {
+    margin: 0;
+    height: 2.8rem;
+    padding: 1rem 1.3rem;
+    font-size: 2rem;
+    min-width: 20rem;
+    flex-grow: 1;
+    border-top-left-radius: .5rem;
+    border-bottom-left-radius: .5rem;
+    border: none;
+    outline: none;
+    font-family: inherit;
+    background-color: white;
+    color: black;
 }
 
 
-#extension-voco-text-response-container{
-	margin-top:1rem;
-	text-align:right;
+#extension-voco-text-response-container {
+    margin-top: 1rem;
+    text-align: right;
 }
 
-#extension-voco-text-response-field{
-	display:inline-block;
-	padding: 1rem 1.5rem;
-	font-size: 2rem;
-	border-radius:.5rem;
-	background-color:rgba(255,255,255,.3);
-	text-align:left;
-	line-height:3rem;
+#extension-voco-text-response-field {
+    display: inline-block;
+    padding: 1rem 1.5rem;
+    font-size: 2rem;
+    border-radius: .5rem;
+    background-color: rgba(255, 255, 255, .3);
+    text-align: left;
+    line-height: 3rem;
 }
 
-#extension-voco-text-response-field:first-letter{
-  text-transform: capitalize;
+#extension-voco-text-response-field:first-letter {
+    text-transform: capitalize;
 }
 
 /*   VOCO  satellites   */
 
-.extension-voco-select-satellites{
-	display:none;
+.extension-voco-select-satellites {
+    display: none;
 }
 
-.extension-voco-potential-satellite .extension-voco-no-satellites{
-	display:none;
-}
-.extension-voco-potential-satellite .extension-voco-select-satellites{
-	display:block;
+.extension-voco-potential-satellite .extension-voco-no-satellites {
+    display: none;
 }
 
-#extension-voco-loading{
-	text-align:center;
-	padding:2rem;
+.extension-voco-potential-satellite .extension-voco-select-satellites {
+    display: block;
 }
 
-.extension-voco-select-satellites-question{
-	display:flex;
-    flex-direction:column;
-	justify-content:space-between;
+#extension-voco-loading {
+    text-align: center;
+    padding: 2rem;
 }
 
-.extension-voco-select-satellites-question > div{
-	padding:2rem;
+.extension-voco-select-satellites-question {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
 }
 
-.extension-voco-switch-slider{
-	cursor:pointer;
+.extension-voco-select-satellites-question>div {
+    padding: 2rem;
 }
 
-#extension-voco-content input[type="radio"]{
-	padding:1rem;
+.extension-voco-switch-slider {
+    cursor: pointer;
+}
+
+#extension-voco-content input[type="radio"] {
+    padding: 1rem;
 }
 
 
 /*  voco has connected satellites  */
 
-#extension-voco-connected-satellites-list-container{
-    display:none;
-    margin-bottom:4rem;
-}
-.extension-voco-has-satellites #extension-voco-connected-satellites-list-container{
-    display:block;
+#extension-voco-connected-satellites-list-container {
+    display: none;
+    margin-bottom: 4rem;
 }
 
-.extension-voco-has-satellites .extension-voco-select-satellites{
-    display:none;
+.extension-voco-has-satellites #extension-voco-connected-satellites-list-container {
+    display: block;
 }
 
-#extension-voco-connected-satellites-list{
-    margin-bottom:2rem;
-    padding-left:0;
+.extension-voco-has-satellites .extension-voco-select-satellites {
+    display: none;
 }
 
-#extension-voco-connected-satellites-list li{
+#extension-voco-connected-satellites-list {
+    margin-bottom: 2rem;
+    padding-left: 0;
+}
+
+#extension-voco-connected-satellites-list li {
     list-style-type: none;
-    background-color: rgba(255,255,255,.07);
+    background-color: rgba(255, 255, 255, .07);
     border-radius: 0.5rem;
     padding: 1rem 1.5rem;
     margin: 1rem 0;
@@ -745,54 +755,54 @@ body #extension-voco-view .extension-voco-tab-selected{
 /*  errors and warnings  */
 
 #extension-voco-missing-microphone,
-#extension-voco-injection-busy{
-    max-width:60rem;
-    margin:2rem auto;
-    padding:2rem;
-    background-color:rgba(0,0,0,.4);
-    color:white;
-    border-radius:.5rem;
+#extension-voco-injection-busy {
+    max-width: 60rem;
+    margin: 2rem auto;
+    padding: 2rem;
+    background-color: rgba(0, 0, 0, .4);
+    color: white;
+    border-radius: .5rem;
 }
 
-.extension-voco-warning{
-    max-width:60rem;
-    margin:2rem auto;
-    padding:2rem;
-    background-color:red;
-    color:white;
-    border-radius:.5rem;
+.extension-voco-warning {
+    max-width: 60rem;
+    margin: 2rem auto;
+    padding: 2rem;
+    background-color: red;
+    color: white;
+    border-radius: .5rem;
 }
 
-.extension-voco-llm-warning{
-    max-width:60rem;
-    margin:2rem auto;
-    padding:2rem;
-    background-color:red;
-    color:white;
-    border-radius:.5rem;
+.extension-voco-llm-warning {
+    max-width: 60rem;
+    margin: 2rem auto;
+    padding: 2rem;
+    background-color: red;
+    color: white;
+    border-radius: .5rem;
 }
 
-#extension-voco-unavailable{
-    text-align:center;
+#extension-voco-unavailable {
+    text-align: center;
 }
 
-.extension-voco-green-bg{
-	background-color:#0c7e0f;
+.extension-voco-green-bg {
+    background-color: #0c7e0f;
 }
 
-.extension-voco-orange-bg{
-	background-color:#9a1074;
-	border:2px solid :#9a1074;
-	box-sizing:border-box;
+.extension-voco-orange-bg {
+    background-color: #9a1074;
+    border: 2px solid:#9a1074;
+    box-sizing: border-box;
 }
 
 
 
-#extension-voco-missing-microphone-icon{
-    width:64px;
-    height:64px;
-    margin:2rem auto;
-    display:block;
+#extension-voco-missing-microphone-icon {
+    width: 64px;
+    height: 64px;
+    margin: 2rem auto;
+    display: block;
 }
 
 
@@ -804,107 +814,111 @@ body #extension-voco-view .extension-voco-tab-selected{
 /*  MATRIX CHAT  */
 
 #extension-voco-matrix-candle-username,
-.extension-voco-bold{
-    font-weight:bold;
+.extension-voco-bold {
+    font-weight: bold;
     word-break: break-all;
 }
 
 
 
-.extension-voco-vlak .extension-voco-vlak{
-    margin:2rem auto;
+.extension-voco-vlak .extension-voco-vlak {
+    margin: 2rem auto;
 }
 
 
-#extension-voco-matrix-advanced-tip{
-    padding:.5rem 2rem;
+#extension-voco-matrix-advanced-tip {
+    padding: .5rem 2rem;
 }
 
-#extension-voco-matrix-advanced-tip > p{
-    display:flex;
-    flex-wrap:wrap;
-    justify-content:space-between;
-    align-items:center;
+#extension-voco-matrix-advanced-tip>p {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: center;
 }
 
-#extension-voco-matrix-show-new-account-skip{
+#extension-voco-matrix-show-new-account-skip {
     display: inline-block;
     padding: 1rem 2rem;
-    background-color: rgba(0,0,0,.2);
+    background-color: rgba(0, 0, 0, .2);
     border-radius: 0.5rem;
-    cursor:pointer;
-}
-#extension-voco-matrix-show-new-account-skip:hover{
-    background-color: rgba(0,0,0,.4);
+    cursor: pointer;
 }
 
-#extension-voco-matrix-show-new-account-advanced{
-    text-decoration:underline;
-    cursor:pointer;
+#extension-voco-matrix-show-new-account-skip:hover {
+    background-color: rgba(0, 0, 0, .4);
 }
 
-.extension-voco-matrix-input-description{
-    margin-top:0;
-    opacity:.6;
+#extension-voco-matrix-show-new-account-advanced {
+    text-decoration: underline;
+    cursor: pointer;
 }
 
-#extension-voco-tab-chat button{
-    display:block;
-    margin-left:auto;
+.extension-voco-matrix-input-description {
+    margin-top: 0;
+    opacity: .6;
 }
 
-#extension-voco-matrix-learn-more-button{
-    margin-top:2rem;
+#extension-voco-tab-chat button {
+    display: block;
+    margin-left: auto;
 }
 
-.extension-voco-align-items-right{
-    display:flex;
-    justify-content:flex-end;
-    flex-wrap:wrap;
-}
-#extension-voco-tab-chat .extension-voco-align-items-right > button{
-    display:inline-block;
-    margin-left:2rem;
+#extension-voco-matrix-learn-more-button {
+    margin-top: 2rem;
 }
 
-#extension-voco-matrix-members-list li{
+.extension-voco-align-items-right {
+    display: flex;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+}
+
+#extension-voco-tab-chat .extension-voco-align-items-right>button {
+    display: inline-block;
+    margin-left: 2rem;
+}
+
+#extension-voco-matrix-members-list li {
     margin: 1rem 0;
 }
 
-.extension-voco-matrix-members-display-name{
-    font-weight:bold;
+.extension-voco-matrix-members-display-name {
+    font-weight: bold;
 }
-.extension-voco-matrix-members-id{
-    margin-left:2rem;
-    opacity:.7;
-    cursor:pointer;
-    display:inline-block;
+
+.extension-voco-matrix-members-id {
+    margin-left: 2rem;
+    opacity: .7;
+    cursor: pointer;
+    display: inline-block;
     word-break: break-word;
 }
 
-#extension-voco-matrix-show-hidden-password-button{
-    background-color:rgba(0,0,0,.2);
-    padding:.5rem 1rem;
-    display:inline-block;
-    border-radius:.5rem;
-    cursor:pointer;
-    margin-left:1rem;
+#extension-voco-matrix-show-hidden-password-button {
+    background-color: rgba(0, 0, 0, .2);
+    padding: .5rem 1rem;
+    display: inline-block;
+    border-radius: .5rem;
+    cursor: pointer;
+    margin-left: 1rem;
 }
-f
 
-#extension-voco-matrix-invite-management-output{
-    font-style:italic;
+f #extension-voco-matrix-invite-management-output {
+    font-style: italic;
 }
-#extension-voco-matrix-invite-management-output:empty{
-    display:none;
+
+#extension-voco-matrix-invite-management-output:empty {
+    display: none;
 }
+
 /*
 .extension-voco-matrix-members-admin .extension-voco-matrix-members-id::after{
     content:' (Candle)';
 }
 */
-.extension-voco-matrix-members-admin .extension-voco-matrix-members-id{
-    cursor:initial;
+.extension-voco-matrix-members-admin .extension-voco-matrix-members-id {
+    cursor: initial;
 }
 
 
@@ -912,55 +926,54 @@ f
 
 /*  LLM AI  */
 
-#extension-voco-tab-ai ul{
-	padding-left:0;
+#extension-voco-tab-ai ul {
+    padding-left: 0;
 }
 
-#extension-voco-downloading-models-progress-container{
-	display:none;
-	height:2rem;
-	border-radius:1rem;
-	width:80%;
-	margin:2rem auto;
-	background-color:rgba(0,0,0,.3);
-	border:1px solid rgba(0,0,0,.5);
-	box-sizing:border-box;
-	overflow:hidden;
-}
-.developer #extension-voco-downloading-models-progress-container{
-	display:block;
+#extension-voco-downloading-models-progress-container {
+    display: none;
+    height: 2rem;
+    border-radius: 1rem;
+    width: 80%;
+    margin: 2rem auto;
+    background-color: rgba(0, 0, 0, .3);
+    border: 1px solid rgba(0, 0, 0, .5);
+    box-sizing: border-box;
+    overflow: hidden;
 }
 
-#extension-voco-downloading-models-progress-container > div{
-	width:25%;
-	height:2rem;
-	display:inline-block;
-	background-color:#888;
+.developer #extension-voco-downloading-models-progress-container {
+    display: block;
+}
+
+#extension-voco-downloading-models-progress-container>div {
+    width: 25%;
+    height: 2rem;
+    display: inline-block;
+    background-color: #888;
 }
 
 
-#extension-voco-downloading-models-progress-container:empty{
-	display:none;
+#extension-voco-downloading-models-progress-container:empty {
+    display: none;
 }
 
-#extension-voco-downloading-models-indicator{
-	position:fixed;
-	width:16rem;
-	z-index:2;
-	bottom:2rem;
-	left:calc(50vw - 8rem);
-	padding:1rem;
-	border-radius:1rem;
-	background-color:black;
-	color:white;
+#extension-voco-downloading-models-indicator {
+    position: fixed;
+    width: 16rem;
+    z-index: 2;
+    bottom: 2rem;
+    left: calc(50vw - 8rem);
+    padding: 1rem;
+    border-radius: 1rem;
+    background-color: black;
+    color: white;
     background-size: 200% 200%;
-    background-image: linear-gradient(
-          -90deg, 
-          rgba(59,173,227,.5) 0%, 
-          rgba(87,111,230,.5) 50%, 
-          rgba(152,68,183,.5) 51%, 
-          rgba(59,173,227,.5) 100%
-    );  
+    background-image: linear-gradient(-90deg,
+            rgba(59, 173, 227, .5) 0%,
+            rgba(87, 111, 230, .5) 50%,
+            rgba(152, 68, 183, .5) 51%,
+            rgba(59, 173, 227, .5) 100%);
     animation: extension-voco-bg-sweep-to-right 2s ease infinite;
 }
 
@@ -971,50 +984,56 @@ f
 }
 */
 
-@keyframes extension-voco-bg-sweep-to-right { 
-  0%{background-position:100% 50%}
-  100%{background-position:0% 50%}
+@keyframes extension-voco-bg-sweep-to-right {
+    0% {
+        background-position: 100% 50%
+    }
+
+    100% {
+        background-position: 0% 50%
+    }
 }
 
 
-.extension-voco-llm-models-list li{
-	position:relative;
-	overflow:hidden;
-	border-radius:1rem;
-	display:flex;
-	align-items:center;
+.extension-voco-llm-models-list li {
+    position: relative;
+    overflow: hidden;
+    border-radius: 1rem;
+    display: flex;
+    align-items: center;
 }
 
-.extension-voco-llm-models-list input[type='radio'] { 
-	transform: scale(3); 
-	/*position:absolute;
+.extension-voco-llm-models-list input[type='radio'] {
+    transform: scale(3);
+    /*position:absolute;
 	left:4rem;
 	top:4rem;*/
 }
-.extension-voco-llm-models-list li > div{
-	margin-left:4rem;
-	padding-left:2rem;
-	border-left:1px solid rgba(255,255,255,.4);
+
+.extension-voco-llm-models-list li>div {
+    margin-left: 4rem;
+    padding-left: 2rem;
+    border-left: 1px solid rgba(255, 255, 255, .4);
 }
 
-.extension-voco-llm-model-details{
-	opacity:.6;
+.extension-voco-llm-model-details {
+    opacity: .6;
 }
 
-.extension-voco-llm-model-details > *{
-	font-style:italic;
-	display:block;
+.extension-voco-llm-model-details>* {
+    font-style: italic;
+    display: block;
 }
 
-.extension-voco-llm-models-list audio{
-	margin-top:1rem;
+.extension-voco-llm-models-list audio {
+    margin-top: 1rem;
 }
 
 
-.extension-voco-unicode-icon-medium{
-	display:inline-block;
-	font-size:3rem;
-	/*margin-right:1rem;*/
+.extension-voco-unicode-icon-medium {
+    display: inline-block;
+    font-size: 3rem;
+    /*margin-right:1rem;*/
 }
 
 /*
@@ -1024,65 +1043,66 @@ f
 */
 
 
-#extension-voco-main-llm-playground-textarea{
-	width:100%;
-	height:20rem;
-	margin-bottom:1rem;
-	padding:1rem;
-	line-height:2rem;
-	box-sizing:border-box;
+#extension-voco-main-llm-playground-textarea {
+    width: 100%;
+    height: 20rem;
+    margin-bottom: 1rem;
+    padding: 1rem;
+    line-height: 2rem;
+    box-sizing: border-box;
 }
 
 #extension-voco-main-llm-playground-stop-button-container,
-#extension-voco-main-llm-playground-textarea-buttons{
-	display:flex;
-	justify-content:space-between;
-	align-items:center;
+#extension-voco-main-llm-playground-textarea-buttons {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
 }
 
-#extension-voco-main-llm-playground-textarea-buttons:not(.extension-voco-hidden) + #extension-voco-main-llm-playground-stop-button-container{
-	display:none;
+#extension-voco-main-llm-playground-textarea-buttons:not(.extension-voco-hidden)+#extension-voco-main-llm-playground-stop-button-container {
+    display: none;
 }
 
 
-#extension-voco-llm-generated-text-output{
-	white-space: pre-wrap;
-	/*word-wrap: break-word;*/
-}
-#extension-voco-llm-generated-text-output:empty{
-	display:none;
-	padding:1rem;
+#extension-voco-llm-generated-text-output {
+    white-space: pre-wrap;
+    /*word-wrap: break-word;*/
 }
 
-.extension-voco-llm-models-list > li:not(.extension-voco-llm-item-downloaded):not(.extension-voco-llm-not-possible){
-	opacity:.7;
+#extension-voco-llm-generated-text-output:empty {
+    display: none;
+    padding: 1rem;
 }
 
-.extension-voco-llm-models-list > li.extension-voco-llm-item-downloaded .extension-voco-llm-model-downloaded{
-	color:#0f0;
+.extension-voco-llm-models-list>li:not(.extension-voco-llm-item-downloaded):not(.extension-voco-llm-not-possible) {
+    opacity: .7;
 }
 
-.extension-voco-llm-models-list li.extension-voco-llm-item-downloaded > div{
-	border-left: 1px solid rgba(0,255,0,.4);
+.extension-voco-llm-models-list>li.extension-voco-llm-item-downloaded .extension-voco-llm-model-downloaded {
+    color: #0f0;
 }
 
-.extension-voco-llm-models-list input{
-	cursor:pointer;
+.extension-voco-llm-models-list li.extension-voco-llm-item-downloaded>div {
+    border-left: 1px solid rgba(0, 255, 0, .4);
+}
+
+.extension-voco-llm-models-list input {
+    cursor: pointer;
 }
 
 .extension-voco-wakeword-running #extension-voco-main-llm-wakeword-not-running,
 .extension-voco-tts-running #extension-voco-main-llm-tts-not-running,
 .extension-voco-stt-running #extension-voco-main-llm-stt-not-running,
 .extension-voco-assistant-running #extension-voco-main-llm-assistant-not-running,
-#extension-voco-main-llm-playground{
-	display:none;
+#extension-voco-main-llm-playground {
+    display: none;
 }
 
 #extension-voco-main-llm-wakeword-running,
 #extension-voco-main-llm-tts-running,
 #extension-voco-main-llm-stt-running,
-#extension-voco-main-llm-assistant-running{
-	display:none;
+#extension-voco-main-llm-assistant-running {
+    display: none;
 }
 
 
@@ -1090,44 +1110,47 @@ f
 .extension-voco-wakeword-running #extension-voco-main-llm-wakeword-running,
 .extension-voco-tts-running #extension-voco-main-llm-tts-running,
 .extension-voco-stt-running #extension-voco-main-llm-stt-running,
-.extension-voco-assistant-running #extension-voco-main-llm-assistant-running{
-	display:block;
+.extension-voco-assistant-running #extension-voco-main-llm-assistant-running {
+    display: block;
 }
 
-.extension-voco-satellite-item-fastest{
-	border:2px dashed green;
+.extension-voco-satellite-item-fastest {
+    border: 2px dashed green;
 }
-.extension-voco-satellite-item-fastest:after{
-	content:'FASTEST DEVICE';
+
+.extension-voco-satellite-item-fastest:after {
+    content: 'FASTEST DEVICE';
 }
 
 
-.extension-voco-llm-model-downloaded-delete-button{
-	position: absolute;
+.extension-voco-llm-model-downloaded-delete-button {
+    position: absolute;
     right: 2rem;
     font-size: 2.2rem;
     border: 2rem;
     bottom: 2rem;
     cursor: pointer;
     padding: 1rem;
-    background: rgba(255,0,0,.6);
+    background: rgba(255, 0, 0, .6);
     border-radius: 1rem;
     display: inline-block;
     width: 2.5rem;
     height: 2.5rem;
     text-align: center;
 }
-.extension-voco-llm-model-downloaded-delete-button:hover{
-	background: rgba(255,0,0,1);
+
+.extension-voco-llm-model-downloaded-delete-button:hover {
+    background: rgba(255, 0, 0, 1);
 }
 
 
-.extension-voco-llm-not-possible{
-	opacity:.2;
-	pointer-events:none;
+.extension-voco-llm-not-possible {
+    opacity: .2;
+    pointer-events: none;
 }
-.extension-voco-llm-not-possible:after{
-	content: "Cannot run on this device (not enough memory/space)";
+
+.extension-voco-llm-not-possible:after {
+    content: "Cannot run on this device (not enough memory/space)";
     display: block;
     position: absolute;
     background: black;
@@ -1138,53 +1161,57 @@ f
     text-align: center;
 }
 
-#extension-voco-info-overlay{
-	position:fixed;
-	top:9rem;
-	left:2rem;
-	bottom:2rem;
-	right:2rem;
-	z-index:9999999;
-}
-#extension-voco-info-overlay > pre{
-	white-space: pre-wrap;
-	overflow:auto;
-	height:100%;
-	width:100%;
-	padding:2rem;
-	padding-bottom:9rem;
-	background-color:#333;
-	color:white;
-	border-radius:1rem;
-	border:3px solid #888;
+#extension-voco-info-overlay {
+    position: fixed;
+    top: 9rem;
+    left: 2rem;
+    bottom: 2rem;
+    right: 2rem;
+    z-index: 9999999;
 }
 
-#extension-voco-info-overlay-close-button{
-	position:fixed;
-	bottom:2rem;
-	right:12rem;
+#extension-voco-info-overlay>pre {
+    white-space: pre-wrap;
+    overflow: auto;
+    height: 100%;
+    width: 100%;
+    padding: 2rem;
+    padding-bottom: 9rem;
+    background-color: #333;
+    color: white;
+    border-radius: 1rem;
+    border: 3px solid #888;
+}
+
+#extension-voco-info-overlay-close-button {
+    position: fixed;
+    bottom: 2rem;
+    right: 12rem;
 }
 
 
 
 
-#extension-voco-main-llm-tts-running-panel{
-	display:flex;
-	justify-content:space-between;
+#extension-voco-main-llm-tts-running-panel {
+    display: flex;
+    justify-content: space-between;
 }
-#extension-voco-main-llm-tts-running-panel > div{
-	position:relative;
-	overflow:hidden;
-	flex-grow:1;
-	text-align:right;
-	/*height: 8rem;*/
-	min-height:8rem;
+
+#extension-voco-main-llm-tts-running-panel>div {
+    position: relative;
+    overflow: hidden;
+    flex-grow: 1;
+    text-align: right;
+    /*height: 8rem;*/
+    min-height: 8rem;
 }
-#extension-voco-main-llm-tts-running-panel > div:not(:last-of-type){
-	margin-right:2rem;
+
+#extension-voco-main-llm-tts-running-panel>div:not(:last-of-type) {
+    margin-right: 2rem;
 }
-#extension-voco-main-llm-tts-running-panel > div > div{
-	padding:.5rem;
+
+#extension-voco-main-llm-tts-running-panel>div>div {
+    padding: .5rem;
 }
 
 /*
@@ -1196,207 +1223,238 @@ f
     font-size: 13rem;
 }
 */
-#extension-voco-main-llm-tts-running-panel .extension-voco-unicode-icon-medium{
+#extension-voco-main-llm-tts-running-panel .extension-voco-unicode-icon-medium {
     /*position: absolute;*/
-	display:block;
-	text-align:center;
+    display: block;
+    text-align: center;
     opacity: .4;
     left: 0;
     top: 4rem;
-	font-size: 4rem;
-	line-height: 6rem;
+    font-size: 4rem;
+    line-height: 6rem;
 }
 
 
-#extension-voco-main-llm-tts-running-panel .extension-voco-running-panel-name{
-	/*position: absolute;*/
-	right:.5rem;
-	bottom:.5rem;
-	display:block;
-	text-align:center;
+#extension-voco-main-llm-tts-running-panel .extension-voco-running-panel-name {
+    /*position: absolute;*/
+    right: .5rem;
+    bottom: .5rem;
+    display: block;
+    text-align: center;
+}
+
+
+.extension-voco-running-panel-error {
+    display: block;
+    text-align: center;
+    background-color: red;
+    color: white;
+    padding: 0.5rem;
+    overflow-wrap: break-word;
+    word-wrap: break-word;
+    width: 80%;
+    box-sizing: border-box;
+    margin: 2rem auto 1rem auto;
 }
 
 
 /*  spinner  */
 
-#extension-voco-loading{
-    text-align:center;
-    margin-top:4rem;
+#extension-voco-loading {
+    text-align: center;
+    margin-top: 4rem;
 }
 
 .extension-voco-spinner {
-  display: block;
-  position: relative;
-  width: 80px;
-  height: 80px;
-  margin:0 auto;
+    display: block;
+    position: relative;
+    width: 80px;
+    height: 80px;
+    margin: 0 auto;
 }
+
 .extension-voco-spinner div {
-  position: absolute;
-  top: 33px;
-  width: 13px;
-  height: 13px;
-  border-radius: 50%;
-  background: rgba(255,255,255,.5);
-  animation-timing-function: cubic-bezier(0, 1, 1, 0);
+    position: absolute;
+    top: 33px;
+    width: 13px;
+    height: 13px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, .5);
+    animation-timing-function: cubic-bezier(0, 1, 1, 0);
 }
+
 .extension-voco-spinner div:nth-child(1) {
-  left: 8px;
-  animation: extension-voco-spinner1 0.6s infinite;
+    left: 8px;
+    animation: extension-voco-spinner1 0.6s infinite;
 }
+
 .extension-voco-spinner div:nth-child(2) {
-  left: 8px;
-  animation: extension-voco-spinner2 0.6s infinite;
+    left: 8px;
+    animation: extension-voco-spinner2 0.6s infinite;
 }
+
 .extension-voco-spinner div:nth-child(3) {
-  left: 32px;
-  animation: extension-voco-spinner2 0.6s infinite;
+    left: 32px;
+    animation: extension-voco-spinner2 0.6s infinite;
 }
+
 .extension-voco-spinner div:nth-child(4) {
-  left: 56px;
-  animation: extension-voco-spinner3 0.6s infinite;
+    left: 56px;
+    animation: extension-voco-spinner3 0.6s infinite;
 }
 
 @keyframes extension-voco-spinner1 {
-  0% {
-    transform: scale(0);
-  }
-  100% {
-    transform: scale(1);
-  }
+    0% {
+        transform: scale(0);
+    }
+
+    100% {
+        transform: scale(1);
+    }
 }
+
 @keyframes extension-voco-spinner3 {
-  0% {
-    transform: scale(1);
-  }
-  100% {
-    transform: scale(0);
-  }
+    0% {
+        transform: scale(1);
+    }
+
+    100% {
+        transform: scale(0);
+    }
 }
+
 @keyframes extension-voco-spinner2 {
-  0% {
-    transform: translate(0, 0);
-  }
-  100% {
-    transform: translate(24px, 0);
-  }
+    0% {
+        transform: translate(0, 0);
+    }
+
+    100% {
+        transform: translate(24px, 0);
+    }
 }
 
 
-#extension-voco-list .extension-voco-spinner{
-    margin-top:6rem;
+#extension-voco-list .extension-voco-spinner {
+    margin-top: 6rem;
 }
 
 
 @media screen and (max-width: 640px) {
-    #extension-voco-matrix-advanced-tip > p span{
-        display:block;
-        text-align:center;
-        padding:2rem;
-        width:100%;
+    #extension-voco-matrix-advanced-tip>p span {
+        display: block;
+        text-align: center;
+        padding: 2rem;
+        width: 100%;
     }
-    #extension-voco-matrix-advanced-tip button{
+
+    #extension-voco-matrix-advanced-tip button {
         margin: 0 auto;
     }
-    .extension-voco-item{
-    	flex-direction:column;
+
+    .extension-voco-item {
+        flex-direction: column;
     }
-    .extension-voco-item-menu{
-        border-top:1px solid rgba(255,255,255,.3);
+
+    .extension-voco-item-menu {
+        border-top: 1px solid rgba(255, 255, 255, .3);
     }
-    .extension-voco-item-setter{
-        border-right:none;
+
+    .extension-voco-item-setter {
+        border-right: none;
     }
 }
 
 
 @media screen and (min-width: 641px) {
-	.extension-voco-line2{
-		width:auto;
-		margin-left:6rem;
-	}
-	.extension-voco-sentence{
-		width: calc(100% - 6rem);
-	}
-	.extension-voco-line2 > div{
-		width:auto;
-		min-width: 200px;
-	}
-	.extension-voco-time{
-		margin-right:1rem;
-	}
+    .extension-voco-line2 {
+        width: auto;
+        margin-left: 6rem;
+    }
+
+    .extension-voco-sentence {
+        width: calc(100% - 6rem);
+    }
+
+    .extension-voco-line2>div {
+        width: auto;
+        min-width: 200px;
+    }
+
+    .extension-voco-time {
+        margin-right: 1rem;
+    }
+
     /*
     .extension-voco-centered-page{
         padding: 2rem;
     }
     */
-    .extension-voco-select-satellites-question{
-        flex-direction:row;
+    .extension-voco-select-satellites-question {
+        flex-direction: row;
     }
-    
-    #extension-voco-view button{
-        padding:1rem 2rem;
+
+    #extension-voco-view button {
+        padding: 1rem 2rem;
     }
-    #extension-voco-server-list-toggle{
-    	border-top: none;
-        border-left: 1px solid rgba(255,255,255,.3);
+
+    #extension-voco-server-list-toggle {
+        border-top: none;
+        border-left: 1px solid rgba(255, 255, 255, .3);
     }
-    #extension-voco-server-list-toggle{
-        
-    }
+
+    #extension-voco-server-list-toggle {}
 }
 
 
 @media screen and (min-width: 1025px) {
-	#extension-voco-view{
-		height:100vh; 
-		/*
+    #extension-voco-view {
+        height: 100vh;
+        /*
         left:9.6rem;
 		top: 0;
 		position:absolute;
 		width: calc(100% - 9.6rem);
 		padding-right:9.6rem;
         */
-	}
-	
-	#extension-voco-content-container{
-		height:auto;
-		/*width: calc(100% - 3rem);*/
-	}
-	
-    #extension-candleappstore-selected-main{
-        padding:4rem;
     }
 
-    .extension-voco-vlak{
-        padding:4rem 6rem;
+    #extension-voco-content-container {
+        height: auto;
+        /*width: calc(100% - 3rem);*/
     }
-    
-    .extension-voco-vlak .extension-voco-vlak{
-        padding:2rem;
+
+    #extension-candleappstore-selected-main {
+        padding: 4rem;
     }
+
+    .extension-voco-vlak {
+        padding: 4rem 6rem;
+    }
+
+    .extension-voco-vlak .extension-voco-vlak {
+        padding: 2rem;
+    }
+
     /*
     .extension-voco-centered-page{
         max-width:70rem;
     }
     */
-    #extension-voco-text-input-field{
-        margin:0 1rem 0 0;
+    #extension-voco-text-input-field {
+        margin: 0 1rem 0 0;
     }
-    
-	
-	.extension-voco-vlak .extension-voco-vlak{
-		padding:2rem 4rem;
-	}
-	
-	/*
+
+
+    .extension-voco-vlak .extension-voco-vlak {
+        padding: 2rem 4rem;
+    }
+
+    /*
 	.extension-voco-item{
 		width: calc(50% - 4rem);
 		margin-left: 2rem;
 		margin-right: 2rem;
 	}
 	*/
-	
+
 }
-
-
