@@ -51,8 +51,15 @@ body:not(.developer) .extension-voco-show-if-developer {
 
 
 body.developer .extension-voco-timer-item-cosmetic:after {
-    content: "Owned by other controller";
+    content: "Managed by other controller";
     display: block;
+	width:100%;
+	position:absolute;
+	left:10rem;
+	bottom:1rem;
+	font-size:1rem;
+	opacity:.7;
+	font-style:italic;
 }
 
 
