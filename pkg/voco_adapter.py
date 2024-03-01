@@ -265,7 +265,7 @@ class VocoAdapter(Adapter):
         self.llm_not_enough_disk_space = False
         #self.llm_downloaded_models = {'tts':[],'stt':[],'assistant':[]} # is this still used?
         
-        self.fastest_device_id = None # which Voco device in the network has the fastest hardware and should ideally be used to run LLM models
+        self.fastest_controller_id = None # which Voco device in the network has the fastest hardware and should ideally be used to run LLM models
         self.fastest_device_last_ping_time = 0
         
         
@@ -738,7 +738,7 @@ class VocoAdapter(Adapter):
         self.privatekey_path = os.path.join(self.ssl_folder, 'privatekey.pem')
 
 
-        self.fastest_device_id = self.persistent_data['site_id']
+        self.fastest_controller_id = self.persistent_data['site_id']
         
         self.running = True
         #self.internal_clock_started = False
@@ -1091,7 +1091,7 @@ class VocoAdapter(Adapter):
         #print("\n\n\n\nself.total_memory: " + str(self.total_memory))
         
         self.hardware_score = self.hardware_score + math.floor(self.total_memory / 1000)
-        self.fastest_device_score = 0
+        self.fastest_controller_score = 0
         #print("self.hardware_score: " + str(self.hardware_score))
         
         
@@ -6344,7 +6344,7 @@ class VocoAdapter(Adapter):
                 if self.persistent_data['listening'] == True:
                     
                     # record audio?
-                    if ((self.llm_enabled and self.llm_stt_enabled and self.llm_models['stt']['active'] != None and self.llm_stt_possible) or self.fastest_device_id != None and self.fastest_device_last_ping_time > time.time() - 60): #self.persistent_data['is_satellite'] == True
+                    if ((self.llm_enabled and self.llm_stt_enabled and self.llm_models['stt']['active'] != None and self.llm_stt_possible) or self.fastest_controller_id != None and self.fastest_device_last_ping_time > time.time() - 60): #self.persistent_data['is_satellite'] == True
                         #pass
                         
                         # TEST TO START RECORDING EARLIER
@@ -7536,7 +7536,7 @@ class VocoAdapter(Adapter):
             #print("- - - message ends in /ping. A Voco server (" + str(payload['hostname']) + "," + str(payload['ip']) + ") is asking for our ip and hostname")
             
         # TODO: there is a lot of partitioning into ping vs pong route here, but in many cases that doesn't matter. As long as it comes from another controller, it can be useful, no matter if its ping or pong
-        # Could also technicallyt disable satellite mode if the main controller reports that it's itself a satellite    
+        # Could also technically disable satellite mode if the main controller reports that it's itself a satellite    
         
         self.save_to_persistent_data = False
             
@@ -7546,27 +7546,28 @@ class VocoAdapter(Adapter):
             # If the message came from another controller
             if payload['siteId'] != self.persistent_data['site_id']:
                 
-                if str(payload['siteId']) == str(self.fastest_device_id):
+                if str(payload['siteId']) == str(self.fastest_controller_id):
                     if self.DEBUG:
-                        print("got ping from fastest device: " + str(payload['siteId']))
+                        print("parse_ping: got ping from fastest controller: " + str(payload['siteId']))
                     self.fastest_device_last_ping_time = time.time()
 
                 # find the fastest device that has LLM abilities on the network
-                if 'hardware_score' in payload and payload['hardware_score'] > self.fastest_device_score and 'has_stt' in payload and payload['has_stt'] == True and 'has_assistant' in payload and payload['has_assistant'] == True:
-                    self.fastest_device_score = payload['hardware_score']
-                    
-                    if self.llm_stt_started and self.llm_assistant_started and self.fastest_device_score < self.hardware_score:
+                if 'hardware_score' in payload and payload['hardware_score'] > self.fastest_controller_score and 'has_stt' in payload and payload['has_stt'] == True and 'has_assistant' in payload and payload['has_assistant'] == True:
+                    self.fastest_controller_score = payload['hardware_score']
+                    if self.DEBUG:
+                        print("parse_ping: got ping from a even faster controller: " + str(payload['siteId']))
+                    if self.llm_stt_started and self.llm_assistant_started and self.fastest_controller_score < self.hardware_score:
                         if self.DEBUG:
-                            print("The other device also has an LLM assistant, but is slower. Setting initial fastest_device_score to my own: " + str(self.hardware_score))
-                        self.fastest_device_score = self.hardware_score
+                            print("parse_ping: The other controller also has an LLM assistant, but is slower. Setting initial fastest_controller_score to my own: " + str(self.hardware_score))
+                        self.fastest_controller_score = self.hardware_score
                     
-                    if self.llm_stt_started and self.llm_assistant_started and self.fastest_device_score > self.hardware_score + 4:
+                    if self.llm_stt_started and self.llm_assistant_started and self.fastest_controller_score > self.hardware_score + 4:
                         if self.DEBUG:
-                            print("While I have LLM features, I found a MUCH better Rasbperry Pi in the network, with a score of " + str(payload['hardware_score']) + ", it's ID is: " + str(payload['siteId']))
-                        self.fastest_device_id = payload['siteId']
+                            print("parse_ping: While I have LLM features, I found a MUCH better Rasbperry Pi in the network, with a score of " + str(payload['hardware_score']) + ", it's ID is: " + str(payload['siteId']))
+                        self.fastest_controller_id = payload['siteId']
                     else:
                         if self.DEBUG:
-                            print("Found a faster Rasbperry Pi in the network, with a score of " + str(payload['hardware_score']) + ", it's ID is: " + str(payload['siteId']))
+                            print("parse_ping: Found a faster Rasbperry Pi in the network, with a score of " + str(payload['hardware_score']) + ", it's ID is: " + str(payload['siteId']))
                 
                 
                 #
@@ -7708,8 +7709,8 @@ class VocoAdapter(Adapter):
 
             if self.DEBUG2:
                 print("self.hardware_score       : " + str(self.hardware_score))
-                print("self.fastest_device_score : " + str(self.fastest_device_score))
-                print("self.fastest_device_id    : " + str(self.fastest_device_id))
+                print("self.fastest_controller_score : " + str(self.fastest_controller_score))
+                print("self.fastest_controller_id    : " + str(self.fastest_controller_id))
 
             # TODO: trigger the injection mechanism here, so that new names are learnt as quickly as possible? Maybe turn of the timed injection from the clock in that case (if is_satellite or if at lest one satellites is connected in case of being a main controller)
         else:
@@ -8017,7 +8018,7 @@ class VocoAdapter(Adapter):
             elif word_count < 3 and 'unknownword' in sentence:
                 if self.DEBUG:
                     print("heard short unclear snippet of text. Aborting. Heard sentence was: " + str(sentence))
-                if (self.llm_stt_started or self.persistent_data['site_id'] != self.fastest_device_id) and 'id' in intent_message and not intent_message['id'].endswith('fafafafa'):
+                if (self.llm_stt_started or self.persistent_data['site_id'] != self.fastest_controller_id) and 'id' in intent_message and not intent_message['id'].endswith('fafafafa'):
                     if self.DEBUG:
                         print("Perhaps STT can still make something of this")
                     self.try_again_via_stt = True
@@ -8790,7 +8791,7 @@ class VocoAdapter(Adapter):
                         or voice_message.startswith("Sorry, I don't understand") 
                         or voice_message.startswith("Sorry, I couldn't find a match")) 
                     and (self.llm_assistant_started 
-                        or (self.fastest_device_id != None and self.fastest_device_last_ping_time > time.time() - 60))
+                        or (self.fastest_controller_id != None and self.fastest_device_last_ping_time > time.time() - 60))
                     ): 
                     
                     if self.DEBUG:
@@ -8877,7 +8878,7 @@ class VocoAdapter(Adapter):
                         print(" - self.main_controller_has_stt: " + str(self.main_controller_has_stt))
                         print(" - self.main_controller_has_assistant: " + str(self.main_controller_has_assistant))
                         print(" - best_confidence_score: " + str(best_confidence_score))
-                        print(" - fastest_device_id: " + str(self.fastest_device_id))
+                        print(" - fastest_controller_id: " + str(self.fastest_controller_id))
                         print(" - fastest_device_last_ping_time delta: " + str(int(time.time() - self.fastest_device_last_ping_time)))
                         
                     self.last_command_was_answered_by_assistant = False
@@ -12052,7 +12053,7 @@ class VocoAdapter(Adapter):
         #        print("llm_stt: no active model defined yet")
         #    return
 
-        if self.mqtt_client != None and self.mqtt_connected and self.fastest_device_id != self.persistent_data['site_id'] and self.fastest_device_last_ping_time + 60 > time.time():
+        if self.mqtt_client != None and self.mqtt_connected and self.fastest_controller_id != self.persistent_data['site_id'] and self.fastest_device_last_ping_time + 60 > time.time():
             if self.DEBUG:
                 print("\nD O _ S T T\nsending audio recording to _fastest_ controller for STT via /do_stt: " + str(self.last_recording_path))
 
@@ -12064,7 +12065,7 @@ class VocoAdapter(Adapter):
                 base64_bytes = base64.b64encode(fileContent)
                 base64_message = base64_bytes.decode('ascii')
 
-                mqtt_path = "hermes/voco/" + str(self.fastest_device_id) + '/do_stt'
+                mqtt_path = "hermes/voco/" + str(self.fastest_controller_id) + '/do_stt'
                 #byteArr = bytearray(fileContent)
                 #self.mqtt_client.publish("/hermes/voco/" + str(self.persistent_data['main_site_id']) + '/do_sst', byteArr, 0)
                 if self.DEBUG:
@@ -12659,9 +12660,9 @@ class VocoAdapter(Adapter):
 
         try:
 
-            if self.mqtt_client != None and self.mqtt_connected and self.fastest_device_id != self.persistent_data['site_id'] and self.fastest_device_last_ping_time + 60 > time.time():
+            if self.mqtt_client != None and self.mqtt_connected and self.fastest_controller_id != self.persistent_data['site_id'] and self.fastest_device_last_ping_time + 60 > time.time():
 
-                mqtt_path = "hermes/voco/" + str(self.fastest_device_id) + '/do_assistant'
+                mqtt_path = "hermes/voco/" + str(self.fastest_controller_id) + '/do_assistant'
                 if self.DEBUG:
                     print(" - ask_ai_assistant: passing LLM Assistant voice command to fastest controller.  mqtt_path: " + str(mqtt_path))
                 self.mqtt_client.publish(mqtt_path, json.dumps({'siteId':str(self.persistent_data['site_id']), 'text':str(voice_message)}) )

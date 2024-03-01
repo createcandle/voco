@@ -337,7 +337,7 @@
 										}
 
 										var fastest_class = "";
-										if(typeof body['fastest_device_id'] != 'undefined' && body['satellite_targets'][key] == body['fastest_device_id']){
+										if(typeof body['fastest_controller_id'] != 'undefined' && body['satellite_targets'][key] == body['fastest_controller_id']){
 											fastest_class = "extension-voco-satellite-item-fastest";
 										}
 										list_html += '<div class="extension-voco-radio-select-item ' + fastest_class + '"><input type="radio" name="main_controller_hostname" value="' + body['satellite_targets'][key] + '" ' + checked_value + ' /><span>' + body['satellite_targets'][key] + '</span></div>';
@@ -1845,8 +1845,8 @@
 							let model_name = llm_details.model;
 
 							let required_memory = 0;
-							console.log("llm_details.memory: ", typeof llm_details.memory);
-							console.log("llm_details.size: ", typeof llm_details.size);
+							console.log(model_name, "llm_details.memory: ", typeof llm_details.memory);
+							console.log(model_name, "llm_details.size: ", typeof llm_details.size);
 
 							if(typeof llm_details.memory != 'undefined'){
 								if(llm_details.memory != null && llm_details.memory != 0){
@@ -1930,16 +1930,19 @@
 
 							//console.log("model_name =?= active_model: ", model_name, active_model);
 							if(llm_models[llm_type]['active'] == null){
+								if(this.debug){
+									console.log("Voco: active model was null for llm_type: ", llm_type);
+								}
 								if(model_name == 'voco'){
 									if(this.debug){
-										console.log("Voco: BINGO, spotted the active model (which is plain old voco)");
+										console.log("Voco: BINGO, spotted the active model (which is plain old voco). llm_type: ", llm_type);
 									}
 									radio_el.checked = true;
 								}
 							}
-							else if(typeof llm_models[llm_type]['active'] == 'string' && llm_models[llm_type]['active'].endsWith(model_name)){
+							else if(typeof llm_models[llm_type]['active'] == 'string' && (llm_models[llm_type]['active'].endsWith(model_name) || llm_models[llm_type]['active'].endsWith(model_name + '.tflite'))){
 								if(this.debug){
-									console.log("Voco: BINGO, spotted the active model");
+									console.log("Voco: SPOTTED the active model: ", llm_type, " -> ",model_name);
 								}
 								radio_el.checked = true;
 							}
