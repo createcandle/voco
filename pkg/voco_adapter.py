@@ -4212,6 +4212,18 @@ class VocoAdapter(Adapter):
         if self.DEBUG:
             print("in send_wakeword_detected_message. wakeword: " + str(wakeword))
             
+        self.intent_received = False
+        
+        if self.llm_assistant_continue_conversation > 0:
+            self.llm_assistant_continue_conversation -= 1
+            if self.DEBUG:
+                print("self.llm_assistant_continue_conversation counter is now: " + str(self.llm_assistant_continue_conversation))
+            
+        if self.recording_state != 0 and self.llm_assistant_continue_conversation == 1:
+            if self.DEBUG:
+                print("\nWARNING, Already recording audio while in a conversation. Not sending additional wakeword message\n")
+            return
+            
         millis = int(round(time.time() * 1000))
         payload = {
             "modelId": wakeword,
@@ -4229,10 +4241,7 @@ class VocoAdapter(Adapter):
         if self.mqtt_second_client != None and self.mqtt_second_connected:
             self.mqtt_second_client.publish(f"hermes/hotword/" + str(self.persistent_data['llm_wakeword_model']) + "/detected", json.dumps(payload))
         
-        if self.llm_assistant_continue_conversation > 0:
-            self.llm_assistant_continue_conversation -= 1
-            if self.DEBUG:
-                print("self.llm_assistant_continue_conversation counter is now: " + str(self.llm_assistant_continue_conversation))
+        
 
 
 
@@ -4321,16 +4330,12 @@ class VocoAdapter(Adapter):
             
             sleep(.1)
             
-            
-            
-            
                 
             if time.time() > self.current_utc_time + 1:
                 #if self.DEBUG:
                 #    print("\n😀\nCLOCK TICK " + str(int(time.time()) % 60) + "\n")
                 self.current_utc_time = int(time.time())
-                
-                
+                    
                 if self.llm_assistant_process != None and self.llm_assistant_process.poll() == None and self.llm_assistant_process.stdout != None:
                     try:
                     
@@ -6155,7 +6160,7 @@ class VocoAdapter(Adapter):
                 #        print("\nReceived intent message, but ignoring it because llm_stt_always_use is True\n")
                 #    return
             
-                self.intent_received = True # Used to create a 'no voice input received' sound effect if no intent was heard.
+                
                 if self.DEBUG:
                     print("\n----------------------------------- hermes/I N T E N T ----------------------------")
                     print("message topic: " + str(msg.topic))
@@ -6201,6 +6206,8 @@ class VocoAdapter(Adapter):
                         if intent_message['siteId'] == self.persistent_data['site_id']: # and self.persistent_data['is_satellite']
                             if self.DEBUG:
                                 print("mqtt /hermes/intent: brute-force end the existing session (BLOCKED)")
+                            self.intent_received = True # Used to create a 'no voice input received' sound effect if no intent was heard.
+                                
                             # Brute-force end the existing session
                             try:
                                 # TODO: need to optimize/check this
@@ -6223,10 +6230,12 @@ class VocoAdapter(Adapter):
                     else:
                         if self.DEBUG:
                             print("siteId was in intent_message, but it was None?")
+                        self.intent_received = True # Used to create a 'no voice input received' sound effect if no intent was heard.
             
                 else:
                     if self.DEBUG:
                         print("warning, siteId not in intent_message?")
+                    self.intent_received = True # Used to create a 'no voice input received' sound effect if no intent was heard.
                     # abort here?
 
 
@@ -6428,10 +6437,11 @@ class VocoAdapter(Adapter):
                     
                     
             if self.persistent_data['listening'] == True:
-                if self.persistent_data['is_satellite']: # and self.satellite_should_act_on_intent == False:
-                    if self.DEBUG:
-                        print("ignoring hermes/hotword/toggleOn")
-                    return
+                # TODO: disabled this in march 2024. 
+                #if self.persistent_data['is_satellite']: # and self.satellite_should_act_on_intent == False:
+                #    if self.DEBUG:
+                #        print("ignoring hermes/hotword/toggleOn")
+                #    return
         
                 elif self.intent_received == False: # Used to create a 'no voice input received' sound effect if no intent was heard.
                     if self.DEBUG:
@@ -7054,7 +7064,7 @@ class VocoAdapter(Adapter):
                         print("\nReceived intent message, but ignoring it because llm_stt_always_use is True\n")
                     return
                 
-                self.intent_received = True # Used to create a 'no voice input received' sound effect if no intent was heard.
+                #self.intent_received = True # Used to create a 'no voice input received' sound effect if no intent was heard.
                 if self.DEBUG:
                     print("\n----------------------------------- hermes/I N T E N T ----------------------------")
                     print("message topic: " + str(msg.topic))
@@ -7100,6 +7110,9 @@ class VocoAdapter(Adapter):
                         if intent_message['siteId'] == self.persistent_data['site_id']: # and self.persistent_data['is_satellite']
                             if self.DEBUG:
                                 print("mqtt /hermes/intent: brute-force end the existing session") #  (NO,TEMPORARILY DISABLED)
+                            
+                            self.intent_received = True # Used to create a 'no voice input received' sound effect if no intent was heard.
+                            
                             # Brute-force end the existing session
                             try:
                                 # TODO: TEMPORARILY DISABLED
@@ -7123,10 +7136,12 @@ class VocoAdapter(Adapter):
                     else:
                         if self.DEBUG:
                             print("siteId was in intent_message, but it was None?")
+                        self.intent_received = True # Used to create a 'no voice input received' sound effect if no intent was heard.
                 
                 else:
                     if self.DEBUG:
                         print("warning, siteId not in intent_message?")
+                    self.intent_received = True # Used to create a 'no voice input received' sound effect if no intent was heard.
                     # abort here?
 
 
@@ -7699,7 +7714,7 @@ class VocoAdapter(Adapter):
             # TODO: trigger the injection mechanism here, so that new names are learnt as quickly as possible? Maybe turn of the timed injection from the clock in that case (if is_satellite or if at lest one satellites is connected in case of being a main controller)
         else:
             if self.DEBUG:
-                print("ping message was missing parts")
+                print("ping message was missing parts: " + str(json.dumps(payload,indent=4)))
     
     
 
@@ -8855,11 +8870,15 @@ class VocoAdapter(Adapter):
                     #else:
                     
                 else:
+                    # We end up here if, for example, the confidence was 1, or if the fastest_device_last_ping_time delta was more than 60
                     if self.DEBUG:
                         print("no need/ability to use LLM Assistant.\n - voice_message: " + str(voice_message))
+                        print(" - best_confidence_score: " + str(best_confidence_score))
                         print(" - self.main_controller_has_stt: " + str(self.main_controller_has_stt))
                         print(" - self.main_controller_has_assistant: " + str(self.main_controller_has_assistant))
                         print(" - best_confidence_score: " + str(best_confidence_score))
+                        print(" - fastest_device_id: " + str(self.fastest_device_id))
+                        print(" - fastest_device_last_ping_time delta: " + str(int(time.time() - self.fastest_device_last_ping_time)))
                         
                     self.last_command_was_answered_by_assistant = False
                     #if self.persistent_data['is_satellite'] == False:
@@ -12618,8 +12637,6 @@ class VocoAdapter(Adapter):
         self.try_again_via_stt = False
         self.try_again_via_assistant = False
 
-
-
         if intent != None and 'sessionId' in intent:
             if self.DEBUG:
                 print("ask_ai_assistant: ending session (BLOCKED)")
@@ -12677,6 +12694,12 @@ class VocoAdapter(Adapter):
             print("in really_ask_ai_assistant. voice_message: " + str(voice_message))
         #self.llm_assistant_process.stdin.write(voice_message + '\n')
         #self.llm_assistant_process.stdin.flush()
+
+        if self.assistant_countdown > 0:
+            if self.DEBUG:
+                print("\n\nASSISTANT IS ALREADY BUSY. ABORTING. \n\n")
+            return
+
         voice_message = voice_message.strip()
         original_voice_message = voice_message
 
@@ -12806,7 +12829,7 @@ class VocoAdapter(Adapter):
                     if stamp != self.last_assistant_output_change_time:
                         self.last_assistant_output_change_time = stamp
                         if self.DEBUG:
-                            print("OUTPUT FILE CHANGED")
+                            print("OUTPUT FILE CHANGED (" + str(self.llm_assistant_output_file_path) + ")")
                         if repeated_the_question == False:
                             if self.DEBUG:
                                 print("ignoring first output from assistant, since it's likely a repeat of the user's question.")
