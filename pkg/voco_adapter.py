@@ -5966,9 +5966,16 @@ class VocoAdapter(Adapter):
                 #if self.DEBUG:
                 #    print("intent_name: " + str(intent_name))
                 intent_message = json.loads(msg.payload.decode("utf-8"))
-                intent_message['origin'] = 'voice'
+                
+                # TODO: why do this?
+                if not 'origin' in intent_message:
+                    if self.DEBUG:
+                        print("hermes/nlu/intentParsed: intent didn't have origin yet. Setting it to voice.")
+                    intent_message['origin'] = 'voice'
+                    
                 #intent_message['destination'] = 'voice'
-                intent_message['siteId'] = self.persistent_data['site_id']
+                #intent_message['siteId'] = self.persistent_data['site_id']
+                
                 if self.DEBUG:
                     print("\n$\n$\n$\n")
                     print(json.dumps(intent_message, indent=4, sort_keys=True))
@@ -5978,11 +5985,11 @@ class VocoAdapter(Adapter):
                     print("intent_message['sessionId']: " + str(intent_message['sessionId']))
                     print("self.current_snips_session_id: " + str(self.current_snips_session_id))
                 
-                self.mqtt_client.publish('hermes/dialogueManager/endSession', json.dumps({"text": "", "sessionId": intent_message['sessionId']}))
+                #self.mqtt_client.publish('hermes/dialogueManager/endSession', json.dumps({"text": "", "sessionId": intent_message['sessionId']}))
                 if str(intent_message['sessionId']) != str(self.current_snips_session_id):
                     if self.DEBUG:
-                        print("publishing to endSession twice. ")
-                    self.mqtt_client.publish('hermes/dialogueManager/endSession', json.dumps({"text": "", "sessionId": str(self.current_snips_session_id)}))
+                        print("publishing to endSession twice. (BLOCKED) ")
+                    #self.mqtt_client.publish('hermes/dialogueManager/endSession', json.dumps({"text": "", "sessionId": str(self.current_snips_session_id)}))
                 self.master_intent_callback(intent_message)
             else:
                 if self.DEBUG:
@@ -6009,11 +6016,13 @@ class VocoAdapter(Adapter):
                     print("intentNotRecognized: self.current_snips_session_id: " + str(self.current_snips_session_id))
                     
                 if self.persistent_data['is_satellite'] == False:
-                    self.mqtt_client.publish('hermes/dialogueManager/endSession', json.dumps({"text": "", "sessionId": str(intent_message['sessionId'])}))
+                    if self.DEBUG:
+                        print("closing session (BLOCKED)")
+                    #self.mqtt_client.publish('hermes/dialogueManager/endSession', json.dumps({"text": "", "sessionId": str(intent_message['sessionId'])}))
                     if str(intent_message['sessionId']) != str(self.current_snips_session_id):
                         if self.DEBUG:
-                            print("intentNotRecognized: CLOSING TWO SESSIONS")
-                        self.mqtt_client.publish('hermes/dialogueManager/endSession', json.dumps({"text": "", "sessionId": str(self.current_snips_session_id)}))
+                            print("intentNotRecognized: CLOSING TWO SESSIONS (BLOCKED)")
+                        #self.mqtt_client.publish('hermes/dialogueManager/endSession', json.dumps({"text": "", "sessionId": str(self.current_snips_session_id)}))
                     
                 if 'input' in payload:
                     if self.llm_enabled and self.llm_assistant_enabled and self.llm_assistant_started:
@@ -6109,13 +6118,13 @@ class VocoAdapter(Adapter):
                     
                         if intent_message['siteId'] == self.persistent_data['site_id']: # and self.persistent_data['is_satellite']
                             if self.DEBUG:
-                                print("mqtt /hermes/intent: brute-force end the existing session")
+                                print("mqtt /hermes/intent: brute-force end the existing session (BLOCKED)")
                             # Brute-force end the existing session
                             try:
                                 # TODO: need to optimize/check this
-                            
-                                self.mqtt_client.publish('hermes/dialogueManager/endSession', json.dumps({"text": "", "sessionId": intent_message['sessionId']}))
-                                self.mqtt_client.publish('hermes/dialogueManager/endSession', json.dumps({"text": "", "sessionId": str(self.current_snips_session_id)}))
+                                pass
+                                #self.mqtt_client.publish('hermes/dialogueManager/endSession', json.dumps({"text": "", "sessionId": intent_message['sessionId']}))
+                                #self.mqtt_client.publish('hermes/dialogueManager/endSession', json.dumps({"text": "", "sessionId": str(self.current_snips_session_id)}))
                                 #if self.DEBUG:
                                 #    print("ending Snips session")
                             except Exception as ex:
@@ -7012,9 +7021,10 @@ class VocoAdapter(Adapter):
                             # Brute-force end the existing session
                             try:
                                 # TODO: TEMPORARILY DISABLED
-                                
-                                self.mqtt_client.publish('hermes/dialogueManager/endSession', json.dumps({"text": "", "sessionId": intent_message['sessionId']}))
-                                self.mqtt_client.publish('hermes/dialogueManager/endSession', json.dumps({"text": "", "sessionId": str(self.current_snips_session_id)}))
+                                if self.DEBUG:
+                                    print("hermes/intent: ending session (BLOCKED)")
+                                #self.mqtt_client.publish('hermes/dialogueManager/endSession', json.dumps({"text": "", "sessionId": intent_message['sessionId']}))
+                                #self.mqtt_client.publish('hermes/dialogueManager/endSession', json.dumps({"text": "", "sessionId": str(self.current_snips_session_id)}))
                                 #if self.DEBUG:
                                 #    print("ending Snips session")
                             except Exception as ex:
@@ -12512,7 +12522,9 @@ class VocoAdapter(Adapter):
         
         
         if intent != None and 'sessionId' in intent:
-            self.mqtt_client.publish('hermes/dialogueManager/endSession', json.dumps({"text": "", "sessionId": intent['sessionId']}))
+            if self.DEBUG:
+                print("ask_ai_assistant: ending session (BLOCKED)")
+            #self.mqtt_client.publish('hermes/dialogueManager/endSession', json.dumps({"text": "", "sessionId": intent['sessionId']}))
         #self.mqtt_client.publish('hermes/dialogueManager/endSession', json.dumps({"text": "", "sessionId": str(self.current_snips_session_id)}))
         
         if voice_message == None:
