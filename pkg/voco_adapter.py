@@ -844,8 +844,7 @@ class VocoAdapter(Adapter):
         self.mqtt_username = 'candle'
         self.mqtt_password = 'smarthome'
         
-        self.parse_origin_transfer = None
-        self.parse_site_id_transfer = None
+        self.parse_payload_transfer = None
         
         # SECOND MQTT CLIENT
         self.mqtt_second_client = None
@@ -1227,9 +1226,9 @@ class VocoAdapter(Adapter):
         
         
         self.llm_wakeword_models = {
-            'Basic':{'model':'voco',
+            'Hey Snips - Basic':{'model':'voco',
                                 'size':0,
-                                'description':'If the Ai wakeword model fails to start, we fall back to the Snips hotword system. In this case voice commands can be initiated by saying "Hey Snips".',
+                                'description':'Start a voice command by saying "Hey Snips". This uses the "old" hotword system, and also acts as the fallback option in case the more advanced AI wakeword model fails to start. It has some limitations, such as not allowing for continued conversations with the assistant.',
                                 'downloaded':True,
                                 'model_path':str(os.path.join(self.wakeword_models_dir_path,'hey_candle.tflite'))
                             },
@@ -1383,7 +1382,7 @@ class VocoAdapter(Adapter):
         
         self.llm_assistant_models = {
             'Basic':{'model':'voco',
-                                'description':'Do not use any assistant AI. If voice recognition (speech-to-text) it still enabled, that will only be used to atttempt to understand what you said again if it is unclear.',
+                                'description':'Do not use any Assistant AI.',
                                 'model_url':'',
                                 'downloaded':True
                             },
@@ -3105,7 +3104,7 @@ class VocoAdapter(Adapter):
                 if self.llm_assistant_continue_conversation == 2:
                     #self.llm_assistant_continue_conversation -= 1
                     if self.DEBUG:
-                        print("REALLY DONE SPEAKING -> calling send_wakeword_detected_message")
+                        print("REALLY DONE SPEAKING -> in a conversation -> calling send_wakeword_detected_message")
                     self.send_wakeword_detected_message()
                 elif self.llm_assistant_continue_conversation == 0:
                     if self.periodic_voco_attempts > 2:
@@ -3113,6 +3112,8 @@ class VocoAdapter(Adapter):
                             print("not in a conversation, and the main controller is missing. Will attempt to speak warning about missing main controller.")
                         self.speak(self.main_controller_missing_warning)
                     
+    
+    # Entry point for adding new messages that should be spoken/outputted. This adds them to the queue that spread_thread manages.
     def speak(self, voice_message="",intent='default'):
         try:
             
@@ -3141,7 +3142,7 @@ class VocoAdapter(Adapter):
             print("Error in speak: " + str(ex))
     
 
-
+    # Starts the process of finding to optimal way to speak/return a message
     def really_speak(self, voice_message="",intent={}):
         try:
             
@@ -3396,7 +3397,7 @@ class VocoAdapter(Adapter):
                         self.persistent_data['audio_output'] = str(self.audio_controls[0]['human_device_name'])
                         self.save_persistent_data()
                     else:
-                        self.send_pairing_prompt( "Please set audio output")
+                        self.send_pairing_prompt("Please set audio output")
                         
             else:
                 #if not self.persistent_data['is_satellite']:
@@ -3422,9 +3423,6 @@ class VocoAdapter(Adapter):
         os.system('sudo pkill -f ' + str(self.llm_tts_binary_name))
         if self.DEBUG:
             self.speak("Debug. Was asked to stop speaking. ")
-
-
-
 
 
     def mute(self):
@@ -7650,6 +7648,8 @@ class VocoAdapter(Adapter):
                 print(" - sentence: " + str(sentence))
             
             if session_id == None and self.current_snips_session_id != '':
+                if self.DEBUG:
+                    print("query_intent: setting self.current_snips_session_id as session id")
                 session_id = self.current_snips_session_id
 
             query_id = 'b3faa0ff-39e8-4a23-9a12-d918fafafafa' #8e0e
@@ -11800,7 +11800,7 @@ class VocoAdapter(Adapter):
     # start long running TTS process
     def start_llm_tts(self,restart=False):
         if self.DEBUG2:
-            print("in start_llm_tts. restart: " + str(restart))
+            print("in start_llm_tts. Forced restart?: " + str(restart))
 
         if self.llm_tts_process != None and self.llm_tts_process.poll() == None:
             if self.DEBUG:
@@ -11859,64 +11859,73 @@ class VocoAdapter(Adapter):
 
 
         # actually start Piper
-
+        
+        self.llm_stt_not_enough_memory = False
+        
         self.check_available_memory()
 
-        if self.llm_enabled and self.llm_tts_enabled and self.free_memory > self.llm_tts_minimal_memory:
-            my_env = os.environ.copy()
+        if self.llm_enabled and self.llm_tts_enabled:
+            
+            if self.free_memory > self.llm_tts_minimal_memory:
+                
+                my_env = os.environ.copy()
 
-            # speed of voice can be controlled too with
-            # --length_scale 1.0
+                # speed of voice can be controlled too with
+                # --length_scale 1.0
 
-            tts_command = [
-                str(self.llm_tts_binary_path),
-                "--model",
-                str(self.llm_models['tts']['active']),
-                "--json-input",
-                "--server",
-                "--output-raw",
-                "--sentence_silence",
-                "0.3",
-                "|",
-                "aplay"
-            ]
+                tts_command = [
+                    str(self.llm_tts_binary_path),
+                    "--model",
+                    str(self.llm_models['tts']['active']),
+                    "--json-input",
+                    "--server",
+                    "--output-raw",
+                    "--sentence_silence",
+                    "0.3",
+                    "|",
+                    "aplay"
+                ]
 
-            if self.pipewire_enabled == False:
+                if self.pipewire_enabled == False:
+                    if self.DEBUG:
+                        print("No pipewire, so adding device parameter to Piper: " + str(self.llm_tts_output_device_string))
+                    tts_command = tts_command + ["-D",str(self.llm_tts_output_device_string)]
+
+                tts_command_part2 = [
+                    "-r"
+                    "22050",
+                    "-f"
+                    "S16_LE",
+                    "-t",
+                    "raw",
+                    "-"
+                ]
+                tts_command = tts_command + tts_command_part2
+
+                tts_command = ' '.join(tts_command)
                 if self.DEBUG:
-                    print("No pipewire, so adding device parameter to Piper: " + str(self.llm_tts_output_device_string))
-                tts_command = tts_command + ["-D",str(self.llm_tts_output_device_string)]
+                    print("tts_command: " + str(tts_command))
 
-            tts_command_part2 = [
-                "-r"
-                "22050",
-                "-f"
-                "S16_LE",
-                "-t",
-                "raw",
-                "-"
-            ]
-            tts_command = tts_command + tts_command_part2
+                self.llm_tts_process = Popen(tts_command, env=my_env, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, universal_newlines=True,text=True,bufsize=1,shell=True) # ,preexec_fn=os.setsid
+                os.set_blocking(self.llm_tts_process.stdout.fileno(), False)
+                if self.llm_tts_process.poll() == None:
+                    if self.DEBUG:
+                        print("\n\n\n[OK]\nLLM TTS PROCESS STARTED SUCCESFULLY")
+                    self.llm_tts_started = True
 
-            tts_command = ' '.join(tts_command)
-            if self.DEBUG:
-                print("tts_command: " + str(tts_command))
-
-            self.llm_tts_process = Popen(tts_command, env=my_env, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, universal_newlines=True,text=True,bufsize=1,shell=True) # ,preexec_fn=os.setsid
-            os.set_blocking(self.llm_tts_process.stdout.fileno(), False)
-            if self.llm_tts_process.poll() == None:
-                if self.DEBUG:
-                    print("\n\n\n[OK]\nLLM TTS PROCESS STARTED SUCCESFULLY")
-                self.llm_tts_started = True
-
+                else:
+                    if self.DEBUG:
+                        print("ERROR, LLM TTS PROCESS FAILED TO START")
+                    self.llm_tts_started = False
             else:
                 if self.DEBUG:
-                    print("ERROR, LLM TTS PROCESS FAILED TO START")
-                self.llm_tts_started = False
+                    print("ERROR,LLM TTS PROCESS NOT STARTED (not enough memory)")
+                self.llm_stt_not_enough_memory = True
         else:
             if self.DEBUG:
-                print("ERROR,LLM TTS PROCESS NOT STARTED (disabled or not enough memory)")
+                print("ERROR,LLM TTS PROCESS NOT STARTED (disabled)")
             self.llm_tts_started = False
-
+            
 
 
 
@@ -12905,9 +12914,6 @@ class VocoAdapter(Adapter):
 
                 with open(self.llm_assistant_output_file_path, "w") as myfile:
                     myfile.write("")
-
-
-
 
 
             else:

@@ -1244,7 +1244,7 @@ f #extension-voco-matrix-invite-management-output {
 }
 
 
-.extension-voco-running-panel-error {
+.extension-voco-running-panel-error{
     display: block;
     text-align: center;
     background-color: red;
@@ -1255,6 +1255,9 @@ f #extension-voco-matrix-invite-management-output {
     width: 80%;
     box-sizing: border-box;
     margin: 2rem auto 1rem auto;
+}
+.extension-voco-running-panel-error:empty{
+	display:none;
 }
 
 
