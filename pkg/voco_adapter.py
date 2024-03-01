@@ -6443,7 +6443,7 @@ class VocoAdapter(Adapter):
                 #        print("ignoring hermes/hotword/toggleOn")
                 #    return
         
-                elif self.intent_received == False: # Used to create a 'no voice input received' sound effect if no intent was heard.
+                if self.intent_received == False: # Used to create a 'no voice input received' sound effect if no intent was heard.
                     if self.DEBUG:
                         print("No intent received")
                         print("payload " + str(payload))
