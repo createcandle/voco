@@ -738,7 +738,7 @@ class VocoAdapter(Adapter):
         self.privatekey_path = os.path.join(self.ssl_folder, 'privatekey.pem')
 
 
-        self.fastest_controller_id = self.persistent_data['site_id']
+        #self.fastest_controller_id = self.persistent_data['site_id']
         
         self.running = True
         #self.internal_clock_started = False
@@ -7554,6 +7554,8 @@ class VocoAdapter(Adapter):
                     if self.DEBUG:
                         print("parse_ping: another controller is shutting down: " + str(payload['siteId']))
                     if self.fastest_controller_id == str(payload['siteId']):
+                        if self.DEBUG:
+                            print("parse_ping: it's actually the fastest controller that is shutting down. Will need to look for the next fastest controller.")
                         self.fastest_controller_score = 0
                         self.fastest_controller_id = None
                         self.fastest_controller_last_ping_time = 0
@@ -7571,21 +7573,24 @@ class VocoAdapter(Adapter):
                     # find the fastest device that has LLM abilities on the network
                     if 'hardware_score' in payload and payload['hardware_score'] > self.fastest_controller_score and 'has_stt' in payload and payload['has_stt'] == True and 'has_assistant' in payload and payload['has_assistant'] == True:
                         self.fastest_controller_score = payload['hardware_score']
+
                         if self.DEBUG:
                             print("parse_ping: got ping from a even faster controller: " + str(payload['siteId']))
+                        
                         if self.llm_stt_started and self.llm_assistant_started and self.fastest_controller_score < self.hardware_score:
                             if self.DEBUG:
                                 print("parse_ping: The other controller also has an LLM assistant, but is slower. Setting initial fastest_controller_score to my own: " + str(self.hardware_score))
                             self.fastest_controller_score = self.hardware_score
+                            self.fastest_controller_id = self.persistent_data['site_id']
                     
-                        if self.llm_stt_started and self.llm_assistant_started and self.fastest_controller_score > self.hardware_score + 4:
+                        if self.llm_stt_started and self.llm_assistant_started and self.fastest_controller_score < self.hardware_score + 4:
                             if self.DEBUG:
-                                print("parse_ping: While I have LLM features, I found a MUCH better Rasbperry Pi in the network, with a score of " + str(payload['hardware_score']) + ", it's ID is: " + str(payload['siteId']))
-                            self.fastest_controller_id = payload['siteId']
+                                print("parse_ping: I have LLM features myself, and the other Rasbperry Pi in the network isn't that much better")
+                            self.fastest_controller_id = self.persistent_data['site_id']
                         else:
                             if self.DEBUG:
                                 print("parse_ping: Found a faster Rasbperry Pi in the network, with a score of " + str(payload['hardware_score']) + ", it's ID is: " + str(payload['siteId']))
-                    
+                            self.fastest_controller_id = payload['siteId']
                 
                     #
                     # Learning the main_site_id of the main controller
@@ -7603,6 +7608,7 @@ class VocoAdapter(Adapter):
                                 print("broadcast pong was from intented main MQTT server. This has supplied the intended main_site_id: " + str(payload['siteId']) )
                             self.persistent_data['main_controller_ip'] = payload['ip']
                         
+                            # This is no longer relevant, as the main controller and the fastest controller can be two separate things
                             if 'has_stt' in payload:
                                 self.main_controller_has_stt = payload['has_stt']
                                 if self.DEBUG2:
@@ -8895,8 +8901,8 @@ class VocoAdapter(Adapter):
                         print(" - best_confidence_score: " + str(best_confidence_score))
                         print(" - self.main_controller_has_stt: " + str(self.main_controller_has_stt))
                         print(" - self.main_controller_has_assistant: " + str(self.main_controller_has_assistant))
-                        print(" - best_confidence_score: " + str(best_confidence_score))
                         print(" - fastest_controller_id: " + str(self.fastest_controller_id))
+                        print(" - fastest_controller_score: " + str(self.fastest_controller_score))
                         print(" - fastest_controller_last_ping_time delta: " + str(int(time.time() - self.fastest_controller_last_ping_time)))
                         
                     self.last_command_was_answered_by_assistant = False
