@@ -4194,8 +4194,6 @@ class VocoAdapter(Adapter):
                 self.llm_wakeword_failed = True
                 self.should_restart_snips = True
                 #self.persistent_data['llm_wakeword_model'] = 'voco'
-                
-            self.llm_wakeword_started = False
             
             py_audio.terminate()
             
@@ -4203,6 +4201,10 @@ class VocoAdapter(Adapter):
             if self.DEBUG:
                 print("run_wakeword: general ERROR: " + str(ex))
         
+        self.llm_wakeword_started = False
+        
+        if self.DEBUG:
+            print("\nEXITING WAKEWORD THREAD\n")
         
         
             
@@ -4502,6 +4504,14 @@ class VocoAdapter(Adapter):
                                     self.periodic_voco_attempts += 1
                                 
                                     self.send_mqtt_ping(broadcast=True) # broadcast ping
+                                    
+                                    if time.time() > self.fastest_controller_last_ping_time + 60 and self.fastest_controller_id != None:
+                                        if self.DEBUG:
+                                            print("clock: resetting fastest controller information")
+                                        self.fastest_controller_last_ping_time = time.time()
+                                        self.fastest_controller_score = 0
+                                        self.fastest_controller_id = None
+                                    
                                     
                                     if self.persistent_data['is_satellite'] == False:
                                         if self.DEBUG:
@@ -5194,6 +5204,11 @@ class VocoAdapter(Adapter):
                 print("Error setting listening state: " + str(ex))
         else:
             self.set_status_on_thing("Missing token, check settings")
+
+        if active and self.llm_enabled and self.llm_wakeword_enabled and self.llm_wakeword_started == False:
+            if self.DEBUG:
+                print("listening state was enabled, to restarting wakeword thread: ")
+            self.start_wakeword_thread()
 
 
     def set_feedback_sounds(self,state):
@@ -6344,7 +6359,7 @@ class VocoAdapter(Adapter):
                 if self.persistent_data['listening'] == True:
                     
                     # record audio?
-                    if ((self.llm_enabled and self.llm_stt_enabled and self.llm_models['stt']['active'] != None and self.llm_stt_possible) or self.fastest_controller_id != None and self.fastest_controller_last_ping_time > time.time() - 60): #self.persistent_data['is_satellite'] == True
+                    if ((self.llm_enabled and self.llm_stt_enabled and self.llm_models['stt']['active'] != None and self.llm_stt_started) or (self.fastest_controller_id != None and self.fastest_controller_last_ping_time > time.time() - 60)): #self.persistent_data['is_satellite'] == True
                         #pass
                         
                         # TEST TO START RECORDING EARLIER
@@ -6365,6 +6380,10 @@ class VocoAdapter(Adapter):
                         except Exception as ex:
                             print("Error in toggleOff start_recording check: " + str(ex))
                     
+                    else:
+                        if self.DEBUG:
+                            print("Not starting an audio recording as there is no STT available")
+                    
                     # Mute?
                     if 'siteId' in payload and payload['siteId'] == self.persistent_data['site_id']:
                         if self.DEBUG:
@@ -6379,8 +6398,6 @@ class VocoAdapter(Adapter):
         elif msg.topic == 'hermes/hotword/toggleOn':
             
             # unmute if the audio output was muted.
-            
-                
             
             if not 'siteId' in payload:
                 if self.DEBUG:
@@ -7478,7 +7495,7 @@ class VocoAdapter(Adapter):
 
 
     def send_mqtt_ping(self, broadcast=False, ping_type="ping",target_site_id=None):
-        if self.DEBUG:
+        if self.DEBUG2:
             print("- - - send_mqtt_ping: About to ping or pong. Broadcast flag = " + str(broadcast) + ", ping_type: " + str(ping_type))
             
         #if self.DEBUG:
