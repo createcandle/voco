@@ -4501,7 +4501,8 @@ class VocoAdapter(Adapter):
                                     """
                                         
                                     self.periodic_mqtt_attempts += 1
-                                    self.periodic_voco_attempts += 1
+                                    if self.persistent_data['is_satellite'] and self.this_is_main_controller == False:
+                                        self.periodic_voco_attempts += 1
                                 
                                     self.send_mqtt_ping(broadcast=True) # broadcast ping
                                     
