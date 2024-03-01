@@ -7478,8 +7478,8 @@ class VocoAdapter(Adapter):
 
 
     def send_mqtt_ping(self, broadcast=False, ping_type="ping",target_site_id=None):
-        if self.DEBUG2:
-            print("- - - About to ping or pong. Broadcast flag = " + str(broadcast))
+        if self.DEBUG:
+            print("- - - send_mqtt_ping: About to ping or pong. Broadcast flag = " + str(broadcast) + ", ping_type: " + str(ping_type))
             
         #if self.DEBUG:
         #    print("- - - self.llm_stt_started: " + str(self.llm_stt_started))
@@ -7528,13 +7528,13 @@ class VocoAdapter(Adapter):
 
 
     def parse_ping(self,payload,ping_type="ping"):
-        if self.DEBUG2:
+        if self.DEBUG:
             print("\n    ( . . . pong . . . )---\n")
-        if self.DEBUG2:
+        if self.DEBUG:
             pass
             #print('in parse_ping. ping_type: ' + str(ping_type))
             #print("(own site_id: " + str(self.persistent_data['site_id']) + ")")
-            #print("- - - payload: " + str(payload))
+            print("- - - payload: " + str(json.dumps(payload,indent=4)))
             
             #print("- - - message ends in /ping. A Voco server (" + str(payload['hostname']) + "," + str(payload['ip']) + ") is asking for our ip and hostname")
             
@@ -7606,17 +7606,17 @@ class VocoAdapter(Adapter):
                             if 'has_stt' in payload:
                                 self.main_controller_has_stt = payload['has_stt']
                                 if self.DEBUG2:
-                                    print("self.main_controller_has_stt: " + str(self.main_controller_has_stt))
+                                    print("parse_ping: self.main_controller_has_stt: " + str(self.main_controller_has_stt))
                         
                             if 'has_assistant' in payload:
                                 self.main_controller_has_assistant = payload['has_assistant']
                                 if self.DEBUG2:
-                                    print("self.main_controller_has_assistant: " + str(self.main_controller_has_assistant))
+                                    print("parse_ping: self.main_controller_has_assistant: " + str(self.main_controller_has_assistant))
                         
                             if self.persistent_data['main_site_id'] != payload['siteId']:
                                 self.save_to_persistent_data = True
                                 if self.DEBUG2:
-                                    print("received the new main_site_id. Saving it.")
+                                    print("parse_ping: received the new main_site_id. Saving it.")
                                 
                             self.persistent_data['main_site_id'] = payload['siteId']
             
@@ -7629,7 +7629,7 @@ class VocoAdapter(Adapter):
                 
                     if payload['siteId'] == self.persistent_data['main_site_id'] and self.persistent_data['main_site_id'] != self.persistent_data['site_id']:
                         if self.DEBUG2:
-                            print("good response from main controller")
+                            print("parse_ping: good response from main controller")
                     
                         if self.periodic_voco_attempts > 4:
                             #self.set_status_on_thing("Reconnected to main controller")
@@ -7646,14 +7646,14 @@ class VocoAdapter(Adapter):
                         # If the main controller has a different hostname, remember that new name
                         if self.persistent_data['main_controller_hostname'] != payload['hostname']:
                             if self.DEBUG:
-                                print("hostname of main controller seems to have changed from: " + str(self.persistent_data['main_controller_hostname']) + ", to: " + str(payload['hostname']))
+                                print("parse_ping: hostname of main controller seems to have changed from: " + str(self.persistent_data['main_controller_hostname']) + ", to: " + str(payload['hostname']))
                             self.persistent_data['main_controller_hostname'] = payload['hostname']
                             self.save_to_persistent_data = True
             
                         if self.persistent_data['mqtt_server'] != payload['ip']:
                             # can this even happen? If we don't have the IP of the main MQTT server, then we will never receive this update message? Maybe if both wifi and ethernet are connected?
                             if self.DEBUG:
-                                print("The IP adress of the main Voco server has changed to " + str(payload['ip'])) 
+                                print("parse_ping: The IP adress of the main Voco server has changed to " + str(payload['ip'])) 
                             self.persistent_data['mqtt_server'] = payload['ip']
                             self.save_to_persistent_data = True
             
@@ -7679,14 +7679,14 @@ class VocoAdapter(Adapter):
                 
                     if payload['siteId'] != self.persistent_data['site_id'] and payload['main_controller'] == self.persistent_data['site_id']:
                         if self.DEBUG2:
-                            print("SPOTTED A SATELLITE THAT IS USING THIS CONTROLLER AS ITS MAIN CONTROLLER")
+                            print("parse_ping: SPOTTED A SATELLITE THAT IS USING THIS CONTROLLER AS ITS MAIN CONTROLLER")
                     
                         if self.persistent_data['is_satellite'] == False:
                             self.connected_satellites[ str(payload['hostname']) ] = int(time.time())
                         else:
                             # TODO: explain this better in the UI? Edge case..
                             if self.DEBUG:
-                                print("Error. Well this is awkward. A satellite is connected to this controller, but this controller is already itself a satellite")
+                                print("parse_ping: Error. Well this is awkward. A satellite is connected to this controller, but this controller is already itself a satellite")
             
             
                     #
@@ -7709,7 +7709,7 @@ class VocoAdapter(Adapter):
                     #    self.persistent_data['satellite_thing_titles'][payload['siteId']] = []
         
                     if self.DEBUG2:
-                        print('clearing list of things titles from satellite: ' + str(payload['siteId']))
+                        print('parse_ping: clearing list of things titles from satellite: ' + str(payload['siteId']))
                     self.persistent_data['satellite_thing_titles'][payload['siteId']] = [] # clear the set
 
                     #if payload['satellite_intent_handling']:
@@ -7719,21 +7719,21 @@ class VocoAdapter(Adapter):
                         self.persistent_data['satellite_thing_titles'][payload['siteId']].append(thing_title)
                     
                     if self.DEBUG2:
-                        print("self.persistent_data['satellite_thing_titles']['" + payload['siteId']  + "'] is now this length: " + str(len(self.persistent_data['satellite_thing_titles'][payload['siteId']])) )
+                        print("parse_ping: self.persistent_data['satellite_thing_titles']['" + payload['siteId']  + "'] is now this length: " + str(len(self.persistent_data['satellite_thing_titles'][payload['siteId']])) )
                     
                     
             #if self.save_to_persistent_data:
             #    self.save_persistent_data()
 
             if self.DEBUG2:
-                print("self.hardware_score       : " + str(self.hardware_score))
-                print("self.fastest_controller_score : " + str(self.fastest_controller_score))
-                print("self.fastest_controller_id    : " + str(self.fastest_controller_id))
+                print("parse_ping: self.hardware_score       : " + str(self.hardware_score))
+                print("parse_ping: self.fastest_controller_score : " + str(self.fastest_controller_score))
+                print("parse_ping: self.fastest_controller_id    : " + str(self.fastest_controller_id))
 
             # TODO: trigger the injection mechanism here, so that new names are learnt as quickly as possible? Maybe turn of the timed injection from the clock in that case (if is_satellite or if at lest one satellites is connected in case of being a main controller)
         else:
             if self.DEBUG:
-                print("ping message was missing parts: " + str(json.dumps(payload,indent=4)))
+                print("parse_ping: ping message was missing parts: " + str(json.dumps(payload,indent=4)))
     
     
 
