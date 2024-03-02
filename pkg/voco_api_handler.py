@@ -509,7 +509,7 @@ class VocoAPIHandler(APIHandler):
                                 else:
                                     print("Error, no jwt in incoming /init request")
                                 
-                                self.adapter.last_text_response = ""
+                                self.adapter.last_text_response = []
                                 self.adapter.refresh_matrix_members = True
                                 
                                 # Update IP address and hostname
@@ -719,8 +719,8 @@ class VocoAPIHandler(APIHandler):
 
                                 #self.adapter.check_available_memory()
 
-                                last_text_response = self.adapter.last_text_response;
-                                self.adapter.last_text_response = ""
+                                #last_text_response = self.adapter.last_text_response;
+                                #self.adapter.last_text_response = []
 
                                 return APIResponse(
                                     status=200,
@@ -731,7 +731,7 @@ class VocoAPIHandler(APIHandler):
                                                         'items': self.adapter.persistent_data['action_times'],
                                                         'mqtt_others': self.adapter.mqtt_others,
                                                         'current_time':self.adapter.current_utc_time,
-                                                        'text_response':last_text_response,
+                                                        'text_response':self.adapter.last_text_response,
                                                         'llm_busy_generating':self.adapter.llm_busy_generating,
                                                         'llm_generated_text':self.adapter.llm_generated_text,
                                                         'info_to_show': self.adapter.info_to_show,
@@ -788,6 +788,7 @@ class VocoAPIHandler(APIHandler):
                             try:
                                 if self.DEBUG:
                                     print("handling /parse. Incoming text: " + str(request.body['text']))
+                                self.adapter.last_text_response = [];
                                 self.adapter.last_text_command = str(request.body['text'])
                                 self.adapter.parse_text(site_id=self.adapter.persistent_data['site_id'],origin="text")
                                 return APIResponse(

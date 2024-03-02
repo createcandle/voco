@@ -1432,7 +1432,7 @@
 
 		update_text_chat(){
 			if(this.debug){
-				//console.log("voco: in update_text_chat.\nthis.text_chat_response: \n-", this.text_chat_response,"\n-",this.previous_text_chat_response);
+				console.log("voco: in update_text_chat.\nthis.text_chat_response: \n-", this.text_chat_response,"\n-",this.previous_text_chat_response);
 			}
 			
 			// Remove the existing old messages first
@@ -1474,8 +1474,8 @@
 				return
 			}
 			
-			if(this.text_chat_response == '' || this.text_chat_response == null){
-				this.previous_text_chat_response = '';
+			if(this.text_chat_response == [] || this.text_chat_response == null){
+				this.previous_text_chat_response = [];
 				return
 			}
 			
@@ -1494,22 +1494,31 @@
 			this.reset_to_allow_sending_text_chat();
 			
 			//var nicer_text = this.text_chat_response;
-			let nicer_text = this.text_chat_response.replace(/ \./g, '\.'); //.replace(" .", ".");
+			
+			//let nicer_text = this.text_chat_response.join('. ')
+			for( let c = 0; c < this.text_chat_response.length; c++){
+				let nicer_text = this.text_chat_response[c];
+				
+				nicer_text = nicer_text.replace(/ \./g, '\.'); //.replace(" .", "."); // remove spaces before periods
 
-			function applySentenceCase(str) {
-			    return str.replace(/.+?[\.\?\!](\s|$)/g, function (txt) {
-			        return txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase();
-			    });
-			}
+				function applySentenceCase(str) {
+				    return str.replace(/.+?[\.\?\!](\s|$)/g, function (txt) {
+				        return txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase();
+				    });
+				}
 
-			nicer_text = applySentenceCase(nicer_text);
-			nicer_text = nicer_text.replace(/\. /g, '\.\<br\/\>');
+				nicer_text = applySentenceCase(nicer_text);
+				nicer_text = nicer_text.replace(/\. /g, '\.\<br\/\>'); // replace periods with BR tag
 
-			if(this.debug){
-				console.log("update_text_chat: made the response chat message nicer: ", nicer_text);
+				if(this.debug){
+					console.log("update_text_chat: made the response chat message nicer: ", nicer_text);
+				}
+			
+				this.add_text_chat_message(nicer_text,'response');
 			}
 			
-			this.add_text_chat_message(nicer_text,'response');
+			
+			
 			
 			
 		}
