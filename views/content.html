@@ -56,13 +56,18 @@
 			<p style="text-align:center">No microphone detected</p>
 		</div>
         
-		<div id="extension-voco-text-commands-container" style="display:none">
+		<div id="extension-voco-text-commands-container" style="display:none" class="extension-voco-hidden">
+			
+			<div id="extension-voco-text-chat-container-wrapper">
+				<ul id="extension-voco-text-chat-container" style="display:none"></ul>
+			</div>
+			<div id="extension-voco-text-chat-waiting-for-response"></div>
 			<div id="extension-voco-text-input-container">
 				<textarea id="extension-voco-text-input-field" placeholder="What time is it?"></textarea>
 				<button id="extension-voco-text-input-send-button" class="text-button">Send</button>
 			</div>
 
-			<div id="extension-voco-text-response-container" style="display:none"><span id="extension-voco-text-response-field">response will be here</span></div>
+			
 		</div>
 		
 		
@@ -97,7 +102,9 @@
 							<div class="extension-voco-time"></div>
 							<div class="extension-voco-change"></div>
 						</div>
-
+						<div class="extension-voco-line3">
+							<div class="extension-voco-timer-item-owner"></div>
+						</div>
 					</div>
 
 					<div class="extension-voco-item-menu">

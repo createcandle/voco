@@ -49,7 +49,7 @@ body:not(.developer) .extension-voco-show-if-developer {
     word-wrap: break-word;
 }
 
-
+/*
 body.developer .extension-voco-timer-item-cosmetic:after {
     content: "Managed by other controller";
     display: block;
@@ -61,7 +61,12 @@ body.developer .extension-voco-timer-item-cosmetic:after {
 	opacity:.7;
 	font-style:italic;
 }
+*/
 
+
+body.developer .extension-voco-timer-item-owner:not(:empty):before{
+	content: "Managed by other controller: ";
+}
 
 /*  TABS  */
 
@@ -647,6 +652,9 @@ body #extension-voco-view .extension-voco-tab-selected {
     /*max-width: 60rem;*/
     margin: 4rem auto;
     box-sizing: border-box;
+	display:flex;
+	flex-direction:column;
+	height:auto;
 }
 
 #extension-voco-text-input-container {
@@ -658,7 +666,7 @@ body #extension-voco-view .extension-voco-tab-selected {
     margin: 0;
     height: 2.8rem;
     padding: 1rem 1.3rem;
-    font-size: 2rem;
+    font-size: 1.6rem;
     min-width: 20rem;
     flex-grow: 1;
     border-top-left-radius: .5rem;
@@ -671,12 +679,107 @@ body #extension-voco-view .extension-voco-tab-selected {
 }
 
 
-#extension-voco-text-response-container {
-    margin-top: 1rem;
-    text-align: right;
+#extension-voco-text-chat-container-wrapper{
+	display:flex;
+	flex-direction: column-reverse;
+	height:auto;
+	max-height:50vh;
+	overflow:auto;
 }
 
-#extension-voco-text-response-field {
+#extension-voco-text-chat-container {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+	height:auto;
+}
+#extension-voco-text-chat-container:not(:empty){
+	margin-bottom: 1rem;
+}
+
+
+#extension-voco-text-chat-container > li{
+    display:inline-block;
+    border-radius: .7rem;
+    margin-bottom: .1rem;
+	width:70%;
+	box-sizing:border-box;
+}
+
+#extension-voco-text-chat-container > li > span{
+	display:inline-block;
+	padding: .5rem 1rem;
+}
+
+.extension-voco-text-chat-response{
+  margin-right:30%;
+}
+.extension-voco-text-chat-response > span{
+  background: #b61191;
+}
+
+.extension-voco-text-chat-command{
+	text-align:right;
+	margin-left:30%;
+}
+.extension-voco-text-chat-command > span{
+  background: #0084ff;
+  color: #fff;
+  text-align:left;
+  
+}
+
+.extension-voco-text-chat-response + .extension-voco-text-chat-command > span{
+  border-bottom-right-radius: .2rem;
+  margin-top:1rem;
+}
+
+.extension-voco-text-chat-command + .extension-voco-text-chat-response > span{
+  border-bottom-right-radius: .2rem;
+  margin-top:1rem;
+}
+
+.extension-voco-text-chat-command + .extension-voco-text-chat-command > span{
+  border-top-right-radius: .2rem;
+  border-bottom-right-radius: .2rem;
+}
+
+.extension-voco-text-chat-response + .extension-voco-text-chat-response > span{
+  border-top-left-radius: .2rem;
+  border-bottom-left-radius: .2rem;
+}
+
+.extension-voco-text-chat-command > span:last-of-type {
+	border-radius:.5rem;
+	border-bottom-left-radius: 1rem;
+}
+
+.extension-voco-text-chat-response > span:last-of-type {
+	border-radius:.5rem;
+	border-bottom-right-radius: 1rem;
+}
+
+#extension-voco-text-chat-waiting-for-response{
+	display:none;
+    background-size: 200% 200%;
+    background-image: linear-gradient(-90deg,
+            rgba(59, 173, 227, .5) 0%,
+            rgba(87, 111, 230, .5) 50%,
+            rgba(152, 68, 183, .5) 51%,
+            rgba(59, 173, 227, .5) 100%);
+    animation: extension-voco-bg-sweep-to-right 2s ease infinite;
+	height:3.7rem;
+	min-height:3.7rem;
+	border-radius:.5rem;
+	margin:.2rem 0 1rem 0;
+	width:70%;
+	margin-right:20%;
+	box-sizing:border-box;
+}
+
+/*
+.extension-voco-text-chat-command,
+#extension-voco-text-chat-command {
     display: inline-block;
     padding: 1rem 1.5rem;
     font-size: 2rem;
@@ -686,7 +789,21 @@ body #extension-voco-view .extension-voco-tab-selected {
     line-height: 3rem;
 }
 
-#extension-voco-text-response-field:first-letter {
+
+.extension-voco-text-chat-response,
+#extension-voco-text-chat-response {
+    display: inline-block;
+    padding: 1rem 1.5rem;
+    font-size: 2rem;
+    border-radius: .5rem;
+    background-color: rgba(255, 255, 255, .3);
+    text-align: left;
+    line-height: 3rem;
+}
+*/
+
+
+#extension-voco-text-chat-response:first-letter {
     text-transform: capitalize;
 }
 
@@ -1176,24 +1293,31 @@ f #extension-voco-matrix-invite-management-output {
     right: 2rem;
     z-index: 9999999;
 }
+#extension-voco-info-overlay:empty{
+	display:none;
+}
 
-#extension-voco-info-overlay>pre {
+#extension-voco-info-overlay > pre {
     white-space: pre-wrap;
     overflow: auto;
     height: 100%;
     width: 100%;
     padding: 2rem;
     padding-bottom: 9rem;
-    background-color: #333;
-    color: white;
+    background-color: #0c3b5c;
+    color: #ddd;
     border-radius: 1rem;
-    border: 3px solid #888;
+	box-sizing:border-box;
+	font-size: 2.2rem;
+	font-family:sans-serif;
+	margin:0;
+	overflow:auto;
 }
 
 #extension-voco-info-overlay-close-button {
-    position: fixed;
+    position: absolute;
     bottom: 2rem;
-    right: 12rem;
+    right: 2rem;
 }
 
 
@@ -1452,6 +1576,7 @@ f #extension-voco-matrix-invite-management-output {
     */
     #extension-voco-text-input-field {
         margin: 0 1rem 0 0;
+		font-size:2rem;
     }
 
 
@@ -1466,5 +1591,12 @@ f #extension-voco-matrix-invite-management-output {
 		margin-right: 2rem;
 	}
 	*/
+
+	
+
+	#extension-voco-info-overlay > pre {
+		padding:4rem;
+		font-size: 4rem;
+	}
 
 }

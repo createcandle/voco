@@ -345,7 +345,8 @@ class VocoAPIHandler(APIHandler):
                                           'mqtt_others': self.adapter.mqtt_others,
                                           'llm_enabled':self.adapter.llm_enabled,
                                           
-                                          'device_model': self.adapter.device_model,
+                                          'controller_model': self.adapter.controller_model,
+                                          'controller_pi_version': self.adapter.controller_pi_version,
                                           'device_total_memory': self.adapter.total_memory,
                                           'device_free_memory': self.adapter.free_memory,
                                     
@@ -616,7 +617,7 @@ class VocoAPIHandler(APIHandler):
                                                         'matrix_server': matrix_server,
                                                         'matrix_username': matrix_username,
                                                         'has_matrix_token': has_matrix_token,
-                                                        'device_model': self.adapter.device_model,
+                                                        'controller_model': self.adapter.controller_model,
                                                         'hardware_score': self.adapter.hardware_score,
                                                         'debug':self.adapter.DEBUG
                                                         }),
@@ -718,6 +719,9 @@ class VocoAPIHandler(APIHandler):
 
                                 #self.adapter.check_available_memory()
 
+                                last_text_response = self.adapter.last_text_response;
+                                self.adapter.last_text_response = ""
+
                                 return APIResponse(
                                     status=200,
                                     content_type='application/json',
@@ -727,7 +731,7 @@ class VocoAPIHandler(APIHandler):
                                                         'items': self.adapter.persistent_data['action_times'],
                                                         'mqtt_others': self.adapter.mqtt_others,
                                                         'current_time':self.adapter.current_utc_time,
-                                                        'text_response':self.adapter.last_text_response,
+                                                        'text_response':last_text_response,
                                                         'llm_busy_generating':self.adapter.llm_busy_generating,
                                                         'llm_generated_text':self.adapter.llm_generated_text,
                                                         'info_to_show': self.adapter.info_to_show,

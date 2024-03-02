@@ -19,7 +19,7 @@
 			this.all_things;
 			this.items_list = [];
 			this.current_time = 0;
-
+			this.site_id = null;
 
             this.matrix_room_members = [];
             this.matrix_candle_username = "";
@@ -44,9 +44,41 @@
 			this.previous_info_to_show = '';
 
 			this.slow_device = false; // Pi 3 or Pi 4 is considered slow
-			this.device_speed = 3;
+			this.controller_speed = 3;
 			this.device_total_memory = 500; // How much memory the device has
 			this.device_free_memory = 500; // How much memory the device has
+
+			this.poll_nr = 0;
+			
+			this.text_chat_messages = [];
+			this.text_chat_response = '';
+			this.previous_text_chat_response = null;
+			this.text_chat_nr = 0;
+			this.busy_doing_text_chat_command = false;
+			this.last_text_chat_start_time = 0;
+			
+			this.text_chat_hints = [
+			    'What time is it?',
+				'Please tell me the time',
+				'Can you tell me the time?',
+				'Can you tell me what time it is?',
+			    'In 10 minutes remind me to go jogging',
+				'Set a countdown for midnight',
+				'Set a timer for 30 seconds',
+				'Wake me up at 8 in the morning',
+				'How many timers do I have?',
+                'At two o clock turn off the lights',
+				'How many timers have been set?',
+				'Tell me about my timers',
+				'Tell me about my alarms',
+				'At lunch time remind me to go to the super market',
+				'Remove all the timers',
+				'Disable all the alarms',
+				'Set a timer for 9 o clock',
+				'At 10 o clock tonight remind me to go to bed',
+				'Remove the last timer',
+				'How much longer does the countdown have to go?'
+			];
 
             setTimeout(() => {
                 const jwt = localStorage.getItem('jwt');
@@ -60,6 +92,9 @@
     	        }).catch((e) => {
     	  			console.log("Error (delayed) saving token: ", e);
     	        });
+				
+				this.do_overlay_poll();
+				
             }, 5100);
 
 			fetch(`/extensions/${this.id}/views/content.html`)
@@ -116,9 +151,8 @@
 
 			//const pre = document.getElementById('extension-voco-response-data');
 			const text_input_field = document.getElementById('extension-voco-text-input-field');
-			const text_response_container = document.getElementById('extension-voco-text-response-container');
-			const text_response_field = document.getElementById('extension-voco-text-response-field');
-			text_response_container.style.display = 'none';
+			const text_chat_container = document.getElementById('extension-voco-text-chat-container');
+			
 
 
 
@@ -152,42 +186,26 @@
 
 			text_input_field.focus();
 
+			const random_hint_number = Math.floor(Math.random()*this.text_chat_hints.length);
+			text_input_field.placeholder = this.text_chat_hints[random_hint_number];
 
-			const hints = [
-			    'What time is it?',
-				'Please tell me the time',
-				'Can you tell me the time?',
-				'Can you tell me what time it is?',
-			    'In 10 minutes remind me to go jogging',
-				'Set a countdown for midnight',
-				'Set a timer for 30 seconds',
-				'Wake me up at 8 in the morning',
-				'How many timers do I have?',
-                'At two o clock turn off the lights',
-				'How many timers have been set?',
-				'Tell me about my timers',
-				'Tell me about my alarms',
-				'At lunch time remind me to go to the super market',
-				'Remove all the timers',
-				'Disable all the alarms',
-				'Set a timer for 9 o clock',
-				'At 10 o clock tonight remind me to go to bed',
-				'Remove the last timer',
-				'How much longer does the countdown have to go?'
-			];
-			const random_hint_number = Math.floor(Math.random()*hints.length);
-
-			text_input_field.placeholder = hints[random_hint_number];
-
-
-			document.getElementById('extension-voco-text-input-field').addEventListener('keyup', function onEvent(e) {
-			    if (e.keyCode === 13) {
-			        if(this.debug){
-                        console.log('Enter pressed in text command input');
-                    }
-					this.send_input_text();
-			    }
-			});
+			if(text_input_field){
+				document.getElementById('extension-voco-text-input-field').addEventListener('keyup', (event) => {
+				    if (event.keyCode === 13 && text_input_field.offsetHeight < 100 && this.busy_doing_text_chat_command == false) {
+				        if(this.debug){
+	                        console.log('Enter pressed in text command input');
+							console.log(".offsetHeight: ", text_input_field.offsetHeight);
+	                    }
+						this.send_input_text();
+				    }
+				});
+				document.getElementById('extension-voco-text-input-field').addEventListener('input', (event) => {
+					if (text_input_field.scrollHeight > 100) {
+						text_input_field.style.height = "5px";
+						text_input_field.style.height = (text_input_field.scrollHeight+5) + "px";
+					}
+				});
+			}
 
 			document.getElementById('extension-voco-text-input-send-button').addEventListener('click', (event) => {
 				if(this.debug){
@@ -195,6 +213,10 @@
                 }
 				this.send_input_text();
 			});
+			
+			
+			
+			
 
             // Reset poll attempts if the user clicks on "voco not available" warning.
 			document.getElementById('extension-voco-unavailable').addEventListener('click', (event) => {
@@ -352,6 +374,10 @@
 							}
 						}
 					}
+					
+					if(typeof body['main_site_id'] == 'string'){
+						this.site_id = body['main_site_id'];
+					}
 
 					// Remove spinner
 					document.getElementById("extension-voco-loading").remove();
@@ -499,6 +525,7 @@
 				try{
 					if( main_view.classList.contains('selected') ){
                         this.do_poll();
+						this.update_text_chat();
 					}
                     else{
                         //console.log('voco is not selected');
@@ -957,18 +984,26 @@
 								}
 								let voco_overlay_el = document.getElementById('extension-voco-info-overlay');
 								if(voco_overlay_el){
-									voco_overlay_el.innerHTML = '<pre>' + body['info_to_show'] + '</pre>';
-									let voco_overlay_close_button = document.createElement('button');
-									voco_overlay_close_button.setAttribute('id','extension-voco-info-overlay-close-button');
-									voco_overlay_close_button.classList.add('text-button');
+									let new_content = '';
+									if(body['info_to_show'] != ''){
+										new_content = '<pre>' + body['info_to_show'] + '</pre>';
+									}
+									voco_overlay_el.innerHTML = new_content;
+									if(new_content != ''){
+										let voco_overlay_close_button = document.createElement('button');
+										voco_overlay_close_button.setAttribute('id','extension-voco-info-overlay-close-button');
+										voco_overlay_close_button.classList.add('text-button');
 
-									voco_overlay_close_button.textContent = 'Close';
-									voco_overlay_close_button.addEventListener('click', (event) => {
-										if(this.debug){
-						                    console.log("closing Voco overlay");
-						                }
-										voco_overlay_el.innerHTML = '';
-									});
+										voco_overlay_close_button.textContent = 'Close';
+										voco_overlay_close_button.addEventListener('click', (event) => {
+											if(this.debug){
+							                    console.log("closing Voco overlay");
+							                }
+											voco_overlay_el.innerHTML = '';
+										});
+										voco_overlay_el.appendChild(voco_overlay_close_button);
+									}
+									
 								}
 								else{
 									if(this.debug){
@@ -978,14 +1013,13 @@
 							}
 						}
 					}
-					//setTimeout(do_overlay_poll,2000);
+
 				}).catch((e) => {
 					console.error("voco: error in call to /overlay_poll: ", e);
-					//setTimeout(do_overlay_poll,2000);
+
 				}).then((body) => {
-					console.log("\n\n\nVoco: final then is working!\n\n\n");
 					this.overlay_poll_done = true;
-		        	setTimeout(do_overlay_poll,2000);
+		        	setTimeout(this.do_overlay_poll,2000);
 				})
 			}
 		}
@@ -997,10 +1031,9 @@
 
 			//const pre = document.getElementById('extension-voco-response-data');
 			const text_input_field = document.getElementById('extension-voco-text-input-field');
-			const text_response_container = document.getElementById('extension-voco-text-response-container');
-			const text_response_field = document.getElementById('extension-voco-text-response-field');
+			const text_chat_container = document.getElementById('extension-voco-text-chat-container');
 			const generated_text_output_el = document.getElementById('extension-voco-llm-generated-text-output');
-			//text_response_container.style.display = 'none';
+			//text_chat_container.style.display = 'none';
 
 
 
@@ -1034,8 +1067,9 @@
 
             }
             else{
-                //console.log("starting poll");
-
+				if(this.debug){
+                	//console.log("voco: wasn't busy polling");
+				}
             }
 
             var refresh_chat_members = false
@@ -1044,7 +1078,10 @@
                 this.refresh_matrix_members_counter = 0;
                 refresh_chat_members = true
             }
-
+			if(this.debug){
+				this.poll_nr++;
+				//console.log("voco:  poll nr: ", this.poll_nr);
+			}
             this.busy_polling = true;
 			//console.log(this.attempts);
 			//console.log("calling")
@@ -1112,46 +1149,20 @@
                     }
 
 
-
-                    //const text_response_container = document.getElementById('extension-voco-text-response-container');
-					//const text_response_field = document.getElementById('extension-voco-text-response-field');
-                    if(text_response_field){
+					// Update text chat
+					if(typeof body['text_response'] != 'undefined'){
+						if(this.previous_text_chat_response == null){
+							this.previous_text_chat_response = body['text_response'];
+							if(document.getElementById('extension-voco-text-commands-container')){
+								document.getElementById('extension-voco-text-commands-container').classList.remove('extension-voco-hidden');
+							}
+						}
 						if(body['text_response'].length != 0){
-							var nicer_text = body['text_response'];
-							nicer_text = nicer_text.replace(/ \./g, '\.'); //.replace(" .", ".");
-
-							function applySentenceCase(str) {
-							    return str.replace(/.+?[\.\?\!](\s|$)/g, function (txt) {
-							        return txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase();
-							    });
-							}
-
-							nicer_text = applySentenceCase(nicer_text);
-							nicer_text = nicer_text.replace(/\. /g, '\.\<br\/\>');
-
-							if(this.debug){
-
-							}
-
-							if(text_response_field.textContent != nicer_text){
-								console.log("got new text chat response: ", nicer_text);
-								text_response_field.textContent = nicer_text;
-							}
-
-							//text_response_field.innerHTML = nicer_text;
-							text_response_container.style.display = 'block';
+							
 						}
-						else{
-							text_response_field.innerText = "";
-							text_response_container.style.display = 'none';
-						}
-                    }
-					else{
-						console.error("voco: missing text_response_field");
+						this.text_chat_response = body['text_response'];
+						this.update_text_chat();
 					}
-
-
-					//pre.innerText = "";
 
                     // Update list of timers
 					if(this.items_list.length > 0 ){
@@ -1395,9 +1406,6 @@
 
 
 
-
-
-
 	        }).catch((e) => {
 	  			//console.log("Error getting timer items: " , e);
 				if(this.debug){
@@ -1422,6 +1430,104 @@
 
 
 
+		update_text_chat(){
+			if(this.debug){
+				//console.log("voco: in update_text_chat.\nthis.text_chat_response: \n-", this.text_chat_response,"\n-",this.previous_text_chat_response);
+			}
+			
+			// Remove the existing old messages first
+			
+			const now_stamp = Date.now(); // Math.floor((new Date()).getTime() / 1000)
+			for (let i = this.text_chat_messages.length - 1; i >= 0; i-- ){
+				//console.log("update_text_chat: ", i, this.text_chat_messages[i]);
+				try{
+					// Chat messages remain visible for 10 minutes;
+					if(this.text_chat_messages[i]['timestamp'] < now_stamp - 600000){
+						const old_message_el = document.querySelector('#extension-voco-text-chat-message' + this.text_chat_messages[i]['id']);
+						if(old_message_el){
+							old_message_el.remove();
+							if(this.debug){
+								console.log("voco: removed old text chat message");
+							}
+						}
+						else{
+							console.warn("voco: text chat message element was missing: ", this.text_chat_messages[i]);
+						}
+						this.text_chat_messages.splice(i, 1);
+					}
+				}
+				catch(e){
+					console.error("voco: update_text_chat:  error looping over old messages: ", e);
+				}
+				
+			}
+			
+			// If there was no response to the command for 30 seconds, allow sending a new command
+			if(this.busy_doing_text_chat_command && now_stamp > this.last_text_chat_start_time + 30000){
+				this.reset_to_allow_sending_text_chat();
+			}
+				
+			
+			
+			
+			if(this.text_chat_messages.length == 0){
+				return
+			}
+			
+			if(this.text_chat_response == '' || this.text_chat_response == null){
+				this.previous_text_chat_response = '';
+				return
+			}
+			
+			// Add new text chat message (if it exists)
+			if(this.text_chat_response == this.previous_text_chat_response){
+				return
+			}
+			
+			// Skip the very first message, since it may be a left-over.
+			if(this.previous_text_chat_response == null){
+				this.previous_text_chat_response = this.text_chat_response;
+				return
+			}
+			this.previous_text_chat_response = this.text_chat_response;
+			
+			this.reset_to_allow_sending_text_chat();
+			
+			//var nicer_text = this.text_chat_response;
+			let nicer_text = this.text_chat_response.replace(/ \./g, '\.'); //.replace(" .", ".");
+
+			function applySentenceCase(str) {
+			    return str.replace(/.+?[\.\?\!](\s|$)/g, function (txt) {
+			        return txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase();
+			    });
+			}
+
+			nicer_text = applySentenceCase(nicer_text);
+			nicer_text = nicer_text.replace(/\. /g, '\.\<br\/\>');
+
+			if(this.debug){
+				console.log("update_text_chat: made the response chat message nicer: ", nicer_text);
+			}
+			
+			this.add_text_chat_message(nicer_text,'response');
+			
+			
+		}
+
+		add_text_chat_message(message,message_type){
+			const text_chat_container = document.getElementById('extension-voco-text-chat-container');
+			
+			this.text_chat_messages.push({'id':this.text_chat_nr++,'message':message, 'type':message_type, 'timestamp': Date.now()});
+			
+			let new_message_el = document.createElement('li');
+			new_message_el.classList.add('extension-voco-text-chat-' + message_type);
+			new_message_el.setAttribute('id','extension-voco-text-chat-message' + this.text_chat_nr);
+			new_message_el.innerHTML = '<span>' + message + '</span>';
+			
+			text_chat_container.appendChild(new_message_el);
+			
+			text_chat_container.style.display = 'block';
+		}
 
 
 
@@ -1515,6 +1621,33 @@
 					const type = items[item][ 'type' ];
 					const cosmetic = items[item][ 'cosmetic' ];
 					const sentence = items[item][ 'slots' ]['sentence'];
+					
+					
+					
+					//let owner_el = document.createElement('div');
+					//owner_el.classList.add('extension-voco-timer-item-owner');
+					let owner = '';
+					if(this.site_id != null){
+						owner = this.site_id;
+						if(typeof items[item][ 'siteId' ] != 'undefined'){
+							owner = items[item][ 'siteId' ];
+							if(owner != this.site_id){
+								clone.classList.add('extension-voco-timer-item-cosmetic');
+							}
+							const owner_el = clone.querySelector('.extension-voco-timer-item-owner');
+							if(owner_el){
+								owner_el.textContent = owner;
+							}
+							
+						}
+						else if(cosmetic){
+							clone.classList.add('extension-voco-timer-item-cosmetic');
+						}
+					}
+					
+					
+					//owner_el.textContent = owner;
+					//clone.appendChild(owner_el);
 
 					if( type == 'value' || type == 'boolean_related' ){
 						try{
@@ -1524,14 +1657,14 @@
 								s.classList.add('extension-voco-thing');
 								var t = document.createTextNode(thing);
 								s.appendChild(t);
-								clone.querySelectorAll('.extension-voco-change' )[0].appendChild(s);
+								clone.querySelector('.extension-voco-change' ).appendChild(s);
 
 								const value = items[item]['original_value'];
 								var s = document.createElement("span");
 								s.classList.add('extension-voco-value');
 								var t = document.createTextNode(value);
 								s.appendChild(t);
-								clone.querySelectorAll('.extension-voco-change' )[0].appendChild(s);
+								clone.querySelector('.extension-voco-change' ).appendChild(s);
 							}
 
 						}
@@ -1576,9 +1709,8 @@
 				  	});
 
 					clone.classList.add('extension-voco-type-' + type);
-					if(cosmetic){
-						clone.classList.add('extension-voco-timer-item-cosmetic');
-					}
+					
+					
 
 					//clone.querySelectorAll('.extension-voco-type' )[0].classList.add('extension-voco-icon-' + type);
 					clone.querySelectorAll('.extension-voco-sentence' )[0].innerHTML = sentence;
@@ -1728,49 +1860,49 @@
 				}
 
 				if(content_container_el){
-  		    if(typeof body['llm_wakeword_started'] != 'undefined'){
-  					this.llm_wakeword_started = body['llm_wakeword_started'];
-  					if(this.llm_wakeword_started){
-  						content_container_el.classList.add('extension-voco-wakeword-running');
-  					}
-  					else{
-  						content_container_el.classList.remove('extension-voco-wakeword-running');
-  					}
-  				}
+		  		    if(typeof body['llm_wakeword_started'] != 'undefined'){
+	  					this.llm_wakeword_started = body['llm_wakeword_started'];
+	  					if(this.llm_wakeword_started){
+	  						content_container_el.classList.add('extension-voco-wakeword-running');
+	  					}
+	  					else{
+	  						content_container_el.classList.remove('extension-voco-wakeword-running');
+	  					}
+	  				}
 
-  				if(typeof body['llm_tts_started'] != 'undefined'){
-  					this.llm_tts_started = body['llm_tts_started'];
-  					if(this.llm_tts_started){
-  						content_container_el.classList.add('extension-voco-tts-running');
-  					}
-  					else{
-  						content_container_el.classList.remove('extension-voco-tts-running');
-  					}
-  				}
+	  				if(typeof body['llm_tts_started'] != 'undefined'){
+	  					this.llm_tts_started = body['llm_tts_started'];
+	  					if(this.llm_tts_started){
+	  						content_container_el.classList.add('extension-voco-tts-running');
+	  					}
+	  					else{
+	  						content_container_el.classList.remove('extension-voco-tts-running');
+	  					}
+	  				}
 
-  				if(typeof body['llm_stt_started'] != 'undefined'){
-  					this.llm_stt_started = body['llm_stt_started'];
-  					if(this.llm_stt_started){
-  						content_container_el.classList.add('extension-voco-stt-running');
-  						//document.getElementById('extension-voco-main-llm-stt-running').classList.remove('extension-voco-hidden');
-  						//document.getElementById('extension-voco-main-llm-stt-not-running').style.display = 'none';
-  					}
-  					else{
-  						content_container_el.classList.remove('extension-voco-stt-running');
-  						//document.getElementById('extension-voco-main-llm-stt-running').classList.add('extension-voco-hidden');
-  						//document.getElementById('extension-voco-main-llm-stt-not-running').style.display = 'block';
-  					}
-  				}
+	  				if(typeof body['llm_stt_started'] != 'undefined'){
+	  					this.llm_stt_started = body['llm_stt_started'];
+	  					if(this.llm_stt_started){
+	  						content_container_el.classList.add('extension-voco-stt-running');
+	  						//document.getElementById('extension-voco-main-llm-stt-running').classList.remove('extension-voco-hidden');
+	  						//document.getElementById('extension-voco-main-llm-stt-not-running').style.display = 'none';
+	  					}
+	  					else{
+	  						content_container_el.classList.remove('extension-voco-stt-running');
+	  						//document.getElementById('extension-voco-main-llm-stt-running').classList.add('extension-voco-hidden');
+	  						//document.getElementById('extension-voco-main-llm-stt-not-running').style.display = 'block';
+	  					}
+	  				}
 
-  				if(typeof body['llm_assistant_started'] != 'undefined'){
-  					this.llm_assistant_started = body['llm_assistant_started'];
-  					if(this.llm_assistant_started){
-  						content_container_el.classList.add('extension-voco-assistant-running');
-  					}
-  					else{
-  						content_container_el.classList.remove('extension-voco-assistant-running');
-  					}
-  				}
+	  				if(typeof body['llm_assistant_started'] != 'undefined'){
+	  					this.llm_assistant_started = body['llm_assistant_started'];
+	  					if(this.llm_assistant_started){
+	  						content_container_el.classList.add('extension-voco-assistant-running');
+	  					}
+	  					else{
+	  						content_container_el.classList.remove('extension-voco-assistant-running');
+	  					}
+	  				}
 				}
 
 
@@ -1790,26 +1922,38 @@
 					}
 				}
 
-				if(typeof body['device_model'] != 'undefined'){
-					if(body['device_model'].startsWith('Raspberry Pi 3')){
+				if(typeof body['controller_pi_version'] != 'undefined'){
+					this.controller_speed = body['controller_pi_version'];
+					if(this.controller_speed < 5){
 						this.slow_device = true;
-						this.device_speed = 3;
 						document.getElementById('extension-voco-main-device-model-warning').style.display = 'block';
 					}
-					else if(body['device_model'].startsWith('Raspberry Pi 4')){
+					if(this.debug){
+	                    console.log("Voco running on Pi version: ", this.controller_speed);
+	                }
+				}
+				
+				/*
+				if(typeof body['controller_model'] != 'undefined'){
+					if(body['controller_model'].startsWith('Raspberry Pi 3')){
 						this.slow_device = true;
-						this.device_speed = 4;
+						this.controller_speed = 3;
+						document.getElementById('extension-voco-main-device-model-warning').style.display = 'block';
+					}
+					else if(body['controller_model'].startsWith('Raspberry Pi 4')){
+						this.slow_device = true;
+						this.controller_speed = 4;
 						document.getElementById('extension-voco-main-device-model-warning').style.display = 'block';
 					}
 				}
-
+				*/
+				
 				if(typeof body['device_total_memory'] != 'undefined'){
 					this.device_total_memory = parseInt(body['device_total_memory']);
 				}
 				if(typeof body['device_free_memory'] != 'undefined'){
 					this.device_free_memory = parseInt(body['device_free_memory']);
 				}
-
 
 				// Finally, generate the models lists
 				if(typeof body.llm_models != 'undefined'){
@@ -1895,12 +2039,12 @@
 							}
 
 							if(typeof llm_details.minimal_pi != 'undefined'){
-								if(llm_details.minimal_pi > this.llm_device_speed){
+								if(llm_details.minimal_pi > this.llm_controller_speed){
 									llm_item_el.classList.add('extension-voco-llm-not-possible');
 								}
 							}
 							if(typeof llm_details.minimal_pi != 'undefined'){
-								if(llm_details.minimal_pi > this.llm_device_speed){
+								if(llm_details.minimal_pi > this.llm_controller_speed){
 									llm_item_el.classList.add('extension-voco-llm-not-possible');
 								}
 							}
@@ -2056,23 +2200,35 @@
 
 
 		send_input_text(){
-
+			if(this.debug){
+				console.log("voco: in send_input_text");
+			}
+			const text_chat_container = document.getElementById('extension-voco-text-chat-container');
 			const text_input_field = document.getElementById('extension-voco-text-input-field');
+			const text_chat_waiting_for_response_el = document.getElementById('extension-voco-text-chat-waiting-for-response');
+			
 			if(text_input_field){
 				var text = text_input_field.value;
 				//console.log(text);
+				let was_empty = false;
 				if(text == ""){
 					text = text_input_field.placeholder;
+					was_empty = true;
 					//document.getElementById('extension-voco-response-data').innerText = "You cannot send an empty command";
 					//return;
-				}
-
-				if(text.toLowerCase() == "hello"){
-					text_input_field.placeholder = text;
-					text_response_field.innerText = "Hello!";
-					return;
+					
 				}
 				//console.log("Sending text command");
+
+				if(text == ""){
+					const random_hint_number = Math.floor(Math.random()*this.text_chat_hints.length);
+					text_input_field.placeholder = this.text_chat_hints[random_hint_number];
+					return
+				}
+
+				this.busy_doing_text_chat_command = true;
+				document.getElementById('extension-voco-text-input-send-button').setAttribute("disabled", "disabled");
+				this.last_text_chat_start_time = Date.now(); // Math.floor((new Date()).getTime() / 1000)
 
 		  		// Send text query
 		        window.API.postJson(
@@ -2083,11 +2239,25 @@
 					if(this.debug){
 	                    console.log("parsing text command response: ", body);
 	                }
-					text_input_field.placeholder = text;
+					if(was_empty){
+						text_input_field.placeholder = this.text_chat_hints[Math.floor(Math.random()*this.text_chat_hints.length)];
+					}
+					else{
+						text_input_field.placeholder = text;
+					}
 					text_input_field.value = "";
+					
+					this.add_text_chat_message(text,'command');
+					
+					// Show waiting for chat response indicator
+					
+					if(text_chat_waiting_for_response_el){
+						text_chat_waiting_for_response_el.style.display = 'block';
+					}
 
 		        }).catch((e) => {
 		  			console.error("Voco: error sending text to be parsed: " , e);
+					this.reset_to_allow_sending_text_chat();
 					//document.getElementById('extension-voco-response-data').innerText = "Error sending text command: " , e;
 		        });
 			}
@@ -2096,7 +2266,23 @@
 			}
 
 		}
+		
+		
 
+		reset_to_allow_sending_text_chat(){
+			
+			this.last_text_chat_start_time = 0;
+			const text_chat_waiting_for_response_el = document.getElementById('extension-voco-text-chat-waiting-for-response');
+			if(text_chat_waiting_for_response_el){
+				text_chat_waiting_for_response_el.style.display = 'none';
+			}
+			setTimeout(() => {
+				this.busy_doing_text_chat_command = false;
+				document.getElementById('extension-voco-text-input-send-button').removeAttribute("disabled");
+			},2000);
+			
+			
+		}
 
 
 
