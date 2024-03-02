@@ -806,6 +806,7 @@ class VocoAdapter(Adapter):
         self.current_snips_session_id = ''
         self.snips_clear_injections_first = False
         self.snips_satellite_parts = ['snips-audio-server','snips-hotword'] # No longer needed, as the satellite now runs the full monty
+        self.intended_snips_proces_count = 6
         #self.snips_parts = ['snips-hotword','snips-audio-server','snips-tts','snips-nlu','snips-injection','snips-dialogue','snips-asr']
        
         
@@ -3573,10 +3574,12 @@ class VocoAdapter(Adapter):
         """
         commands = self.snips_parts
         
-        self.busy_starting_snips = True
+        
         self.external_processes = []
         
         self.stop_snips()
+        
+        self.busy_starting_snips = True
         time.sleep(.2)
         try:
             
@@ -3588,12 +3591,12 @@ class VocoAdapter(Adapter):
                 print("run_snips: initial snips_processes_count: " + str(snips_processes_count))
             
             if snips_processes_count != 0:
-                if snips_processes_count < len(commands) - 1: # If there is only one crashed part of snips, but the other part(s) are still running, then a repair will be attempted. If multiple parts are down, then fully restart snips.
+                if snips_processes_count < self.intended_snips_proces_count - 1: # If there is only one crashed part of snips, but the other part(s) are still running, then a repair will be attempted. If multiple parts are down, then fully restart snips.
                     if self.DEBUG:
                         print("way to few snips processes. Stopping snips fully before (re)starting snips")
                     self.stop_snips()
                 
-                elif snips_processes_count > len(commands): # occurs when switching from normal to satellite mode. This also requires a complete restart of snips.
+                elif snips_processes_count > self.intended_snips_proces_count: # occurs when switching from normal to satellite mode. This also requires a complete restart of snips.
                     if self.DEBUG:
                         print("way to many snips processes. Stopping snips fully before (re)starting snips")
                     self.stop_snips()
@@ -3737,18 +3740,23 @@ class VocoAdapter(Adapter):
                 #    extra_dialogue_manager_command = extra_dialogue_manager_command + ["--mqtt",mqtt_ip]
                 
                 if str(self.persistent_data['llm_wakeword_model']) == 'voco':
-                   if self.DEBUG:
-                       print("\n\nWARNING, NOT USING NEW WAKEWORD, IT IS SET TO VOCO\n\n") 
-                
+                    if self.DEBUG:
+                        print("\n\nWARNING, NOT USING NEW WAKEWORD, IT IS SET TO VOCO\n\n")
+                    self.intended_snips_proces_count = 7
+                else:
+                    self.intended_snips_proces_count = 6
+                    
                 if unique_command == 'snips-hotword' and self.use_open_wakeword and self.llm_wakeword_failed == False and str(self.persistent_data['llm_wakeword_model']) != 'voco':
                     if self.DEBUG:
                         print("run_snips: starting wakeword thread instead of snips-hotword")
-                        
+                    self.intended_snips_proces_count = 6
                     self.start_wakeword_thread()
                     #if self.DEBUG:
                     #    print("\nrun_snips: hopefully started wakeword thread instead of snips-hotword\n")
                     continue
-                
+                    
+                elif unique_command == 'snips-hotword' and str(self.persistent_data['llm_wakeword_model']) != 'voco' and self.llm_wakeword_failed:
+                    self.intended_snips_proces_count = 7
                 
                 
                 # Add IP and port
@@ -3966,6 +3974,8 @@ class VocoAdapter(Adapter):
         if self.DEBUG:
             print("in start_wakeword_thread")
             
+        self.intended_snips_proces_count = 6
+        
         if self.llm_wakeword_started:
             if self.DEBUG:
                 print("wakeword thread is already running. Attempting to stop it first.")
@@ -3975,6 +3985,7 @@ class VocoAdapter(Adapter):
         if self.llm_wakeword_started:
            if self.DEBUG:
                print("\nERROR, wakeword was still running after having been given time to stop")
+        
         
         self.wakeword_thread = None
         self.wakeword_thread = threading.Thread(target=self.run_wakeword) #, args=(self.voice_messages_queue,))
@@ -4133,6 +4144,7 @@ class VocoAdapter(Adapter):
                                     if self.DEBUG:
                                         print("wakeword thread: started microphone input stream.")
                                     self.llm_wakeword_started = True
+                                    
 
                                 # Feed to openWakeWord model
                                 prediction = owwModel.predict(audio)
@@ -4205,6 +4217,7 @@ class VocoAdapter(Adapter):
                         print("\n Wakeword failed to start! Microphone found, but no useable samplerate detected")
                     self.llm_wakeword_failed = True
                     self.should_restart_snips = True
+
                     #self.persistent_data['llm_wakeword_model'] = 'voco'
         
             else:
@@ -5055,7 +5068,8 @@ class VocoAdapter(Adapter):
                                     if self.DEBUG:
                                         print("clock: second opinion on Snips being down: self.is_snips_running_count() count: " + str(alternative_process_counter))
                             
-                                    if alternative_process_counter < len(self.snips_parts):
+                                    #self.intended_snips_proces_count = len(self.snips_parts)
+                                    if alternative_process_counter < self.intended_snips_proces_count:
                                         self.should_restart_snips = True
                                         if self.DEBUG:
                                             print("clock: conclusion: too few snips parts are up, snips coordinator should be restarted")
@@ -8234,6 +8248,7 @@ class VocoAdapter(Adapter):
         first_voice_message = ""
         stop_looping = False
         try_again = False
+        found_on_satellite = False
         message_passed_to_main_controller = False
         all_possible_intents_count = len(all_possible_intents)
         if self.DEBUG:
@@ -8735,14 +8750,21 @@ class VocoAdapter(Adapter):
                         
                     # TODO: add the reverse too, where a satellite stops if the main controller (or even another satellite) has a better thing title match. DONE?
                     
-                    
                 
+                    if found_on_satellite == False and len(satellites_with_the_thing) > 0:
+                        if self.DEBUG:
+                            print("there are other controllers with the vague thing/multi-thing (e.g.'lights')")
+                            
+                        if len(found_properties) == 0:
+                            if self.DEBUG:
+                                print("didn't find any relevant multi-thing on this controller")
+                            #return
                     # Reaching out to other controllers
                     
                     #if found_on_satellite and not self.persistent_data['is_satellite']:
-                    if found_on_satellite or len(satellites_with_the_thing) > 0: #and (self.persistent_data['is_satellite'] or self.this_is_main_controller == True): # TODO: are these secondary checks necessary?
+                    if found_on_satellite or (found_on_satellite == False and len(satellites_with_the_thing) > 0): #and (self.persistent_data['is_satellite'] or self.this_is_main_controller == True): # TODO: are these secondary checks necessary?
                         if self.DEBUG:
-                            print("This thing title exists on a satellite / another controller. It should handle it too.")
+                            print("This thing title exists on a satellite / another controller. It should handle it")
                              
                         if self.persistent_data['listening'] == False and 'origin' in intent_message and intent_message['origin'] == 'voice':
                             if self.DEBUG:
@@ -8752,15 +8774,14 @@ class VocoAdapter(Adapter):
                         if came_from_targetted_parse == False:
                             #if self.periodic_voco_attempts < 3:
                             if self.mqtt_connected:
-                                if self.DEBUG:
-                                    print("this message should be handled by another controller that has the desired device. Passing command on to main/other controller: " + str(sentence))
-                                    print(" - came_from_targetted_parse: " + str(came_from_targetted_parse))
-                                    print(" - message_passed_to_main_controller: " + str(message_passed_to_main_controller))
                                 
                                 if message_passed_to_main_controller == False:
                                     message_passed_to_main_controller = True
                                     if self.DEBUG:
-                                        print("passing to other controllers")
+                                        print("\npassing to other controllers")
+                                        print("this message should be handled by another controller that has the desired device. Passing command on to main/other controller: " + str(sentence))
+                                        print(" - came_from_targetted_parse: " + str(came_from_targetted_parse))
+                                        print(" - message_passed_to_main_controller: " + str(message_passed_to_main_controller))
                                     
                                     session_id = None
                                     if 'sessionId' in intent_message:
@@ -8796,21 +8817,22 @@ class VocoAdapter(Adapter):
                         #voice_message = "Sorry, that device is available on a satellite"
                         #break
                     
-                    if len(found_properties) == 0 and found_on_satellite == False:
+                    #elif len(found_properties) == 0: #and found_on_satellite == False:
+                    if len(found_properties) == 0:
                         if self.DEBUG:
                             print("found_properties length was 0")
                         #if self.persistent_data['is_satellite'] == False:
-                        
-                        if (first_test and best_confidence_score == 1):
-                            if self.DEBUG:
-                                print("didn't find any matching properties in the first intent test, even though best_confidence_score was 1.")
-                            voice_message = "Sorry, I couldn't find a match. "
-                        elif final_test:
-                            if self.DEBUG:
-                                print("didn't find any matching properties in the final intent test. Giving up.")
-                            voice_message = "Sorry, I couldn't find a match. "
-                            #self.speak("Sorry, I couldn't find a match. ",intent=intent_message)
-                        #if not self.llm_assistant_started:
+                        if found_on_satellite == False:
+                            if (first_test and best_confidence_score == 1):
+                                if self.DEBUG:
+                                    print("didn't find any matching properties in the first intent test, even though best_confidence_score was 1.")
+                                voice_message = "Sorry, I couldn't find a match. "
+                            elif final_test:
+                                if self.DEBUG:
+                                    print("didn't find any matching properties in the final intent test. Giving up.")
+                                voice_message = "Sorry, I couldn't find a match. "
+                                #self.speak("Sorry, I couldn't find a match. ",intent=intent_message)
+                            #if not self.llm_assistant_started:
                         break #return
                         
                         #else:
@@ -8857,7 +8879,7 @@ class VocoAdapter(Adapter):
                     if self.DEBUG:
                         print("- empty string, and not final test, so doing continue")
                     continue
-                elif  self.persistent_data['is_satellite']:
+                elif self.persistent_data['is_satellite']:
                     if self.DEBUG:
                         print("voice message was empty string, and I am a satellite, so I am calling it a day")
                     return
@@ -9026,7 +9048,7 @@ class VocoAdapter(Adapter):
                         print(" - fastest_controller_id: " + str(self.fastest_controller_id))
                         print(" - fastest_controller_score: " + str(self.fastest_controller_score))
                         print(" - fastest_controller_last_ping_time delta: " + str(int(time.time() - self.fastest_controller_last_ping_time)))
-                        
+                        print(" - message_passed_to_main_controller: " + str(message_passed_to_main_controller))
                     self.last_command_was_answered_by_assistant = False
                     #if self.persistent_data['is_satellite'] == False:
                     if voice_message.startswith('Sorry'):
@@ -11466,7 +11488,7 @@ class VocoAdapter(Adapter):
     
     
     def is_snips_running(self):
-        return self.is_snips_running_count() == len(self.snips_parts)
+        return self.is_snips_running_count() == self.intended_snips_proces_count
     
     
     def is_snips_running_count(self):
@@ -11497,7 +11519,7 @@ class VocoAdapter(Adapter):
                 print(" -- is_snips_running_count: snips_actual_processes_count = " + str(snips_actual_processes_count))
         
         
-            if snips_actual_processes_count != 0 and snips_actual_processes_count != len(self.snips_parts):
+            if snips_actual_processes_count != 0 and snips_actual_processes_count != self.intended_snips_proces_count:
                 if self.DEBUG:
                     print("Snips actual process count mismatch. Setting should_restart_snips to True")
                 self.should_restart_snips = True
@@ -11514,12 +11536,12 @@ class VocoAdapter(Adapter):
             #        print("too many orphaned snips satellite processes.. something is wrong. Setting should_restart_snips to True")
             #    self.should_restart_snips = True
             
-            if len(self.external_processes) == len(self.snips_parts) * 2:
+            if len(self.external_processes) == self.intended_snips_proces_count * 2:
                 if self.DEBUG:
                     print("too many orphaned snips processes.. something is wrong. Setting should_restart_snips to True")
                 self.should_restart_snips = True
             
-            if len(self.external_processes) >= len(self.snips_parts) * 4:
+            if len(self.external_processes) >= self.intended_snips_proces_count * 4:
                 print("ERROR. Voco seems to be stuck in a loop where it is unable to start properly. Will try to restart the addon.")
                 self.close_proxy() #restart the addon
 
@@ -13265,7 +13287,7 @@ class VocoAdapter(Adapter):
             if self.DEBUG:
                 print("really_ask_ai_assistant: almost sent a message to assistant that is more likely to be a device command: " + str(original_voice_message))
             self.llm_assistant_continue_conversation = 0
-            self.speak("Sorry, could you repeat that?",intent)
+            #self.speak("Sorry, could you repeat that?",intent)
             
         self.llm_assistant_countdown = 0
     
