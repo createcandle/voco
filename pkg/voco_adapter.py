@@ -9321,7 +9321,7 @@ class VocoAdapter(Adapter):
             #            print('not actually playing the delayed intent, it is just here to look pretty in the main controller UI\n')
             #
             #    
-            if play:
+            #if play:
             if not ('cosmetic' in item and item['cosmetic'] == True):
                 if self.DEBUG:
                     print('delayed_intent_player: not cosmetic, so playing the delayed intent')
