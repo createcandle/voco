@@ -6746,7 +6746,7 @@ class VocoAdapter(Adapter):
                         print("sending normal mqtt ping in response to mqtt loaded message")
                     time.sleep(.5)
                     self.inject_updated_things_into_snips(True) # force snips to learn all the names
-                    self.send_mqtt_ping(broadcast=True) # send  the list of things this satellite manages to the main voice controller
+                    self.send_mqtt_ping(broadcast=True,ping_type='init') # send  the list of things this satellite manages to the main voice controller
                     
             
     
@@ -7687,7 +7687,7 @@ class VocoAdapter(Adapter):
         if self.mqtt_connected and self.ip_address != None:
             try:
                 if broadcast:
-                    mqtt_ping_path = "hermes/voco/" + str(ping_type)
+                    mqtt_ping_path = "hermes/voco/ping" # + str(ping_type)
                     #if self.DEBUG:
                     #    print("- - -  sending broadcast " + str(ping_type) + " to: " + str(self.persistent_data['mqtt_server']) + ", announcing my IP as: " + str(self.ip_address))
                 elif target_site_id != None:
@@ -7783,9 +7783,9 @@ class VocoAdapter(Adapter):
 
 
     def parse_ping(self,payload,ping_type="ping"):
-        if self.DEBUG2:
-            print("\n    ( . . . pong . . . )---\n")
-        if self.DEBUG2:
+        if self.DEBUG:
+            print("in parse_ping\n\n    ( . . . pong . . . )---\n")
+        if self.DEBUG:
             #print('in parse_ping. ping_type: ' + str(ping_type))
             #print("(own site_id: " + str(self.persistent_data['site_id']) + ")")
             print("- - - payload: " + str(json.dumps(payload,indent=4)))
@@ -7957,7 +7957,8 @@ class VocoAdapter(Adapter):
                 
                 # figure out which of the controllers is now the fastest on the network, so that it can handle AI calculations
                 self.update_fastest_controller()
-                    
+                
+                print("\n\n\nPING_TYPE??")
                 if 'ping_type' in payload and payload['ping_type'] == 'init':
                     if self.DEBUG:
                         print("responding to a an init ping")
