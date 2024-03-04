@@ -480,7 +480,7 @@ class VocoAdapter(Adapter):
         
         
         # Get network info
-        self.previous_hostname = "candle"
+        #self.previous_hostname = "candle"
         self.hostname = "candle"
         self.ip_address = None
        
@@ -4588,10 +4588,10 @@ class VocoAdapter(Adapter):
                                     #print("snips did not need to be restarted")
                                     # Check if hostname has changed. This is extremely rare, but it could happen.
                                     self.update_network_info()
-                                    if self.hostname != self.previous_hostname: # If the hostname was changed by the user
-                                
-                                        if self.DEBUG:
-                                            print("clock: hostname was changed.")
+                                    #if self.hostname != self.previous_hostname: # If the hostname was changed by the user
+                                        #self.previous_hostname = self.hostname
+                                        #if self.DEBUG:
+                                        #    print("clock: hostname was changed.")
                                         #if not self.persistent_data['is_satellite']:
                                         #self.send_mqtt_ping(broadcast=True) #broadcast ping
                                 
@@ -4626,14 +4626,15 @@ class VocoAdapter(Adapter):
                                     if self.persistent_data['is_satellite'] and self.this_is_main_controller == False:
                                         self.periodic_voco_attempts += 1
                                 
+                                    # The main broadcast ping that informs other controllers of this controller's existence and information
                                     self.send_mqtt_ping(broadcast=True) # broadcast ping
                                     
-                                    if time.time() > self.fastest_controller_last_ping_time + 60 and self.fastest_controller_id != self.persistent_data['site_id']:
-                                        if self.DEBUG:
-                                            print("clock: resetting fastest controller information")
-                                        self.fastest_controller_last_ping_time = time.time()
-                                        self.fastest_controller_score = 0
-                                        self.fastest_controller_id = None
+                                    #if time.time() > self.fastest_controller_last_ping_time + 60 and self.fastest_controller_id != self.persistent_data['site_id']:
+                                    #    if self.DEBUG:
+                                    #        print("clock: resetting fastest controller information")
+                                    #    self.fastest_controller_last_ping_time = time.time()
+                                    #    self.fastest_controller_score = 0
+                                    #    self.fastest_controller_id = None
                                     
                                     
                                     if self.persistent_data['is_satellite'] == False:
@@ -5439,11 +5440,11 @@ class VocoAdapter(Adapter):
             print("In unload. Shutting down Voco.")
             print("")
             
+        self.send_mqtt_ping(broadcast=True,ping_type='goodbye')
+        
         self.running = False
         
         self.kill_llm()
-        
-        
             
         if self.matrix_started:
             self.matrix_started = False
@@ -5456,7 +5457,7 @@ class VocoAdapter(Adapter):
         # inform main server we're no longer up and running. We ask the main server to ignore our things.
         if self.persistent_data['is_satellite']:
             self.satellite_should_act_on_intent = False
-            self.send_mqtt_ping()
+            self.send_mqtt_ping(broadcast=True)
         
         self.save_persistent_data()
         if self.mqtt_client != None:
@@ -6745,7 +6746,7 @@ class VocoAdapter(Adapter):
                         print("sending normal mqtt ping in response to mqtt loaded message")
                     time.sleep(.5)
                     self.inject_updated_things_into_snips(True) # force snips to learn all the names
-                    self.send_mqtt_ping() # send  the list of things this satellite manages to the main voice controller
+                    self.send_mqtt_ping(broadcast=True) # send  the list of things this satellite manages to the main voice controller
                     
             
     
@@ -7082,7 +7083,7 @@ class VocoAdapter(Adapter):
              
             if self.DEBUG:
                 print("-sending broadcast ping.")
-            self.send_mqtt_ping(broadcast=True) # broadcast ping. Shout out to all devices connected to this MQTT server. If we're a satellite doing a search, the main controller might respond.
+            self.send_mqtt_ping(broadcast=True,ping_type='init') # broadcast ping. Shout out to all devices connected to this MQTT server. By setting 'init' the other controllers will immediately respond
             
                 
         else:
@@ -7484,6 +7485,7 @@ class VocoAdapter(Adapter):
                         if self.DEBUG:
                             print("Should speak, but no message to be spoken and/or no intent data provided?")
                         
+                # currently not used. Switched to sending broadcast pings every 15 seconds.
                 elif msg.topic.endswith('/ping'):
                     if self.DEBUG2:
                         print("received ping targetted at this controller")
@@ -7713,7 +7715,7 @@ class VocoAdapter(Adapter):
                             }))
                 
                 if self.DEBUG2:
-                    print(str(ping_type) + " sent")
+                    print("send_mqtt_ping: sent ping of type: " + str(ping_type))
                 
             except Exception as ex:
                 if self.DEBUG:
@@ -7733,7 +7735,7 @@ class VocoAdapter(Adapter):
             if self.DEBUG:
                 print("\n\n    🌷 Both STT and Assistant have started\n\n")
                 print("sending speedcheck ping")
-            self.send_mqtt_ping(True,'speedcheck')
+            self.send_mqtt_ping(broadcast=True,ping_type='init')
         else:
             if self.DEBUG:
                 print("- either the STT server or the Assistant is not running (yet)")
@@ -7803,12 +7805,13 @@ class VocoAdapter(Adapter):
                 
                 
                 # A controller is saying goodbye
-                if 'running' in payload and payload['running'] == False:
+                if ('running' in payload and payload['running'] == False) or ('ping_type' in payload and payload['ping_type'] == 'goodbye'):
                     if self.DEBUG:
                         print("parse_ping: a controller is shutting down: " + str(payload['siteId']))
                 
                     # pretend it was last seen in 1970
-                    self.mqtt_others[payload['ip']]['last_seen'] = 0
+                    #self.mqtt_others[payload['ip']]['last_seen'] = 0
+                    del self.mqtt_others[payload['ip']]
 
                     self.update_fastest_controller()
                 
@@ -7956,6 +7959,8 @@ class VocoAdapter(Adapter):
                 # figure out which of the controllers is now the fastest on the network, so that it can handle AI calculations
                 self.update_fastest_controller()
                     
+                if 'ping_type' in payload and payload['ping_type'] == 'init':
+                    xxxxxxx
                     
             #if self.save_to_persistent_data:
             #    self.save_persistent_data()
@@ -9648,6 +9653,7 @@ class VocoAdapter(Adapter):
                                     print("NOT INJECTING - I am a satellite")
                             """
 
+                        
                         if self.persistent_data['is_satellite']:
                             if self.mqtt_client != None:
                                 self.send_mqtt_ping() # inform main controller of updated things list that this device manages
