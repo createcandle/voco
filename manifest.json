@@ -26,7 +26,7 @@
   "name": "Voco",
   "options": {
     "default": {
-      "Authorization token": "",
+	  "Authorization token": "",
       "Metric": true,
       "Microphone": "Auto",
       "Speaker": "Auto",
@@ -34,31 +34,55 @@
       "Voice accent": "en-GB",
       "Voice pitch": "1.2",
       "Voice speed": "0.9",
-      "Hotword sensitivity": "0.5",
+      "Wake word sensitivity": 50,
       "System audio volume": 90,
-      "Sound detection": false,
-      "Hey Candle": true,
-	  "Mute the radio": false,
-      "Satellite device control": false,
 	  "Disable security": false,
 	  "MQTT port": 1885,
 	  "Send chat control notifications": false,
+	  "Allow notifications when chat is disabled": false,
 	  "Show the sentence that Voco heard": false,
+	  "Do not break up AI assistant sentences": false,
+	  "AI Assistant creativity": 0,
+	  "AI Assistant threads": 3,
+	  "Custom wake word model URL": "",
 	  "Custom AI voice synthesis model url": "",
+	  "Custom AI assistant model URL": "",
       "Debugging": false
     },
     "schema": {
       "properties": {
-        "Authorization token": {
-          "description": "Advanced. To be allowed to get information on all your devices, you have to create an 'authorization' code. It's basically a very long password. You can generate it yourself under Settings -> Developer -> Create local authorization. Any code you add here will override the code set through the interface.",
-          "type": "string"
-        },
         "Metric": {
           "description": "Check the box to use metric values instead of imperial units. For example: temperature in Celcius or Fahrenheit.",
           "type": "boolean"
         },
+        "Wake word sensitivity": {
+          "description": "How sensitive should the system be to the wakeword? If it's often waking up when nobody said the actual wakeword, then you could try lowering this sensitivity. The default is 50.",
+          "type": "integer",
+          "minimum": 10,
+          "maximum": 90
+        },
+        "AI Assistant creativity": {
+          "description": "When set to zero, the assistant will give the exact same answer to a specific question every time. Higher values will lead to less predictable responses, which might be useful if you want to use the assistant for creative writing, for example. The default is zero. A popular option is 70.",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "AI Assistant threads": {
+          "description": "Advanced. How much processing power is the AI assistant allowed to use? A higher setting generally results in a faster response, but at the cost of making the entire system less responsive. The default is 3.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 3
+        },
+        "Do not break up AI assistant sentences": {
+          "description": "Normally the AI assistant's responses are broken into chunks of text at both periods and commas. This allows for voice generation to start when just a part of the first sentence is complete. However, this can also lead to strange broken up speech.",
+          "type": "boolean"
+        },
+        "Show the sentence that Voco heard": {
+          "description": "Whenever you give a voice command, Voco can show a popup with the sentence it just heard. This can be useful to learn more about how Voco is handling your commands.",
+          "type": "boolean"
+        },
         "Allow notifications when chat is disabled": {
-          "description": "Normally when you disable chat control, Voco also stops sending notifications from your rules to the chatroom. You can allow Voco to keep sending these notifications even when chat control is disabled.",
+          "description": "Normally when you disable chat control, Voco also stops sending notifications from your rules to the chatroom. You can allow Voco to keep sending these notifications even when chat control is disabled. The default is to not allow these notifications to go through.",
           "type": "boolean"
         },
         "Microphone": {
@@ -94,7 +118,7 @@
           "type": "string"
         },
         "Voice accent": {
-          "description": "Select an accent that you'd like the basic speaking voice to have. Default is en-GB",
+          "description": "Advanced. Select an accent that you'd like the basic speaking voice to have. Default is en-GB",
           "enum": [
             "en-US", 
             "en-GB"
@@ -102,7 +126,7 @@
           "type": "string"
         },
         "Voice pitch": {
-          "description": "Select how high or low you'd like to basic voice to sound. Default is 1.2.",
+          "description": "Advanced. Select how high or low you'd like to basic voice to sound. Default is 1.2.",
           "enum": [
             "0.5",
             "0.6",
@@ -124,7 +148,7 @@
           "type": "string"
         },
         "Voice speed": {
-          "description": "How fast should the basic voice speak? Default is 0.9.",
+          "description": "Advanced. How fast should the basic voice speak? Default is 0.9.",
           "enum": [
             "0.5",
             "0.6",
@@ -145,50 +169,11 @@
           ],
           "type": "string"
         },
-        "Hotword sensitivity": {
-          "description": "How sensitive should the system be to 'hey snips'? If it's often responding when nobody said the actual hotword, then you could try lowering this sensitivity. Default is 0.5.",
-          "enum": [
-              "0.1",
-              "0.2",
-              "0.3",
-              "0.4",
-			  "0.45",
-              "0.5",
-			  "0.55",
-              "0.6",
-			  "0.65",
-              "0.7",
-              "0.8",
-              "0.9",
-              "1.0"
-          ],
-          "type": "string"
-        },
         "System audio volume": {
           "description": "Advanced. When provided, the system volume will be set to this volume percentage level when Voco starts. This is separate from Voco's own volume, which is relative to the system volume. Can be between 0 and 100 percent. The default is 90.",
           "type": "integer",
           "minimum": 10,
           "maximum": 100
-        },
-        "Sound detection": {
-          "description": "When enabled, an extra switch will be created in the voice control thing. That switch will be turned on for 10 seconds whenever speech or sound is detected.",
-          "type": "boolean"
-        },
-        "Hey Candle": {
-          "description": "When enabled, you can also say 'Hey Candle' to start a command.",
-          "type": "boolean"
-        },
-        "Mute the radio": {
-          "description": "If you're using a bluetooth speaker, enabling this will briefly stop the radio whenever Voco needs to say something.",
-          "type": "boolean"
-        },
-        "Satellite device control": {
-          "description": "If this is a satellite, enabling this will allow you to control things on this satellite using your voice. It's recommended to give things on satellites unique names. For example, call 'radio' something like 'kitchen radio' instead. If a thing with the same name exists on the main controller and on a satellite, a voice command will always favour controlling the satellite's thing.",
-          "type": "boolean"
-        },
-        "Show the sentence that Voco heard": {
-          "description": "Advanced. Whenever you give a voice command, Voco can show a popup with the sentence it just heard. This can be useful to learn more about how Voco is handling your commands.",
-          "type": "boolean"
         },
         "Send chat control notifications": {
           "description": "Advanced. If enabled, Voco will send a Matrix notification whenever it can be controlled via chat, or when this control has just been disabled.",
@@ -202,8 +187,20 @@
           "description": "Advanced. By default Candle uses port 1885, but you can override that here by entering a different port number.",
           "type": "integer"
         },
-		"Custom AI voice synthesis model url": {
-          "description": "Advanced. Provide a URL to a custom voice synthesis model. It must be a .ommx type.",
+		"Custom wake word model URL": {
+		  "description": "Advanced. Provide a URL to a custom wake word model. It must be a .tflite type.",
+          "type": "string"
+        },
+		"Custom AI voice synthesis model URL": {
+		  "description": "Advanced. Provide a URL to a custom voice synthesis model. It must be a .ommx type.",
+          "type": "string"
+        },
+		"Custom AI assistant model URL": {
+          "description": "Advanced. Provide a URL to a custom AI assistant model. It must be a .guff type.",
+          "type": "string"
+        },
+        "Authorization token": {
+          "description": "Advanced. To be allowed to get information on all your devices, you have to create an 'authorization' code. It's basically a very long password. You can generate it yourself under Settings -> Developer -> Create local authorization. Any code you add here will override the code set through the interface.",
           "type": "string"
         },
         "Debugging": {

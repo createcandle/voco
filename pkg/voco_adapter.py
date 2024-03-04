@@ -333,6 +333,7 @@ class VocoAdapter(Adapter):
         self.llm_assistant_conversation_seconds_threshold = 30 # If another intent comes it with X seconds after the previous assistant interaction, take it as a strong hint that this is a dialogue to be continued.
         self.llm_assistant_reverse_prompt_was_spotted = True # sometimes assistants don't end a response with the "Researcher:" reverse prompt
         self.got_assistant_output = False # only briefly becomes true while the assistant is outputting text
+        self.llm_assistant_do_not_split_on_comma = False
         self.llm_assistant_maximum_no_new_output_duration = 3 # Sometimes an assistant doesn't render the "Researcher:" response. As a fall-back, if the assistant goes quiet for over a second, assume it's done talking.
         self.info_to_show = '' # text that will be shown in a big overlay in the UI
         self.llm_assistant_reset_delay = 90 # how many seconds after the user has stopped chatting with the assistant should it fully reset itself
@@ -1574,41 +1575,51 @@ class VocoAdapter(Adapter):
                          }
         }
         
-        self.llm_assistant_prompt = "The following is a conversation between a curious researcher and their helpful AI assistant called {assistant_name}, which is a large language model trained on the sum of human knowledge."
+        self.llm_assistant_prompt = "The following is a conversation between a curious researcher and their helpful AI assistant called Digital Athena, which gives helpful and honest answers.\\n\\nResearcher:"
         #self.llm_assistant_prompt = "<|im_start|>system \\n A conversation between a user and an LLM-based AI assistant. The assistant gives helpful and honest answers. <|im_end|> \\n <|im_start|>user \\n What is the capital of France? <|im_end|> \\n <|im_start|>assistant \\n Paris is the capital of France. \\n <|im_end|> \\n " #"<|im_start|>user \\n "
         
-        
+        # The following is a conversation between a curious researcher and their helpful AI assistant called Digital Athena, which is a large language model trained on the sum of human knowledge.\\n
         #  \\n\\nResearcher: What is the capital of Germany? \nDigital Athena: Berlin is the capital of Germany. 
         # "end" is currently not used for anything
         self.llm_assistant_protocols = {
             "basic":{
-                "system_prompt":"The following is a conversation between a curious researcher and their helpful AI assistant called Digital Athena, which is a large language model trained on the sum of human knowledge.\\nResearcher:", 
-                "system":"{system_message}\\n\\n",
-                "user":"Researcher: {user_message}\\n",
-                "in_suffix":"Digital Athena:",
-                "reverse":"Researcher:",
+                "user_name":"Researcher",
+                "assistant_name":"Digital Athena",
+                "system_prompt":"The following is a conversation between a curious researcher and their helpful AI assistant called {assistant_name}. The assistant gives helpful and honest answers, and never asks questions.", # Researcher:
+                "system":"{system_prompt}\\n\\n{reverse_prompt}",
+                "user":"{user_message}",
+                "reverse_prompt":"{user_name}:",
+                "in_prefix":" ",
+                "in_suffix":"{assistant_name}:",
                 "end":""
             },
             "chatml":{
-                "system_prompt":"<|im_start|>system \\n A conversation between a user and an LLM-based AI assistant. The assistant gives helpful and honest answers. <|im_end|> \\n <|im_start|>user \\n What is the capital of France? <|im_end|> \\n <|im_start|>assistant \\n Paris is the capital of France. \\n <|im_end|>",
-                "system":"<|im_start|>system\\n{system_message}<|im_end|>",
-                "user":"<|im_start|>user\\n{user_message}<|im_end|>\\n",
-                "reverse":"<|im_start|>user",
-                "in_suffix":"<|im_start|>assistant",
+                "user_name":"User",
+                "assistant_name":"Assistant",
+                "system_prompt":"<|im_start|>system \\n A conversation between a user and an LLM-based AI assistant. The assistant gives helpful and honest answers, and never asks questions. <|im_end|>\\n<|im_start|>user \\n What is the capital of France? <|im_end|> \\n <|im_start|>assistant \\n Paris is the capital of France. \\n <|im_end|>",
+                "system":"<|im_start|>system\\n{system_prompt}<|im_end|>\\n{reverse_prompt}\\n",
+                "user":"{user_message}<|im_end|>",
+                "reverse_prompt":"<|im_start|>user",
+                "in_prefix":" \\n",
+                "in_suffix":"<|im_start|>assistant\\n",
                 "end":"<|im_end|>"
             },
             "phi":{
-                "system_prompt":"The following is a conversation between a curious researcher called Alice and their helpful AI assistant called Bob, which is a large language model trained on the sum of human knowledge. \\n\\nAlice: What is the capital of Germany? \nBob: Berlin is the capital of Germany. \nAlice:",
-                "system":"{system_message}\\n\\n",
-                "user":"Alice: {user_message}\\n",
-                "in_suffix":"Bob:",
-                "reverse":"Alice:",
+                "user_name":"Alice",
+                "assistant_name":"Bob",
+                "system_prompt":"The following is a conversation between a curious researcher called Alice and their helpful AI assistant called {assistant_name}, which is a large language model trained on the sum of human knowledge. \\n\\nAlice: What is the capital of Germany?\nBob: Berlin is the capital of Germany.\nAlice:",
+                "system":"{system_prompt}\\n\\n{reverse_prompt}",
+                "user":"{user_message}\\n",
+                "reverse_prompt":"{user_name}:",
+                "in_prefix":" ",
+                "in_suffix":"{assistant_name}:",
                 "end":""
             },
         }
         
+        # Default chat protocol
+        self.llm_assistant_protocol = 'basic'
         
-        self.llm_assistant_protocol = self.llm_assistant_protocols['basic']
 
                         
                         
@@ -2381,7 +2392,6 @@ class VocoAdapter(Adapter):
 
         
         try:
-            
             # Voice detection
             if 'Sound detection' in config:
                 self.sound_detection = bool(config['Sound detection'])
@@ -2393,25 +2403,7 @@ class VocoAdapter(Adapter):
             if self.DEBUG:
                 print("Error loading sound detection preference from settings: " + str(ex))
       
-        # TODO Hey Candle - currently doesn't do anything anymore
-        try:
-            if 'Hey Candle' in config:
-                #self.use_open_wakeword = bool(config['Hey Candle'])
-                if bool(config['Hey Candle']) == True:
-                    
-                    if self.DEBUG:
-                        print("-Hey Candle is enabled")
-                    
-                        
-                        
-            if 'Mute the radio' in config:
-                self.kill_ffplay_before_speaking = bool(config['Mute the radio'])
-                
-                        
-        except Exception as ex:
-            if self.DEBUG:
-                print("Error loading voice detection or radio mute preference from settings: " + str(ex))
-      
+        
       
         # System audio volume
         try:
@@ -2494,6 +2486,13 @@ class VocoAdapter(Adapter):
                     self.llm_assistant_models['Custom']['model_url'] = str(config['Custom AI assistant model URL'])
                 if self.DEBUG:
                     print("-Custom AI assistant model URL is present in the config data: " + str(self.llm_assistant_models['Custom']['model_url']))
+                    
+            if 'Do not break up AI assistant sentences' in config:
+                self.llm_assistant_do_not_break_up_sentences = bool(config['Do not break up AI assistant sentences'])
+                if self.DEBUG:
+                    print("-Do not break up AI assistant sentences preference is present in the config data: " + str(self.llm_assistant_do_not_break_up_sentences))
+            
+                    
                     
         except Exception as ex:
             print("Error loading custom AI settings from config: " + str(ex))
@@ -3099,7 +3098,7 @@ class VocoAdapter(Adapter):
                     next_message = voice_messages_queue.get(False)
                     if next_message != None:
                         if self.DEBUG:
-                            print("Speaking next voice_message in the queue: " + str(next_message))
+                            print("speak_thread: handling next voice_message in the queue: " + str(next_message))
                         
                         if 'voice_message' in next_message:
                             intent = {'siteId':self.persistent_data['site_id']}
@@ -3123,7 +3122,7 @@ class VocoAdapter(Adapter):
                 
                 elif just_spoke:
                     if self.DEBUG:
-                        print("voice_thread: just spoke was true, but voice_message_queue is now empty again\n\n🤭 DONE TALKING\n\n")
+                        print("speak_thread: just spoke was true, but voice_message_queue is now empty again\n\n🤭 DONE TALKING\n\n")
                     just_spoke = False
                     
                     #if self.llm_assistant_continue_conversation:
@@ -3153,11 +3152,11 @@ class VocoAdapter(Adapter):
                         if '(infer=' in str(tts_stdout):
                             tts_stdout_last_part = str(tts_stdout).split('(infer=')[-1]
                             if self.DEBUG:
-                                print("\ntts_stdout_last_part:\n" + str(tts_stdout_last_part) + "\n")
+                                print("\nspeak_thread: tts_stdout_last_part:\n" + str(tts_stdout_last_part) + "\n")
                                 
                             numbers = re.findall(r"[-+]?\d*\.\d+|\d+", tts_stdout_last_part)
                             if self.DEBUG:
-                                print("timing numbers from tts process: " + str(numbers))
+                                print("speak_thread: timing numbers from tts process: " + str(numbers))
                             speaking_time = 0
                             if len(numbers) > 1:
                                 speaking_time += float(numbers[1])
@@ -3165,7 +3164,7 @@ class VocoAdapter(Adapter):
                             #    print("number: " + str(number))
                             #    speaking_time += float(number)
                             if self.DEBUG:
-                                print("total speaking_time: " + str(speaking_time))
+                                print("speak_thread: total speaking_time: " + str(speaking_time))
                             if speaking_time > 0:
                                 self.llm_tts_waiting_for_speaking_to_finish = True
                                 self.llm_tts_really_done_speaking_time = (time.time() + speaking_time + 2) - self.last_tts_speaking_offset
@@ -3179,14 +3178,16 @@ class VocoAdapter(Adapter):
                         pass
                         
                     except Exception as ex:
-                        print("speak_thread: tts_stdout: other type of exception: " + str(ex))
+                        if self.DEBUG:
+                            print("speak_thread: tts_stdout: other type of exception: " + str(ex))
                 
                 #else:
                 #    if self.DEBUG:
                 #        print("speak_thread: tts subprocess was not ok")
                 
             except Exception as ex:
-                print("Caught error getting STDOUT from LLM TTS proces: " + str(ex))
+                if self.DEBUG:
+                    print("speak_thread: Caught error getting STDOUT from LLM TTS proces: " + str(ex))
 
             if self.llm_tts_waiting_for_speaking_to_finish and time.time() < self.llm_tts_really_done_speaking_time:
                 if self.DEBUG:
@@ -3199,12 +3200,12 @@ class VocoAdapter(Adapter):
                 if self.llm_assistant_continue_conversation == 2:
                     #self.llm_assistant_continue_conversation -= 1
                     if self.DEBUG:
-                        print("REALLY DONE SPEAKING -> in a conversation -> calling send_wakeword_detected_message")
+                        print("speak_thread: REALLY DONE SPEAKING -> in a conversation -> calling send_wakeword_detected_message")
                     self.send_wakeword_detected_message()
                 elif self.llm_assistant_continue_conversation == 0:
                     if self.periodic_voco_attempts > 2:
                         if self.DEBUG:
-                            print("not in a conversation, and the main controller is missing. Will attempt to speak warning about missing main controller.")
+                            print("speak_thread: not in a conversation, and the main controller is missing. Will attempt to speak warning about missing main controller.")
                         self.speak(self.main_controller_missing_warning)
                     
     
@@ -3370,7 +3371,7 @@ class VocoAdapter(Adapter):
 
             if intent['origin'] == 'text':
                 if self.DEBUG:
-                    print("(...) response should be show as text: '" + voice_message + "' at: " + str(site_id))
+                    print("(...) response should be shown as text chat: '" + voice_message + "' at: " + str(site_id))
             elif intent['origin'] == 'matrix' or intent['origin'] == 'both':
                 if self.DEBUG:
                     print("(...) response should be sent back to the matrix network: '" + voice_message + "' at: " + str(site_id))
@@ -7735,7 +7736,7 @@ class VocoAdapter(Adapter):
             print("in check_if_this_is_the_fastest_controller")
         if self.llm_stt_started and self.llm_assistant_started:
             if self.DEBUG:
-                print("\n\n    🌷 Both STT and Assistant have started\n\n")
+                print("\n\n    🌷  Both STT and Assistant have started\n\n")
                 print("sending speedcheck ping")
             self.send_mqtt_ping(broadcast=True,ping_type='init')
         else:
@@ -8467,7 +8468,7 @@ class VocoAdapter(Adapter):
                     incoming_intent = 'set_value'
                 
                 # tests if it's a request to actuate a device
-                elif check_if_message_is_for_actuators(sentence.lower()) and (incoming_intent == 'get_value' or incoming_intent == 'get_boolean'):
+                elif self.check_if_message_is_for_actuators(sentence.lower()) and (incoming_intent == 'get_value' or incoming_intent == 'get_boolean'):
                     if incoming_intent == 'get_value':
                         incoming_intent = 'set_value'
                     elif incoming_intent == 'get_boolean':
@@ -11988,11 +11989,12 @@ class VocoAdapter(Adapter):
                                         elif key == 'assistant':
                                             downloaded_assistant_model = True
                                             if 'protocol' in self.llm_models[key]['list'][model_name]:
-                                                self.llm_models[key]['protocol'] = self.llm_models[key]['list'][model_name]['protocol']
+                                                self.llm_models[key]['protocol'] = str(self.llm_models[key]['list'][model_name]['protocol'])
                                                 if str(self.llm_models[key]['list'][model_name]['protocol']) in self.llm_assistant_protocols:
+                                                    self.llm_assistant_protocol = str(self.llm_models[key]['list'][model_name]['protocol'])
                                                     if self.DEBUG:
-                                                        print("setting LLM Assistant protocol to: " + str(self.llm_models[key]['list'][model_name]['protocol']))
-                                                    self.llm_assistant_protocol = self.llm_assistant_protocols[ str(self.llm_models[key]['list'][model_name]['protocol']) ]
+                                                        print("setting active LLM Assistant protocol to: " + str(self.llm_assistant_protocol))
+                                                    
                                 else:
                                     if self.DEBUG:
                                         print("NOT ENOUGH DISK SPACE TO DOWNLOAD PREFERED LLM MODEL: " + str(model_file_test_path))
@@ -12516,8 +12518,8 @@ class VocoAdapter(Adapter):
         if stt_result == None or stt_result == 'None':
             if self.DEBUG:
                 print("STT output was None\n\n")
-            if self.llm_stt_always_use or self.try_again_via_assistant:
-                self.speak("Sorry, I don't understand",intent=intent)
+            #if self.llm_stt_always_use or self.try_again_via_assistant:
+            self.speak("Sorry, speech recognition failed",intent=intent)
             return
 
         try:
@@ -12777,53 +12779,74 @@ class VocoAdapter(Adapter):
                     return
 
 
-                if 'protocol' in self.llm_models['assistant'] and str(self.llm_models['assistant']['protocol']) in self.llm_assistant_protocols:
-                    self.llm_assistant_protocol = self.llm_assistant_protocols[ str(self.llm_models['assistant']['protocol']) ]
 
-                if self.DEBUG:
-                    print("start LLM Assistant: protocol: \n" + str(json.dumps(self.llm_assistant_protocol,indent=4)))
+                """
+                    "basic":{
+                        "user_name":"Researcher",
+                        "assistant_name":"Digital Athena",
+                        "system_prompt":"The following is a conversation between a curious researcher and their helpful AI assistant called {assistant_name}, which gives helpful and honest answers.", # Researcher:
+                        "system":"{system_prompt}\\n\\n{reverse_prompt}",
+                        "user":"{user_message}",
+                        "reverse_prompt":"{user_name}:",
+                        "in_prefix":" ",
+                        "in_suffix":"{assistant_name}:",
+                        "end":""
+                    },
+                """
 
-                if 'system_prompt' in self.llm_assistant_protocol:
-                    self.llm_assistant_prompt = self.llm_assistant_protocol['system_prompt']
-                if self.DEBUG:
-                    print("starting LLM assistant. System prompt before: " + str(self.llm_assistant_prompt))
-
-
-                if 'system' in self.llm_assistant_protocol:
-                    assistant_prompt = self.llm_assistant_protocol['system'].replace("{system_message}", self.llm_assistant_prompt)
-                    #assistant_prompt = self.llm_models['assistant']['prompts']['system'].replace('{system_message}', assistant_prompt)
-                    assistant_prompt = "$'" + assistant_prompt + "'"
-                    #assistant_prompt = "'" + self.llm_assistant_prompt + "'" # TODO: currently hardcoded to chatML
-                    #reverse_prompt = self.llm_models['assistant']['prompts']['reverse'].replace("{assistant_name}", self.llm_assistant_name)
-
-                    reverse_prompt = 'User:'
-                    if 'reverse' in self.llm_assistant_protocol:
-                        reverse_prompt = str(self.llm_assistant_protocol['reverse'])
-                    reverse_prompt = "'" + reverse_prompt + "'"
-                    # "<|im_start|>system \n A conversation between a user and an LLM-based AI assistant. The assistant gives helpful and honest answers. <|im_end|>\n <|im_start|>user \n What is the capital of France? <|im_end|> \n <|im_start|>assistant \n Paris is the capital of France. \n <|im_end|> \n <|im_start|>user \n "
-
-                    in_suffix = "Assistant:"
-                    if 'in_suffix' in self.llm_assistant_protocol:
-                        in_suffix = str(self.llm_assistant_protocol['in_suffix'])
-                    in_suffix = "'" + in_suffix + "'"
-
-                    #self.llm_assistant_prompt = "'The following is a conversation between a curious Researcher and their helpful AI assistant called " + str(self.llm_assistant_name) + ", which is a large language model trained on the sum of human knowledge. \n\n Researcher: What is the capital of Germany? \n" + str(self.llm_assistant_name) +": Berlin is the capital of Germany. \nResearcher:'"
-
-                    #if self.llm_models['assistant']['prompts']:
-                    #    if 'user' in self.llm_models['assistant']['prompts']:
-                    #        voice_message = self.llm_models['assistant']['prompts']['user'].replace('{prompt}', voice_message)
-
+                #if 'protocol' in self.llm_models['assistant'] and str(self.llm_models['assistant']['protocol']) in self.llm_assistant_protocols:
+                    #self.llm_assistant_protocol = self.llm_assistant_protocols[ str(self.llm_models['assistant']['protocol']) ]
+                
+                if not self.llm_assistant_protocol in self.llm_assistant_protocols:
                     if self.DEBUG:
-                        print("\nLLM Assistant: system prompt after : \n--->" + str(assistant_prompt) + "<---\n")
-                        print("LLM Assistant: reverse_prompt after: " + str(reverse_prompt))
-                        print("LLM Assistant: in_suffix after     : " + str(in_suffix))
+                        print("ERROR, selected chat protocol is unknown/unsupported: " + str(self.llm_assistant_protocol))
+                    return
+                    
+                prot = self.llm_assistant_protocols[str(self.llm_assistant_protocol)]
+
+                if self.DEBUG:
+                    print("start LLM Assistant: protocol: \n" + str(json.dumps(prot,indent=4)))
+
+                #if 'system_prompt' in prot:
+                #    self.llm_assistant_prompt = self.llm_assistant_protocol['system']
+                    
+                    
+                #if self.DEBUG:
+                #    print("starting LLM assistant. System prompt before: " + str(self.llm_assistant_prompt))
+
+
+                if 'system' in prot and 'reverse_prompt' in prot:
+                    
+                    in_prefix = prot['in_prefix'].replace("{user_name}", prot['user_name'])
+                    in_suffix = prot['in_suffix'].replace("{assistant_name}", prot['assistant_name'])
+                    reverse_prompt = prot['reverse_prompt'].replace("{user_name}", prot['user_name'])
+                    
+                    system_prompt = prot['system_prompt'].replace("{user_name}", prot['user_name'])
+                    system_prompt = system_prompt.replace("{assistant_name}", prot['assistant_name'])
+                    
+                    assistant_prompt = prot['system'].replace("{system_prompt}", system_prompt)
+                    assistant_prompt = assistant_prompt.replace("{reverse_prompt}", reverse_prompt)
+                    assistant_prompt = assistant_prompt.replace("{user_name}", prot['user_name'])
+                    assistant_prompt = assistant_prompt.replace("{assistant_name}", prot['assistant_name'])
+
+                    assistant_prompt = "$'" + assistant_prompt + "'"
+                    reverse_prompt = "$'" + reverse_prompt + "'"
+                    in_prefix = "$'" + in_prefix + "'"
+                    in_suffix = "$'" + in_suffix + "'"
+                    
+                    if self.DEBUG:
+                        print("")
+                        print("LLM Assistant: reverse_prompt: " + str(reverse_prompt))
+                        print("LLM Assistant: in_prefix     : " + str(in_prefix))
+                        print("LLM Assistant: in_suffix     : " + str(in_suffix))
+                        print("LLM Assistant: system prompt : \n--->" + str(assistant_prompt) + "<---\n")
 
                     my_env = os.environ.copy()
 
                     with open(self.llm_assistant_output_file_path, "w") as myfile:
                         myfile.write("")
+                        
                     self.last_assistant_output_change_time = time.time()
-
                     self.llm_assistant_reverse_prompt_was_spotted = True
 
                     #"sh",
@@ -12855,13 +12878,13 @@ class VocoAdapter(Adapter):
                         str(self.llm_assistant_words_to_generate * 2),
                         "--keep", # keep all tokens from the initial prompt
                         "-1",
-                        "--log-disable",
+                        #"--log-disable",
                         "--temp",
                         str(self.llm_assistant_temperature),
                         "--mirostat",
                         "2",
                         "--in-prefix",
-                        "' '",
+                        str(in_prefix),
                         "--in-suffix",
                         str(in_suffix),
                         "--reverse-prompt",
@@ -13036,7 +13059,7 @@ class VocoAdapter(Adapter):
             else:
                 if self.DEBUG:
                     print("\n\nask_ai_assistant: DEAD END - cannot send voice message to an assistant\n\n")
-
+                    self.speak("debug: assistant dead end", intent)
         except Exception as ex:
             if self.DEBUG:
                 print("Caught error in ask_ai_assistant: " + str(ex))
@@ -13045,12 +13068,13 @@ class VocoAdapter(Adapter):
 
     def really_ask_ai_assistant(self,voice_message,intent=None):
         if self.DEBUG:
-            print("in really_ask_ai_assistant. voice_message: " + str(voice_message))
+            print("\n\n\n*\n**\n***\n\nin really_ask_ai_assistant. \n - voice_message: " + str(voice_message))
+            print(" - intent: " + str(intent))
         #self.llm_assistant_process.stdin.write(voice_message + '\n')
         #self.llm_assistant_process.stdin.flush()
 
         origin = 'voice'
-        if intent != None and 'origin' in intent and intent['origin'] == 'voice':
+        if intent != None and 'origin' in intent: # and intent['origin'] == 'voice':
             origin = intent['origin']
             
         if self.llm_assistant_countdown > 0 and self.last_assistant_output_change_time > time.time() - 5:
@@ -13064,7 +13088,10 @@ class VocoAdapter(Adapter):
             return
 
         voice_message = voice_message.strip()
+        voice_message = voice_message.lstrip()
+        voice_message = voice_message.rstrip()
         original_voice_message = voice_message
+        lowercase_voice_message = voice_message.lower()
         assistant_needs_reset = False
         self.llm_assistant_countdown = 0
         
@@ -13075,13 +13102,19 @@ class VocoAdapter(Adapter):
                     print("heard 'Hello, I am listening', aborting parsing by Assistant.")
                 return
 
-            if not voice_message.endswith('?'):
+            if not voice_message.endswith('?') and (
+                                lowercase_voice_message.startswith('who ') 
+                                or lowercase_voice_message.startswith('what ') 
+                                or lowercase_voice_message.startswith('where ') 
+                                or lowercase_voice_message.startswith('how ') 
+                                or lowercase_voice_message.startswith('what ') 
+                                or lowercase_voice_message.startswith('can ')
+                                ):
                 if voice_message.endswith('.') or voice_message.endswith("!"):
                     voice_message = voice_message[:-1]
                 voice_message = voice_message + "?"
                 if self.DEBUG:
                     print("really_ask_ai_assistant: adding question mark to voice message: " + str(voice_message))
-
 
             voice_message = voice_message.strip() # superfluous?
 
@@ -13090,11 +13123,13 @@ class VocoAdapter(Adapter):
             display_output = ''
             if ' show me ' in display_test or display_test.startswith('show me ') or display_test.startswith('show us ') or display_test.startswith('please show ') or display_test.startswith('can you show ') or display_test.startswith('display ') or display_test.startswith('please display ') or display_test.startswith('can you display ') or display_test.startswith('can you please display '):
                 if self.DEBUG:
-                    print("\nTHE ASSISTANT OUTPUT SHOULD BE SHOWN\n")
+                    print("\n\nDISPLAY\nTHE ASSISTANT OUTPUT SHOULD BE SHOWN ON A DISPLAY\n")
                 display = True
-                self.speak('OK, I will show you on a display',intent)
-                intent['origin'] = 'text'
+                if origin == 'voice':
+                    old_intent = intent.copy()
+                    self.speak('OK, I will show you on a display',old_intent)
                 origin = 'text'
+                intent['origin'] = 'text'
                 display_output = '<span class="extension-voco-display-text-query">' + str(original_voice_message) + '</span>'
 
             if str(self.persistent_data['llm_assistant_protocol']) not in self.llm_assistant_protocols:
@@ -13228,8 +13263,8 @@ class VocoAdapter(Adapter):
                                     full = full.strip()
 
                                     if self.DEBUG:
-                                        print("+ + + + + +\nfull: \n" + str(full))
-                                        print("+ + + + + +")
+                                        print("full:\n+ + + + + +\n" + str(full))
+                                        print("+ + + + + +\n")
                                     
                                     if '\n\n' in full:
                                         if self.DEBUG:
@@ -13278,10 +13313,11 @@ class VocoAdapter(Adapter):
                                             if self.DEBUG:
                                                 print("\nWARNING, the assistant might be halucinating a conversation?\n - before_assistant:" + str(before_assistant) + "\n")
                                                 print(" - original_voice_message not in before_assistant: " + str(original_voice_message[:-1]))
-                                            if origin != 'voice':
-                                                self.last_text_response = '[!] Sorry, AI Assistant was hallucinating. Restarting it.'
+                                            self.speak("Sorry, the AI assistant was hallucinating. It's restarting.", intent)
                                             self.force_reset_assistant()
                                             return
+                                    
+                                            # origin != 'voice
                                     
                                         chars_to_remove = full.index(in_suffix) + len(in_suffix)
                                         full = full[chars_to_remove:] #.split(in_suffix)[1]
@@ -13292,8 +13328,8 @@ class VocoAdapter(Adapter):
                                     if "is a language model trained on the sum of human knowledge." in full:
                                         if self.DEBUG:
                                             print("\nWARNING, the assistant might be going off the rails\n" + str(full) + "\n")
-                                        if origin != 'voice':
-                                            self.last_text_response = '[!] Sorry, AI Assistant was hallucinating. Restarting it.'
+                                        self.speak("Sorry, the AI assistant was hallucinating. It's restarting.", intent)
+                                            
                                         self.force_reset_assistant()
                                         return
 
@@ -13307,7 +13343,10 @@ class VocoAdapter(Adapter):
                                         #real_lines = full.split('.')
                                         #lines = re.split(r"[,.?]+", full)
                                         #pre_lines = re.split(r"([,.?!]+)", full)
-                                        pre_lines = re.split(r"(,\s|[.?!:]+)", full)
+                                        if display or (origin == 'voice' and self.controller_pi_version < 5) or self.llm_assistant_do_not_split_on_comma:
+                                            pre_lines = re.split(r"([.?!:]+)", full)
+                                        else:
+                                            pre_lines = re.split(r"(,\s|[.?!:]+)", full)
                                     
                                         #lines = re.split('([^a-zA-Z0-9])', full)
                                         if self.DEBUG:
@@ -13317,7 +13356,7 @@ class VocoAdapter(Adapter):
                                             if self.DEBUG:
                                                 print("removed first pre_lines item that was an empty string ")
                                             del pre_lines[0]
-                                    
+                                        
                                         if pre_lines[-1] == '':
                                             if self.DEBUG:
                                                 print("removed last pre_lines item that was an empty string ")
@@ -13327,9 +13366,10 @@ class VocoAdapter(Adapter):
                                         if display:
                                             if self.DEBUG2:
                                                 print("generating display HTML")
-                                            print("reverse prompt -1: " + str(reverse_prompt[:-1]))
+                                                #print("reverse prompt -1: " + str(reverse_prompt[:-1]))
                                             new_info_to_show = display_output
                                             display_line_nr = 0
+                                            previous_display_line_class = 'first'
                                             for display_line in pre_lines:
                                             
                                                 if len(reverse_prompt) > 2 and (reverse_prompt in display_line or reverse_prompt[:-1] in display_line):
@@ -13341,6 +13381,8 @@ class VocoAdapter(Adapter):
                                                     display_line = display_line.replace(reverse_prompt)
                                                 
                                                 if in_suffix in display_line:
+                                                    if self.DEBUG:
+                                                        print("note: removing in_suffix from display_line: ->" + str(in_suffix) + "<-")
                                                     display_line = display_line.replace(in_suffix)
                                             
                                                 display_line = display_line.lstrip()
@@ -13359,9 +13401,9 @@ class VocoAdapter(Adapter):
                                                     elif display_line.isdigit():
                                                         display_line_class = 'digit'
                                             
-                                                    new_info_to_show += '<span class="extension-voco-display-text-' + str(display_line_class) + '">' + str(display_line) + '</span>'
+                                                    new_info_to_show += '<span class="extension-voco-display-text-' + str(display_line_class) + ' extension-voco-display-text-previous-' + str(previous_display_line_class) + '">' + str(display_line) + '</span>'
                                                     display_line_nr += 1
-                                                
+                                                    previous_display_line_class = display_line_class
                                             self.info_to_show = new_info_to_show
                                             #if self.DEBUG:
                                             #    print("self.info_to_show is now: " + str(self.info_to_show))
@@ -13624,6 +13666,7 @@ class VocoAdapter(Adapter):
         self.llm_assistant_continue_conversation = 0
         self.stop_ai_assistant()
         self.restart_llm_servers = True
+        
         
 
     # NOT USED (worked, but was too slow, as it reloaded the entire model + history up until then for every request)
