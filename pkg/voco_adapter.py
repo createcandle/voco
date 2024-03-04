@@ -8139,7 +8139,7 @@ class VocoAdapter(Adapter):
             #        print("SATELLITE: master_intent_callback: NOT HANDLING TIMERS - not adding most_likely_intent to list of intents to try")
                 
             
-            if best_confidence_score > self.confidence_score_threshold:
+            if best_confidence_score > 0.3: #self.confidence_score_threshold:
                 if (self.llm_assistant_started or (self.fastest_controller_id != None and self.fastest_controller_last_ping_time > time.time() - 60)) and most_likely_intent == 'get_time' and 'time' not in sentence and best_confidence_score < 0.9:
                     if self.DEBUG:
                         print("Skipping testing get_time intent that doesn't have the word 'time' in it because an assistant is available")
