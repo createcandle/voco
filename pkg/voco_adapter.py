@@ -13119,360 +13119,379 @@ class VocoAdapter(Adapter):
                         if self.DEBUG:
                             print(self.llm_assistant_countdown)
                         sleep(.2)
-
-                        now_stamp = time.time()
-                        # If the user interupts, stop speaking.
-                        if now_stamp - self.last_time_stop_spoken < 4:
-                            if self.DEBUG:
-                                print("ABORTING SPEAKING ASSISTANT OUTPUT, user interupted the process")
-                            #self.llm_assistant_response_count += 1
-                            break
-
-                        if self.got_assistant_output and now_stamp - self.last_assistant_output_change_time > self.llm_assistant_maximum_no_new_output_duration:
-                            if self.DEBUG:
-                                print("The assistant was speaking, but hasn't said anything new for a while. Breaking.")
-                            assistant_needs_reset = True
-                            break
-
-                        #print("x")
-                        stamp = os.stat(str(self.llm_assistant_output_file_path)).st_mtime
-                        if stamp != self.last_assistant_output_change_time:
-                            self.last_assistant_output_change_time = stamp
-                            if self.DEBUG:
-                                print("OUTPUT FILE CHANGED (" + str(self.llm_assistant_output_file_path) + ")")
-                            if repeated_the_question == False:
+                        
+                        try:
+                            now_stamp = time.time()
+                            # If the user interupts, stop speaking.
+                            if now_stamp - self.last_time_stop_spoken < 4:
                                 if self.DEBUG:
-                                    print("ignoring first output from assistant, since it's likely a repeat of the user's question.")
-                                repeated_the_question = True
-                            else:
-                                self.got_assistant_output = True
-                            self.assistant_loop_counter = 0
-                            #self.lock.acquire()
-                            if self.DEBUG:
-                                print("\n\nstamp changed. ⏰ stopwatch:" + str(time.time() - self.llm_stt_stopwatch_start))
-                            #self.lock.release()
+                                    print("ABORTING SPEAKING ASSISTANT OUTPUT, user interupted the process")
+                                #self.llm_assistant_response_count += 1
+                                break
 
-                            reverse_prompt = 'Assistant:'
-                            if self.llm_assistant_protocol != None and 'reverse' in self.llm_assistant_protocol:
-                                reverse_prompt = str(self.llm_assistant_protocol['reverse'])
-                            #str(self.llm_assistant_protocol['reverse'] #.replace("{assistant_name}", self.llm_assistant_name))
-
-                            in_suffix = 'Digital Athena:'
-                            if 'in_suffix' in self.llm_assistant_protocol:
-                                in_suffix = str(self.llm_assistant_protocol['in_suffix'])
-
-                            with open(str(self.llm_assistant_output_file_path), "r") as f:
-                                #content = f.readlines()
-                                #full = ''.join(content)
-                                full = f.read() #lines()
-                                full = full.strip()
-
+                            if self.got_assistant_output and now_stamp - self.last_assistant_output_change_time > self.llm_assistant_maximum_no_new_output_duration:
                                 if self.DEBUG:
-                                    print("+ + + + + +\nfull: \n" + str(full))
-                                    print("+ + + + + +")
+                                    print("The assistant was speaking, but hasn't said anything new for a while. Breaking.")
+                                assistant_needs_reset = True
+                                break
+
+                            #print("x")
+                            stamp = os.stat(str(self.llm_assistant_output_file_path)).st_mtime
+                            if stamp != self.last_assistant_output_change_time:
+                                self.last_assistant_output_change_time = stamp
+                                if self.DEBUG:
+                                    print("OUTPUT FILE CHANGED (" + str(self.llm_assistant_output_file_path) + ")")
+                                if repeated_the_question == False:
+                                    if self.DEBUG:
+                                        print("ignoring first output from assistant, since it's likely a repeat of the user's question.")
+                                    repeated_the_question = True
+                                else:
+                                    self.got_assistant_output = True
+                                self.assistant_loop_counter = 0
+                                #self.lock.acquire()
+                                if self.DEBUG:
+                                    print("\n\nstamp changed. ⏰ stopwatch:" + str(time.time() - self.llm_stt_stopwatch_start))
+                                #self.lock.release()
+
+                                reverse_prompt = 'Assistant:'
+                                if self.llm_assistant_protocol != None and 'reverse' in self.llm_assistant_protocol:
+                                    reverse_prompt = str(self.llm_assistant_protocol['reverse'])
+                                #str(self.llm_assistant_protocol['reverse'] #.replace("{assistant_name}", self.llm_assistant_name))
+
+                                in_suffix = 'Digital Athena:'
+                                if 'in_suffix' in self.llm_assistant_protocol:
+                                    in_suffix = str(self.llm_assistant_protocol['in_suffix'])
+
+                                with open(str(self.llm_assistant_output_file_path), "r") as f:
+                                    #content = f.readlines()
+                                    #full = ''.join(content)
+                                    full = f.read() #lines()
+                                    full = full.strip()
+
+                                    if self.DEBUG:
+                                        print("+ + + + + +\nfull: \n" + str(full))
+                                        print("+ + + + + +")
                                     
-                                if '\n\n' in full:
-                                    if self.DEBUG:
-                                        print("spotted two consecutive newlines in a row in full STT output")
-                                    #full = full.split('\n\n')[0]
-
-                                if reverse_prompt != '' and full.startswith(reverse_prompt):
-                                    full = full[len(reverse_prompt):]
-                                    assistant_needs_reset = True
-                                    if self.DEBUG:
-                                        print("WARNING, Stripped reverse_prompt ('" + str(reverse_prompt) + "') from beginning of full:\n" + str(full))
-
-                                    if voice_message in full:
+                                    if '\n\n' in full:
                                         if self.DEBUG:
-                                            print("WARNING, ALSO SPOTTED THE QUERY IN THE ASSISTANT'S OUTPUT. Removing it.")
-                                        full = full.replace(voice_message,'')
-                                    elif voice_message.lower() in full:
+                                            print("spotted two consecutive newlines in a row in full STT output")
+                                        #full = full.split('\n\n')[0]
+
+                                    if reverse_prompt != '' and full.startswith(reverse_prompt):
+                                        full = full[len(reverse_prompt):]
+                                        assistant_needs_reset = True
                                         if self.DEBUG:
-                                            print("WARNING, ALSO SPOTTED THE LOWERCASE QUERY IN THE ASSISTANT'S OUTPUT. Removing it.")
-                                        full = full.replace(voice_message.lower(),'')
+                                            print("WARNING, Stripped reverse_prompt ('" + str(reverse_prompt) + "') from beginning of full:\n" + str(full))
+
+                                        if voice_message in full:
+                                            if self.DEBUG:
+                                                print("WARNING, ALSO SPOTTED THE QUERY IN THE ASSISTANT'S OUTPUT. Removing it.")
+                                            full = full.replace(voice_message,'')
+                                        elif voice_message.lower() in full:
+                                            if self.DEBUG:
+                                                print("WARNING, ALSO SPOTTED THE LOWERCASE QUERY IN THE ASSISTANT'S OUTPUT. Removing it.")
+                                            full = full.replace(voice_message.lower(),'')
                                     
                                 
-                                full = full.lstrip()
-                                full = full.rstrip()
-                                full = full.strip()
-                                if len(in_suffix) > 1 and full.startswith(in_suffix):
-                                    full = full[len(in_suffix):] #.split(in_suffix)[1]
-                                    if self.DEBUG2:
-                                        print("Stripped in_suffix (" + str(in_suffix) + ") from beginning of full:\n" + str(full))
-
-                                elif len(in_suffix) > 1 and in_suffix in full:
-                                    if self.DEBUG:
-                                        print("warning, in_suffix (" + str(in_suffix) + ") was spotted in full assistant output, but not at the beginning (where it should be)")
-                                    # sometimes the assistant halucinates another question by the user
-                                    before_assistant = full.split(in_suffix)[0]
-                                    if len(original_voice_message) > 1 and len(before_assistant) > 3 and len(before_assistant) > len(in_suffix) and not str(original_voice_message[:-1]) in before_assistant:
+                                    full = full.lstrip()
+                                    full = full.rstrip()
+                                    full = full.strip()
+                                    
+                                    if full.startswith("The following is a conversation between"):
                                         if self.DEBUG:
-                                            print("\nWARNING, the assistant might be halucinating a conversation?\n - before_assistant:" + str(before_assistant) + "\n")
-                                            print(" - original_voice_message not in before_assistant: " + str(original_voice_message[:-1]))
+                                            print("Error, the assistant started outputting the system prompt.")
+                                        if origin != 'voice':
+                                            self.last_text_response = '[!] Sorry, AI Assistant could not answer. Restarting it.'
+                                        self.force_reset_assistant()
+                                        return
+                                    
+                                    if len(in_suffix) > 1 and full.startswith(in_suffix):
+                                        full = full[len(in_suffix):] #.split(in_suffix)[1]
+                                        if self.DEBUG2:
+                                            print("Stripped in_suffix (" + str(in_suffix) + ") from beginning of full:\n" + str(full))
+
+                                    elif len(in_suffix) > 1 and in_suffix in full:
+                                        if self.DEBUG:
+                                            print("warning, in_suffix (" + str(in_suffix) + ") was spotted in full assistant output, but not at the beginning (where it should be)")
+                                        # sometimes the assistant halucinates another question by the user
+                                        before_assistant = full.split(in_suffix)[0]
+                                        if len(original_voice_message) > 1 and len(before_assistant) > 3 and len(before_assistant) > len(in_suffix) and not str(original_voice_message[:-1]) in before_assistant:
+                                            if self.DEBUG:
+                                                print("\nWARNING, the assistant might be halucinating a conversation?\n - before_assistant:" + str(before_assistant) + "\n")
+                                                print(" - original_voice_message not in before_assistant: " + str(original_voice_message[:-1]))
+                                            if origin != 'voice':
+                                                self.last_text_response = '[!] Sorry, AI Assistant was hallucinating. Restarting it.'
+                                            self.force_reset_assistant()
+                                            return
+                                    
+                                        chars_to_remove = full.index(in_suffix) + len(in_suffix)
+                                        full = full[chars_to_remove:] #.split(in_suffix)[1]
+                                        #full = full.split(str(self.llm_assistant_name) + ':')[1]
+                                        if self.DEBUG:
+                                            print("Split full to only use the part after in suffix ()" + str(in_suffix) + "). Full:\n" + str(full))
+
+                                    if "is a language model trained on the sum of human knowledge." in full:
+                                        if self.DEBUG:
+                                            print("\nWARNING, the assistant might be going off the rails\n" + str(full) + "\n")
                                         if origin != 'voice':
                                             self.last_text_response = '[!] Sorry, AI Assistant was hallucinating. Restarting it.'
                                         self.force_reset_assistant()
                                         return
-                                    
-                                    chars_to_remove = full.index(in_suffix) + len(in_suffix)
-                                    full = full[chars_to_remove:] #.split(in_suffix)[1]
-                                    #full = full.split(str(self.llm_assistant_name) + ':')[1]
-                                    if self.DEBUG:
-                                        print("Split full to only use the part after in suffix ()" + str(in_suffix) + "). Full:\n" + str(full))
-
-                                if "is a language model trained on the sum of human knowledge." in full:
-                                    if self.DEBUG:
-                                        print("\nWARNING, the assistant might be going off the rails\n" + str(full) + "\n")
-                                    if origin != 'voice':
-                                        self.last_text_response = '[!] Sorry, AI Assistant was hallucinating. Restarting it.'
-                                    self.force_reset_assistant()
-                                    return
 
 
-                                if ((origin == 'voice' and '.' in full or ', ' in full or '?' in full or '!' in full or ':' in full) or
-                                    (origin != 'voice' and '.' in full or '?' in full or '!' in full or ':' in full)):
-                                    if self.DEBUG:
-                                        print("BINGO!\nIt seems the response will have more than one sentence. In theory the first sentence could already be sent to the speak_thread")
-                                    self.last_command_was_answered_by_assistant = True
-
-                                    #real_lines = full.split('.')
-                                    #lines = re.split(r"[,.?]+", full)
-                                    #pre_lines = re.split(r"([,.?!]+)", full)
-                                    pre_lines = re.split(r"(,\s|[.?!:]+)", full)
-                                    
-                                    #lines = re.split('([^a-zA-Z0-9])', full)
-                                    if self.DEBUG:
-                                        print("pre_lines: " + str(pre_lines))
-                                    
-                                    if pre_lines[0] == '':
+                                    if ((origin == 'voice' and '.' in full or ', ' in full or '?' in full or '!' in full or ':' in full) or
+                                        (origin != 'voice' and '.' in full or '?' in full or '!' in full or ':' in full)):
                                         if self.DEBUG:
-                                            print("removed first pre_lines item that was an empty string ")
-                                        del pre_lines[0]
+                                            print("BINGO!\nIt seems the response will have more than one sentence. In theory the first sentence could already be sent to the speak_thread")
+                                        self.last_command_was_answered_by_assistant = True
+
+                                        #real_lines = full.split('.')
+                                        #lines = re.split(r"[,.?]+", full)
+                                        #pre_lines = re.split(r"([,.?!]+)", full)
+                                        pre_lines = re.split(r"(,\s|[.?!:]+)", full)
                                     
+                                        #lines = re.split('([^a-zA-Z0-9])', full)
+                                        if self.DEBUG:
+                                            print("pre_lines: " + str(pre_lines))
                                     
-                                    # generate HTML to show in an overlay
-                                    if display:
-                                        if self.DEBUG2:
-                                            print("generating display HTML")
-                                        new_info_to_show = display_output
-                                        display_line_nr = 0
-                                        for display_line in pre_lines:
-                                            
-                                            if reverse_prompt in display_line:
-                                                if display_line_nr == 0:
-                                                    if self.DEBUG:
-                                                        print("Error, first line of display text already contained the reverse prompt. Setting info_to_show to empty string.")
-                                                    new_info_to_show = ''
-                                                break
-                                                display_line = display_line.replace(reverse_prompt)
-                                                
-                                            if in_suffix in display_line:
-                                                display_line = display_line.replace(in_suffix)
-                                            
-                                            display_line = display_line.lstrip()
-                                            if display_line != '':
-                                                display_line_class = 'sentence'
-                                                if display_line == '.':
-                                                    display_line_class = 'period'
-                                                elif display_line == ', ':
-                                                    display_line_class = 'comma'
-                                                elif display_line == '?':
-                                                    display_line_class = 'questionmark'
-                                                elif display_line == '!':
-                                                    display_line_class = 'exclamationmark'
-                                                elif display_line == ':':
-                                                    display_line_class = 'colon'
-                                                elif display_line.isdigit():
-                                                    display_line_class = 'digit'
-                                            
-                                                new_info_to_show += '<span class="extension-voco-display-text-' + str(display_line_class) + '">' + str(display_line) + '</span>'
-                                                display_line_nr += 1
-                                                
-                                        self.info_to_show = new_info_to_show
-                                        #if self.DEBUG:
-                                        #    print("self.info_to_show is now: " + str(self.info_to_show))
-                                    
-                                    
-                                    #if len(pre_lines[-1]) > 1:
-                                    #    if len(pre_lines[-1]) != 1:
-                                    #        del pre_lines[-1]
-                                    
-                                    
-                                    lines = []
-                                    for i in range(0,len(pre_lines),2):
-                                        
-                                        try:
-                                            #if self.DEBUG:
-                                            #    print("assistant: merging: " + str(pre_lines[i]) + " + " + str(pre_lines[i+1]))
-                                                
-                                            
-                                            if len(pre_lines) > 1 and pre_lines[1] == ', ': # origin == 'voice' and 
-                                                if len(pre_lines[0]) < 10 and len(pre_lines) < 4:
-                                                    if self.DEBUG:
-                                                        print("very first part of assistant response is very short and ends with a comma. Let's wait until the response it slightly longer to avoid a strange speech delay")
-                                                    break
-                                            if pre_lines[i+1]:
-                                                joined_line = str(pre_lines[i]).strip() + str(pre_lines[i+1])
-                                                joined_line = joined_line.lstrip()
-                                                #if self.DEBUG:
-                                                #    print("joined_line: " + str(joined_line))
-                                                if reverse_prompt in joined_line:
-                                                    if self.DEBUG:
-                                                        print(" - joined_line contained reverse prompt. Breaking: " + str(joined_line))
-                                                    break
-                                                    
-                                                if in_suffix in joined_line:
-                                                    if self.DEBUG:
-                                                        print(" - WARNING, joined line contained suffix. Removing suffix from joined_line.")
-                                                    joined_line = joined_line.replace(in_suffix,'')
-                                                
-                                                    if voice_message in joined_line:
-                                                        if self.DEBUG:
-                                                            print(" - WARNING, joined line also contained voice message")
-                                                        joined_line = joined_line.replace(voice_message,'')
-                                                        
-                                                joined_line = joined_line.strip()
-                                                joined_line = joined_line.lstrip()
-                                                
-                                                if joined_line == '':
-                                                    if self.DEBUG:
-                                                        print("joined line was whitled down to an empty string")
-                                                else:
-                                                    if not joined_line.endswith(' '):
-                                                        joined_line += ' '
-                                                    if self.DEBUG:
-                                                        print("joined_line: " + str(joined_line))
-                                                
-                                                    lines.append(joined_line)
-                                        except Exception as ex:
+                                        if pre_lines[0] == '':
                                             if self.DEBUG:
-                                                print("assistant: error concatenating lines: " + str(ex))
-                                    
-                                    line_count = len(lines)
-                                    if self.DEBUG:
-                                        print("lines count: " + str(line_count))
-
-                                    if reverse_prompt in full:
-                                        self.llm_assistant_reverse_prompt_was_spotted = True
-                                        line_count += 1
-
-                                    if 'is not commonly used in English' in lines[0]:
-                                        if origin == 'text':
-                                            self.last_text_response = '[!] Sorry, AI Assistant was failing. Please try again.'
-                                        #self.speak("Sorry, could you repeat that?",intent)
-                                        self.llm_assistant_countdown = 0
-                                        return
-
-                                    line_index = 0
-                                    for line in lines:
-                                        line_index += 1
-                                        line = line.strip()
-                                        if self.DEBUG:
-                                            print(". line: " + str(line))
-                                        if line_index <= line_count: # TODO: adding the equal sign here disabled the complex waiting system
-
-                                            #if str(self.llm_models['assistant']['prompts']['end']) in line:
-                                            if reverse_prompt in line:
-                                                if self.DEBUG:
-                                                    print("\nSPOTTED REVERSE PROMPT IN LINE: " + str(reverse_prompt))
-                                                #line = line.split(reverse_prompt)[0]
-                                                line = line.replace(reverse_prompt,'')
-                                                line = line.strip()
-
-                                            if len(line) > 1:
-                                                #if self.DEBUG:
-                                                #    print("\nCAN SEND THIS LINE?: " + str(line))
-
-                                                if line in already_sent_sentences:
-                                                    pass
-                                                    #if self.DEBUG:
-                                                    #    print("-line was already sent to speak thread.")
-                                                else:
-                                                    if self.DEBUG:
-                                                        print(str(line_index) + ". NEW LINE: " + str(line))
-                                                    already_sent_sentences.append(line)
-                                                    if self.DEBUG:
-                                                        print("SPEAKING IT.\n - already_sent_sentences is now: " + str(already_sent_sentences))
-                                                    #if origin == 'text':
-                                                    #    self.last_text_response.append(line) # = [full] #.append(full)
-                                                    #if self.DEBUG:
-                                                    #    print("\n⏰\nSTOPWATCH: + " + str(time.time() - self.llm_stt_stopwatch) + ', ' + str(time.time() - self.llm_stt_stopwatch_start))
-                                                    self.speak(line,intent)
-                                            else:
-                                                if self.DEBUG:
-                                                    print("line was too short: -->" + str(line) + "<--")
-
-
-
-                                #if full.endswith('Researcher:') or full.endswith('Researcher: '):
-                                if reverse_prompt in full and not full.startswith(reverse_prompt):
-                                    self.llm_assistant_countdown = 0
-                                
-                                    if self.DEBUG:
-                                        print("REVERSE PROMPT IN OUTPUT (but not at the beginning of the response, which is good)")
-                                        print("DONE!")
-                                        print("command origin: " + str(origin))
-                                        print("intent: " + str(intent))
-                                    
-                                    if len(already_sent_sentences) == 0:
-                                        if self.DEBUG:
-                                            print("WARNING, The assistant didn't generate any sentences")
-                                    
-                                    full = full.replace(reverse_prompt,'')
-                                    full = full.strip()
-                                    
-                                    if full == "":
-                                        if self.DEBUG:
-                                            print("WARING, The full assistant output boils down to an empty string")
+                                                print("removed first pre_lines item that was an empty string ")
+                                            del pre_lines[0]
                                     
                                     
+                                        # generate HTML to show in an overlay
+                                        if display:
+                                            if self.DEBUG2:
+                                                print("generating display HTML")
+                                            print("reverse prompt -1: " + str(reverse_prompt[:-1]))
+                                            new_info_to_show = display_output
+                                            display_line_nr = 0
+                                            for display_line in pre_lines:
+                                            
+                                                if len(reverse_prompt) > 2 and (reverse_prompt in display_line or reverse_prompt[:-1] in display_line):
+                                                    if display_line_nr == 0:
+                                                        if self.DEBUG:
+                                                            print("Error, first line of display text already contained the reverse prompt. Setting info_to_show to empty string.")
+                                                        new_info_to_show = ''
+                                                    break
+                                                    display_line = display_line.replace(reverse_prompt)
+                                                
+                                                if in_suffix in display_line:
+                                                    display_line = display_line.replace(in_suffix)
+                                            
+                                                display_line = display_line.lstrip()
+                                                if display_line != '':
+                                                    display_line_class = 'sentence'
+                                                    if display_line == '.':
+                                                        display_line_class = 'period'
+                                                    elif display_line == ', ':
+                                                        display_line_class = 'comma'
+                                                    elif display_line == '?':
+                                                        display_line_class = 'questionmark'
+                                                    elif display_line == '!':
+                                                        display_line_class = 'exclamationmark'
+                                                    elif display_line == ':':
+                                                        display_line_class = 'colon'
+                                                    elif display_line.isdigit():
+                                                        display_line_class = 'digit'
+                                            
+                                                    new_info_to_show += '<span class="extension-voco-display-text-' + str(display_line_class) + '">' + str(display_line) + '</span>'
+                                                    display_line_nr += 1
+                                                
+                                            self.info_to_show = new_info_to_show
+                                            #if self.DEBUG:
+                                            #    print("self.info_to_show is now: " + str(self.info_to_show))
                                     
-                                    #if origin == 'text':
-                                    #    self.last_text_response = [full] #.append(full)
+                                    
+                                        #if len(pre_lines[-1]) > 1:
+                                        #    if len(pre_lines[-1]) != 1:
+                                        #        del pre_lines[-1]
+                                    
+                                    
+                                        lines = []
+                                        for i in range(0,len(pre_lines),2):
                                         
-                                    if display:
-                                        #if origin != 'text':
-                                        #    self.last_text_response.append(full)
-                                        self.info_to_display = full #.replace(reverse_prompt,'')
+                                            try:
+                                                #if self.DEBUG:
+                                                #    print("assistant: merging: " + str(pre_lines[i]) + " + " + str(pre_lines[i+1]))
+                                                
+                                            
+                                                if len(pre_lines) > 1 and pre_lines[1] == ', ': # origin == 'voice' and 
+                                                    if len(pre_lines[0]) < 10 and len(pre_lines) < 4:
+                                                        if self.DEBUG:
+                                                            print("very first part of assistant response is very short and ends with a comma. Let's wait until the response it slightly longer to avoid a strange speech delay")
+                                                        break
+                                                if pre_lines[i+1]:
+                                                    joined_line = str(pre_lines[i]).strip() + str(pre_lines[i+1])
+                                                    joined_line = joined_line.lstrip()
+                                                    #if self.DEBUG:
+                                                    #    print("joined_line: " + str(joined_line))
+                                                    if reverse_prompt in joined_line:
+                                                        if self.DEBUG:
+                                                            print(" - joined_line contained reverse prompt. Breaking: " + str(joined_line))
+                                                        break
+                                                    
+                                                    if in_suffix in joined_line:
+                                                        if self.DEBUG:
+                                                            print(" - WARNING, joined line contained suffix. Removing suffix from joined_line.")
+                                                        joined_line = joined_line.replace(in_suffix,'')
+                                                
+                                                        if voice_message in joined_line:
+                                                            if self.DEBUG:
+                                                                print(" - WARNING, joined line also contained voice message")
+                                                            joined_line = joined_line.replace(voice_message,'')
+                                                        
+                                                    joined_line = joined_line.strip()
+                                                    joined_line = joined_line.lstrip()
+                                                
+                                                    if joined_line == '':
+                                                        if self.DEBUG:
+                                                            print("joined line was whitled down to an empty string")
+                                                    else:
+                                                        if not joined_line.endswith(' '):
+                                                            joined_line += ' '
+                                                        if self.DEBUG:
+                                                            print("joined_line: " + str(joined_line))
+                                                
+                                                        lines.append(joined_line)
+                                            except Exception as ex:
+                                                if self.DEBUG:
+                                                    print("assistant: error concatenating lines: " + str(ex))
+                                    
+                                        line_count = len(lines)
                                         if self.DEBUG:
-                                            print("Set info_to_display to full assistant reply: \n\n==========================\n" + str(self.info_to_display) + "\n==========================\n\n")
+                                            print("lines count: " + str(line_count))
+                                    
+                                        if line_count != 0:
+                                        
+                                            if reverse_prompt in full:
+                                                self.llm_assistant_reverse_prompt_was_spotted = True
+                                                #line_count += 1
 
-                                    if full != "" and self.llm_assistant_continue_conversations and origin == 'voice' and self.llm_wakeword_started and 'siteId' in intent and intent['siteId'] == self.persistent_data['site_id']:
+                                            if 'is not commonly used in English' in lines[0]:
+                                                if origin == 'text':
+                                                    self.last_text_response = '[!] Sorry, AI Assistant was failing. Please try again.'
+                                                #self.speak("Sorry, could you repeat that?",intent)
+                                                self.llm_assistant_countdown = 0
+                                                return
+
+                                            line_index = 0
+                                            for line in lines:
+                                                line_index += 1
+                                                line = line.strip()
+                                                if self.DEBUG:
+                                                    print(". line: " + str(line))
+                                                if line_index <= line_count: # TODO: adding the equal sign here disabled the complex waiting system
+
+                                                    #if str(self.llm_models['assistant']['prompts']['end']) in line:
+                                                    if reverse_prompt in line:
+                                                        if self.DEBUG:
+                                                            print("\nSPOTTED REVERSE PROMPT IN LINE: " + str(reverse_prompt))
+                                                        #line = line.split(reverse_prompt)[0]
+                                                        line = line.replace(reverse_prompt,'')
+                                                        line = line.strip()
+
+                                                    if len(line) > 1:
+                                                        #if self.DEBUG:
+                                                        #    print("\nCAN SEND THIS LINE?: " + str(line))
+
+                                                        if line in already_sent_sentences:
+                                                            pass
+                                                            #if self.DEBUG:
+                                                            #    print("-line was already sent to speak thread.")
+                                                        else:
+                                                            if self.DEBUG:
+                                                                print(str(line_index) + ". NEW LINE: " + str(line))
+                                                            already_sent_sentences.append(line)
+                                                            if self.DEBUG:
+                                                                print("SPEAKING IT.\n - already_sent_sentences is now: " + str(already_sent_sentences))
+                                                            #if origin == 'text':
+                                                            #    self.last_text_response.append(line) # = [full] #.append(full)
+                                                            #if self.DEBUG:
+                                                            #    print("\n⏰\nSTOPWATCH: + " + str(time.time() - self.llm_stt_stopwatch) + ', ' + str(time.time() - self.llm_stt_stopwatch_start))
+                                                            self.speak(line,intent)
+                                                    else:
+                                                        if self.DEBUG:
+                                                            print("line was too short: -->" + str(line) + "<--")
+                                    
+
+
+
+                                    #if full.endswith('Researcher:') or full.endswith('Researcher: '):
+                                    if reverse_prompt in full and not full.startswith(reverse_prompt):
+                                        self.llm_assistant_countdown = 0
+                                
                                         if self.DEBUG:
-                                            print("setting self.llm_assistant_continue_conversation to True")
-                                        self.llm_assistant_continue_conversation = 2
-
-                                    break
-
-
-
-                                    #full = full[16:]
-                                    #if self.DEBUG:
-                                    #    print("clipped full: " + str(full))
-
-                                    """
-                                    if 'Researcher:' in full:
-                                        full = full.split('Researcher:')[0]
-
-                                    if self.DEBUG:
-                                        print("ANSWER: " + str(full))
-                                    if len(full) > 1:
-                                        if self.DEBUG:
-                                            print("\n⏰\nSTOPWATCH: + " + str(time.time() - self.llm_stt_stopwatch) + ', ' + str(time.time() - self.llm_stt_stopwatch_start))
-                                        self.llm_stt_stopwatch = time.time()
-                                        self.llm_assistant_response_count += 1
-                                        self.speak(full,intent)
-                                        if self.DEBUG:
-                                            print("\n⏰\nSTOPWATCH: + " + str(time.time() - self.llm_stt_stopwatch) + ', ' + str(time.time() - self.llm_stt_stopwatch_start))
-                                        self.llm_stt_stopwatch = time.time()
-                                        if self.DEBUG:
+                                            print("REVERSE PROMPT IN OUTPUT (but not at the beginning of the response, which is good)")
                                             print("DONE!")
-                                    break
-                                    """
+                                            print("command origin: " + str(origin))
+                                            print("intent: " + str(intent))
+                                    
+                                        if len(already_sent_sentences) == 0:
+                                            if self.DEBUG:
+                                                print("WARNING, The assistant didn't generate any sentences")
+                                    
+                                        full = full.replace(reverse_prompt,'')
+                                        full = full.strip()
+                                    
+                                        if full == "":
+                                            if self.DEBUG:
+                                                print("WARING, The full assistant output boils down to an empty string")
+                                    
+                                    
+                                    
+                                        #if origin == 'text':
+                                        #    self.last_text_response = [full] #.append(full)
+                                        
+                                        #if display:
+                                            #if origin != 'text':
+                                            #    self.last_text_response.append(full)
+                                        #    self.info_to_display = full #.replace(reverse_prompt,'')
+                                        #    if self.DEBUG:
+                                        #        print("Set info_to_display to full assistant reply: \n\n==========================\n" + str(self.info_to_display) + "\n==========================\n\n")
 
-                                #for line in content:
-                                #    line = line.replace("\n", "")
-                                #    print("tail: " + str(line))
+                                        if full != "" and self.llm_assistant_continue_conversations and origin == 'voice' and self.llm_wakeword_started and 'siteId' in intent and intent['siteId'] == self.persistent_data['site_id']:
+                                            if self.DEBUG:
+                                                print("setting self.llm_assistant_continue_conversation to True")
+                                            self.llm_assistant_continue_conversation = 2
+
+                                        break
+
+
+
+                                        #full = full[16:]
+                                        #if self.DEBUG:
+                                        #    print("clipped full: " + str(full))
+
+                                        """
+                                        if 'Researcher:' in full:
+                                            full = full.split('Researcher:')[0]
+
+                                        if self.DEBUG:
+                                            print("ANSWER: " + str(full))
+                                        if len(full) > 1:
+                                            if self.DEBUG:
+                                                print("\n⏰\nSTOPWATCH: + " + str(time.time() - self.llm_stt_stopwatch) + ', ' + str(time.time() - self.llm_stt_stopwatch_start))
+                                            self.llm_stt_stopwatch = time.time()
+                                            self.llm_assistant_response_count += 1
+                                            self.speak(full,intent)
+                                            if self.DEBUG:
+                                                print("\n⏰\nSTOPWATCH: + " + str(time.time() - self.llm_stt_stopwatch) + ', ' + str(time.time() - self.llm_stt_stopwatch_start))
+                                            self.llm_stt_stopwatch = time.time()
+                                            if self.DEBUG:
+                                                print("DONE!")
+                                        break
+                                        """
+
+                                    #for line in content:
+                                    #    line = line.replace("\n", "")
+                                    #    print("tail: " + str(line))
+                            
+                        except Exception as ex:
+                            if self.DEBUG:
+                                print("Caught error in ask_ai_assistant: " + str(ex))
+                        
 
 
                     #with open(self.llm_assistant_output_file_path, "w") as myfile:

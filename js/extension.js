@@ -1073,13 +1073,10 @@
 						this.info_to_show = body['info_to_show'];
 						this.display_info_overlay();
 					}
-
+					this.overlay_poll_done = true;
 				}).catch((e) => {
 					console.error("voco: error in call to /overlay_poll: ", e);
-
-				}).then((body) => {
 					this.overlay_poll_done = true;
-		        	//setTimeout(this.do_overlay_poll,2000);
 				})
 			}
 		}
@@ -1105,42 +1102,54 @@
 					}
 					let voco_overlay_el = document.getElementById('extension-voco-info-overlay');
 					if(voco_overlay_el){
-						voco_overlay_el.innerHTML = '';
+						
 					
-						if(this.info_to_show != ''){
+						if(this.info_to_show == ''){
+							voco_overlay_el.innerHTML = '';
+						}
+						else{
 							//new_content = '<div id="extension-voco-info-overlay-big-close-button"></div><pre>' + this.info_to_show + '</pre>';
 						
-							// add huge close button
-							let voco_overlay_big_close_button_el = document.createElement('div');
-							voco_overlay_big_close_button_el.setAttribute('id','extension-voco-info-overlay-big-close-button');
-							voco_overlay_big_close_button_el.addEventListener('click', (event) => {
-								if(this.debug){
-				                    console.log("voco: clicked on big overlay close button");
-				                }
-								voco_overlay_el.innerHTML = '';
-								this.clear_info_to_show();
-							});
-							voco_overlay_el.appendChild(voco_overlay_big_close_button_el);
-					
-							// add content
-							let voco_overlay_main_content_el = document.createElement('pre');
-							voco_overlay_main_content_el.innerHTML = this.info_to_show;
-							voco_overlay_el.appendChild(voco_overlay_main_content_el);
+							let overlay_content_el = document.getElementById('extension-voco-info-overlay-content');
 							
-							// add small close button
-							let voco_overlay_close_button = document.createElement('button');
-							voco_overlay_close_button.setAttribute('id','extension-voco-info-overlay-close-button');
-							voco_overlay_close_button.classList.add('text-button');
-
-							voco_overlay_close_button.textContent = '✕';
-							voco_overlay_close_button.addEventListener('click', (event) => {
-								if(this.debug){
-				                    console.log("closing Voco overlay");
-				                }
+							if(overlay_content_el){
+								overlay_content_el.innerHTML = this.info_to_show;
+							}
+							else{
 								voco_overlay_el.innerHTML = '';
-								this.clear_info_to_show();
-							});
-							voco_overlay_el.appendChild(voco_overlay_close_button);
+								// add huge close button
+								let voco_overlay_big_close_button_el = document.createElement('div');
+								voco_overlay_big_close_button_el.setAttribute('id','extension-voco-info-overlay-big-close-button');
+								voco_overlay_big_close_button_el.addEventListener('click', (event) => {
+									if(this.debug){
+					                    console.log("voco: clicked on big overlay close button");
+					                }
+									voco_overlay_el.innerHTML = '';
+									this.clear_info_to_show();
+								});
+								voco_overlay_el.appendChild(voco_overlay_big_close_button_el);
+					
+								// add content
+								let voco_overlay_main_content_el = document.createElement('pre');
+								voco_overlay_main_content_el.setAttribute('id','extension-voco-info-overlay-content');
+								voco_overlay_main_content_el.innerHTML = this.info_to_show;
+								voco_overlay_el.appendChild(voco_overlay_main_content_el);
+							
+								// add small close button
+								let voco_overlay_close_button = document.createElement('button');
+								voco_overlay_close_button.setAttribute('id','extension-voco-info-overlay-close-button');
+								voco_overlay_close_button.classList.add('text-button');
+
+								voco_overlay_close_button.textContent = '✕';
+								voco_overlay_close_button.addEventListener('click', (event) => {
+									if(this.debug){
+					                    console.log("closing Voco overlay");
+					                }
+									voco_overlay_el.innerHTML = '';
+									this.clear_info_to_show();
+								});
+								voco_overlay_el.appendChild(voco_overlay_close_button);
+							}
 					
 						}
 					
