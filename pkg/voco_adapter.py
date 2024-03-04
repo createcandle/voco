@@ -8467,6 +8467,7 @@ class VocoAdapter(Adapter):
                         print("Applying ugly heuristic to allow for value decrease ('load the' detected at start of sentence)")
                     incoming_intent = 'set_value'
                 
+                """
                 # tests if it's a request to actuate a device
                 elif self.check_if_message_is_for_actuators(sentence.lower()) and (incoming_intent == 'get_value' or incoming_intent == 'get_boolean'):
                     if incoming_intent == 'get_value':
@@ -8475,9 +8476,24 @@ class VocoAdapter(Adapter):
                         incoming_intent = 'set_state'
                 
                 """
-                elif (sentence.lower().startswith('turn on ') or sentence.lower().startswith('turn off ') or sentence.lower().startswith('switch off ') or sentence.lower().startswith('switch on ')) and incoming_intent == 'get_value':
+                if ((sentence.startswith('turn on ') 
+                        or sentence.startswith('turn off ') 
+                        or sentence.startswith('switch off ') 
+                        or sentence.startswith('switch on ')
+                        or (sentence.startswith('turn ') and (sentence.endswith(' on') or sentence.endswith(' off')) )
+                        or (sentence.startswith('switch ') and (sentence.endswith(' on') or sentence.endswith(' off')) )
+                        ) 
+                        and (incoming_intent == 'get_value' or incoming_intent == 'get_boolean')):
+                        
                     if self.DEBUG:
                         print("Sentence starts with 'turn on' or 'turn off', so the intent cannot be 'get_value'. Changing to 'set_value' instead... ") # TODO: this might not be a good change
+                        
+                    if incoming_intent == 'get_value':
+                        incoming_intent = 'set_value'
+                    elif incoming_intent == 'get_boolean':
+                        incoming_intent = 'set_state'
+                        
+                """
                     incoming_intent = 'set_value'
                 elif (sentence.lower().startswith('turn on ') or sentence.lower().startswith('turn off ')) and incoming_intent == 'get_boolean':
                     if self.DEBUG:
