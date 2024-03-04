@@ -7771,7 +7771,8 @@ class VocoAdapter(Adapter):
                 fastest_score = payload['hardware_score']
                 fastest_id = str(payload['siteId'])
                 if self.DEBUG:
-                    print("_ 🏎 _ 🏎 ___\nupdate_fastest_controller: there is a faster controller: " + str(payload['siteId']))
+                    if fastest_score > self.fastest_controller_score:
+                        print("_ 🏎 _ 🏎 ___\nupdate_fastest_controller: there is a faster controller: " + str(payload['siteId']) + ", with hardware_score: " + str(self.fastest_controller_score) + " --> " + str(payload['hardware_score']))
             
         if fastest_id == self.persistent_data['site_id']:
             fastest_last_ping_time = time.time()
@@ -7779,8 +7780,6 @@ class VocoAdapter(Adapter):
         self.fastest_controller_score = fastest_score
         self.fastest_controller_id = fastest_id
         self.fastest_controller_last_ping_time = fastest_last_ping_time
-
-
 
 
     def parse_ping(self,payload,ping_type="ping"):
@@ -7960,7 +7959,9 @@ class VocoAdapter(Adapter):
                 self.update_fastest_controller()
                     
                 if 'ping_type' in payload and payload['ping_type'] == 'init':
-                    xxxxxxx
+                    if self.DEBUG:
+                        print("responding to a an init ping")
+                    self.send_mqtt_ping(broadcast=True)
                     
             #if self.save_to_persistent_data:
             #    self.save_persistent_data()
