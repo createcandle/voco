@@ -296,7 +296,6 @@ class VocoAdapter(Adapter):
         self.llm_stt_process = None
         self.llm_stt_started = False
         self.s = None # holds the thread that manages the STT and Assistant processes
-        self.main_controller_has_stt = False # satellites can let the main controller perform the heavy voice processing, but only if it has an stt server
         
         self.record_running = False
         self.record = wave.Wave_write
@@ -335,7 +334,6 @@ class VocoAdapter(Adapter):
         self.llm_assistant_reverse_prompt_was_spotted = True # sometimes assistants don't end a response with the "Researcher:" reverse prompt
         self.got_assistant_output = False # only briefly becomes true while the assistant is outputting text
         self.llm_assistant_maximum_no_new_output_duration = 3 # Sometimes an assistant doesn't render the "Researcher:" response. As a fall-back, if the assistant goes quiet for over a second, assume it's done talking.
-        self.main_controller_has_assistant = False # deprecated, now the fastest controller is automatically selected
         self.info_to_show = '' # text that will be shown in a big overlay in the UI
         self.llm_assistant_reset_delay = 90 # how many seconds after the user has stopped chatting with the assistant should it fully reset itself
         self.llm_assistant_words_to_generate = 512 # -n
@@ -3546,8 +3544,8 @@ class VocoAdapter(Adapter):
             if self.DEBUG:
                 print("doing mute via pipewire (blocked)")
             #run_command('wpctl set-volume @DEFAULT_AUDIO_SINK@ 0%')
-            
             self.currently_muted = True
+            
         elif str(self.current_control_name) != "" and str(self.persistent_data['audio_output']) != 'Bluetooth speaker':
             if self.currently_muted == False:
                 mute_command = "amixer sset " + str(self.current_control_name) + " mute"
@@ -7525,7 +7523,7 @@ class VocoAdapter(Adapter):
                             self.last_time_parse_received = time.time()
                             
                             # Check/set customData for 'parsed' attribute
-                            if not 'customData' in payload or 'customData' in payload and payload['customData'] == None:
+                            if not 'customData' in payload or ('customData' in payload and payload['customData'] == None):
                                 if self.DEBUG:
                                     print("/parse: adding customData to indicate this intent arrived via /parse")
                                 payload['customData'] = {}
@@ -7537,10 +7535,11 @@ class VocoAdapter(Adapter):
                                     if self.DEBUG:
                                         print("\nPARSED WAS ALREADY TRUE, ABORTING\n")
                                     return
-                                else:
-                                    payload['customData']['parsed'] = True
-                                    payload['customData']['parsed_by'] = self.persistent_data['site_id']
+                            else:
+                                payload['customData']['parsed'] = True
+                                payload['customData']['parsed_by'] = self.persistent_data['site_id']
                 
+                            # save the data that should be restored once the NLU is done. Annoyingly it strips out important data, such as the originating siteId and 'origin'
                             self.parse_payload_transfer = payload
                 
                             #self.last_text_command = payload['text']
@@ -7838,19 +7837,6 @@ class VocoAdapter(Adapter):
                             print("broadcast ping was from intented main MQTT server. This has supplied the intended main_site_id: " + str(payload['siteId']) )
                         self.persistent_data['main_controller_ip'] = payload['ip']
                     
-                        # This is no longer relevant, as the main controller and the fastest controller can be two separate things
-                        """
-                        if 'has_stt' in payload:
-                            self.main_controller_has_stt = payload['has_stt']
-                            if self.DEBUG2:
-                                print("parse_ping: self.main_controller_has_stt: " + str(self.main_controller_has_stt))
-                    
-                        if 'has_assistant' in payload:
-                            self.main_controller_has_assistant = payload['has_assistant']
-                            if self.DEBUG2:
-                                print("parse_ping: self.main_controller_has_assistant: " + str(self.main_controller_has_assistant))
-                        """
-                        
                         if self.persistent_data['main_site_id'] != payload['siteId']:
                             self.save_to_persistent_data = True
                             if self.DEBUG2:
@@ -8478,8 +8464,17 @@ class VocoAdapter(Adapter):
                     if self.DEBUG:
                         print("Applying ugly heuristic to allow for value decrease ('load the' detected at start of sentence)")
                     incoming_intent = 'set_value'
-                    
-                elif (sentence.lower().startswith('turn on ') or sentence.lower().startswith('turn off ')) and incoming_intent == 'get_value':
+                
+                # tests if it's a request to do an action
+                # TODO: this only works as long as the test remains only for actuators
+                elif make_sure_command_is_for_assistant(sentence.lower()) and (incoming_intent == 'get_value' or incoming_intent == 'get_boolean'):
+                    if incoming_intent == 'get_value':
+                        incoming_intent = 'set_value'
+                    elif incoming_intent == 'get_boolean':
+                        incoming_intent = 'set_state'
+                
+                """
+                elif (sentence.lower().startswith('turn on ') or sentence.lower().startswith('turn off ') or sentence.lower().startswith('switch off ') or sentence.lower().startswith('switch on ')) and incoming_intent == 'get_value':
                     if self.DEBUG:
                         print("Sentence starts with 'turn on' or 'turn off', so the intent cannot be 'get_value'. Changing to 'set_value' instead... ") # TODO: this might not be a good change
                     incoming_intent = 'set_value'
@@ -8487,7 +8482,8 @@ class VocoAdapter(Adapter):
                     if self.DEBUG:
                         print("Sentence starts with 'turn on' or 'turn off', so the intent cannot be 'get_boolean'. Changing to 'set_state' instead... ") # TODO: this might not be a good change
                     incoming_intent = 'set_state'
-                    
+                """
+                
                 if incoming_intent == 'set_timer' and word_count < 4:
                     #voice_message = "Sorry, I don't understand the timer."
                     if self.DEBUG:
@@ -8822,13 +8818,16 @@ class VocoAdapter(Adapter):
                             
                             # TODO: this is prioritizing satellites. Ideally the thing scanner would go first.
                             
+                            # create list of lowercase thing titles for easy comparison
                             all_thing_titles_list_lowercase = [] # all existing property titles in a list, all lowercase for easy comparison
                             for thing_titlex in self.persistent_data['local_thing_titles']:
                                 all_thing_titles_list_lowercase.append(thing_titlex.lower())
+                                
                             if not target_thing_title.lower() in all_thing_titles_list_lowercase:
                                 if self.DEBUG:
                                     print("target_thing_title was not in all_thing_titles_list_lowercase")
-                                # loop over the satellite thing data in self.persistent_data['satellite_thing_titles']
+                                
+                                # Check if a satellite has this thing
                                 for satellite_id in self.persistent_data['satellite_thing_titles']:
                                     #if target_thing_title in self.persistent_data['satellite_thing_titles'][satellite_id]:
                                     
@@ -8836,6 +8835,8 @@ class VocoAdapter(Adapter):
                                         if self.DEBUG:
                                             print("This is a multi-thing command")
                                         multi_thing_command = True
+                                        
+                                        # Tell all the other controllers about it
                                         if not satellite_id in satellites_with_the_thing:
                                             satellites_with_the_thing.append(satellite_id)
                                     else:
@@ -9163,8 +9164,6 @@ class VocoAdapter(Adapter):
                     if self.DEBUG:
                         print("no need/ability to use LLM Assistant.\n - voice_message: " + str(voice_message))
                         print(" - best_confidence_score: " + str(best_confidence_score))
-                        print(" - self.main_controller_has_stt: " + str(self.main_controller_has_stt))
-                        print(" - self.main_controller_has_assistant: " + str(self.main_controller_has_assistant))
                         print(" - fastest_controller_id: " + str(self.fastest_controller_id))
                         print(" - fastest_controller_score: " + str(self.fastest_controller_score))
                         print(" - fastest_controller_last_ping_time delta: " + str(int(time.time() - self.fastest_controller_last_ping_time)))
@@ -9852,7 +9851,6 @@ class VocoAdapter(Adapter):
                 if slots['property'].lower() in self.generic_properties and slots['thing'] != None: # "what are the levels of the climate sensor" should still return multiple properties
                     pass
                 elif slots['thing'] != None and self.persistent_data['is_satellite'] == False:
-                    
                     found_partial_property_title_match = False
                     if len(slots['property']) > 3:
                         for check_prop_title in all_property_titles_list_lowercase:
@@ -9898,7 +9896,7 @@ class VocoAdapter(Adapter):
                 print("No useful input available for a search through the things. Cancelling...")
             return []
         
-        
+    
         # Get all the things data via the API
         try:
             if self.try_updating_things():
@@ -9952,11 +9950,13 @@ class VocoAdapter(Adapter):
         
         try:
             if self.things == None:
-                print('ERROR, things was None')
+                if self.DEBUG:
+                    print('ERROR, things was None')
                 return []
             
-            if  len(self.things) == 0:
-                print("ERROR, the things dictionary was empty. perhaps the API key was missing?")
+            if len(self.things) == 0:
+                if self.DEBUG:
+                    print("ERROR, the things dictionary was empty. perhaps the API key was missing?")
                 #self.speak("You don't seem to have any things. Please make sure you have added an authorization token. ",intent={'siteId':self.persistent_data['site_id']})
                 return []
             
@@ -9972,8 +9972,6 @@ class VocoAdapter(Adapter):
                 try:
                     current_thing_title = str(thing['title']).lower()
                     
-                    
-                    
                     """
                     #if self.see_switches_as_lights:
                     #    if thing_must_have_capability == 'Light':
@@ -9985,9 +9983,11 @@ class VocoAdapter(Adapter):
                     
                     
                     probable_thing_title = None    # Used later, by the back-up way of finding the correct thing.
+                
                 except:
                     if self.DEBUG:
                         print("Notice: thing had no title")
+                        
                     try:
                         current_thing_title = str(thing['name']).lower()
                     except:
@@ -9999,9 +9999,9 @@ class VocoAdapter(Adapter):
                 #target_thing_title = target_thing_title + 's' # fuzz testing
                 
                 try:
-                    #if self.DEBUG:
+                    if self.DEBUG:
                         #print("")
-                        #print("___" + current_thing_title)
+                        print("___" + current_thing_title)
                     #if self.DEBUG:
                     #    print(str(current_thing_title) + " =??= " + str(target_thing_title))
                         
