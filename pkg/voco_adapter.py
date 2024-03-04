@@ -8814,6 +8814,8 @@ class VocoAdapter(Adapter):
                                     #if target_thing_title in self.persistent_data['satellite_thing_titles'][satellite_id]:
                                     
                                     if target_thing_title.lower() in self.multi_things:
+                                        if self.DEBUG:
+                                            print("This is a multi-thing command")
                                         multi_thing_command = True
                                         if not satellite_id in satellites_with_the_thing:
                                             satellites_with_the_thing.append(satellite_id)
@@ -8904,7 +8906,7 @@ class VocoAdapter(Adapter):
                                 self.speak(self.main_controller_missing_warning, intent_message)
                         else:
                             if self.DEBUG:
-                                print("this was an already parsed message, so should not be sent to yet another controller")
+                                print("STOP\nthis was an already parsed message, so should not be sent to yet another controller\n")
                         #if len(found_properties) == 0: # and self.this_is_main_controller == False:
                         #    if self.DEBUG:
                         #        print("is_satellite, and found no properties. aborting.")
@@ -9044,7 +9046,8 @@ class VocoAdapter(Adapter):
                 print("End of master_intent_callback")
                 print(" * found_thing_on_satellite: " + str(found_thing_on_satellite))
                 print(" * this_is_origin_site     : " + str(this_is_origin_site))
-                print(" * is_satllite             : " + str(self.persistent_data['is_satellite']))
+                print(" * multi_thing_command     : " + str(multi_thing_command))
+                print(" * is_satellite            : " + str(self.persistent_data['is_satellite']))
             
             # TODO: doesn't this cause some results to strand here that should go on to the AI Assistant?
             if self.persistent_data['is_satellite'] and this_is_origin_site == False and found_thing_on_satellite == False and voice_message.startswith('Sorry'):
@@ -9065,6 +9068,7 @@ class VocoAdapter(Adapter):
                         or voice_message.startswith("Sorry, I don't understand") 
                         or voice_message.startswith("Sorry, I couldn't find a match")) 
                     and message_passed_to_other_controller == False
+                    and multi_thing_command == False
                     and (self.llm_assistant_started 
                         or (self.fastest_controller_id != None and self.fastest_controller_last_ping_time > time.time() - 60))
                     ):
