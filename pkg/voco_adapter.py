@@ -12449,7 +12449,7 @@ class VocoAdapter(Adapter):
                 print(" - self.persistent_data['site_id']: " + str(self.persistent_data['site_id']))
                 print(" - self.persistent_data['main_site_id']: " + str(self.persistent_data['main_site_id']))
                 print(" - self.persistent_data['is_satellite']: " + str(self.persistent_data['is_satellite']))
-                print(" - self.main_controller_has_stt: " + str(self.main_controller_has_stt))
+
 
         #elif self.llm_enabled and self.llm_stt_enabled and self.llm_stt_started:
             
