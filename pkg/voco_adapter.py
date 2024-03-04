@@ -8436,7 +8436,7 @@ class VocoAdapter(Adapter):
                 if self.DEBUG:
                     print("intent was None")
                 voice_message = "Sorry, I don't understand your intention."
-                break # TODO: could also continue? Maybe the next one is OK again
+                continue #break # TODO: could also continue? Maybe the next one is OK again
         
         
             # If the thing title is on a satellite, stop processing here.
@@ -8458,16 +8458,16 @@ class VocoAdapter(Adapter):
                         print("Applying ugly heuristic to more likely send second query to assistant again. sentence: " + str(sentence))
                         # e.g. "What about Germany?"
                     #return ""
-                    break
+                    continue #break
                         
+                # 'lower' is often recognised as 'load'
                 if sentence.startswith('load ') and incoming_intent == 'get_value':
                     if self.DEBUG:
                         print("Applying ugly heuristic to allow for value decrease ('load the' detected at start of sentence)")
                     incoming_intent = 'set_value'
                 
-                # tests if it's a request to do an action
-                # TODO: this only works as long as the test remains only for actuators
-                elif make_sure_command_is_for_assistant(sentence.lower()) and (incoming_intent == 'get_value' or incoming_intent == 'get_boolean'):
+                # tests if it's a request to actuate a device
+                elif check_if_message_is_for_actuators(sentence.lower()) and (incoming_intent == 'get_value' or incoming_intent == 'get_boolean'):
                     if incoming_intent == 'get_value':
                         incoming_intent = 'set_value'
                     elif incoming_intent == 'get_boolean':
@@ -8484,15 +8484,20 @@ class VocoAdapter(Adapter):
                     incoming_intent = 'set_state'
                 """
                 
+                if incoming_intent == 'set_state' and slots['start_time'] != None and slots['end_time'] != None and sentence.endswith(' night') and (not sentence.endswith(' at night') and not sentence.endswith(' the night') and not sentence.endswith(' all night')):
+                    if self.DEBUG:
+                        print("light was likely misheard as night: " + str(sentence))
+                    sentence = sentence.replace('night','light')
+                    slots['sentence'] = sentence
+                    slots['time_string'] = None
+                    slots['start_time'] = None
+                    slots['end_time'] = None
+                
                 if incoming_intent == 'set_timer' and word_count < 4:
                     #voice_message = "Sorry, I don't understand the timer."
                     if self.DEBUG:
                         print("Error, not enough words for set timer")
-                        #voice_message = "Sorry, I don't understand, not enough words."
-                        #return "Debug: Not enough words for set timer"
-                    #return ""
-                    
-                    break
+                    continue #break
                     
                 if (incoming_intent == 'get_value' or incoming_intent == 'set_value' or incoming_intent == 'set_state' or incoming_intent == 'get_boolean') and slots['thing'] == None and slots['property'] == None and slots['boolean'] == None and slots['number'] == None and slots['percentage'] == None and slots['string'] == None:
                     if self.DEBUG:
@@ -11133,7 +11138,7 @@ class VocoAdapter(Adapter):
                 "special_time":None,    # relative times like "sunrise"
                 "duration":None,        # E.g. 5 minutes
                 "period":None,          # Can only be 'in' or 'for'. Used to distinguish "turn on IN 5 minutes" or "turn on FOR 5 minutes"
-                "timer_type":None,      # Can be timer, alarm, reminder, countdown
+                "timer_type":None,      # Can be timer, alarm, reminder, countdown, wake
                 "timer_last":None       # Used to deterine how many timers a user wants to manipulate. Can only be "all" or "last". E.g. "The last 5 timers"
                 }
 
@@ -12936,10 +12941,23 @@ class VocoAdapter(Adapter):
 
 
     # TODO: this should (also) run earlier
-    def make_sure_command_is_for_assistant(self, message):
+    def check_if_message_is_for_assistant(self, message):
         if self.DEBUG:
-            print("in make_sure_command_is_for_assistant. message: " + str(message))
+            print("in check_if_message_is_for_assistant. message: " + str(message))
+        if self.check_if_message_is_for_actuators(message):
+            return False
+        
+        if self.DEBUG:
+            print("no indication that this command is about the devices")
+        return True
+
+
+    def check_if_message_is_for_actuators(self, message):
+        if self.DEBUG:
+            print("in check_if_message_is_for_actuators. message: " + str(message))
         message = message.strip()
+        message = message.lstrip()
+        message = message.rstrip()
         message = message.lower()
         
         # self.llm_assistant_first_words_to_avoid = ['disable','stop','enable','start','create','set']
@@ -12947,13 +12965,13 @@ class VocoAdapter(Adapter):
             if message.startswith(first_word):
                 if self.DEBUG:
                     print("first word strongly suggests a device centric command: " + str(first_word))
-                return False
+                return True
                 
         for last_word in self.llm_assistant_last_words_to_avoid:
             if message.endswith(last_word):
                 if self.DEBUG:
                     print("last word strongly suggests a device centric command: " + str(last_word))
-                return False
+                return True
                 
         words = message.split()
         
@@ -12962,20 +12980,15 @@ class VocoAdapter(Adapter):
         for i, word in enumerate(words):
             if self.DEBUG:
                 print("word: ", i, word)
-            if word in self.llm_assistant_signal1_words_to_avoid and words[i+1] in self.llm_assistant_signal2_words_to_avoid:
+            if word in self.llm_assistant_signal1_words_to_avoid and (words[i+1] in self.llm_assistant_signal2_words_to_avoid or words[-1] in self.llm_assistant_signal2_words_to_avoid):
+                # e.g. "switch on X" or "switch X on"
                 if self.DEBUG:
-                    print("signal word and the one after that strongly suggest a device centric command: " + str(word))
-                return False
+                    print("signal word and the one after that strongly suggest a device centric actuation command: " + str(word))
+                return True
                 
-        if message.endswith(' night') and (not message.endswith(' at night') and not message.endswith(' the night') and not message.endswith(' all night')):
-            if self.DEBUG:
-                print("light was likely misheard as night: " + str(word))
-            return False
-        
         if self.DEBUG:
-            print("no hints detected that this command should not be sent to the assistant")
-        return True
-
+            print("no hints detected that this command is for actuators")
+        return False
 
 
     # CLI version seems to be much faster
@@ -13056,7 +13069,7 @@ class VocoAdapter(Adapter):
         self.llm_assistant_countdown = 0
         
 
-        if self.make_sure_command_is_for_assistant(voice_message):
+        if self.check_if_message_is_for_assistant(voice_message):
             if voice_message == 'Hello, I am listening.':
                 if self.DEBUG:
                     print("heard 'Hello, I am listening', aborting parsing by Assistant.")
@@ -13083,8 +13096,6 @@ class VocoAdapter(Adapter):
                 intent['origin'] = 'text'
                 origin = 'text'
                 display_output = '<span class="extension-voco-display-text-query">' + str(original_voice_message) + '</span>'
-
-            
 
             if str(self.persistent_data['llm_assistant_protocol']) not in self.llm_assistant_protocols:
                 if self.DEBUG:
