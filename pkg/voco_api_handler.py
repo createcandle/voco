@@ -466,8 +466,31 @@ class VocoAPIHandler(APIHandler):
                                 )
                                 
                                 
+                            
+                            elif action == 'llm_reset_assistant':
+                                if self.DEBUG:
+                                    print("API got request to reset assistant")
+                                self.adapter.stop_ai_assistant()
+                                self.adapter.restart_llm_servers = True
+                                return APIResponse(
+                                  status=200,
+                                  content_type='application/json',
+                                  content=json.dumps({'state' : True}),
+                                )
                                 
                                 
+                            elif action == 'clear_info_to_show':
+                                if self.DEBUG:
+                                    print("API got request to clear info_to_show")
+                                self.adapter.info_to_show = ''
+                                return APIResponse(
+                                  status=200,
+                                  content_type='application/json',
+                                  content=json.dumps({'state' : True}),
+                                )
+                                
+                                
+                            # Not used at the moment
                             elif action == 'llm_generate_text':
                                 state = False
                                 if 'prompt' in request.body and 'llm_action' in request.body:
@@ -619,6 +642,7 @@ class VocoAPIHandler(APIHandler):
                                                         'has_matrix_token': has_matrix_token,
                                                         'controller_model': self.adapter.controller_model,
                                                         'hardware_score': self.adapter.hardware_score,
+                                                        'llm_assistant_started': self.adapter.llm_assistant_started,
                                                         'debug':self.adapter.DEBUG
                                                         }),
                                 )

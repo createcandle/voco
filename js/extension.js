@@ -20,6 +20,7 @@
 			this.items_list = [];
 			this.current_time = 0;
 			this.site_id = null;
+			this.current_page_title = 'Voco';
 
             this.matrix_room_members = [];
             this.matrix_candle_username = "";
@@ -56,6 +57,9 @@
 			this.text_chat_nr = 0;
 			this.busy_doing_text_chat_command = false;
 			this.last_text_chat_start_time = 0;
+			this.should_reset_previous_chat_response = false;
+			
+			this.ai_tab_shown = false;
 			
 			this.text_chat_hints = [
 			    'What time is it?',
@@ -79,7 +83,24 @@
 				'Remove the last timer',
 				'How much longer does the countdown have to go?'
 			];
+			
+			this.assistant_text_chat_hints = [
+			    'What is the capital of Portugal?',
+				'Can you show me a recipe for apple pie?',
+				'Please tell me a joke',
+				'What are the 5 biggest countries in the world?',
+			    'What is the climate in Russia?',
+				'How long should I boil an egg?',
+				'How long should I boil broccoli?',
+				'What is Mexico known for?',
+				'Tell me three fun facts about France',
+                'Which is bigger, the sun or the moon?',
+				'What are the names of the planets in our solar system?',
+				'What is the biggest planet in our solar system?'
+			];
+			this.assistant_text_chat_hints_added = false;
 
+			
             setTimeout(() => {
                 const jwt = localStorage.getItem('jwt');
                 //console.log("jwt: ", jwt);
@@ -107,6 +128,22 @@
 	  		  	}
 	        })
 	        .catch((e) => console.error('Failed to fetch content:', e));
+			
+			
+			const main_view = document.getElementById('extension-voco-view');
+			if(main_view){
+				this.overlay_interval = setInterval( () => {
+					try{
+						if( !document.hidden && !main_view.classList.contains('selected') ){
+							this.do_overlay_poll();
+						}
+					}
+	                catch(e){
+	                    console.log("Voco: interval this.do_overlay_poll error: ", e);
+	                }
+
+				}, 5000);
+			}
 	    }
 
 
@@ -150,9 +187,16 @@
 			const list = document.getElementById('extension-voco-list');
 
 			//const pre = document.getElementById('extension-voco-response-data');
-			const text_input_field = document.getElementById('extension-voco-text-input-field');
+			const content_container_el = document.getElementById('extension-voco-content-container');
 			const text_chat_container = document.getElementById('extension-voco-text-chat-container');
+			const text_input_field = document.getElementById('extension-voco-text-input-field');
 			
+			
+
+			if(content_container_el == null || text_input_field == null){
+				console.error("Voco: HTML did not load");
+				return
+			}
 
 
 
@@ -168,6 +212,9 @@
 
                     if(desired_tab == '?'){desired_tab = 'tutorial';}
 
+					if(desired_tab == 'ai'){
+						this.ai_tab_shown = true;
+					}
                     //console.log("desired tab: " + desired_tab);
 
                     for(var j=0; j<all_tabs.length;j++){
@@ -207,6 +254,7 @@
 				});
 			}
 
+			// CHAT SEND
 			document.getElementById('extension-voco-text-input-send-button').addEventListener('click', (event) => {
 				if(this.debug){
                     console.log("send text command button clicked");
@@ -215,7 +263,40 @@
 			});
 			
 			
+			// CHAT MORE
+			document.getElementById('extension-voco-text-input-more-button').addEventListener('click', (event) => {
+				if(this.debug){
+                    console.log("show more text input options button clicked. this.llm_assistant_started: ", this.llm_assistant_started);
+                }
+				content_container_el.classList.add('extension-voco-show-full-assistant');
+			});
 			
+			
+			// CHAT SHOW LESS
+			document.getElementById('extension-voco-text-input-less-button').addEventListener('click', (event) => {
+				if(this.debug){
+                    console.log("Show less input buttons button clicked");
+                }
+				content_container_el.classList.remove('extension-voco-show-full-assistant');
+			});
+			
+			
+			// CHAT RESET
+			document.getElementById('extension-voco-text-input-reset-button').addEventListener('click', (event) => {
+				if(this.debug){
+                    console.log("Reset text chat button clicked. this.llm_assistant_started: ", this.llm_assistant_started);
+                }
+				
+				text_chat_container.innerHTML = '';
+				
+				
+				if(this.llm_assistant_started){
+					this.reset_assistant();
+				}
+				else{
+					
+				}
+			});
 			
 
             // Reset poll attempts if the user clicks on "voco not available" warning.
@@ -377,8 +458,21 @@
 					
 					if(typeof body['main_site_id'] == 'string'){
 						this.site_id = body['main_site_id'];
+						if(this.debug){
+							console.log("Voco: debug: my site_id is: ", this.site_id);
+						}
 					}
 
+					if(typeof body['llm_assistant_started'] != 'undefined'){
+						if(body['llm_assistant_started'] && this.assistant_text_chat_hints_added == false ){
+							this.assistant_text_chat_hints_added = true;
+							this.text_chat_hints = this.text_chat_hints.concat(this.assistant_text_chat_hints);
+							if(this.debug){
+								//console.log("voco: debug: LLM Assistant is up, added assistant hints: ", this.text_chat_hints);
+							}
+						}
+					}
+					
 					// Remove spinner
 					document.getElementById("extension-voco-loading").remove();
 
@@ -523,12 +617,12 @@
 
 			this.interval = setInterval( () => {
 				try{
-					if( main_view.classList.contains('selected') ){
+					if( !document.hidden && main_view.classList.contains('selected') ){
                         this.do_poll();
 						this.update_text_chat();
 					}
                     else{
-                        //console.log('voco is not selected');
+                        //console.log('voco is not selected or page is not visible');
                     }
 				}
                 catch(e){
@@ -536,7 +630,6 @@
                 }
 
 			}, 2000);
-
 
 			// TABS
 
@@ -565,6 +658,7 @@
 				this.update_ai_data();
 			});
 
+			/*
 			document.getElementById('extension-voco-main-llm-playground-write-text-button').addEventListener('click', (event) => {
 				if(document.getElementById('extension-voco-main-llm-playground-textarea').value.length < 15){
 					alert("Please provide more text to summarize");
@@ -592,6 +686,7 @@
 				document.getElementById('extension-voco-main-llm-playground-textarea-buttons').classList.remove('extension-voco-hidden');
 				this.llm_generate_text('', 'stop');
 			});
+			*/
 
 
 
@@ -970,48 +1065,13 @@
 		        window.API.postJson(
 	                `/extensions/${this.id}/api/overlay_poll`
 		        ).then((body) => {
-		        	console.log("got response from /overlay_poll: ", body);
-					// LLM AI
+		        	if(this.debug){
+						console.log("voco: debug: got response from /overlay_poll: ", body);
+					}
 
 					if(typeof body['info_to_show'] != 'undefined'){
-						if(body['info_to_show'] != ''){
-							if(this.previous_info_to_show != body['info_to_show']){
-								this.previous_info_to_show = body['info_to_show'];
-								if( document.getElementById('extension-voco-info-overlay') == null ){
-									let voco_overlay_el = document.createElement('div');
-									voco_overlay_el.setAttribute('id','extension-voco-info-overlay');
-									document.body.appendChild(voco_overlay_el);
-								}
-								let voco_overlay_el = document.getElementById('extension-voco-info-overlay');
-								if(voco_overlay_el){
-									let new_content = '';
-									if(body['info_to_show'] != ''){
-										new_content = '<pre>' + body['info_to_show'] + '</pre>';
-									}
-									voco_overlay_el.innerHTML = new_content;
-									if(new_content != ''){
-										let voco_overlay_close_button = document.createElement('button');
-										voco_overlay_close_button.setAttribute('id','extension-voco-info-overlay-close-button');
-										voco_overlay_close_button.classList.add('text-button');
-
-										voco_overlay_close_button.textContent = 'Close';
-										voco_overlay_close_button.addEventListener('click', (event) => {
-											if(this.debug){
-							                    console.log("closing Voco overlay");
-							                }
-											voco_overlay_el.innerHTML = '';
-										});
-										voco_overlay_el.appendChild(voco_overlay_close_button);
-									}
-									
-								}
-								else{
-									if(this.debug){
-										console.error("voco overlay is missing");
-									}
-								}
-							}
-						}
+						this.info_to_show = body['info_to_show'];
+						this.display_info_overlay();
 					}
 
 				}).catch((e) => {
@@ -1019,10 +1079,94 @@
 
 				}).then((body) => {
 					this.overlay_poll_done = true;
-		        	setTimeout(this.do_overlay_poll,2000);
+		        	//setTimeout(this.do_overlay_poll,2000);
 				})
 			}
 		}
+
+
+		display_info_overlay(){
+			if(this.debug){
+				//console.log("voco: in display_info_overlay:  this.info_to_show: ", this.info_to_show);
+			}
+			try{
+				if(this.previous_info_to_show != this.info_to_show){
+					this.previous_info_to_show = this.info_to_show;
+					if(this.debug){
+						console.log("voco: display_info_overlay has new info_to_show: ", this.info_to_show);
+					}
+					if( document.getElementById('extension-voco-info-overlay') == null ){
+						if(this.debug){
+							console.log("voco: display_info_overlay: adding overlay to document.body");
+						}
+						let voco_overlay_el = document.createElement('div');
+						voco_overlay_el.setAttribute('id','extension-voco-info-overlay');
+						document.body.appendChild(voco_overlay_el);
+					}
+					let voco_overlay_el = document.getElementById('extension-voco-info-overlay');
+					if(voco_overlay_el){
+						voco_overlay_el.innerHTML = '';
+					
+						if(this.info_to_show != ''){
+							//new_content = '<div id="extension-voco-info-overlay-big-close-button"></div><pre>' + this.info_to_show + '</pre>';
+						
+							// add huge close button
+							let voco_overlay_big_close_button_el = document.createElement('div');
+							voco_overlay_big_close_button_el.setAttribute('id','extension-voco-info-overlay-big-close-button');
+							voco_overlay_big_close_button_el.addEventListener('click', (event) => {
+								if(this.debug){
+				                    console.log("voco: clicked on big overlay close button");
+				                }
+								voco_overlay_el.innerHTML = '';
+								this.clear_info_to_show();
+							});
+							voco_overlay_el.appendChild(voco_overlay_big_close_button_el);
+					
+							// add content
+							let voco_overlay_main_content_el = document.createElement('pre');
+							voco_overlay_main_content_el.innerHTML = this.info_to_show;
+							voco_overlay_el.appendChild(voco_overlay_main_content_el);
+							
+							// add small close button
+							let voco_overlay_close_button = document.createElement('button');
+							voco_overlay_close_button.setAttribute('id','extension-voco-info-overlay-close-button');
+							voco_overlay_close_button.classList.add('text-button');
+
+							voco_overlay_close_button.textContent = '✕';
+							voco_overlay_close_button.addEventListener('click', (event) => {
+								if(this.debug){
+				                    console.log("closing Voco overlay");
+				                }
+								voco_overlay_el.innerHTML = '';
+								this.clear_info_to_show();
+							});
+							voco_overlay_el.appendChild(voco_overlay_close_button);
+					
+						}
+					
+					}
+					else{
+						if(this.debug){
+							console.error("voco overlay is missing");
+						}
+					}
+				}
+				else{
+					if(this.debug){
+						//console.log("voco: info_to_show is same as previous");
+					}
+				}
+			}
+			catch(e){
+				console.error("voco: caught error trying to show big text overlay: ", e);
+				let voco_overlay_el = document.getElementById('extension-voco-info-overlay');
+				if(voco_overlay_el){
+					voco_overlay_el.innerHTML = '';
+				}
+			}
+			
+		}
+
 
 
 		do_poll(){
@@ -1097,12 +1241,19 @@
 				this.attempts = 0;
 				document.getElementById('extension-voco-main-controller-not-responding').style.display = 'none';
 
+	  		    if(this.ai_tab_shown && typeof body['llm_wakeword_model'] == 'string'){
+  					this.change_title(body['llm_wakeword_model']);
+  				}
+				
+				if(typeof body['info_to_show'] != 'undefined'){
+					this.info_to_show = body['info_to_show'];
+					this.display_info_overlay();
+				}
+
 				//console.log(body['items']);
 				if(body['state'] == true){
 					this.items_list = body['items'];
 					this.current_time = body['current_time'];
-
-
 
                     if(body['is_satellite'] == false){
                         if(body['initial_injection_completed']){
@@ -1160,8 +1311,16 @@
 						if(body['text_response'].length != 0){
 							
 						}
+						if(this.should_reset_previous_chat_response){
+							this.should_reset_previous_chat_response = false;
+							this.previous_text_chat_response = [];
+						}
+						
 						this.text_chat_response = body['text_response'];
 						this.update_text_chat();
+						
+						
+						
 					}
 
                     // Update list of timers
@@ -1358,7 +1517,7 @@
 
 				let content_container_el = document.getElementById('extension-voco-content-container');
 
-			  if(content_container_el){
+				if(content_container_el){
 					if(typeof body['llm_wakeword_started'] != 'undefined'){
 						this.llm_wakeword_started = body['llm_wakeword_started'];
 						if(this.llm_wakeword_started){
@@ -1432,7 +1591,9 @@
 
 		update_text_chat(){
 			if(this.debug){
-				console.log("voco: in update_text_chat.\nthis.text_chat_response: \n-", this.text_chat_response,"\n-",this.previous_text_chat_response);
+				console.log("voco: in update_text_chat");
+				console.log("- this.text_chat_response: ", this.text_chat_response);
+				console.log("- this.previous_text_chat_response: ", this.previous_text_chat_response);
 			}
 			
 			// Remove the existing old messages first
@@ -1471,25 +1632,39 @@
 			
 			
 			if(this.text_chat_messages.length == 0){
+				if(this.debug){
+					console.log("update_text_chat: stopping because text_chat_messages length is still 0, so no command was been given yet");
+				}
 				return
 			}
 			
-			if(this.text_chat_response == [] || this.text_chat_response == null){
+			if(this.text_chat_response == null || this.text_chat_response.length == 0){
+				if(this.debug){
+					console.log("update_text_chat: returning. Latest text_chat response is empty. Setting previous_text_chat_response to empty array too");
+				}
 				this.previous_text_chat_response = [];
 				return
 			}
 			
 			// Add new text chat message (if it exists)
-			if(this.text_chat_response == this.previous_text_chat_response){
+			if(JSON.stringify(this.text_chat_response) == JSON.stringify(this.previous_text_chat_response)){
+				if(this.debug){
+					console.log("update_text_chat: returning. text_chat_response and previous_text_chat_response are the same.");
+				}
 				return
 			}
 			
 			// Skip the very first message, since it may be a left-over.
 			if(this.previous_text_chat_response == null){
+				if(this.debug){
+					console.log("update_text_chat: returning. previous_text_chat_response was still null. Setting it to text_chat_response instead: ", this.text_chat_response);
+				}
 				this.previous_text_chat_response = this.text_chat_response;
 				return
 			}
-			this.previous_text_chat_response = this.text_chat_response;
+			
+			
+			
 			
 			this.reset_to_allow_sending_text_chat();
 			
@@ -1499,15 +1674,16 @@
 			for( let c = 0; c < this.text_chat_response.length; c++){
 				let nicer_text = this.text_chat_response[c];
 				
+				if( this.previous_text_chat_response.indexOf(nicer_text) != -1){
+					console.log("skipping sentence was also in the previous_text_chat_response: ", nicer_text);
+					continue
+				}
+				
 				nicer_text = nicer_text.replace(/ \./g, '\.'); //.replace(" .", "."); // remove spaces before periods
 
-				function applySentenceCase(str) {
-				    return str.replace(/.+?[\.\?\!](\s|$)/g, function (txt) {
-				        return txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase();
-				    });
+				if(this.text_chat_response.length == 1){
+					nicer_text = this.applySentenceCase(nicer_text);
 				}
-
-				nicer_text = applySentenceCase(nicer_text);
 				nicer_text = nicer_text.replace(/\. /g, '\.\<br\/\>'); // replace periods with BR tag
 
 				if(this.debug){
@@ -1517,11 +1693,16 @@
 				this.add_text_chat_message(nicer_text,'response');
 			}
 			
-			
-			
-			
-			
+			this.previous_text_chat_response = this.text_chat_response;
 		}
+
+
+		applySentenceCase(str) {
+		    return str.replace(/.+?[\.\?\!](\s|$)/g, function (txt) {
+		        return txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase();
+		    });
+		}
+		
 
 		add_text_chat_message(message,message_type){
 			const text_chat_container = document.getElementById('extension-voco-text-chat-container');
@@ -1532,6 +1713,11 @@
 			new_message_el.classList.add('extension-voco-text-chat-' + message_type);
 			new_message_el.setAttribute('id','extension-voco-text-chat-message' + this.text_chat_nr);
 			new_message_el.innerHTML = '<span>' + message + '</span>';
+			if(message_type == 'command'){
+				new_message_el.addEventListener('click', (event) => {
+					document.getElementById('extension-voco-text-input-field').value = message;
+				});
+			}
 			
 			text_chat_container.appendChild(new_message_el);
 			
@@ -1878,6 +2064,10 @@
 	  						content_container_el.classList.remove('extension-voco-wakeword-running');
 	  					}
 	  				}
+					
+		  		    if(typeof body['llm_wakeword_model'] == 'string'){
+						this.change_title(body['llm_wakeword_model']);
+					}
 
 	  				if(typeof body['llm_tts_started'] != 'undefined'){
 	  					this.llm_tts_started = body['llm_tts_started'];
@@ -1973,6 +2163,19 @@
 	  			console.error("Voco: error during llm_init api call: ", e);
 	        });
 		}
+
+
+		change_title(new_title){
+			if(new_title != this.current_page_title){
+				this.current_page_title = new_title;
+				new_title = new_title.replace('_',' ');
+				new_title = new_title.replace('-',' ');
+				new_title = this.applySentenceCase(new_title);
+				document.getElementById('extension-voco-title').textContent = new_title;
+			}
+			
+		}
+
 
 
 		//generate_llm_models_list(llm_type='tts',models={}, active_model='none'){
@@ -2238,7 +2441,9 @@
 				this.busy_doing_text_chat_command = true;
 				document.getElementById('extension-voco-text-input-send-button').setAttribute("disabled", "disabled");
 				this.last_text_chat_start_time = Date.now(); // Math.floor((new Date()).getTime() / 1000)
-
+				
+				//this.previous_text_chat_response = [];
+				
 		  		// Send text query
 		        window.API.postJson(
 		          `/extensions/voco/api/parse`,
@@ -2257,6 +2462,8 @@
 					text_input_field.value = "";
 					
 					this.add_text_chat_message(text,'command');
+					
+					this.should_reset_previous_chat_response = true;
 					
 					// Show waiting for chat response indicator
 					
@@ -2279,20 +2486,48 @@
 		
 
 		reset_to_allow_sending_text_chat(){
-			
 			this.last_text_chat_start_time = 0;
 			const text_chat_waiting_for_response_el = document.getElementById('extension-voco-text-chat-waiting-for-response');
 			if(text_chat_waiting_for_response_el){
 				text_chat_waiting_for_response_el.style.display = 'none';
 			}
 			setTimeout(() => {
+				if(text_chat_waiting_for_response_el){
+					text_chat_waiting_for_response_el.style.display = 'none';
+				}
 				this.busy_doing_text_chat_command = false;
 				document.getElementById('extension-voco-text-input-send-button').removeAttribute("disabled");
 			},2000);
-			
-			
 		}
 
+		reset_assistant(){
+	        window.API.postJson(
+	          `/extensions/${this.id}/api/ajax`,
+				{'action':'llm_reset_assistant'}
+
+	        ).then((body) => {
+				if(this.debug){
+					console.log("llm_reset_assistant response: ", body);
+				}
+	        }).catch((e) => {
+	  			console.error("Voco: error during llm_reset_assistant api call: ", e);
+	        });
+		}
+
+
+		clear_info_to_show(){
+	        window.API.postJson(
+	          `/extensions/${this.id}/api/ajax`,
+				{'action':'clear_info_to_show'}
+
+	        ).then((body) => {
+				if(this.debug){
+					console.log("clear_info_to_show response: ", body);
+				}
+	        }).catch((e) => {
+	  			console.error("Voco: error during clear_info_to_show api call: ", e);
+	        });
+		}
 
 
 		llm_generate_text(prompt,llm_action='generate'){

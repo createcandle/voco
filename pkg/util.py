@@ -345,11 +345,11 @@ def clean_up_string_for_chatting(sentence):
         
         # If there is only one sentence, remove the trailing period
         period_counter = sentence.count('.')
-        if period_counter == 1 and sentence[-1] == '.':
-            sentence = sentence[:-1]
-            
+        #if period_counter == 1 and sentence[-1] == '.':
+        #    sentence = sentence[:-1]
+        
         # If there are multiple sentences, capitalize all of them
-        if len(sentence) > 5 and "." in sentence:
+        if len(sentence) > 5 and period_counter > 1: #"." in sentence:
             numLetters = 0
             capitalized_parts = []
             for s in sentence.split('. '):

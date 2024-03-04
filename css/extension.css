@@ -14,8 +14,9 @@
     font-family: 'Open Sans', sans-serif;
     font-weight: normal;
     font-size: 1.8rem;
+	text-transform: capitalize;
     margin: 0 auto;
-    display: block;
+    display: inline-block;
     padding: 1rem;
     padding-left: 3.8rem;
     font-size: 1.8rem;
@@ -23,7 +24,7 @@
     background-repeat: no-repeat;
     background-position: 0;
     background-image: url('../images/menu-icon.svg');
-    width: 8rem;
+    width: auto;
     margin: 0 auto;
 }
 
@@ -517,11 +518,16 @@ body #extension-voco-view .extension-voco-tab-selected {
     transform: scale(2);
 }
 
-.extension-voco-line2 {
+.extension-voco-line2,
+.extension-voco-line3 {
     display: flex;
     flex-wrap: wrap;
     justify-content: space-between;
     width: 100%;
+}
+.extension-voco-line3{
+	justify-content:flex-end;
+	opacity:.5;
 }
 
 .extension-voco-line2>div {
@@ -678,6 +684,10 @@ body #extension-voco-view .extension-voco-tab-selected {
     color: black;
 }
 
+#extension-voco-text-input-field::placeholder{
+	color:#888;
+}
+
 
 #extension-voco-text-chat-container-wrapper{
 	display:flex;
@@ -721,6 +731,7 @@ body #extension-voco-view .extension-voco-tab-selected {
 .extension-voco-text-chat-command{
 	text-align:right;
 	margin-left:30%;
+	cursor:pointer;
 }
 .extension-voco-text-chat-command > span{
   background: #0084ff;
@@ -801,6 +812,21 @@ body #extension-voco-view .extension-voco-tab-selected {
     line-height: 3rem;
 }
 */
+
+/*  SHOW MORE LLM AI ASSISTANT OPTIONS  */
+
+#extension-voco-text-input-more-buttons-container{
+	display:none;
+	flex-direction:column;
+}
+.extension-voco-show-full-assistant #extension-voco-text-input-more-buttons-container{
+	display:flex;
+}
+#extension-voco-text-input-more-button.extension-voco-hidden + #extension-voco-text-input-more-buttons-container{
+	display:flex;
+}
+
+
 
 
 #extension-voco-text-chat-response:first-letter {
@@ -1286,42 +1312,148 @@ f #extension-voco-matrix-invite-management-output {
 }
 
 #extension-voco-info-overlay {
+	display:flex;
     position: fixed;
-    top: 9rem;
-    left: 2rem;
-    bottom: 2rem;
-    right: 2rem;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    right: 0;
     z-index: 9999999;
+	background-color:rgba(0,0,0,.9);
 }
 #extension-voco-info-overlay:empty{
 	display:none;
 }
 
+#extension-voco-info-overlay > #extension-voco-info-overlay-big-close-button{
+	height:100%;
+	width:0;
+	flex-grow:1;
+	cursor:pointer;
+}
+
 #extension-voco-info-overlay > pre {
     white-space: pre-wrap;
     overflow: auto;
-    height: 100%;
+    height: calc(100% - 4rem);
     width: 100%;
-    padding: 2rem;
+	max-width:80rem;
+    padding: 2rem 2rem 2rem 5rem;
     padding-bottom: 9rem;
     background-color: #0c3b5c;
     color: #ddd;
     border-radius: 1rem;
-	box-sizing:border-box;
 	font-size: 2.2rem;
 	font-family:sans-serif;
-	margin:0;
+	margin:2rem 2rem 2rem 2rem;
 	overflow:auto;
+	box-sizing:border-box;
+	position:relative;
 }
 
 #extension-voco-info-overlay-close-button {
     position: absolute;
-    bottom: 2rem;
-    right: 2rem;
+	display:flex;
+	align-items:center;
+	justify-content:center;
+    top: 3rem;
+    right: 3rem;
+	width:4rem;
+	height:4rem;
+	border-radius:50%;
+	font-size:2rem;
+	color:#ddd;
 }
 
+#extension-voco-info-overlay-close-button:hover{
+	color:#fff;
+	background-color:#900;
+}
 
+#extension-voco-info-overlay .extension-voco-display-text-query{
+	display:block;
+	margin-bottom:4rem;
+	opacity:.6;
+	font-style:italic;
+	padding-right:1rem;
+	border-bottom: 1px solid #bbb;
+	padding-bottom: 2rem;
+	width: calc(100% - 4rem);
+}
 
+/*
+#extension-voco-info-overlay .extension-voco-display-text-sentence + .extension-voco-display-text-period + .extension-voco-display-text-sentence:before{
+	content:'';
+	display:block;
+	width:0;
+	height:10rem;
+}
+*/
+#extension-voco-info-overlay .extension-voco-display-text-sentence + .extension-voco-display-text-colon:after,
+#extension-voco-info-overlay .extension-voco-display-text-sentence + .extension-voco-display-text-period:after{
+	content:'';
+	display:block;
+	width:100%;
+	height:4rem;
+}
+
+#extension-voco-info-overlay .extension-voco-display-text-questionmark,
+#extension-voco-info-overlay .extension-voco-display-text-exclamationmark{
+	margin-right:1rem;
+}
+
+/*
+#extension-voco-info-overlay .extension-voco-display-text-colon + .extension-voco-display-text-sentence{
+	margin-left:1rem;
+}
+*/
+/*
+#extension-voco-info-overlay .extension-voco-display-text-questionmark:after,
+#extension-voco-info-overlay .extension-voco-display-text-exclamationmark:after,
+#extension-voco-info-overlay .extension-voco-display-text-period:after,
+#extension-voco-info-overlay .extension-voco-display-text-colon:after{
+	content:'';
+	display:block;
+	width:100%;
+	height:2rem;
+}
+*/
+
+/*
+#extension-voco-info-overlay .extension-voco-display-text-digit:before{
+	content:'';
+	display:block;
+	width:0;
+	height:2rem;
+}
+*/
+
+#extension-voco-info-overlay .extension-voco-display-text-digit{
+	display:inline-flex;
+	width:3rem;
+	height:3rem;
+	background-color:rgba(128,128,128,.2);
+	align-items:center;
+	justify-content:center;
+	border-radius:2.5rem;
+	position:relative;
+	/*left:-6rem;*/
+	margin-left:-4rem;
+	margin-right:1rem;
+}
+#extension-voco-info-overlay .extension-voco-display-text-digit + .extension-voco-display-text-period{
+	display:none;
+}
+/*
+#extension-voco-info-overlay .extension-voco-display-text-digit + .extension-voco-display-text-period + .extension-voco-display-text-sentence{
+	margin-left:4rem;
+	font-weight:bold;
+}
+*/
+
+#extension-voco-info-overlay .extension-voco-display-text-digit + .extension-voco-display-text-period ~ .extension-voco-display-text-sentence{
+	color:#eee;
+}
 
 #extension-voco-main-llm-tts-running-panel {
     display: flex;
@@ -1500,7 +1632,8 @@ f #extension-voco-matrix-invite-management-output {
 
 
 @media screen and (min-width: 641px) {
-    .extension-voco-line2 {
+	.extension-voco-line2,
+    .extension-voco-line3 {
         width: auto;
         margin-left: 6rem;
     }
@@ -1595,8 +1728,23 @@ f #extension-voco-matrix-invite-management-output {
 	
 
 	#extension-voco-info-overlay > pre {
-		padding:4rem;
+		padding:4rem 8rem;
 		font-size: 4rem;
+		border-radius: 2rem;
+	}
+	#extension-voco-info-overlay .extension-voco-display-text-digit{
+		width:5rem;
+		height:5rem;
+		margin-left:-6rem;
+	}
+	#extension-voco-info-overlay .extension-voco-display-text-query{
+		padding-top: 2rem;
+		padding-bottom: 4rem;
+		width: calc(100% - 4rem);
+	}
+	
+	#extension-voco-text-input-more-buttons-container:not(.extension-voco-text-input-more-buttons-expanded){
+		flex-direction:row;
 	}
 
 }

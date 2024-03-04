@@ -1,8 +1,9 @@
 <div id="extension-voco-content" class="extension-voco-show-tab-timers">
   
     <div id="extension-voco-content-container">
-        <h3 id="extension-voco-title">Voco</h3>
-		
+        <div style="text-align:center">
+			<h3 id="extension-voco-title">Voco</h3>
+		</div>
 		<div id="extension-voco-add-token">
             <h3>Your permission is required</h3>
 			<p>To fully use Voco you will first need to give it permission to control your things.</p>
@@ -64,7 +65,15 @@
 			<div id="extension-voco-text-chat-waiting-for-response"></div>
 			<div id="extension-voco-text-input-container">
 				<textarea id="extension-voco-text-input-field" placeholder="What time is it?"></textarea>
-				<button id="extension-voco-text-input-send-button" class="text-button">Send</button>
+				<div id="extension-voco-text-input-buttons-container">
+					<button id="extension-voco-text-input-send-button" class="text-button">Send</button>
+					<button id="extension-voco-text-input-reset-button" class="text-button" title="Restart the AI assistant. It will forget what it has been talking about">Reset</button>
+					
+					<div id="extension-voco-text-input-more-buttons-container">
+						<button id="extension-voco-text-input-more-button" class="text-button">More</button>
+						<button id="extension-voco-text-input-less-button" class="text-button">Less</button>
+					</div>
+				</div>
 			</div>
 
 			
