@@ -3282,7 +3282,7 @@ class VocoAdapter(Adapter):
                     
                 if voice_message == '':
                     print("[...] ERROR, voice message was empty string")
-                    voice_message = 'Error in speak: message was empty string'
+                    voice_message = 'debug: Error in speak: message was empty string'
                 else:
                     print("[...] speak: " + str(voice_message))
                 #print("[...] intent: " + str(json.dumps(intent, indent=4)))
@@ -3515,9 +3515,9 @@ class VocoAdapter(Adapter):
             else:
                 #if not self.persistent_data['is_satellite']:
                 
-                if len(voice_message) > 1:
+                if len(voice_message) > 1 and not voice_message.lower().startswith('debug'):
                     if self.DEBUG:
-                        print("speaking: site_id '" + str(site_id) + "' is not relevant for this site, will publish to MQTT")
+                        print("speaking: site_id '" + str(site_id) + "' is not relevant for this site, will publish to MQTT: " + str(voice_message))
                     self.mqtt_client.publish("hermes/voco/" + str(site_id) + "/speak",json.dumps({"message":voice_message,"intent":intent}))
             
                 #self.mqtt_client.publish("hermes/voco/" + str(payload['siteId']) + "/play",json.dumps({"sound_file":"start_of_input"}))
@@ -6208,10 +6208,13 @@ class VocoAdapter(Adapter):
                         intent_message['origin'] = self.parse_payload_transfer['origin']
                     if 'siteId' in self.parse_payload_transfer:
                         intent_message['siteId'] = self.parse_payload_transfer['siteId']
+                    if 'text' in self.parse_payload_transfer:
+                        intent_message['text'] = self.parse_payload_transfer['text']
+                    if 'customData' in self.parse_payload_transfer and not 'customData' in intent_message:
+                        intent_message['customData'] = self.parse_payload_transfer['customData']
                     
-                    if not 'customData' in intent_message:
-                        intent_message['customData'] = {}
-                    intent_message['customData']['parsed'] = True
+                    #    intent_message['customData'] = {}
+                    #intent_message['customData']['parsed'] = True
                     
                     self.parse_payload_transfer = None
                     
@@ -7530,13 +7533,13 @@ class VocoAdapter(Adapter):
                             if 'parsed' in payload['customData']:
                                 if self.DEBUG:
                                     print("ERROR/WARNING, this message to /parse already had 'parsed' set in the payload customData: " + str(payload['customData']))
-                                if payload['customData']:
+                                if payload['customData']['parsed']:
                                     if self.DEBUG:
-                                        print("PARSED WAS ALREADY TRUE, ABORTING")
+                                        print("\nPARSED WAS ALREADY TRUE, ABORTING\n")
                                     return
-                                
-                            payload['customData']['parsed'] = True
-                            payload['customData']['backup_siteId'] = self.persistent_data['site_id']
+                                else:
+                                    payload['customData']['parsed'] = True
+                                    payload['customData']['parsed_by'] = self.persistent_data['site_id']
                 
                             self.parse_payload_transfer = payload
                 
@@ -8085,38 +8088,54 @@ class VocoAdapter(Adapter):
         
         if intent_message == None:
             if self.DEBUG:
-                print("ERROR in master_intent_callback, intent_message was None")
+                print("\nERROR in master_intent_callback: intent_message was None. Aborting.")
             return
+            
+        if not 'input' in intent_message:
+            if self.DEBUG:
+                print("\nERROR in master_intent_callback: missing 'input' (the sentence) in intent_message. Aborting.")
+            return
+            
+        if self.DEBUG:
+            print("\n\n\n     ---- In MASTER INTENT CALLBACK ----")
+            print(str(intent_message))
+            print("\n\n\n")
+            print("intent_message['origin']: " + str(intent_message['origin']))
+            
             
         final_test = False # there is a main incoming intent, and potentially some alternatives that can ale be tested. If we're on the last alternative (and still haven't gotten a good match), then this will cause various failure-related voice message to be spoken.
         this_is_origin_site = False # Whether the origin site of the intent (e.g. a satellite or the main controller) is the same site as this controller.
         found_thing_on_satellite = False # If this is a satellite that handles intents for things, then it matters whether there was an good match with the likely desired thing. If there wasn't, then saying "sorry, the thing was not found" is not important, as it would be the main controller's job to figure that out.
         best_confidence_score = 0
         
-        sentence = ""
+
         voice_message = ""
         word_count = 1
+        sentence = str(intent_message['input']).lower() # TODO: is it smart to make the sentence lowercase?
         
-        if self.DEBUG:
-            print("\n\n\n     ---- In MASTER INTENT CALLBACK ----")
-            print(str(intent_message))
-            print("\n\n\n")
-            print("intent_message['origin']: " + str(intent_message['origin']))
+        
+        
+        if sentence == "":
+            if self.DEBUG:
+                print("\nERROR in master_intent_callback: sentence is empty string. Aborting.")
+            return
+        
+        
         
         try:
             
             came_from_targetted_parse = False
-            if intent_message != None and 'customData' in intent_message and intent_message['customData'] != None and 'parsed' in intent_message['customData'] and intent_message['customData']['parsed'] == True:
+            if 'customData' in intent_message and intent_message['customData'] != None and 'parsed' in intent_message['customData'] and intent_message['customData']['parsed'] == True:
                 if self.DEBUG:
-                    print("NOTE: This message was itself already received from another controller via hermes/voco/[site_id]/parse, so should not be passed on any further (to avoid loops)")
+                    print("NOTE: master_intent_callback: This message was itself already received from another controller via hermes/voco/[site_id]/parse, so should not be passed on any further (to avoid loops)")
                 came_from_targetted_parse = True
             if self.DEBUG:
-                print("came_from_targetted_parse: " + str(came_from_targetted_parse))
+                print("master_intent_callback: came_from_targetted_parse: " + str(came_from_targetted_parse))
             
             
         except Exception as ex:
             if self.DEBUG:
-                print("error setting up alternatives loop: " + str(ex))
+                print("master_intent_callback: error setting up alternatives loop: " + str(ex))
         
         try:
             all_possible_intents = []
@@ -8172,7 +8191,7 @@ class VocoAdapter(Adapter):
                             
                         else:
                             if self.DEBUG:
-                                print("Strange, intent is None?")
+                                print("master_intent_callback: Strange, intent is None?")
                                 
                     else:
                         if self.DEBUG:
@@ -8182,12 +8201,12 @@ class VocoAdapter(Adapter):
                     index += 1
         except Exception as ex:
             if self.DEBUG:
-                print("Error getting list of possible intents: " + str(ex))
+                print("caught ERROR in master_intent_callback: getting list of possible intents failed: " + str(ex))
         
         
         if intent_message['input'] == None:
             if self.DEBUG:
-                print("aborting - intent message had no input??: " + str(intent_message))
+                print("master_intent_callback: aborting - intent message had no input??: " + str(intent_message))
             return
             
         sentence = str(intent_message['input']).lower() # TODO: is it smart to make the sentence lowercase?
@@ -9732,7 +9751,7 @@ class VocoAdapter(Adapter):
             all_property_titles_list_lowercase.append(property_titlex.lower())
         
         
-        if self.DEBUG:
+        if self.DEBUG2:
             print("# all_thing_titles_list_lowercase: " + str(all_thing_titles_list_lowercase))
             print("# all_property_titles_list_lowercase: " + str(all_property_titles_list_lowercase))
         
@@ -9869,6 +9888,10 @@ class VocoAdapter(Adapter):
             if self.DEBUG:
                 print("No sentence available in things scanner. Error: " + str(ex))
         
+        if self.DEBUG:
+            if sentence == "":
+                print("\n\nTHING SCANNER: SENTENCE IS EMPTY STRING")
+            
 
         if target_thing_title == None and target_property_title == None and target_space == None:
             if self.DEBUG:
@@ -9879,9 +9902,11 @@ class VocoAdapter(Adapter):
         # Get all the things data via the API
         try:
             if self.try_updating_things():
-                print("check_things: things list was succesfully updated")
+                if self.DEBUG:
+                    print("check_things: things list was succesfully updated")
         except Exception as ex:
-            print("Error, couldn't load things: " + str(ex))
+            if self.DEBUG:
+                print("Error, couldn't load things: " + str(ex))
         
         
         result = [] # This will hold all found matches
