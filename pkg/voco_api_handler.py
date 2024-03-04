@@ -776,6 +776,7 @@ class VocoAPIHandler(APIHandler):
                                                         'llm_not_enough_disk_space':self.adapter.llm_not_enough_disk_space,
                                                         'free_memory':self.adapter.free_memory,
                                                         'fastest_controller_id':self.adapter.fastest_controller_id,
+                                                        'fastest_controller_score':self.adapter.fastest_controller_score,
                                                         'llm_tts_started': self.adapter.llm_tts_started,
                                                         'llm_stt_started': self.adapter.llm_stt_started,
                                                         'llm_wakeword_started': self.adapter.llm_wakeword_started,
@@ -911,12 +912,12 @@ class VocoAPIHandler(APIHandler):
                                                                         'update':"Please change the hostname first"
                                                                         }),
                                                 )
+                                                
                                         except Exception as ex:
                                             if self.DEBUG:
                                                 print("Error checking if hostname is something other than 'candle': " + str(ex))
                                         
                                         try:
-                                            
                                             
                                             self.adapter.persistent_data['is_satellite'] = bool(request.body['is_satellite'])
 
@@ -960,12 +961,12 @@ class VocoAPIHandler(APIHandler):
                                                     if self.DEBUG:
                                                         print("- Satellite mode enabled")
                                                         
-                                                    
-                                                        
                                                 else:
                                                     update = 'Error: could not find IP address of prefered controller'
                                             else:
-                                                
+                                                if self.DEBUG:
+                                                    print("- Satellite mode disabled")
+                                                    
                                                 # No longer a satellite
                                                 self.adapter.persistent_data['mqtt_server'] = 'localhost'
                                                 self.adapter.persistent_data['main_controller_ip'] = 'localhost'
@@ -985,8 +986,7 @@ class VocoAPIHandler(APIHandler):
                                                 
                                                 state = True
                                                 update = 'Satellite mode disabled'
-                                                if self.DEBUG:
-                                                    print("- Satellite mode disabled")
+                                                
                                                 
                                             
                                         except Exception as ex:

@@ -343,6 +343,7 @@ class VocoAdapter(Adapter):
         self.llm_assistant_temperature = 0 # use 0.7 for more unpredictable/creative output
         
         self.llm_assistant_first_words_to_avoid = ['disable','stop','enable','start','create','set']
+        self.llm_assistant_last_words_to_avoid = ['light','lights','off','on']
         self.llm_assistant_signal1_words_to_avoid = ['turn', 'switch','toggle']
         self.llm_assistant_signal2_words_to_avoid = ['on','off']
         
@@ -4462,6 +4463,13 @@ class VocoAdapter(Adapter):
                             print("clock: assistant_stdout: " + str(assistant_stdout))
                         self.llm_assistant_process.stdout.flush()
                         
+                        assistant_stderr = str(os.read(self.llm_assistant_process.stderr.fileno(), 10240))
+                        if self.DEBUG:
+                            if len(str(assistant_stderr)) > 1:
+                                pass
+                            print("\n\nclock: assistant_stdERROR: " + str(assistant_stderr))
+                            print("")
+                            
                     except OSError:
                         # the os throws an exception if there is no data
                         #print('[No more data]')
@@ -6595,29 +6603,36 @@ class VocoAdapter(Adapter):
                             print("toggleOn: unsubscribing from audio_frame_topic")
                             
                         if self.llm_assistant_process == None:
-                            print("toggleOn: WARNING, assistant process is None")
+                            if self.DEBUG:
+                                print("toggleOn: WARNING, assistant process is None")
                             self.llm_assistant_started = False
                         elif self.llm_assistant_process.poll() != None:
-                            print("toggleOn: WARNING, assistant process has stopped!")
+                            if self.DEBUG:
+                                print("toggleOn: WARNING, assistant process has stopped!")
                             self.llm_assistant_started = False
                         else:
-                            print("toggleOn: assistant process seems to be running OK")
+                            if self.DEBUG:
+                                print("toggleOn: assistant process seems to be running OK")
                             self.llm_assistant_started = True
                             
                         if self.llm_stt_process == None:
-                            print("toggleOn: WARNING, stt process is none")
+                            if self.DEBUG:
+                                print("toggleOn: WARNING, stt process is none")
                             self.llm_stt_started = False
                         elif self.llm_stt_process.poll() != None:
-                            print("toggleOn: WARNING, stt process has stopped!")
+                            if self.DEBUG:
+                                print("toggleOn: WARNING, stt process has stopped!")
                             self.llm_stt_started = False
                         else:
-                            print("toggleOn: stt process seems to be running OK")
+                            if self.DEBUG:
+                                print("toggleOn: stt process seems to be running OK")
                             self.llm_stt_started = True
                         
                         self.mqtt_second_client.unsubscribe(self.audio_frame_topic)
                         
                     except Exception as ex:
-                        print("error unsubscribing from audio frame topic on first mqtt client: " + str(ex))
+                        if self.DEBUG:
+                            print("error unsubscribing from audio frame topic on first mqtt client: " + str(ex))
                     
                     
             if self.persistent_data['listening'] == True:
@@ -7659,7 +7674,7 @@ class VocoAdapter(Adapter):
         #print(str(msg))
 
 
-    def send_mqtt_ping(self, broadcast=False, ping_type="ping",target_site_id=None):
+    def send_mqtt_ping(self, broadcast=False, ping_type="ping", target_site_id=None):
         if self.DEBUG2:
             print("- - - send_mqtt_ping: About to ping or pong. Broadcast flag = " + str(broadcast) + ", ping_type: " + str(ping_type))
             
@@ -7683,6 +7698,7 @@ class VocoAdapter(Adapter):
                         print("\n    ---( . . . ping . . . )\n")
                         
                 self.mqtt_client.publish(mqtt_ping_path,json.dumps({
+                            'ping_type':str(ping_type),
                             'ip':str(self.ip_address),
                             'siteId':self.persistent_data['site_id'],
                             'hostname':str(self.hostname),
@@ -7707,6 +7723,62 @@ class VocoAdapter(Adapter):
                 print("Warning, not sending broadcast ping. self.mqtt_connected was likely false")
 
 
+    # this gets called when either the AI assistant or the STT server have just started
+    # If both have started it sends a broadcast ping with a pong request to find out which 
+    # other servers exist and have LLM capabilities
+    def check_if_this_is_the_fastest_controller(self):
+        if self.DEBUG:
+            print("in check_if_this_is_the_fastest_controller")
+        if self.llm_stt_started and self.llm_assistant_started:
+            if self.DEBUG:
+                print("\n\n    🌷 Both STT and Assistant have started\n\n")
+                print("sending speedcheck ping")
+            self.send_mqtt_ping(True,'speedcheck')
+        else:
+            if self.DEBUG:
+                print("- either the STT server or the Assistant is not running (yet)")
+                print(" - self.llm_stt_started: " + str(self.llm_stt_started))
+                print(" - self.llm_assistant_started: " + str(self.llm_assistant_started))
+                print("")
+                
+                
+    # find the fastest device that has LLM abilities on the network
+    def update_fastest_controller(self):
+        if self.DEBUG2:
+            print("in update_fastest_controller")
+        
+        fastest_score = 0
+        fastest_id = None
+        fastest_last_ping_time = 0
+        threshold_time = int(time.time()) - 60
+        
+        if self.llm_enabled and self.llm_stt_enabled and self.llm_stt_started and self.llm_assistant_enabled and self.llm_assistant_started:
+            fastest_score = self.hardware_score + 4 # adding four because another controller has to be significantly faster to warrant switching to it. This guarantees it's at least the same Raspberry Pi generation + has at least 4Gb more memory
+            fastest_id = self.persistent_data['site_id']
+            if self.DEBUG2:
+                print("\n\n_ 🏎 _ 🏎 ___\nupdate_fastest_controller: setting this controller as controller to beat. Hardware score: " + str(self.hardware_score))
+        
+        for ip, payload in self.mqtt_others.items():
+            if (    'hardware_score' in payload and payload['hardware_score'] > fastest_score 
+                    and 'has_stt' in payload and payload['has_stt'] == True 
+                    and 'has_assistant' in payload and payload['has_assistant'] == True
+                    and 'last_seen' in payload and payload['last_seen'] > threshold_time
+                    and 'siteId' in payload
+                    ):
+            
+                fastest_score = payload['hardware_score']
+                fastest_id = str(payload['siteId'])
+                if self.DEBUG:
+                    print("_ 🏎 _ 🏎 ___\nupdate_fastest_controller: there is a faster controller: " + str(payload['siteId']))
+            
+        if fastest_id == self.persistent_data['site_id']:
+            fastest_last_ping_time = time.time()
+        
+        self.fastest_controller_score = fastest_score
+        self.fastest_controller_id = fastest_id
+        self.fastest_controller_last_ping_time = fastest_last_ping_time
+
+
 
 
     def parse_ping(self,payload,ping_type="ping"):
@@ -7726,61 +7798,29 @@ class VocoAdapter(Adapter):
             
         if 'ip' in payload and 'siteId' in payload and 'hostname' in payload and 'satellite' in payload and 'main_controller' in payload and 'thing_titles' in payload:
             
-            # Is it the fastest controller?
-            if str(payload['siteId']) == str(self.fastest_controller_id) and 'has_stt' in payload and payload['has_stt'] == True and 'has_assistant' in payload and payload['has_assistant'] == True:
-                if self.DEBUG2:
-                    print("parse_ping: got ping from fastest controller, which is still running STT and Assistant: " + str(payload['siteId']))
-                self.fastest_controller_last_ping_time = time.time()
-                
-            # A controller is saying goodbye
-            if 'running' in payload and payload['running'] == False:
-                if self.DEBUG:
-                    print("parse_ping: a controller is shutting down: " + str(payload['siteId']))
-                if self.fastest_controller_id == str(payload['siteId']):
-                    if self.DEBUG:
-                        print("parse_ping: it's actually the fastest controller that is shutting down. Will need to look for the next fastest controller.")
-                    self.fastest_controller_score = 0
-                    self.fastest_controller_id = None
-                    self.fastest_controller_last_ping_time = 0
-            
-            else:
-                
-                # A controller is alive and well
-                
-                # find the fastest device that has LLM abilities on the network
-                if 'hardware_score' in payload and payload['hardware_score'] > self.fastest_controller_score and 'has_stt' in payload and payload['has_stt'] == True and 'has_assistant' in payload and payload['has_assistant'] == True:
-                    
-                    if self.DEBUG:
-                        print("\n\n_ 🏎 _ 🏎 ___\nparse_ping: got ping from a faster controller: " + str(payload['siteId']))
-                        print(str(self.fastest_controller_score) + " -> " + str(payload['hardware_score']))
-                        if self.hardware_score > payload['hardware_score']:
-                            print("....not as fast as this device though: " + str(self.hardware_score))
-                            print("self.llm_stt_started: " + str(self.llm_stt_started))
-                            print("self.llm_assistant_started: " + str(self.llm_assistant_started))
-                        print("")
-                            
-                    self.fastest_controller_score = payload['hardware_score']
-                        
-                    self.check_if_this_is_the_fastest_controller()
-                
-                    if self.llm_stt_started and self.llm_assistant_started and self.fastest_controller_score < self.hardware_score + 4:
-                        if self.DEBUG:
-                            print("parse_ping: I have LLM features myself, and the other Rasbperry Pi in the network isn't that much better")
-                        self.fastest_controller_id = self.persistent_data['site_id']
-                    else:
-                        if self.DEBUG:
-                            print("parse_ping: Found a faster Rasbperry Pi in the network, with a score of " + str(payload['hardware_score']) + ", it's ID is: " + str(payload['siteId']))
-                        self.fastest_controller_id = payload['siteId']
-                        
-                        
-            
-            # If the message came from another controller
             if payload['siteId'] != self.persistent_data['site_id']:
+                self.mqtt_others[payload['ip']] = payload
                 
+                
+                # A controller is saying goodbye
+                if 'running' in payload and payload['running'] == False:
+                    if self.DEBUG:
+                        print("parse_ping: a controller is shutting down: " + str(payload['siteId']))
+                
+                    # pretend it was last seen in 1970
+                    self.mqtt_others[payload['ip']]['last_seen'] = 0
+
+                    self.update_fastest_controller()
+                
+                    return
+                else:
+                    # remember that this controller was spotted recently
+                    self.mqtt_others[payload['ip']]['last_seen'] = int(time.time())
+            
+            
                 #
                 # Learning the main_site_id of the main controller
                 #
-        
                 if self.persistent_data['is_satellite']:
         
                     #self.connected_satellites = {} # TODO: just to make sure this is empty, since a satellite doesn't have other connected satellites... right? No need?
@@ -7790,10 +7830,11 @@ class VocoAdapter(Adapter):
                     #if payload['ip'] != self.ip_address and payload['ip'] == self.persistent_data['mqtt_server'] and self.persistent_data['main_site_id'] == self.persistent_data['site_id']:
                     if payload['ip'] != self.ip_address and payload['hostname'] == self.persistent_data['main_controller_hostname']: # and self.persistent_data['main_site_id'] == self.persistent_data['site_id']: # and self.persistent_data['main_site_id'] == self.persistent_data['site_id']:
                         if self.DEBUG2:
-                            print("broadcast pong was from intented main MQTT server. This has supplied the intended main_site_id: " + str(payload['siteId']) )
+                            print("broadcast ping was from intented main MQTT server. This has supplied the intended main_site_id: " + str(payload['siteId']) )
                         self.persistent_data['main_controller_ip'] = payload['ip']
                     
                         # This is no longer relevant, as the main controller and the fastest controller can be two separate things
+                        """
                         if 'has_stt' in payload:
                             self.main_controller_has_stt = payload['has_stt']
                             if self.DEBUG2:
@@ -7803,15 +7844,14 @@ class VocoAdapter(Adapter):
                             self.main_controller_has_assistant = payload['has_assistant']
                             if self.DEBUG2:
                                 print("parse_ping: self.main_controller_has_assistant: " + str(self.main_controller_has_assistant))
-                    
+                        """
+                        
                         if self.persistent_data['main_site_id'] != payload['siteId']:
                             self.save_to_persistent_data = True
                             if self.DEBUG2:
                                 print("parse_ping: received the new main_site_id. Saving it.")
                             
                         self.persistent_data['main_site_id'] = payload['siteId']
-        
-        
         
         
                 #
@@ -7888,8 +7928,8 @@ class VocoAdapter(Adapter):
                 #if payload['satellite'] == False: # TODO: why this check? Not needed anymore? Satellites should also have all the information up to date now. 
                 # Ah, I guess to avoid showing controllers to connect to in the UI that are already in satellite mode. That's useful.. Messy, since in some places this check doesn't exist at the moment
                 #if payload['siteId'] != self.persistent_data['site_id']:
-                self.mqtt_others[payload['ip']] = payload #{'hostname':str(payload['hostname']), 'ip':payload['ip', 'last_seen':int(time.time()),'main_controller':payload['main_controller']]
-                self.mqtt_others[payload['ip']]['last_seen'] = int(time.time())
+                #self.mqtt_others[payload['ip']] = payload #{'hostname':str(payload['hostname']), 'ip':payload['ip', 'last_seen':int(time.time()),'main_controller':payload['main_controller']]
+                
             
                 # Save other controller's thing titles
             
@@ -7913,6 +7953,9 @@ class VocoAdapter(Adapter):
                     print("parse_ping: self.persistent_data['satellite_thing_titles']['" + payload['siteId']  + "'] is now this length: " + str(len(self.persistent_data['satellite_thing_titles'][payload['siteId']])) )
                 
                 
+                # figure out which of the controllers is now the fastest on the network, so that it can handle AI calculations
+                self.update_fastest_controller()
+                    
                     
             #if self.save_to_persistent_data:
             #    self.save_persistent_data()
@@ -7929,14 +7972,7 @@ class VocoAdapter(Adapter):
     
     
     
-    def check_if_this_is_the_fastest_controller(self):
-        if self.DEBUG:
-            print("in check_if_this_is_the_fastest_controller")
-        if self.llm_stt_started and self.llm_assistant_started and self.fastest_controller_score <= self.hardware_score:
-            if self.DEBUG:
-                print("Setting fastest_controller_score and fastest_controller_id to this device.  self.hardware_score: " + str(self.hardware_score))
-            self.fastest_controller_score = self.hardware_score
-            self.fastest_controller_id = self.persistent_data['site_id']
+    
 
 
 
@@ -8341,7 +8377,8 @@ class VocoAdapter(Adapter):
         stop_looping = False
         try_again = False
         found_on_satellite = False
-        message_passed_to_main_controller = False
+        multi_thing_command = False
+        message_passed_to_other_controller = False
         all_possible_intents_count = len(all_possible_intents)
         if self.DEBUG:
             print("all_possible_intents_count: " + str(all_possible_intents_count))
@@ -8771,6 +8808,7 @@ class VocoAdapter(Adapter):
                                     #if target_thing_title in self.persistent_data['satellite_thing_titles'][satellite_id]:
                                     
                                     if target_thing_title.lower() in self.multi_things:
+                                        multi_thing_command = True
                                         if not satellite_id in satellites_with_the_thing:
                                             satellites_with_the_thing.append(satellite_id)
                                     else:
@@ -8803,7 +8841,6 @@ class VocoAdapter(Adapter):
                         
                     # TODO: add the reverse too, where a satellite stops if the main controller (or even another satellite) has a better thing title match. DONE?
                     
-                
                     if found_on_satellite == False and len(satellites_with_the_thing) > 0:
                         if self.DEBUG:
                             print("there are other controllers with the vague thing/multi-thing (e.g.'lights')")
@@ -8828,13 +8865,13 @@ class VocoAdapter(Adapter):
                             #if self.periodic_voco_attempts < 3:
                             if self.mqtt_connected:
                                 
-                                if message_passed_to_main_controller == False:
-                                    message_passed_to_main_controller = True
+                                if message_passed_to_other_controller == False:
+                                    message_passed_to_other_controller = True
                                     if self.DEBUG:
                                         print("\npassing to other controllers")
                                         print("this message should be handled by another controller that has the desired device. Passing command on to main/other controller: " + str(sentence))
                                         print(" - came_from_targetted_parse: " + str(came_from_targetted_parse))
-                                        print(" - message_passed_to_main_controller: " + str(message_passed_to_main_controller))
+                                        print(" - message_passed_to_other_controller: " + str(message_passed_to_other_controller))
                                     
                                     session_id = None
                                     if 'sessionId' in intent_message:
@@ -8942,7 +8979,6 @@ class VocoAdapter(Adapter):
                     print("voice message from loop started with OK, so we are definitely done.")
                 break
                 
-                
             elif voice_message.startswith('Sorry'):
                 if final_test == False:
                     if self.DEBUG:
@@ -8985,13 +9021,26 @@ class VocoAdapter(Adapter):
             if self.DEBUG:
                 print("hole in one")
             
+            
+            
+            
+       #
+       #    END OF MASTER_INTENT_CALLBACK
+       # 
+       #    PASS TO ASSISTANT ?
+       #     
+            
+            
         try:
             
             # If I am a satellite, should the central controller speak my message?
             if self.DEBUG:
                 print("End of master_intent_callback")
                 print(" * found_thing_on_satellite: " + str(found_thing_on_satellite))
+                print(" * this_is_origin_site     : " + str(this_is_origin_site))
+                print(" * is_satllite             : " + str(self.persistent_data['is_satellite']))
             
+            # TODO: doesn't this cause some results to strand here that should go on to the AI Assistant?
             if self.persistent_data['is_satellite'] and this_is_origin_site == False and found_thing_on_satellite == False and voice_message.startswith('Sorry'):
                 if self.DEBUG:
                     print("\n\nI am a satellite that handles thing intents, but couldn't find a good thing match, so I won't ask the main controller to speak my sorry message\n\nEND\n\n")
@@ -9004,15 +9053,15 @@ class VocoAdapter(Adapter):
                     print("\n(...) " + str(voice_message))
                     print("self.llm_assistant_started? " + str(self.llm_assistant_started))
             
-                # (self.persistent_data['is_satellite'] and self.main_controller_has_stt and self.main_controller_has_assistant) or
                 if (best_confidence_score != 1 
                     and self.llm_enabled 
                     and (voice_message == '' 
                         or voice_message.startswith("Sorry, I don't understand") 
                         or voice_message.startswith("Sorry, I couldn't find a match")) 
+                    and message_passed_to_other_controller == False
                     and (self.llm_assistant_started 
                         or (self.fastest_controller_id != None and self.fastest_controller_last_ping_time > time.time() - 60))
-                    ): 
+                    ):
                     
                     if self.DEBUG:
                         print("\nThe final message was empty or 'Sorry, I don't understand', and an assistant is available, so the AI assistant can take a shot at it\n")
@@ -9044,23 +9093,13 @@ class VocoAdapter(Adapter):
                         if self.DEBUG:
                             print("intent was not of type voice (so text input), sending sentence directly to assistant: " + str(sentence))
                             print("intent_message['origin']: " + str(intent_message['origin']))
-                        
                         self.ask_ai_assistant(sentence,intent=intent_message)
                     
                     # self.llm_stt_done is no longer needed. It was used as a flag when the STT process started in paralel, as soon as the audio recording was complete.
                     # TODO: also check if main controller has assistant up and running? Then it could handle that too if an assistant is not available locally.
-                    elif (self.llm_stt_started or (self.persistent_data['is_satellite'] and self.main_controller_has_stt)): # and self.llm_stt_done == False:
+                    elif (self.llm_stt_started or self.fastest_controller_id != None): # and self.llm_stt_done == False:
                         if self.DEBUG:
                             print("intent has undefined origin, or origin was voice. setting self.try_again_via_assistant to true")
-                        #if self.try_again_via_stt == True:
-                        #    if self.DEBUG:
-                        #        print(" try_again_via_stt was true, so setting self.try_again_via_assistant to true")
-                        #    self.try_again_via_assistant = True
-                        #else:
-                        #    if self.DEBUG:
-                        #        print(" try_again_via_stt was false, so going directly to ask_ai_assistant with sentence: " + str(sentence))
-                        #    self.try_again_via_assistant = True
-                            #self.ask_ai_assistant(sentence,intent_message)
                         self.try_again_via_assistant = True
                         self.try_llm_stt(intent=intent_message)
                     
@@ -9100,7 +9139,7 @@ class VocoAdapter(Adapter):
                         print(" - fastest_controller_id: " + str(self.fastest_controller_id))
                         print(" - fastest_controller_score: " + str(self.fastest_controller_score))
                         print(" - fastest_controller_last_ping_time delta: " + str(int(time.time() - self.fastest_controller_last_ping_time)))
-                        print(" - message_passed_to_main_controller: " + str(message_passed_to_main_controller))
+                        print(" - message_passed_to_other_controller: " + str(message_passed_to_other_controller))
                     self.last_command_was_answered_by_assistant = False
                     #if self.persistent_data['is_satellite'] == False:
                     if voice_message.startswith('Sorry'):
@@ -9114,6 +9153,18 @@ class VocoAdapter(Adapter):
         
         
 
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
      
      
      
@@ -9294,8 +9345,6 @@ class VocoAdapter(Adapter):
             
                 self.speak(voice_message, item['intent_message'])
 
-            
-
         except Exception as ex:
             print("Error in delayed_intent_player: " + str(ex))
 
@@ -9305,6 +9354,7 @@ class VocoAdapter(Adapter):
 
 
     # Update Snips with the latest names of things and properties. This helps to improve recognition.
+    # TODO: this is called more frequently than necessary
     def inject_updated_things_into_snips(self, force_injection=False):
         """ Teaches Snips what the user's devices and properties are called """
         #if self.DEBUG:
@@ -9440,7 +9490,8 @@ class VocoAdapter(Adapter):
                 try:
                     thing_titles = set(self.persistent_data['all_thing_titles']) # all_thing_titles includes the previously known satellite thing titles (which might have changed)
                 except:
-                    print("Error, Couldn't load previous thing titles from persistence. If Voco was just installed then this is normal.")
+                    if self.DEBUG:
+                        print("Error, Couldn't load previous thing titles from persistence. If Voco was just installed then this is normal.")
                     thing_titles = set()
                     self.persistent_data['local_thing_titles'] = []
                     self.save_to_persistent_data = True #self.save_persistent_data()
@@ -9448,7 +9499,8 @@ class VocoAdapter(Adapter):
                 try:
                     property_titles = set(self.persistent_data['property_titles'])
                 except:
-                    print("Error, Couldn't load previous property titles from persistence. If Voco was just installed then this is normal.")
+                    if self.DEBUG:
+                        print("Error, Couldn't load previous property titles from persistence. If Voco was just installed then this is normal.")
                     property_titles = set()
                     self.persistent_data['property_titles'] = []
                     self.save_to_persistent_data = True #self.save_persistent_data()
@@ -9456,7 +9508,8 @@ class VocoAdapter(Adapter):
                 try:
                     property_strings = set(self.persistent_data['property_strings'])
                 except:
-                    print("Error, Couldn't load previous property strings from persistence. If Voco was just installed then this is normal.")
+                    if self.DEBUG:
+                        print("Error, Couldn't load previous property strings from persistence. If Voco was just installed then this is normal.")
                     property_strings = set()
                     self.persistent_data['property_strings'] = []
                     self.save_to_persistent_data = True #self.save_persistent_data()
@@ -11866,10 +11919,11 @@ class VocoAdapter(Adapter):
             print("\nin download_llm_models")
         try:
 
-            downloaded_assistant_model = False
+            downloaded_tts_model = False
             downloaded_stt_model = False
-
-            self.llm_models['assistant']['protocol'] = 'basic'
+            downloaded_assistant_model = False
+            
+            self.llm_models['assistant']['protocol'] = 'basic' # Set the default LLM protocol
 
             self.llm_busy_downloading_models = 0
 
@@ -11935,7 +11989,10 @@ class VocoAdapter(Adapter):
                                         if self.DEBUG:
                                             print("MODEL FILE NOW EXISTS")
                                         self.llm_models[key]['active'] = model_file_test_path
-                                        if key == 'stt':
+                                        
+                                        if key == 'tts':
+                                            downloaded_tts_model = True
+                                        elif key == 'stt':
                                             downloaded_stt_model = True
                                         elif key == 'assistant':
                                             downloaded_assistant_model = True
@@ -11960,25 +12017,32 @@ class VocoAdapter(Adapter):
                                 if os.path.exists(model_file_test_path):
                                     if self.DEBUG:
                                         print("Deleting LLM model that isn't currently used because disk space is low: " + str(model_file_test_path))
-                                    os.system('pkill -f ' + str(self.llm_tts_binary_name))
-                                    os.system('pkill -f ' + str(self.llm_stt_binary_name))
-                                    os.system('pkill -f ' + str(self.llm_assistant_binary_name)) # make sure model file isn't locked
+                                    #os.system('pkill -f ' + str(self.llm_tts_binary_name))
+                                    #os.system('pkill -f ' + str(self.llm_stt_binary_name))
+                                    #os.system('pkill -f ' + str(self.llm_assistant_binary_name)) # make sure model file isn't locked
                                     os.system('rm ' + str(model_file_test_path))
-                                    self.assistant_loop_counter = self.llm_servers_watchdog_interval - 2
+                                    #self.assistant_loop_counter = self.llm_servers_watchdog_interval - 2
+                                    #self.restart_llm_servers = True
 
                     if self.llm_models[key]['list'][model_name]['model'] == 'voco':
                         self.llm_models[key]['list'][model_name]['downloaded'] = True
                     else:
                         self.llm_models[key]['list'][model_name]['downloaded'] = bool(os.path.exists(model_file_test_path))
 
-                if downloaded_assistant_model and self.llm_stt_started:
+                if (    (downloaded_assistant_model and self.llm_assistant_started) 
+                        or (downloaded_stt_model and self.llm_stt_started)
+                        or (downloaded_tts_model and self.llm_tts_started)
+                        ):
+                        
                     # This will cause the assistant to be restarted
                     os.system('pkill -f ' + str(self.llm_stt_binary_name))
                     os.system('pkill -f ' + str(self.llm_assistant_binary_name))
-                    self.assistant_loop_counter = self.llm_servers_watchdog_interval - 2
+                    #self.assistant_loop_counter = self.llm_servers_watchdog_interval - 2
+                    self.restart_llm_servers = True
 
         except Exception as ex:
-            print("Error downloading LLM models: " + str(ex))
+            if self.DEBUG:
+                print("Error downloading LLM models: " + str(ex))
 
         self.llm_busy_downloading_models = 0
         self.save_to_persistent_data = True
@@ -12062,40 +12126,47 @@ class VocoAdapter(Adapter):
 
             self.assistant_loop_counter += 1
             if self.assistant_loop_counter == self.llm_servers_watchdog_interval or self.restart_llm_servers == True:
-                self.restart_llm_servers = False
+                
                 self.assistant_loop_counter = 0
                 if self.DEBUG2:
                     print("at assistant periodic restart check. self.llm_assistant_response_count: " + str(self.llm_assistant_response_count))
+                
+                try:
+                    if self.llm_tts_enabled:
+                        if self.llm_tts_process == None or (self.llm_tts_process != None and self.llm_tts_process.poll() != None):
+                            if self.DEBUG2:
+                                print("\nLLM servers thread: TTS server doesn't seem to be running. Attempting restart\n")
+                            self.llm_tts_started = False
+                            self.start_llm_tts()
 
-                if self.llm_tts_enabled:
-                    if self.llm_tts_process == None or (self.llm_tts_process != None and self.llm_tts_process.poll() != None):
-                        if self.DEBUG2:
-                            print("\nLLM servers thread: TTS server doesn't seem to be running. Attempting restart\n")
-                        self.llm_tts_started = False
-                        self.start_llm_tts()
+                    if self.llm_stt_enabled:
+                        if self.llm_stt_process == None or (self.llm_stt_process != None and self.llm_stt_process.poll() != None):
+                            if self.DEBUG2:
+                                print("\nLLM servers thread: STT server doesn't seem to be running. Attempting restart\n")
+                            self.llm_stt_started = False
+                            self.start_llm_stt_server()
 
-                if self.llm_stt_enabled:
-                    if self.llm_stt_process == None or (self.llm_stt_process != None and self.llm_stt_process.poll() != None):
-                        if self.DEBUG2:
-                            print("\nLLM servers thread: STT server doesn't seem to be running. Attempting restart\n")
-                        self.llm_stt_started = False
-                        self.start_llm_stt_server()
+                    if self.llm_assistant_enabled:
+                        if self.llm_assistant_process == None or (self.llm_assistant_process != None and self.llm_assistant_process.poll() != None):
+                            if self.DEBUG2:
+                                print("\nLLM servers thread: assistant doesn't seem to be running. Attempting restart\n")
+                            self.llm_assistant_started = False
+                            self.last_assistant_output_change_time = time.time()
+                            self.start_ai_assistant()
 
-                if self.llm_assistant_enabled:
-                    if self.llm_assistant_process == None or (self.llm_assistant_process != None and self.llm_assistant_process.poll() != None):
-                        if self.DEBUG2:
-                            print("\nLLM servers thread: assistant doesn't seem to be running. Attempting restart\n")
-                        self.llm_assistant_started = False
-                        self.last_assistant_output_change_time = time.time()
-                        self.start_ai_assistant()
+                        elif self.llm_assistant_response_count > 2 and (time.time() - self.llm_assistant_reset_delay) > self.last_assistant_output_change_time:
+                            if self.DEBUG2:
+                                print("\no\noo\nooo\nLLM servers thread: attemping to restart assistant process\nooo\noo\no\n")
+                            self.llm_assistant_started = False
+                            self.last_assistant_output_change_time = time.time()
+                            self.start_ai_assistant()
+                
+                except Exception as ex:
+                    if self.DEBUG:
+                        print("start_llm_servers: caught error: " + str(ex))
 
-                    elif self.llm_assistant_response_count > 2 and (time.time() - self.llm_assistant_reset_delay) > self.last_assistant_output_change_time:
-                        if self.DEBUG2:
-                            print("\no\noo\nooo\nLLM servers thread: attemping to restart assistant process\nooo\noo\no\n")
-                        self.llm_assistant_started = False
-                        self.last_assistant_output_change_time = time.time()
-                        self.start_ai_assistant()
 
+                self.restart_llm_servers = False
             sleep(1)
 
             if self.running == False:
@@ -12114,7 +12185,7 @@ class VocoAdapter(Adapter):
 
 
     # start long running TTS process
-    def start_llm_tts(self,restart=False):
+    def start_llm_tts(self, restart=False):
         if self.DEBUG2:
             print("in start_llm_tts. Forced restart?: " + str(restart))
 
@@ -12125,40 +12196,40 @@ class VocoAdapter(Adapter):
         if self.llm_tts_process != None and self.llm_tts_process.poll() == None:
             if self.DEBUG:
                 print("\n\nTTS PROCESS ALREADY RUNNING\n\n")
-            if restart == False:
-                return
-            else:
+            if restart or self.restart_llm_servers: # TODO: why these checks? Why not always kill the process?
+
                 if self.DEBUG:
                     print("\n\nFORCE RESTARTING TTS. STOPPING IT FIRST\n\nself.llm_tts_process.pid: " + str(self.llm_tts_process.pid))
-            os.kill(self.llm_tts_process.pid, signal.SIGINT)
-            #os.killpg(os.getpgid(self.llm_assistant_process.pid), signal.SIGHUP)
-            #os.killpg(os.getpgid(self.llm_assistant_process.pid), signal.SIGTERM)
-            time.sleep(.1)
+                
+                os.kill(self.llm_tts_process.pid, signal.SIGINT)
+                #os.killpg(os.getpgid(self.llm_assistant_process.pid), signal.SIGHUP)
+                #os.killpg(os.getpgid(self.llm_assistant_process.pid), signal.SIGTERM)
+                time.sleep(.1)
 
-            if self.llm_tts_process.poll() == None:
-                if self.DEBUG:
-                    print("\n\nERROR, LLM TTS PROCESS IS STILL ALIVE\n\n")
-
-                try:
-                    outs, errs = self.llm_tts_process.communicate(timeout=3)
-                except Exception as ex:
+                if self.llm_tts_process.poll() == None:
                     if self.DEBUG:
-                        print("start_llm_tts: attempt to nicely stop existing LLM TTS process failed with ERROR: " + str(ex))
+                        print("\n\nERROR, LLM TTS PROCESS IS STILL ALIVE\n\n")
+
                     try:
-                        self.llm_tts_process.kill()
-                        outs, errs = self.llm_tts_process.communicate(timeout=1)
+                        outs, errs = self.llm_tts_process.communicate(timeout=3)
                     except Exception as ex:
                         if self.DEBUG:
-                            print("Second follow-up attempt to less nicely stop existing TTS process also failed, with error: " + str(ex))
+                            print("start_llm_tts: attempt to nicely stop existing LLM TTS process failed with ERROR: " + str(ex))
+                        try:
+                            self.llm_tts_process.kill()
+                            outs, errs = self.llm_tts_process.communicate(timeout=1)
+                        except Exception as ex:
+                            if self.DEBUG:
+                                print("Second follow-up attempt to less nicely stop existing TTS process also failed, with error: " + str(ex))
 
-            if self.llm_tts_process.poll() == None:
-                if self.DEBUG:
-                    print("start_llm_tts: using pkill to stop existing TTS process...")
-                os.system('pkill -f ' + str(self.llm_tts_binary_name))
-            else:
-                if self.DEBUG:
-                    print("LLM TTS PROCESS SEEMS TO HAVE STOPPED PROPERLY")
-            self.llm_tts_process = None
+                if self.llm_tts_process.poll() == None:
+                    if self.DEBUG:
+                        print("start_llm_tts: using pkill to stop existing TTS process...")
+                    os.system('pkill -f ' + str(self.llm_tts_binary_name))
+                else:
+                    if self.DEBUG:
+                        print("LLM TTS PROCESS SEEMS TO HAVE STOPPED PROPERLY")
+                self.llm_tts_process = None
 
         #os.system('pkill -f piper')
 
@@ -12521,6 +12592,7 @@ class VocoAdapter(Adapter):
             else:
                 if self.DEBUG:
                     print("invalid result? No text in stt server json result")
+                    
         except Exception as ex:
             if self.DEBUG:
                 print("Error parsing STT server result, invalid json? Error: " + str(ex))
@@ -12729,7 +12801,7 @@ class VocoAdapter(Adapter):
                 if 'system' in self.llm_assistant_protocol:
                     assistant_prompt = self.llm_assistant_protocol['system'].replace("{system_message}", self.llm_assistant_prompt)
                     #assistant_prompt = self.llm_models['assistant']['prompts']['system'].replace('{system_message}', assistant_prompt)
-                    assistant_prompt = "'" + assistant_prompt + "'"
+                    assistant_prompt = "$'" + assistant_prompt + "'"
                     #assistant_prompt = "'" + self.llm_assistant_prompt + "'" # TODO: currently hardcoded to chatML
                     #reverse_prompt = self.llm_models['assistant']['prompts']['reverse'].replace("{assistant_name}", self.llm_assistant_name)
 
@@ -12766,8 +12838,6 @@ class VocoAdapter(Adapter):
                     #"sh",
                     #    "-c",
                     #
-
-
                     #self.llm_assistant_words_to_generate = 1024
                     #self.llm_assistant_context_size
 
@@ -12804,19 +12874,7 @@ class VocoAdapter(Adapter):
                         "--in-suffix",
                         str(in_suffix),
                         "--reverse-prompt",
-                        str(reverse_prompt)
-                    ]
-                    # "' <|im_end|> \\n <|im_start|>assistant \\n'",
-                    #
-                    #    "'" + str(reverse_prompt) + "'"
-
-                    # "'" + str(self.llm_assistant_name) + ":'",
-                    # "--silent-prompt",
-
-                    #"--prompt-cache",
-                    #str(self.llm_assistant_prompt_cache_path),
-
-                    assistant_command_part2 = [
+                        str(reverse_prompt),
                         "-t",
                         str(self.llm_assistant_threads),
                         #">>",
@@ -12827,8 +12885,7 @@ class VocoAdapter(Adapter):
                         #"|",
                         #"cat"
                     ]
-
-                    assistant_command = assistant_command + assistant_command_part2
+                    
 
                     assistant_command = ' '.join(assistant_command)
                     if self.DEBUG:
@@ -12836,7 +12893,7 @@ class VocoAdapter(Adapter):
 
 
                     #self.llm_assistant_process = Popen(assistant_command, env=my_env, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,bufsize=100,shell=True) # preexec_fn=os.setsid
-                    self.llm_assistant_process = Popen(assistant_command, env=my_env, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, universal_newlines=True, bufsize=1, shell=True) # preexec_fn=os.setsid
+                    self.llm_assistant_process = Popen(assistant_command, env=my_env, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, universal_newlines=True, bufsize=1, shell=True) # preexec_fn=os.setsid
                     os.set_blocking(self.llm_assistant_process.stdout.fileno(), False)
                     time.sleep(.1)
                     if self.llm_assistant_process.poll() == None:
@@ -12848,17 +12905,23 @@ class VocoAdapter(Adapter):
                         if self.DEBUG:
                             print("\n\n\nLLM Assistant process immediately crashed! return code: " + str(self.llm_assistant_process.returncode) + "\n\n\n")
                         self.llm_assistant_started = False
+                        """
                         if self.llm_assistant_process.returncode == 0:
                             #print(p.stdout # + '\n' + "Command success" #.decode('utf-8')
-                            print("assistant process : starting error. stdout: " + str(self.llm_assistant_process.stdout))
+                            if self.DEBUG:
+                                print("assistant process : starting error. stdout: " + str(self.llm_assistant_process.stdout))
                         else:
                             if self.llm_assistant_process.stderr:
-                                print("assistant process: starting error. stderr: " + str(self.llm_assistant_process.stderr)) # + '\n' + "Command failed"   #.decode('utf-8'))
+                                if self.DEBUG:
+                                    print("assistant process: starting error. stderr: " + str(self.llm_assistant_process.stderr)) # + '\n' + "Command failed"   #.decode('utf-8'))
 
                         if self.llm_assistant_process.stdout:
-                            print("assistant process: starting error. stdout: " + str(self.llm_assistant_process.stdout))
+                            if self.DEBUG:
+                                print("assistant process: starting error. stdout: " + str(self.llm_assistant_process.stdout))
                         if self.llm_assistant_process.stderr:
-                            print("assistant process: starting error. stderr: " + str(self.llm_assistant_process.stderr)) # + '\n' + "Command failed"   #.decode('utf-8'))
+                            if self.DEBUG:
+                                print("assistant process: starting error. stderr: " + str(self.llm_assistant_process.stderr)) # + '\n' + "Command failed"   #.decode('utf-8'))
+                        """
 
                 else:
                     if self.DEBUG:
@@ -12886,7 +12949,7 @@ class VocoAdapter(Adapter):
 
 
 
-
+    # TODO: this should (also) run earlier
     def make_sure_command_is_for_assistant(self, message):
         if self.DEBUG:
             print("in make_sure_command_is_for_assistant. message: " + str(message))
@@ -12900,7 +12963,12 @@ class VocoAdapter(Adapter):
                     print("first word strongly suggests a device centric command: " + str(first_word))
                 return False
                 
-        
+        for last_word in self.llm_assistant_last_words_to_avoid:
+            if message.endswith(last_word):
+                if self.DEBUG:
+                    print("last word strongly suggests a device centric command: " + str(last_word))
+                return False
+                
         words = message.split()
         
         # self.llm_assistant_signal1_words_to_avoid = ['turn', 'switch','toggle']
@@ -12923,6 +12991,7 @@ class VocoAdapter(Adapter):
         return True
 
 
+
     # CLI version seems to be much faster
     def ask_ai_assistant(self,voice_message=None,intent=None):
         if self.DEBUG:
@@ -12930,30 +12999,30 @@ class VocoAdapter(Adapter):
         self.try_again_via_stt = False
         self.try_again_via_assistant = False
 
-        if intent != None and 'sessionId' in intent:
-            if self.DEBUG:
-                print("ask_ai_assistant: ending session (BLOCKED)")
-            #self.mqtt_client.publish('hermes/dialogueManager/endSession', json.dumps({"text": "", "sessionId": intent['sessionId']}))
-        #self.mqtt_client.publish('hermes/dialogueManager/endSession', json.dumps({"text": "", "sessionId": str(self.current_snips_session_id)}))
-
-        if voice_message == None:
-            if self.DEBUG:
-                print(" - ask_ai_assistant: voice message was None. Aborting")
-                self.speak("debug: ask assistant received empty voice message", intent)
-            return
-
-        if len(str(voice_message)) < 5 and str(voice_message).lower() != 'why?' and str(voice_message).lower() != 'how?':
-            if self.DEBUG:
-                print(" - ask_ai_assistant: voice message was very short. Aborting.  Voice message: " + str(voice_message))
-                self.speak("debug: ask assistant received very short voice message", intent)
-            else:
-                self.speak("Could you be more specific?", intent)
-            return
-
         try:
+            
+            if intent != None and 'sessionId' in intent:
+                if self.DEBUG:
+                    print("ask_ai_assistant: ending session (BLOCKED)")
+                #self.mqtt_client.publish('hermes/dialogueManager/endSession', json.dumps({"text": "", "sessionId": intent['sessionId']}))
+            #self.mqtt_client.publish('hermes/dialogueManager/endSession', json.dumps({"text": "", "sessionId": str(self.current_snips_session_id)}))
 
+            if voice_message == None:
+                if self.DEBUG:
+                    print(" - ask_ai_assistant: voice message was None. Aborting")
+                    self.speak("debug: ask assistant received empty voice message", intent)
+                return
+
+            if len(str(voice_message)) < 5 and str(voice_message).lower() != 'why?' and str(voice_message).lower() != 'how?':
+                if self.DEBUG:
+                    print(" - ask_ai_assistant: voice message was very short. Aborting.  Voice message: " + str(voice_message))
+                    self.speak("debug: ask assistant received very short voice message", intent)
+                else:
+                    self.speak("Could you be more specific?", intent)
+                return
+
+            # If there is a faster controller, let it handle the query
             if self.mqtt_client != None and self.mqtt_connected and self.fastest_controller_id != self.persistent_data['site_id'] and self.fastest_controller_last_ping_time + 60 > time.time():
-
                 mqtt_path = "hermes/voco/" + str(self.fastest_controller_id) + '/do_assistant'
                 if self.DEBUG:
                     print(" - ask_ai_assistant: passing LLM Assistant voice command to fastest controller.  mqtt_path: " + str(mqtt_path))
@@ -12965,16 +13034,9 @@ class VocoAdapter(Adapter):
                     print(" - ask_ai_assistant: passing voice command to locally running LLM Assistant: " + str(voice_message))
                 self.really_ask_ai_assistant(voice_message,intent=intent)
 
-            elif self.mqtt_client != None and self.mqtt_connected and self.persistent_data['is_satellite'] and self.main_controller_has_assistant:
-                mqtt_path = "hermes/voco/" + str(self.persistent_data['main_site_id']) + '/do_assistant'
-                if self.DEBUG:
-                    print("sending voice message to assistant process on main controller.  mqtt_path: " + str(mqtt_path))
-
-                self.mqtt_client.publish(mqtt_path, json.dumps({'siteId':str(self.persistent_data['site_id']), 'text':str(voice_message)}) )
-
             else:
                 if self.DEBUG:
-                    print("\n\nDEAD END - cannot send voice message to an assistant\n\n")
+                    print("\n\nask_ai_assistant: DEAD END - cannot send voice message to an assistant\n\n")
 
         except Exception as ex:
             if self.DEBUG:
@@ -13238,8 +13300,8 @@ class VocoAdapter(Adapter):
                                         self.force_reset_assistant()
                                         return
 
-
-                                    if ((origin == 'voice' and '.' in full or ', ' in full or '?' in full or '!' in full or ':' in full) or
+                                    # On a fast controller allow output to be split up earlier, by comma, before the first sentence has been fully generated.
+                                    if ((origin == 'voice' and '.' in full or ', ' in full or '?' in full or '!' in full or ':' in full and self.controller_pi_version > 4) or
                                         (origin != 'voice' and '.' in full or '?' in full or '!' in full or ':' in full)):
                                         if self.DEBUG:
                                             print("BINGO!\nIt seems the response will have more than one sentence. In theory the first sentence could already be sent to the speak_thread")
@@ -13259,6 +13321,10 @@ class VocoAdapter(Adapter):
                                                 print("removed first pre_lines item that was an empty string ")
                                             del pre_lines[0]
                                     
+                                        if pre_lines[-1] == '':
+                                            if self.DEBUG:
+                                                print("removed last pre_lines item that was an empty string ")
+                                            del pre_lines[-1]
                                     
                                         # generate HTML to show in an overlay
                                         if display:
@@ -13322,7 +13388,9 @@ class VocoAdapter(Adapter):
                                                         if self.DEBUG:
                                                             print("very first part of assistant response is very short and ends with a comma. Let's wait until the response it slightly longer to avoid a strange speech delay")
                                                         break
-                                                if pre_lines[i+1]:
+                                                        
+                                                #if pre_lines[i+1]:
+                                                if i+1 < len(pre_lines):
                                                     joined_line = str(pre_lines[i]).strip() + str(pre_lines[i+1])
                                                     joined_line = joined_line.lstrip()
                                                     #if self.DEBUG:
@@ -13355,6 +13423,11 @@ class VocoAdapter(Adapter):
                                                             print("joined_line: " + str(joined_line))
                                                 
                                                         lines.append(joined_line)
+                                                        
+                                                else:
+                                                    if self.DEBUG:
+                                                        print("\n[zzz]\nlast line didn't have an ending punctuation mark yet: " + str(pre_lines[i]))
+                                                        print("")
                                             except Exception as ex:
                                                 if self.DEBUG:
                                                     print("assistant: error concatenating lines: " + str(ex))
@@ -13522,7 +13595,7 @@ class VocoAdapter(Adapter):
             #.encode('utf-8')
         else:
             if self.DEBUG:
-                print("really_ask_ai_assistant: almost sent a message to assistant that is more likely to be a device command: " + str(original_voice_message))
+                print("really_ask_ai_assistant: almost computed/sent a message to assistant that is more likely to be a device command: " + str(original_voice_message))
             self.llm_assistant_continue_conversation = 0
             #self.speak("Sorry, could you repeat that?",intent)
             
@@ -13535,7 +13608,10 @@ class VocoAdapter(Adapter):
             if self.DEBUG:
                 print("ask_ai_assistant: assistant needs reset was True, force resetting assistant")
             self.force_reset_assistant()
-            
+        if self.DEBUG:
+            print("\n\nEND OF ASK_AI_ASSISTANT\n\n\n\n")
+
+
 
     def force_reset_assistant(self):
         if self.DEBUG:
