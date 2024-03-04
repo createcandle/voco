@@ -7057,7 +7057,7 @@ class VocoAdapter(Adapter):
                 
                 
                 self.mqtt_client.subscribe("hermes/voco/ping")
-                self.mqtt_client.subscribe("hermes/voco/pong")
+                #self.mqtt_client.subscribe("hermes/voco/pong")
                 
                 #if self.persistent_data['is_satellite'] == False:
                 self.mqtt_client.subscribe("hermes/voco/parse")
@@ -7433,8 +7433,8 @@ class VocoAdapter(Adapter):
             #self.send_mqtt_ping(broadcast=True, ping_type="pong")
             
                 
-        elif msg.topic.startswith("hermes/voco/pong"):
-            self.parse_ping(payload,ping_type="pong")
+        #elif msg.topic.startswith("hermes/voco/pong"):
+        #    self.parse_ping(payload,ping_type="pong")
                         
         elif msg.topic.startswith("hermes/voco/add_action"):
             if self.DEBUG:
@@ -7502,11 +7502,11 @@ class VocoAdapter(Adapter):
                     self.parse_ping(payload,ping_type="pong")
                     
                 
-                elif msg.topic.endswith('/delayed_action'):
-                    if self.DEBUG:
-                        print("- - - message ends in /delayed_action. A satellite must be asking the main controller to show this item in its list of action items")
-                    
-                    self.parse_ping(payload,ping_type="pong")
+                #elif msg.topic.endswith('/delayed_action'):
+                #    if self.DEBUG:
+                #        print("- - - message ends in /delayed_action. A satellite must be asking the main controller to show this item in its list of action items")
+                #    
+                #    self.parse_ping(payload,ping_type="pong")
                 
                 
                 elif msg.topic.endswith('/parse'):
@@ -7783,9 +7783,9 @@ class VocoAdapter(Adapter):
 
 
     def parse_ping(self,payload,ping_type="ping"):
-        if self.DEBUG:
+        if self.DEBUG2:
             print("in parse_ping\n\n    ( . . . pong . . . )---\n")
-        if self.DEBUG:
+        if self.DEBUG2:
             #print('in parse_ping. ping_type: ' + str(ping_type))
             #print("(own site_id: " + str(self.persistent_data['site_id']) + ")")
             print("- - - payload: " + str(json.dumps(payload,indent=4)))
@@ -7958,7 +7958,6 @@ class VocoAdapter(Adapter):
                 # figure out which of the controllers is now the fastest on the network, so that it can handle AI calculations
                 self.update_fastest_controller()
                 
-                print("\n\n\nPING_TYPE??")
                 if 'ping_type' in payload and payload['ping_type'] == 'init':
                     if self.DEBUG:
                         print("responding to a an init ping")
@@ -9194,6 +9193,7 @@ class VocoAdapter(Adapter):
                 print("add_action_time: received my own recently published action time, skipping")
             return
         
+        # Check if an action item with the sentence and timestamp combination already exists
         already_exists = False
         try:
             if 'moment' in delayed_action and 'slots' in delayed_action:
@@ -9313,15 +9313,16 @@ class VocoAdapter(Adapter):
                 #print("ORIGIN?: " + str(item['intent_message']['origin']))
             voice_message = ""
         
-            play = True
-            if 'cosmetic' in item:
-                if item['cosmetic']:
-                    play = False
-                    if self.DEBUG:
-                        print('not actually playing the delayed intent, it is just here to look pretty in the main controller UI\n')
-            
-                
+            #play = True
+            #if 'cosmetic' in item:
+            #    if item['cosmetic']:
+            #        play = False
+            #        if self.DEBUG:
+            #            print('not actually playing the delayed intent, it is just here to look pretty in the main controller UI\n')
+            #
+            #    
             if play:
+            if not ('cosmetic' in item and item['cosmetic'] == True):
                 if self.DEBUG:
                     print('delayed_intent_player: not cosmetic, so playing the delayed intent')
                 
@@ -9353,7 +9354,8 @@ class VocoAdapter(Adapter):
                 self.speak(voice_message, item['intent_message'])
 
         except Exception as ex:
-            print("Error in delayed_intent_player: " + str(ex))
+            if self.DEBUG:
+                print("Error in delayed_intent_player: " + str(ex))
 
 
 
@@ -9636,26 +9638,6 @@ class VocoAdapter(Adapter):
                             self.force_injection = False
                             
                             
-                            #if self.mqtt_client != None:
-                            # TODO here we allow the satellite to directly do an injection on the main controller (which apparently works)
-                            # But won't that override the thing names since 'addfromVanilla' is used? Ideally the main controller decides when to re-inject based on satellite data
-                            #    self.mqtt_client.publish('hermes/injection/perform', json.dumps(update_request))
-                            
-                            """
-                            if self.persistent_data['is_satellite'] == False:
-                                if self.DEBUG:
-                                    print("[===]---")
-                                    print("Injection: self.mqtt_client exists, and not satellite, so will try to inject")
-                                    print(str(json.dumps(operations)))
-                                ###self.mqtt_client.publish('hermes/injection/perform', json.dumps(update_request))
-                                ###self.last_injection_time = time.time()
-                                ###self.force_injection = False
-                            else:
-                                if self.DEBUG:
-                                    print("NOT INJECTING - I am a satellite")
-                            """
-
-                        
                         if self.persistent_data['is_satellite']:
                             if self.mqtt_client != None:
                                 self.send_mqtt_ping() # inform main controller of updated things list that this device manages
@@ -9729,21 +9711,7 @@ class VocoAdapter(Adapter):
         set_related = False
         if intent == 'set_state' or intent == 'set_value':
             set_related = True
-        
-        
-        """
-        if isinstance(intent, bool):
-            # this happens when a timer calls the sequence, and 'intent' is a boolean indicating boolean_related instead of a string.
-            boolean_related = intent
-            set_related = True
             
-        else:
-            # if it's a string, it can be one of four types of intent
-            # get_value
-            # set_value
-            # get_boolean
-            # set_state
-         """    
 
 
         #
@@ -9845,25 +9813,6 @@ class VocoAdapter(Adapter):
                                                         break
             
                     
-            """        
-                    if len(property_title_detected) == 0 and word in self.persistent_data['property_titles']:
-                        property_title_detected = word
-                    elif len(thing_title_detected) == 0 and word in self.persistent_data['local_thing_titles']:
-                        thing_title_detected = word
-                else:
-                    print("skipping short word: " + str(word))
-                    
-
-            
-                    
-            print("after: thing_title_detected: " + str(thing_title_detected))
-            print("after: thing_property_detected: " + str(thing_property_detected))
-                    
-            if thing_title_detected != "" and property_title_detected != "":
-                slots['thing'] = thing_title_detected
-                slots['property'] = property_title_detected
-                print("managed to split a thing string into thing and property strings")
-        """
 
         
         # Check if the property name is even possible. It not, set it to None.
@@ -13767,7 +13716,8 @@ class VocoAdapter(Adapter):
 
 
             except Exception as ex:
-                print("Caught exception in llm_generate_text: " + str(ex))
+                if self.DEBUG:
+                    print("Caught exception in llm_generate_text: " + str(ex))
         else:
             if self.DEBUG:
                 print(" - not enough free memory (1500Mb)")
