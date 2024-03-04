@@ -317,6 +317,7 @@ class VocoAdapter(Adapter):
         self.llm_assistant_not_enough_memory = False
         self.llm_assistant_possible = False
         self.llm_assistant_started = False
+        self.last_time_llm_assistant_reset = 0
         self.llm_assistant_process = None
         self.llm_assistant_port = 8047
         self.llm_assistant_threads = 3
@@ -3281,7 +3282,7 @@ class VocoAdapter(Adapter):
                     
                 if voice_message == '':
                     print("[...] ERROR, voice message was empty string")
-                    voice_message = 'debug: Error in speak: message was empty string'
+                    #voice_message = 'debug: Error in speak: message was empty string'
                 else:
                     print("[...] speak: " + str(voice_message))
                 #print("[...] intent: " + str(json.dumps(intent, indent=4)))
@@ -8314,13 +8315,13 @@ class VocoAdapter(Adapter):
                     
                     if this_is_origin_site:
                         #if not self.DEBUG:
-                        if self.llm_enabled and self.llm_stt_enabled and self.llm_stt_possible and 'origin' in intent_message and intent_message['origin'] == 'voice' and best_confidence_score != 1:
+                        if ((self.llm_enabled and self.llm_stt_enabled and self.llm_stt_started) or ()) and 'origin' in intent_message and intent_message['origin'] == 'voice' and best_confidence_score != 1:
                             if self.DEBUG:
                                 print("\n⏰\nSTOPWATCH: + " + str(time.time() - self.llm_stt_stopwatch) + ', ' + str(time.time() - self.llm_stt_stopwatch_start))
                                 print("Setting try_again_via_stt to True")
                             #self.speak("One moment",intent=intent_message)
                             self.try_again_via_stt = True
-                            self.try_llm_stt()
+                            self.try_llm_stt(intent_message)
                         else:
                             # Show the heard sentence in a popup
                             if self.DEBUG or self.popup_heard_sentence:
@@ -9184,8 +9185,11 @@ class VocoAdapter(Adapter):
                 else:
                     # We end up here if, for example, the confidence was 1, or if the fastest_controller_last_ping_time delta was more than 60
                     if self.DEBUG:
-                        print("no need/ability to use LLM Assistant.\n - voice_message: " + str(voice_message))
+                        print("no need/ability to use LLM Assistant.")
+                        print(" - voice_message: " + str(voice_message))
                         print(" - best_confidence_score: " + str(best_confidence_score))
+                        print(" - llm_stt_started: " + str(self.llm_stt_started))
+                        print(" - llm_assistant_started: " + str(self.llm_assistant_started))
                         print(" - fastest_controller_id: " + str(self.fastest_controller_id))
                         print(" - fastest_controller_score: " + str(self.fastest_controller_score))
                         print(" - fastest_controller_last_ping_time delta: " + str(int(time.time() - self.fastest_controller_last_ping_time)))
@@ -12366,10 +12370,12 @@ class VocoAdapter(Adapter):
 
         # Check if the LLM STT server is still running OK
         if self.llm_stt_process == None:
-            print("llm_stt: WARNING, stt process is none")
+            if self.DEBUG:
+                print("llm_stt: WARNING, stt process is none")
             self.llm_stt_started = False
         elif self.llm_stt_process.poll() != None:
-            print("llm_stt: WARNING, stt process has stopped!")
+            if self.DEBUG:
+                print("llm_stt: WARNING, stt process has stopped!")
             self.llm_stt_started = False
         #else:
         #    print("llm_stt: stt process seems to be running OK")
@@ -12454,7 +12460,8 @@ class VocoAdapter(Adapter):
                 self.mqtt_client.publish(mqtt_path, json.dumps({'siteId':str(self.persistent_data['site_id']), 'wav':str(base64_message)}) )
 
             except Exception as ex:
-                print("llm_stt: Error passing voice recording to main controller: " + str(ex))
+                if self.DEBUG:
+                    print("llm_stt: Error passing voice recording to main controller: " + str(ex))
 
 
         else:
@@ -12465,6 +12472,7 @@ class VocoAdapter(Adapter):
                 print(" - self.persistent_data['site_id']: " + str(self.persistent_data['site_id']))
                 print(" - self.persistent_data['main_site_id']: " + str(self.persistent_data['main_site_id']))
                 print(" - self.persistent_data['is_satellite']: " + str(self.persistent_data['is_satellite']))
+                print(" - self.fastest_controller_id: " + str(self.fastest_controller_id))
 
 
         #elif self.llm_enabled and self.llm_stt_enabled and self.llm_stt_started:
@@ -12846,9 +12854,9 @@ class VocoAdapter(Adapter):
                     assistant_prompt = assistant_prompt.replace("{assistant_name}", prot['assistant_name'])
 
                     assistant_prompt = "$'" + assistant_prompt + "'"
-                    reverse_prompt = "$'" + reverse_prompt + "'"
-                    in_prefix = "$'" + in_prefix + "'"
-                    in_suffix = "$'" + in_suffix + "'"
+                    reverse_prompt = "'" + reverse_prompt + "'"
+                    in_prefix = "'" + in_prefix + "'"
+                    in_suffix = "'" + in_suffix + "'"
                     
                     if self.DEBUG:
                         print("")
