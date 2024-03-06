@@ -530,9 +530,10 @@ class VocoAPIHandler(APIHandler):
                                         self.adapter.save_persistent_data()
                                 # reset text response in UI
                                 else:
-                                    print("Error, no jwt in incoming /init request")
+                                    if self.DEBUG:
+                                        print("Error, no jwt in incoming /init request")
                                 
-                                self.adapter.last_text_response = []
+                                self.adapter.chat_messages = []
                                 self.adapter.refresh_matrix_members = True
                                 
                                 # Update IP address and hostname
@@ -703,7 +704,8 @@ class VocoAPIHandler(APIHandler):
                                     #        print("llm_folder_size: " + str(llm_folder_size))
                                         
                                 except Exception as ex:
-                                    print("Error getting llm folder size: " + str(ex))
+                                    if self.DEBUG:
+                                        print("Error getting llm folder size: " + str(ex))
                                 
                                 action_count = len( self.adapter.persistent_data['action_times'] )
 
@@ -743,8 +745,18 @@ class VocoAPIHandler(APIHandler):
 
                                 #self.adapter.check_available_memory()
 
-                                #last_text_response = self.adapter.last_text_response;
-                                #self.adapter.last_text_response = []
+                                #chat_messages = self.adapter.chat_messages
+                                #self.adapter.chat_messages = []
+                                
+                                chat_messages = []
+                                if 'browser_id' in request.body:
+                                    if str(request.body['browser_id']) in self.adapter.browsers:
+                                        self.adapter.browsers[str(request.body['browser_id'])]['last_seen'] = time.time()
+                                    else:
+                                        self.adapter.browsers[str(request.body['browser_id'])] = {'last_seen':time.time()}
+                                    
+                                    if str(request.body['browser_id']) in self.adapter.chat_messages:
+                                        chat_messages = self.adapter.chat_messages[str(request.body['browser_id'])]
 
                                 return APIResponse(
                                     status=200,
@@ -755,7 +767,7 @@ class VocoAPIHandler(APIHandler):
                                                         'items': self.adapter.persistent_data['action_times'],
                                                         'mqtt_others': self.adapter.mqtt_others,
                                                         'current_time':self.adapter.current_utc_time,
-                                                        'text_response':self.adapter.last_text_response,
+                                                        'chat_messages':chat_messages,
                                                         'llm_busy_generating':self.adapter.llm_busy_generating,
                                                         'llm_generated_text':self.adapter.llm_generated_text,
                                                         'info_to_show': self.adapter.info_to_show,
@@ -780,7 +792,8 @@ class VocoAPIHandler(APIHandler):
                                                         'llm_tts_started': self.adapter.llm_tts_started,
                                                         'llm_stt_started': self.adapter.llm_stt_started,
                                                         'llm_wakeword_started': self.adapter.llm_wakeword_started,
-                                                        'llm_assistant_started': self.adapter.llm_assistant_started
+                                                        'llm_assistant_started': self.adapter.llm_assistant_started,
+                                                        'browsers_available':self.adapter.browsers_available
                                                         })
                                 )
                                 
@@ -798,6 +811,9 @@ class VocoAPIHandler(APIHandler):
                         elif request.path == '/overlay_poll':
                             if self.DEBUG2:
                                 print("Getting the overlay_poll data")
+                                
+                            if 'browser_id' in request.body:
+                                self.adapter.browsers[str(request.body['browser_id'])] = {'last_seen':time.time()}
                     
                             return APIResponse(
                                 status=200,
@@ -808,27 +824,39 @@ class VocoAPIHandler(APIHandler):
                             )
                     
                     
-                    
+                        # Text chat command
                         elif request.path == '/parse':
+                            state = False
+                            if self.DEBUG:
+                                print("handling /parse.")
                             try:
-                                if self.DEBUG:
-                                    print("handling /parse. Incoming text: " + str(request.body['text']))
-                                self.adapter.last_text_response = [];
-                                self.adapter.last_text_command = str(request.body['text'])
-                                self.adapter.parse_text(site_id=self.adapter.persistent_data['site_id'],origin="text")
-                                return APIResponse(
-                                    status=200,
-                                    content_type='application/json',
-                                    content=json.dumps({'state' : 'ok'}),
-                                )
+                                
+                                if 'text' in request.body and 'browser_id' in request.body:
+                                    self.adapter.active_browser_id = str(request.body['browser_id'])
+                                    self.adapter.last_text_command = str(request.body['text'])
+                                    self.adapter.chat_messages[str(self.adapter.active_browser_id)] = [] # {'message':'test','timestamp':time.time()}
+                                    self.adapter.chat_requests[str(self.adapter.last_text_command)] = str(self.adapter.active_browser_id)
+                                    
+                                    self.adapter.parse_text(site_id=self.adapter.persistent_data['site_id'],origin="text")
+                                    state = True
+                                    
+                                    if self.DEBUG:
+                                        print("/parse: self.adapter.last_text_command: " + str(self.adapter.last_text_command))
+                                        print("/parse: self.adapter.active_browser_id: " + str(self.adapter.active_browser_id))
+                                        print("/parse: self.adapter.chat_requests: " + str(self.adapter.chat_requests))
+                                else:
+                                    if self.DEBUG:
+                                        print("request to /parse was missing text or browser_id")
+                                        
                             except Exception as ex:
                                 if self.DEBUG:
-                                    print("Error handling parse data: " + str(ex))
-                                return APIResponse(
-                                    status=500,
-                                    content_type='application/json',
-                                    content=json.dumps({'state' : False, 'update': "Internal error while handling text command"}),
-                                )
+                                    print("Error handling API /parse request: " + str(ex))
+                            
+                            return APIResponse(
+                                status=200,
+                                content_type='application/json',
+                                content=json.dumps({'state' : state}),
+                            )
                             
                     
                     
@@ -851,7 +879,8 @@ class VocoAPIHandler(APIHandler):
                                     try:
                                         state = self.adapter.broadcast_remove_action_time(request.body)
                                     except Exception as ex:
-                                        print("error /update -> deleting: " + str(ex))
+                                        if self.DEBUG:
+                                            print("error /update -> deleting: " + str(ex))
                                                 
                        
                                 # TOKEN
@@ -1007,7 +1036,9 @@ class VocoAPIHandler(APIHandler):
                                 return APIResponse(
                                     status=200,
                                     content_type='application/json',
-                                    content=json.dumps({'state' : state, 'update':update}),
+                                    content=json.dumps({'state' : state, 
+                                                        'update':update,
+                                                        'debug':self.adapter.DEBUG}),
                                 )
                             except Exception as ex:
                                 print("Error updating: " + str(ex))

@@ -670,6 +670,7 @@ body #extension-voco-view .extension-voco-tab-selected {
 
 #extension-voco-text-input-field {
     margin: 0;
+	margin-right:.5rem;
     height: 2.8rem;
     padding: 1rem 1.3rem;
     font-size: 1.6rem;
@@ -1524,6 +1525,17 @@ f #extension-voco-matrix-invite-management-output {
 }
 
 
+
+
+
+
+
+
+#extension-voco-random-browser-id{
+	text-align:center;
+	opacity:.4;
+}
+
 /*  spinner  */
 
 #extension-voco-loading {
@@ -1669,7 +1681,14 @@ f #extension-voco-matrix-invite-management-output {
         border-left: 1px solid rgba(255, 255, 255, .3);
     }
 
-    #extension-voco-server-list-toggle {}
+	#extension-voco-info-overlay > pre {
+		padding:4rem 6rem;
+		font-size: 3rem;
+		border-radius: 1.5rem;
+	}
+		
+	
+		
 }
 
 
