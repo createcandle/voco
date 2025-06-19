@@ -14,7 +14,7 @@ _New 100% local AI assistant features using "Large Language Models" (LLM's)_
 
 
 # Installation
-Visit the add-ons page in your WebThings Gateway, and add the 'Voco' add-on.
+Open the Candle Store in your Candle Controller, and add the 'Voco' add-on.
 
 # Abilities
 These are all examples. You don't have to phrase things exactly like this, the AI will understand different variations. Any command should always be preceded by saying "Hey Snips" or "Hey Candle".
