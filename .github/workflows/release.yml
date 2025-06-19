@@ -16,7 +16,7 @@ jobs:
     - name: Dump upload url to file
       run: echo '${{ steps.get_release.outputs.upload_url }}' > upload_url
     - name: Upload upload_url
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: upload_url
         path: upload_url
@@ -55,7 +55,7 @@ jobs:
 
     steps:
     - name: Download upload_url
-      uses: actions/download-artifact@v3
+      uses: actions/download-artifact@v4
       with:
         name: upload_url
         path: upload_url
@@ -83,6 +83,7 @@ jobs:
         #upload_url: ${{ github.event.release.upload_url }}
         upload_url: ${{ env.UPLOAD_URL }}
         asset_path: voco-${{ env.RELEASE_VERSION }}-${{ matrix.platform }}-v${{ matrix.version }}.tgz
+        overwrite: true
       
     - name: Upload Release Asset shasum
       uses: shogo82148/actions-upload-release-asset@v1
@@ -90,5 +91,6 @@ jobs:
         #upload_url: ${{ github.event.release.upload_url }}
         upload_url: ${{ env.UPLOAD_URL }}
         asset_path: voco-${{ env.RELEASE_VERSION }}-${{ matrix.platform }}-v${{ matrix.version }}.tgz.sha256sum
+        overwrite: true
       
 
