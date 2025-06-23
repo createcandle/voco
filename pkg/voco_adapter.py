@@ -1753,10 +1753,11 @@ class VocoAdapter(Adapter):
                         
                 
                 # HDMI output on the Raspad can act a little weird. In those cases using OMXPLayer works better
-                if output_to_bluetooth == False and self.prefer_aplay == False and self.persistent_data['audio_output'] != 'Built-in headphone jack' and self.persistent_data['audio_output'] != 'Bluetooth speaker':
-                    self.omxplay(sound_file,output_to_bluetooth)
-                else:
-                    self.aplay(sound_file,output_to_bluetooth)
+                #if output_to_bluetooth == False and self.prefer_aplay == False and self.persistent_data['audio_output'] != 'Built-in headphone jack' and self.persistent_data['audio_output'] != 'Bluetooth speaker':
+                #    self.omxplay(sound_file,output_to_bluetooth)
+                #else:
+                
+                self.aplay(sound_file,output_to_bluetooth)
                     
                 
                 """
@@ -1798,6 +1799,9 @@ class VocoAdapter(Adapter):
         if self.DEBUG:
             print("in omxplay. bluetooth: " + str(bluetooth))
             
+        self.aplay(file_path, bluetooth)
+        return
+            
         if self.persistent_data['audio_output'] == 'Built-in headphone jack':
             output_device_string = "local"
         else:
@@ -1824,12 +1828,19 @@ class VocoAdapter(Adapter):
             output_device_string = "bluealsa:DEV=" + str(self.persistent_data['bluetooth_device_mac'])
             sound_command = ["aplay", str(file_path) ,"-D", output_device_string]
         else:
-            sound_command = ["aplay", str(file_path) ]
+            if self.pipewire:
+                #sound_command = ["aplay", str(file_path),"-Dpipewire" ]
+                sound_command = ["pw-play", str(file_path)]
+            else:
+                sound_command = ["aplay", str(file_path) ]
             
         if self.DEBUG:
             print("aplay command: " + str( ' '.join(sound_command) ))
-        subprocess.run(sound_command, capture_output=True, shell=False, check=False, encoding=None, errors=None, text=None, env=None, universal_newlines=None)
         
+        my_env = os.environ.copy()
+        subprocess.run(sound_command, capture_output=True, shell=False, check=False, encoding=None, errors=None, text=None, env=my_env, universal_newlines=None)
+        
+        #os.system("aplay " + str(file_path))
         
         
         
@@ -2043,7 +2054,10 @@ class VocoAdapter(Adapter):
     
                 for option in self.audio_controls:
                     if str(option['human_device_name']) == str(self.persistent_data['audio_output']) or str(self.persistent_data['audio_output']) == 'Bluetooth speaker':
-                        environment["ALSA_CARD"] = str(option['simple_card_name'])
+                        if self.pipewire:
+                            pass
+                        else:
+                            environment["ALSA_CARD"] = str(option['simple_card_name'])
                         if self.DEBUG:
                             print("Alsa environment variable for speech output set to: " + str(option['simple_card_name']))
 
@@ -2122,10 +2136,11 @@ class VocoAdapter(Adapter):
                                     output_to_bluetooth = True
                 
                             # which audio player to use?
-                            if output_to_bluetooth == False and self.prefer_aplay == False and self.persistent_data['audio_output'] != 'Built-in headphone jack':
-                                self.omxplay(file_to_play,output_to_bluetooth)
-                            else:
-                                self.aplay(file_to_play,output_to_bluetooth)
+                            #if output_to_bluetooth == False and self.prefer_aplay == False and self.persistent_data['audio_output'] != 'Built-in headphone jack':
+                            #    self.omxplay(file_to_play,output_to_bluetooth)
+                            #else:
+                            
+                            self.aplay(file_to_play,output_to_bluetooth)
                                 
                         except Exception as ex:
                             print("Error playing spoken voice response: " + str(ex))
@@ -2339,7 +2354,9 @@ class VocoAdapter(Adapter):
                     ###    mqtt_ip = "localhost:" + str(self.mqtt_port) # TODO: "localhost" is hardcoded here
                     
                     ###command = command + ["--mqtt",mqtt_ip,"--alsa_capture","plughw:" + str(self.capture_card_id) + "," + str(self.capture_device_id),"--disable-playback"]
+                    
                     command = command + ["--alsa_capture","plughw:" + str(self.capture_card_id) + "," + str(self.capture_device_id),"--disable-playback"]
+                        
                     # "--alsa_playback","default:CARD=ALSA",
                     
                 if unique_command == 'snips-injection':
