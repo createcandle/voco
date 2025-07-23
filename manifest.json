@@ -35,7 +35,7 @@
       "Voice pitch": "1.2",
       "Voice speed": "0.9",
       "Hotword sensitivity": "0.5",
-      "System audio volume": 90,
+      "System audio volume": 80,
       "Sound detection": false,
       "Hey Candle": true,
 	  "Mute the radio": false,
