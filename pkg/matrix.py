@@ -1,7 +1,5 @@
 
 import os
-import sys
-sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'lib'))
 import ssl
 import json
 import time
@@ -33,7 +31,7 @@ try:
                  RoomMessageMedia, DownloadResponse)
 
 except Exception as ex:
-    print("ERROR, matrix.py: could not load Matrix library: " + str(ex))
+    print("ERROR, could not load Matrix library: " + str(ex))
     
 #
 #  MATRIX CHAT

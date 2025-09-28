@@ -60,16 +60,15 @@ try:
     #from nio import Client, AsyncClient, AsyncClientConfig, LoginResponse, RegisterResponse, JoinedRoomsResponse, SyncResponse, RoomCreateResponse, MatrixRoom, RoomMessageText
     from typing import Optional
 
-    from nio import (AsyncClient, AsyncClientConfig, ClientConfig)
-    #from nio import (AsyncClient, AsyncClientConfig, ClientConfig, DevicesError, Event, InviteEvent, LoginResponse,
-    #             LocalProtocolError, MatrixRoom, MatrixUser, RoomMessageText, RegisterResponse, JoinedRoomsResponse,
-    #             crypto, exceptions, RoomSendResponse, SyncResponse, RoomCreateResponse, AccountDataEvent, 
-    #             EnableEncryptionBuilder, ChangeHistoryVisibilityBuilder, ToDeviceEvent, RoomKeyRequest, UploadResponse,
-    #             CallInviteEvent, RoomEncryptedAudio, RoomEncryptedFile, RoomEncryptedMedia, CallInviteEvent, CallEvent, 
-    #             RoomMessageMedia, DownloadResponse)
+    from nio import (AsyncClient, AsyncClientConfig, ClientConfig, DevicesError, Event, InviteEvent, LoginResponse,
+                 LocalProtocolError, MatrixRoom, MatrixUser, RoomMessageText, RegisterResponse, JoinedRoomsResponse,
+                 crypto, exceptions, RoomSendResponse, SyncResponse, RoomCreateResponse, AccountDataEvent, 
+                 EnableEncryptionBuilder, ChangeHistoryVisibilityBuilder, ToDeviceEvent, RoomKeyRequest, UploadResponse,
+                 CallInviteEvent, RoomEncryptedAudio, RoomEncryptedFile, RoomEncryptedMedia, CallInviteEvent, CallEvent, 
+                 RoomMessageMedia, DownloadResponse)
 
 except Exception as ex:
-    print("ERROR, voco_adapter.py: could not load Matrix library: " + str(ex))
+    print("ERROR, could not load Matrix library: " + str(ex))
 
 # Pillow
 try:
@@ -559,7 +558,6 @@ class VocoAdapter(Adapter):
         #self.satellite_thing_list = []
         #self.my_thing_title_list = []
         self.connected_satellites = {}
-        self.is_main_controller = False # set to true is at least one satellite is connected
         #self.satellite_asr_payload = None # temporarily holds the ASR payload that the satellite passes on to the main controller
         self.last_spoken_sentence = ""      # Used to avoid speaking the same sentence twice in quick succession
         self.last_spoken_sentence_time = 0  # Used to avoid speaking the same sentence twice in quick succession
@@ -708,6 +706,7 @@ class VocoAdapter(Adapter):
             
         except Exception as ex:
             print("Error scanning ALSA (audio devices): " + str(ex))
+        
         
         # Get token from persistent data. A config setting would then still override it.
         
@@ -1734,11 +1733,8 @@ class VocoAdapter(Adapter):
                     print("playing sound locally. self.persistent_data['audio_output']: " + str(self.persistent_data['audio_output']))
                 
                 
-                #if self.pipewire:
-                #    sound_file = sound_file + '.wav'
-                #else:
-                sound_file = sound_file + str(self.persistent_data['speaker_volume']) + '.wav'
                 
+                sound_file = sound_file + str(self.persistent_data['speaker_volume']) + '.wav'
                 sound_file = os.path.join(self.addon_path,"sounds",sound_file)
                 #sound_file = os.path.splitext(sound_file)[0] + str(self.persistent_data['speaker_volume']) + '.wav'
                 #sound_command = "aplay " + str(sound_file) + " -D plughw:" + str(self.current_card_id) + "," + str(self.current_device_id)
@@ -1755,6 +1751,12 @@ class VocoAdapter(Adapter):
                             print('bluetooth speaker seems to be connected')
                         output_to_bluetooth = True
                         
+                
+                # HDMI output on the Raspad can act a little weird. In those cases using OMXPLayer works better
+                #if output_to_bluetooth == False and self.prefer_aplay == False and self.persistent_data['audio_output'] != 'Built-in headphone jack' and self.persistent_data['audio_output'] != 'Bluetooth speaker':
+                #    self.omxplay(sound_file,output_to_bluetooth)
+                #else:
+                
                 self.aplay(sound_file,output_to_bluetooth)
                     
                 
@@ -1793,6 +1795,27 @@ class VocoAdapter(Adapter):
                 print("Error playing sound: " + str(ex))
             
 
+    def omxplay(self,file_path, bluetooth=False):
+        if self.DEBUG:
+            print("in omxplay. bluetooth: " + str(bluetooth))
+            
+        self.aplay(file_path, bluetooth)
+        return
+            
+        if self.persistent_data['audio_output'] == 'Built-in headphone jack':
+            output_device_string = "local"
+        else:
+            output_device_string = "hdmi"
+        
+        if bluetooth:
+            output_device_string = "alsa:bluealsa"
+            
+        #if self.kill_ffplay_before_speaking:
+        #    subprocess.run(['pkill','omxplayer'], capture_output=True, shell=False, check=False, encoding=None, errors=None, text=None, env=None, universal_newlines=None)
+        
+        sound_command = ["omxplayer", "-o", output_device_string, str(file_path),]
+        subprocess.run(sound_command, capture_output=True, shell=False, check=False, encoding=None, errors=None, text=None, env=None, universal_newlines=None)
+    
 
 
 
@@ -1807,7 +1830,7 @@ class VocoAdapter(Adapter):
         else:
             if self.pipewire:
                 #sound_command = ["aplay", str(file_path),"-Dpipewire" ]
-                sound_command = ["pw-play", "--volume=" + str(int(self.persistent_data['speaker_volume'])/100), str(file_path)]
+                sound_command = ["pw-play", str(file_path)]
             else:
                 sound_command = ["aplay", str(file_path) ]
             
@@ -2185,7 +2208,6 @@ class VocoAdapter(Adapter):
     def run_snips(self):
         if self.DEBUG:
             print("\n\n[00]\nIN RUN_SNIPS")
-            print("self.missing_microphone: ", self.missing_microphone);
         
         if self.busy_starting_snips:
             if self.DEBUG:
@@ -2333,18 +2355,8 @@ class VocoAdapter(Adapter):
                     
                     ###command = command + ["--mqtt",mqtt_ip,"--alsa_capture","plughw:" + str(self.capture_card_id) + "," + str(self.capture_device_id),"--disable-playback"]
                     
-                    
-                    if self.missing_microphone:
-                        command = command + ["--disable-capture"]
-                    elif self.pipewire:
-                        # will use 'default' device as the microphone
-                        pass
-                    else:
-                        command = command + ["--alsa_capture","plughw:" + str(self.capture_card_id) + "," + str(self.capture_device_id)]
+                    command = command + ["--alsa_capture","plughw:" + str(self.capture_card_id) + "," + str(self.capture_device_id),"--disable-playback"]
                         
-                    command = command + ["--disable-playback"]
-                        
-                    
                     # "--alsa_playback","default:CARD=ALSA",
                     
                 if unique_command == 'snips-injection':
@@ -2529,45 +2541,46 @@ class VocoAdapter(Adapter):
 
 
     def speak_welcome_message(self):
+        if self.still_busy_booting:
             
-        first_message = ""
-        
-        try:
-            if self.persistent_data['is_satellite']:
-                first_message = "Hello, I am a satellite. "
-                if self.missing_microphone:
-                    first_message += " The microphone seems to be disconnected. "
-                    
-            else:
-                if self.persistent_data['listening']:
+            first_message = ""
+            
+            try:
+                if self.persistent_data['is_satellite']:
+                    first_message = "Hello, I am a satellite. "
                     if self.missing_microphone:
-                        first_message = "Hello. The microphone seems to be disconnected. "
+                        first_message += " The microphone seems to be disconnected. "
+                        
+                else:
+                    if self.persistent_data['listening']:
+                        if self.missing_microphone:
+                            first_message = "Hello. The microphone seems to be disconnected. "
+                        else:
+                            first_message = "Hello. I am listening. "
                     else:
-                        first_message = "Hello. I am listening. "
-                else:
-                    first_message =  "Hello. Listening is disabled. "
-
-            #if self.persistent_data['is_satellite'] == False and self.token == None:
-                #time.sleep(1)
-                #print("PLEASE ENTER YOUR AUTHORIZATION CODE IN THE SETTINGS PAGE")
-                #self.set_status_on_thing("Please open the Voco page")
-                #self.speak("I do not have permission to access your devices yet. You can grant this permission .",intent={'siteId':self.persistent_data['site_id']})
-        
-            if self.first_run:
-                #time.sleep(1)
-                if self.missing_microphone:
-                    first_message += " Once you connect a microphone you can ask me something by saying. Hey Snips. "
-                else:
-                    first_message += " If you would like to ask me something, start by saying. Hey Snips. "
+                        first_message =  "Hello. Listening is disabled. "
     
+                #if self.persistent_data['is_satellite'] == False and self.token == None:
+                    #time.sleep(1)
+                    #print("PLEASE ENTER YOUR AUTHORIZATION CODE IN THE SETTINGS PAGE")
+                    #self.set_status_on_thing("Please open the Voco page")
+                    #self.speak("I do not have permission to access your devices yet. You can grant this permission .",intent={'siteId':self.persistent_data['site_id']})
             
-            self.speak(first_message,intent={'siteId':self.persistent_data['site_id']})
-    
-        except Exception as ex:
-            if self.DEBUG:
-                print("Error saying hello: " + str(ex))
+                if self.first_run:
+                    #time.sleep(1)
+                    if self.missing_microphone:
+                        first_message += " Once you connect a microphone you can ask me something by saying. Hey Snips. "
+                    else:
+                        first_message += " If you would like to ask me something, start by saying. Hey Snips. "
         
-            
+                
+                self.speak(first_message,intent={'siteId':self.persistent_data['site_id']})
+        
+            except Exception as ex:
+                if self.DEBUG:
+                    print("Error saying hello: " + str(ex))
+        
+            self.still_busy_booting = False
     
 
 
@@ -2660,8 +2673,6 @@ class VocoAdapter(Adapter):
                             if time.time() - self.addon_start_time > 120:
                                 self.still_busy_booting = False
                                 if self.initial_injection_completed == False: # and self.persistent_data['is_satellite'] == False:
-                                    if self.DEBUG:
-                                        print("Periodic check: self.initial_injection_completed was false, POSSIBLE INJECTION FAILURE")
                                     self.possible_injection_failure = True
                                 
                             # TODO: this doesn't work on satellites. Maybe it now should?
@@ -2692,7 +2703,7 @@ class VocoAdapter(Adapter):
                                         
                                         if self.persistent_data['is_satellite'] == False:
                                             if self.DEBUG:
-                                                print("Clock: attempting a forced injection since no injection complete message was received yet.  self.initial_injection_completed: ", self.initial_injection_completed)
+                                                print("Clock: attempting a forced injection since no injection complete message was received yet")
                                             self.inject_updated_things_into_snips(True) # Force a new injection until it sticks
                                         else:
                                             if self.DEBUG:
@@ -2787,7 +2798,7 @@ class VocoAdapter(Adapter):
                                 if self.DEBUG:
                                     print("still busy booting?? self.mqtt_connected_succesfully_at_least_once?: " + str(self.mqtt_connected_succesfully_at_least_once))
                                 
-                                if self.injection_in_progress == False and self.initial_injection_completed == False and self.mqtt_connected == True:
+                                if self.injection_in_progress == False and self.mqtt_connected == True:
                                     if self.persistent_data['is_satellite'] == False:
                                         if self.DEBUG:
                                             print("Clock: attempting a forced injection since no injection complete message was received yet")
@@ -3072,26 +3083,20 @@ class VocoAdapter(Adapter):
                             self.missing_microphone = True
                             if self.still_busy_booting == False:
                                 self.speak("The microphone has been disconnected.")
-                            if self.stop_snips_on_microphone_unplug and not self.is_main_controller and not self.still_busy_booting:
+                            if self.stop_snips_on_microphone_unplug:
                                 if self.DEBUG:
                                     print("microphone was disconnected. Stopping Snips.")
-                                self.set_status_on_thing("no microphone")
                                 self.stop_snips()
-                            else:
-                                if self.DEBUG:
-                                    print("microphone was disconnected. Restarting Snips but without audio capture.")
-                                self.set_status_on_thing("restarting")
-                                self.run_snips()
                     else:
                         #if self.DEBUG:
                         #    print("microphone list was not empty")
                         if self.microphone == 'Auto':
                             # this only occurs is voco is started without a microphone plugged in, and it has just been plugged in for the first time.
                             self.microphone = self.capture_devices[ len(self.capture_devices) - 1 ] # select the last microphone from the list, which will match the initial record card ID and record device ID that scan_alsa has extracted earlier.
-                            #if self.stop_snips_on_microphone_unplug:
+                            if self.stop_snips_on_microphone_unplug:
                                 #self.should_restart_snips = True
-                            self.set_status_on_thing("restarting")
-                            self.run_snips()
+                                self.set_status_on_thing("restarting")
+                                self.run_snips()
                             if self.DEBUG:
                                 print("Microphone was auto-detected. Set to: " + str(self.microphone))
                             #if self.still_busy_booting == False:
@@ -4058,14 +4063,10 @@ class VocoAdapter(Adapter):
                 print("INJECTION COMPLETE MESSAGE RECEIVED")
             self.possible_injection_failure = False
             self.injection_in_progress = False
-            self.still_busy_booting = False
             # Voco is now really ready
             if self.initial_injection_completed == False:
-                self.initial_injection_completed = True
-                
                 self.speak_welcome_message()
             self.initial_injection_completed = True
-            
             """
             if self.persistent_data['is_satellite']:
                 if self.DEBUG:
@@ -6189,61 +6190,6 @@ class VocoAdapter(Adapter):
                 local_thing_titles_list = []
                 full_thing_titles_list = []
                 
-                
-                # A small helper function that checks for poorly pronouncable strings
-                def too_difficult_to_pronounce(name):
-                    
-                    #if self.DEBUG:
-                    #    print("too_difficult_to_pronounce? " + str(name))
-                    seen_short_capitalized_before = False
-                    seen_combo_before = False
-                    seen_word_with_a_digit_before = False
-                    words = name.split()
-                    for word_index, word in enumerate(words):
-                        #if self.DEBUG:
-                        #    print(" - " + str(word_index) + ". " + str(word))
-                        word_has_letter = False
-                        word_has_digit = False
-                        
-                        if len(word) < 3 and word.isupper():
-                            if seen_short_capitalized_before:
-                                # Don't allow more than two very short abbrevations
-                                return True
-                            seen_short_capitalized_before = True
-                        
-                        for c in word:
-                            if c.isdigit():
-                                word_has_digit = True
-                                seen_word_with_a_digit_before = True
-                            else:
-                                if word_has_letter and word_has_digit:
-                                    # this word has a letter, then a number, and then a letter again. That's bad.
-                                    return True
-                                word_has_letter = True
-                                
-                        #if any(not c.isdigit() for c in word):
-                        #    word_has_letter = True
-                        #if any(c.isdigit() for c in word):
-                        #    word_has_digit = True
-                        #    seen_word_with_a_digit_before = True
-                            
-                        if word_has_letter and word_has_digit:
-                            if seen_combo_before:
-                                # two words with both a letter and a number in the string, that's bad
-                                return True
-                            seen_combo_before = True
-                            if word_index > 0 and word_index < (len(words) - 1): 
-                                # spotted a word in the middle of the name that has both a letter and a number in it. That's bad.
-                                return True
-                        
-                        if word_has_digit and seen_word_with_a_digit_before:
-                            # two words with a number in it, that's bad
-                            return True
-                            
-                    return False
-                
-                
-                
                 # Add things from this controller
                 for thing in self.things:
                     if 'title' in thing:
@@ -6255,33 +6201,14 @@ class VocoAdapter(Adapter):
                                 for word in thing['properties'][thing_property_key]['enum']:
                                     #property_string_name = clean_up_string_for_speaking(str(word).lower()).strip()
                                     property_string_name = clean_up_thing_string(str(word)) #.strip()
-                                    if len(str(property_string_name)) > 2:
-                                        if too_difficult_to_pronounce(property_string_name):
-                                            if self.DEBUG:
-                                                print("skipping property value that is too difficult to pronounce: " + str(property_string_name))
-                                        elif " " in property_string_name and any(char.isdigit() for char in property_string_name) and not (property_string_name[-1].isdigit() or (property_string_name[0].isdigit() and ( property_string_name[1] == " " or property_string_name[2] == " " )) ):
-                                            if self.DEBUG:
-                                                print("skipping property value string with both a space and a number in it (that is not the first or last character): " + str(property_string_name))
-                                        else:
-                                            if len(str(property_string_name)) > 3 and property_string_name.isupper():
-                                                property_string_name = property_string_name.lower()
-                                            fresh_property_strings.add(clean_up_thing_string(property_string_name))
-                                            
+                                    if len(property_string_name) > 1:
+                                        fresh_property_strings.add(clean_up_thing_string(property_string_name))
                         if 'title' in thing['properties'][thing_property_key]:
                             #property_title = clean_up_string_for_speaking(str(thing['properties'][thing_property_key]['title']).lower()).strip()
                             property_title = clean_up_thing_string(str(thing['properties'][thing_property_key]['title'])) #.strip()
-                            if len(property_title) > 2:
+                            if len(property_title) > 1:
                                 if property_title.startswith("Unknown ") == False:
-                                    if too_difficult_to_pronounce(property_title):
-                                        if self.DEBUG:
-                                            print("skipping property_title that is too difficult to pronounce: " + str(property_title))
-                                    elif " " in property_title and any(char.isdigit() for char in property_title) and not property_title[-1].isdigit():
-                                        if self.DEBUG:
-                                            print("skipping property_title with both a space and a number in it (that is not the last character): " + str(property_title))
-                                    else:
-                                        if len(str(property_title)) > 3 and property_title.isupper():
-                                            property_titlee = property_title.lower()
-                                        fresh_property_titles.add(property_title)
+                                    fresh_property_titles.add(property_title)
                         
                 # Add things from satellites (if this is not itself a satellite)
                 #if self.persistent_data['is_satellite'] == False:
@@ -6317,11 +6244,9 @@ class VocoAdapter(Adapter):
                     #thing_name = clean_up_string_for_speaking(str(thing['title']).lower()).strip()
                     #thing_name = clean_up_thing_string(thing_name) # This does not create lowercase, it only removes odd characters. #.strip() # TODO: removing .lower here has cause issues in the thing scanner.. But at least the sentences in matrix now look nice I guess?
                 
-                    if len(str(thing_name)) > 1:
+                    if len(thing_name) > 1:
                         #if self.DEBUG:
                         #    print(" thing title after cleaning:" + thing_name)
-                        
-                        
                         fresh_thing_titles.add(thing_name)
                         #self.my_thing_title_list.append(thing_name)
                     
@@ -6376,11 +6301,6 @@ class VocoAdapter(Adapter):
                     print("previous: len(thing_titles): " + str(len(thing_titles)))
                     print("current:  len(fresh_thing_titles): " + str(len(fresh_thing_titles)))
                     print("diff: " + str(thing_titles^fresh_thing_titles))
-                
-                
-                
-                
-                
                 
                 if len(thing_titles^fresh_thing_titles) > 0 or self.force_injection == True: # comparing sets to detect changes in thing titles
                     if self.DEBUG:
@@ -8378,10 +8298,6 @@ class VocoAdapter(Adapter):
                 acting_as_main_controller = True
                 break
     
-        self.is_main_controller = acting_as_main_controller
-        if self.is_main_controller:
-            self.stop_snips_on_microphone_unplug = False
-            
         return acting_as_main_controller
     
     

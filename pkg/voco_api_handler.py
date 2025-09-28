@@ -4,13 +4,13 @@ import os
 import re
 import json
 import time
-from time import sleep
+#from time import sleep
 import socket
 import requests
 import subprocess
 #import threading
 
-from .util import valid_ip, avahi_detect_gateways
+from .util import valid_ip, avahi_detect_gateways,run_command
 
 from datetime import datetime,timedelta
 #from dateutil import tz
@@ -90,14 +90,12 @@ class VocoAPIHandler(APIHandler):
                     return APIResponse(status=404)
 
             elif request.method == 'POST':
-                if request.path == '/init' or request.path == '/poll' or request.path == '/parse' or request.path == '/update' or request.path == '/ajax':
+                if request.path == '/init' or request.path == '/poll' or request.path == '/overlay_poll' or request.path == '/parse' or request.path == '/update' or request.path == '/ajax':
 
                     try:
                         if self.DEBUG2:
                             print("API handler is being called: " + str(request.path))
                     
-                        
-                        
                         if request.path == '/ajax':
                             
                             action = str(request.body['action'])    
@@ -105,6 +103,8 @@ class VocoAPIHandler(APIHandler):
                                 print("ajax action = " + str(action))
                             
                             
+                            
+                            # Matrix init
                             if action == 'matrix_init':
                                 
                                 matrix_candle_username = self.adapter.persistent_data['matrix_candle_username']
@@ -134,6 +134,9 @@ class VocoAPIHandler(APIHandler):
                                             'has_matrix_token': has_matrix_token}),
                                 )
                                 
+                                
+                                
+                            # Create Matrix account
                             elif action == 'create_matrix_account':
                                 state = False
                                 if self.DEBUG:
@@ -183,6 +186,7 @@ class VocoAPIHandler(APIHandler):
                                 )
                                 
                                 
+                            # Provide Matrix account
                             elif action == 'provide_matrix_account':
                                 state = False
                                 if self.DEBUG:
@@ -234,6 +238,8 @@ class VocoAPIHandler(APIHandler):
                                 )
                                 
                                 
+                                
+                            # Invite to Matrix
                             elif action == 'invite':
                                 state = False
                                 if self.DEBUG:
@@ -269,6 +275,7 @@ class VocoAPIHandler(APIHandler):
                                 )
                                 
                                 
+                            # Kick from Matrix
                             elif action == 'kick':
                                 state = False
                                 if self.DEBUG:
@@ -304,6 +311,7 @@ class VocoAPIHandler(APIHandler):
                                 )
                                 
                                 
+                            # Refresh matrix members list
                             elif action == 'refresh_matrix_members':
                                 state = True
                                 if self.DEBUG:
@@ -316,7 +324,187 @@ class VocoAPIHandler(APIHandler):
                                   content=json.dumps({'state' : state, 'message' : '' }),
                                 )
                                 
-                        
+                                
+                                
+                                
+                            elif action == 'llm_init':
+                                state = True
+                                if self.DEBUG:
+                                    print('ajax handling llm init')
+                                
+                                self.adapter.check_available_memory()
+                                #self.adapter.check_possible_wakewords()
+                                
+                                
+                                return APIResponse(
+                                  status=200,
+                                  content_type='application/json',
+                                  content=json.dumps({
+                                          'state' : state, 
+                                          'message' : '',
+                                          'mqtt_others': self.adapter.mqtt_others,
+                                          'llm_enabled':self.adapter.llm_enabled,
+                                          
+                                          'controller_model': self.adapter.controller_model,
+                                          'controller_pi_version': self.adapter.controller_pi_version,
+                                          'device_total_memory': self.adapter.total_memory,
+                                          'device_free_memory': self.adapter.free_memory,
+                                    
+                                          'llm_not_enough_disk_space':self.adapter.llm_not_enough_disk_space,
+                                          'llm_busy_downloading_models':self.adapter.llm_busy_downloading_models,
+                                          
+                                          'llm_models':self.adapter.llm_models,
+                                          
+                                          'llm_wakeword_models': self.adapter.llm_wakeword_models,
+                                          'llm_wakeword_model': self.adapter.persistent_data['llm_wakeword_model'],
+                                          'llm_wakeword_started': self.adapter.llm_wakeword_started,
+                                          
+                                          'llm_tts_enabled':self.adapter.llm_tts_enabled,
+                                          'llm_tts_minimal_memory':self.adapter.llm_tts_minimal_memory,
+                                          'llm_tts_not_enough_memory':self.adapter.llm_tts_not_enough_memory,
+                                          'llm_tts_started': self.adapter.llm_tts_started,
+                                          
+                                          'llm_stt_enabled':self.adapter.llm_stt_enabled,
+                                          'llm_stt_minimal_memory':self.adapter.llm_stt_minimal_memory,
+                                          'llm_stt_not_enough_memory':self.adapter.llm_stt_not_enough_memory,
+                                          'llm_stt_started': self.adapter.llm_stt_started,
+                                          
+                                          'llm_assistant_enabled':self.adapter.llm_assistant_enabled,
+                                          'llm_assistant_minimal_memory':self.adapter.llm_assistant_minimal_memory,
+                                          'llm_assistant_not_enough_memory':self.adapter.llm_assistant_not_enough_memory,
+                                          'llm_assistant_started': self.adapter.llm_assistant_started
+                                          
+                                      }),
+                                )
+                                
+                                
+                            # Change LLM AI settings, such as the prefered models to use
+                            elif action == 'set_llm':
+                                state = False
+                                if self.DEBUG:
+                                    print('ajax handling set_llm')
+                                try:
+                                    
+                                    if 'llm_wakeword_model' in request.body:
+                                        if self.DEBUG:
+                                            print("set_llm: wakeword")
+                                        if str(self.adapter.persistent_data['llm_wakeword_model']) != str(request.body['llm_wakeword_model']):
+                                            self.adapter.persistent_data['llm_wakeword_model'] = str(request.body['llm_wakeword_model'])
+                                            if self.DEBUG:
+                                                print("self.adapter.persistent_data['llm_wakeword_model'] is now: " + str(self.adapter.persistent_data['llm_wakeword_model']))
+                                            self.adapter.llm_should_download = True
+                                            self.adapter.restart_wakeword = True
+                                            self.adapter.llm_wakeword_failed = False
+                                            self.adapter.should_restart_snips = True
+                                    
+                                    if 'llm_tts_model' in request.body:
+                                        if self.DEBUG:
+                                            print("set_llm: TTS")
+                                        if self.adapter.persistent_data['llm_tts_model'] != str(request.body['llm_tts_model']):
+                                            self.adapter.persistent_data['llm_tts_model'] = str(request.body['llm_tts_model'])
+                                            self.adapter.llm_should_download = True
+                                            self.adapter.clear_llm_tts_cache()
+                                            #self.adapter.download_llm_models()
+                                    
+                                    if 'llm_stt_model' in request.body:
+                                        if self.DEBUG:
+                                            print("set_llm: STT")
+                                        self.adapter.persistent_data['llm_stt_model'] = str(request.body['llm_stt_model'])
+                                        self.adapter.llm_should_download = True
+                                        
+                                    if 'llm_assistant_model' in request.body:
+                                        if self.DEBUG:
+                                            print("set_llm: Assistant")
+                                        self.adapter.persistent_data['llm_assistant_model'] = str(request.body['llm_assistant_model'])
+                                        self.adapter.llm_should_download = True
+                                    
+                                    self.adapter.save_persistent_data()
+                                    
+                                    state = True
+                                        
+                                except Exception as ex:
+                                    print("Error in set_llm: " + str(ex))
+                                    
+                                return APIResponse(
+                                  status=200,
+                                  content_type='application/json',
+                                  content=json.dumps({'state' : state}),
+                                )
+                                
+                                
+                            # Delete specific LLM model files
+                            elif action == 'delete_llm':
+                                state = False
+                                if self.DEBUG:
+                                    print('ajax handling delete_llm')
+                                try:
+                                    if 'model_type' in request.body and 'model_name' in request.body:
+                                        
+                                        model_path = os.path.join(self.adapter.llm_data_dir_path, str(request.body['model_type']), str(request.body['model_name']))
+                                        if os.path.exists(str(model_path)):
+                                            if self.DEBUG:
+                                                print("found model file to delete: " + str(model_path))
+                                            os.system('rm ' + str(model_path))
+                                            if os.path.exists(str(model_path)):
+                                                if self.DEBUG:
+                                                    print("ERROR, failed to delete the model")
+                                            else:
+                                                if self.DEBUG:
+                                                    print("model was deleted succesfully")
+                                                state = True
+                                                
+                                    # Active models cannot be deleted, but could perhaps do a download of models just to be safe?
+                                    # self.adapter.llm_should_download = True
+                                                
+                                except Exception as ex:
+                                    print("Error in delete_llm: " + str(ex))
+                                    
+                                return APIResponse(
+                                  status=200,
+                                  content_type='application/json',
+                                  content=json.dumps({'state' : state}),
+                                )
+                                
+                                
+                            
+                            elif action == 'llm_reset_assistant':
+                                if self.DEBUG:
+                                    print("API got request to reset assistant")
+                                self.adapter.stop_ai_assistant()
+                                self.adapter.restart_llm_servers = True
+                                return APIResponse(
+                                  status=200,
+                                  content_type='application/json',
+                                  content=json.dumps({'state' : True}),
+                                )
+                                
+                                
+                            elif action == 'clear_info_to_show':
+                                if self.DEBUG:
+                                    print("API got request to clear info_to_show")
+                                self.adapter.info_to_show = ''
+                                return APIResponse(
+                                  status=200,
+                                  content_type='application/json',
+                                  content=json.dumps({'state' : True}),
+                                )
+                                
+                                
+                            # Not used at the moment
+                            elif action == 'llm_generate_text':
+                                state = False
+                                if 'prompt' in request.body and 'llm_action' in request.body:
+                                    self.adapter.llm_generate_text(str(request.body['prompt']), str(request.body['llm_action']))
+                                    state = True
+                                
+                                return APIResponse(
+                                  status=200,
+                                  content_type='application/json',
+                                  content=json.dumps({'state' : state}),
+                                )
+                                
+                                
+                            # 404
                             else:
                                 return APIResponse(status=404)    
                         
@@ -342,18 +530,21 @@ class VocoAPIHandler(APIHandler):
                                         self.adapter.save_persistent_data()
                                 # reset text response in UI
                                 else:
-                                    print("Error, no jwt in incoming /init request")
+                                    if self.DEBUG:
+                                        print("Error, no jwt in incoming /init request")
                                 
-                                self.adapter.last_text_response = ""
+                                self.adapter.chat_messages = []
                                 self.adapter.refresh_matrix_members = True
                                 
                                 # Update IP address and hostname
                                 self.adapter.update_network_info()
                             
+                                self.adapter.satellite_targets = avahi_detect_gateways()
+                            
                                 # Ask for latest info from other Voco instances
                                 if self.adapter.mqtt_client != None:
                                     self.adapter.mqtt_client.publish("hermes/voco/ping",json.dumps({'ip':self.adapter.ip_address,'site_id':self.adapter.persistent_data['site_id']}))
-                                    sleep(1)
+                                    #time.sleep(.1) # TODO: disabled this in feb 2024
                             
                                 """
                                 # Satellite targets
@@ -441,6 +632,7 @@ class VocoAPIHandler(APIHandler):
                                                         'has_token':has_token, 
                                                         'is_satellite':is_sat, 
                                                         'main_site_id':self.adapter.persistent_data['main_site_id'],
+                                                        'mqtt_others': self.adapter.mqtt_others,
                                                         'main_controller_hostname':self.adapter.persistent_data['main_controller_hostname'],
                                                         'mqtt_server':self.adapter.persistent_data['mqtt_server'], 
                                                         'mqtt_connected':self.adapter.mqtt_connected, 
@@ -449,6 +641,9 @@ class VocoAPIHandler(APIHandler):
                                                         'matrix_server': matrix_server,
                                                         'matrix_username': matrix_username,
                                                         'has_matrix_token': has_matrix_token,
+                                                        'controller_model': self.adapter.controller_model,
+                                                        'hardware_score': self.adapter.hardware_score,
+                                                        'llm_assistant_started': self.adapter.llm_assistant_started,
                                                         'debug':self.adapter.DEBUG
                                                         }),
                                 )
@@ -463,12 +658,20 @@ class VocoAPIHandler(APIHandler):
 
                     
                     
+                    
+                    
+                    
+                        #
+                        #  POLL
+                        #
                         elif request.path == '/poll':
                             if self.DEBUG2:
                                 print("Getting the poll data")
                             
+                            generated_text = ''
+                            state = True
+                            
                             try:
-                                state = True
                                 
                                 if self.adapter.matrix_busy_registering == False:
                                     if 'refresh_matrix_members' in request.body:
@@ -477,7 +680,32 @@ class VocoAPIHandler(APIHandler):
                                                 print("poll has asked for a periodic refresh of the matrix members list")
                                             self.adapter.refresh_matrix_members = True
                                             
+                                # get generated text
+                                if self.adapter.llm_busy_generating:
+                                    with open(self.adapter.llm_generated_text_file_path, "r") as f:
+                                        #content = f.readlines()
+                                        #generated_text = f.read() #'\n'.join(content)
+                                        self.adapter.llm_generated_text = f.read() #generated_text
                                 
+                                llm_folder_size = 0
+                                try:
+                                    llm_folder_size_command = "du -s " + str(self.adapter.llm_data_dir_path) + " | awk '{print $1}'"
+                                    #if self.DEBUG:
+                                    #    print("llm_folder_size_command: " + str(llm_folder_size_command))
+                                    #llm_folder_size_output = run_command(llm_folder_size_command)
+                                    llm_folder_size = run_command(llm_folder_size_command)
+                                    llm_folder_size = llm_folder_size.strip()
+                                    #if self.DEBUG:
+                                    #    print("llm_folder_size_output: " + str(llm_folder_size_output))
+                                    # if llm_folder_size_output != None:
+                                    #    llm_folder_size = int(llm_folder_size_output.strip())
+                                    #    if self.DEBUG:
+                                    #        print("llm_data_dir_path: " + str(self.adapter.llm_data_dir_path))
+                                    #        print("llm_folder_size: " + str(llm_folder_size))
+                                        
+                                except Exception as ex:
+                                    if self.DEBUG:
+                                        print("Error getting llm folder size: " + str(ex))
                                 
                                 action_count = len( self.adapter.persistent_data['action_times'] )
 
@@ -497,7 +725,7 @@ class VocoAPIHandler(APIHandler):
                                         clock['hours'] = hacky_datetime.hour
                                         clock['minutes'] = hacky_datetime.minute
                                         clock['seconds'] = hacky_datetime.second
-                                        clock['seconds_to_go'] = utc_timestamp - self.adapter.current_utc_time
+                                        clock['seconds_to_go'] = utc_timestamp - int(time.time()) #self.adapter.current_utc_time
                                         #print("seconds to go: " + str(clock['seconds_to_go']))
                                         self.adapter.persistent_data['action_times'][i]['clock'] = clock
             
@@ -515,6 +743,21 @@ class VocoAPIHandler(APIHandler):
                                 if 'matrix_server' in self.adapter.persistent_data:
                                     matrix_server = str(self.adapter.persistent_data['matrix_server'])
 
+                                #self.adapter.check_available_memory()
+
+                                #chat_messages = self.adapter.chat_messages
+                                #self.adapter.chat_messages = []
+                                
+                                chat_messages = []
+                                if 'browser_id' in request.body:
+                                    if str(request.body['browser_id']) in self.adapter.browsers:
+                                        self.adapter.browsers[str(request.body['browser_id'])]['last_seen'] = time.time()
+                                    else:
+                                        self.adapter.browsers[str(request.body['browser_id'])] = {'last_seen':time.time()}
+                                    
+                                    if str(request.body['browser_id']) in self.adapter.chat_messages:
+                                        chat_messages = self.adapter.chat_messages[str(request.body['browser_id'])]
+
                                 return APIResponse(
                                     status=200,
                                     content_type='application/json',
@@ -522,8 +765,12 @@ class VocoAPIHandler(APIHandler):
                                                         'update': '',
                                                         'busy_starting_snips': self.adapter.busy_starting_snips,
                                                         'items': self.adapter.persistent_data['action_times'],
+                                                        'mqtt_others': self.adapter.mqtt_others,
                                                         'current_time':self.adapter.current_utc_time,
-                                                        'text_response':self.adapter.last_text_response, 
+                                                        'chat_messages':chat_messages,
+                                                        'llm_busy_generating':self.adapter.llm_busy_generating,
+                                                        'llm_generated_text':self.adapter.llm_generated_text,
+                                                        'info_to_show': self.adapter.info_to_show,
                                                         'initial_injection_completed':self.adapter.initial_injection_completed,
                                                         'missing_microphone':self.adapter.missing_microphone, 
                                                         'matrix_started':self.adapter.matrix_started,
@@ -536,6 +783,17 @@ class VocoAPIHandler(APIHandler):
                                                         'is_satellite':self.adapter.persistent_data['is_satellite'],
                                                         'connected_satellites': self.adapter.connected_satellites,
                                                         'periodic_voco_attempts':self.adapter.periodic_voco_attempts,
+                                                        'llm_busy_downloading_models':self.adapter.llm_busy_downloading_models,
+                                                        'llm_folder_size':llm_folder_size,
+                                                        'llm_not_enough_disk_space':self.adapter.llm_not_enough_disk_space,
+                                                        'free_memory':self.adapter.free_memory,
+                                                        'fastest_controller_id':self.adapter.fastest_controller_id,
+                                                        'fastest_controller_score':self.adapter.fastest_controller_score,
+                                                        'llm_tts_started': self.adapter.llm_tts_started,
+                                                        'llm_stt_started': self.adapter.llm_stt_started,
+                                                        'llm_wakeword_started': self.adapter.llm_wakeword_started,
+                                                        'llm_assistant_started': self.adapter.llm_assistant_started,
+                                                        'browsers_available':self.adapter.browsers_available
                                                         })
                                 )
                                 
@@ -550,26 +808,55 @@ class VocoAPIHandler(APIHandler):
                        
                     
                     
+                        elif request.path == '/overlay_poll':
+                            if self.DEBUG2:
+                                print("Getting the overlay_poll data")
+                                
+                            if 'browser_id' in request.body:
+                                self.adapter.browsers[str(request.body['browser_id'])] = {'last_seen':time.time()}
                     
+                            return APIResponse(
+                                status=200,
+                                content_type='application/json',
+                                content=json.dumps({
+                                                    'info_to_show': self.adapter.info_to_show
+                                                    })
+                            )
+                    
+                    
+                        # Text chat command
                         elif request.path == '/parse':
+                            state = False
+                            if self.DEBUG:
+                                print("handling /parse.")
                             try:
-                                if self.DEBUG:
-                                    print("handling /parse. Incoming text: " + str(request.body['text']))
-                                self.adapter.last_text_command = str(request.body['text'])
-                                self.adapter.parse_text(site_id=self.adapter.persistent_data['site_id'],origin="text")
-                                return APIResponse(
-                                    status=200,
-                                    content_type='application/json',
-                                    content=json.dumps({'state' : 'ok'}),
-                                )
+                                
+                                if 'text' in request.body and 'browser_id' in request.body:
+                                    self.adapter.active_browser_id = str(request.body['browser_id'])
+                                    self.adapter.last_text_command = str(request.body['text'])
+                                    self.adapter.chat_messages[str(self.adapter.active_browser_id)] = [] # {'message':'test','timestamp':time.time()}
+                                    self.adapter.chat_requests[str(self.adapter.last_text_command)] = str(self.adapter.active_browser_id)
+                                    
+                                    self.adapter.parse_text(site_id=self.adapter.persistent_data['site_id'],origin="text")
+                                    state = True
+                                    
+                                    if self.DEBUG:
+                                        print("/parse: self.adapter.last_text_command: " + str(self.adapter.last_text_command))
+                                        print("/parse: self.adapter.active_browser_id: " + str(self.adapter.active_browser_id))
+                                        print("/parse: self.adapter.chat_requests: " + str(self.adapter.chat_requests))
+                                else:
+                                    if self.DEBUG:
+                                        print("request to /parse was missing text or browser_id")
+                                        
                             except Exception as ex:
                                 if self.DEBUG:
-                                    print("Error handling parse data: " + str(ex))
-                                return APIResponse(
-                                    status=500,
-                                    content_type='application/json',
-                                    content=json.dumps({'state' : False, 'update': "Internal error while handling text command"}),
-                                )
+                                    print("Error handling API /parse request: " + str(ex))
+                            
+                            return APIResponse(
+                                status=200,
+                                content_type='application/json',
+                                content=json.dumps({'state' : state}),
+                            )
                             
                     
                     
@@ -592,7 +879,8 @@ class VocoAPIHandler(APIHandler):
                                     try:
                                         state = self.adapter.broadcast_remove_action_time(request.body)
                                     except Exception as ex:
-                                        print("error /update -> deleting: " + str(ex))
+                                        if self.DEBUG:
+                                            print("error /update -> deleting: " + str(ex))
                                                 
                        
                                 # TOKEN
@@ -653,14 +941,12 @@ class VocoAPIHandler(APIHandler):
                                                                         'update':"Please change the hostname first"
                                                                         }),
                                                 )
+                                                
                                         except Exception as ex:
                                             if self.DEBUG:
                                                 print("Error checking if hostname is something other than 'candle': " + str(ex))
                                         
                                         try:
-                                            
-                                            
-                                            
                                             
                                             self.adapter.persistent_data['is_satellite'] = bool(request.body['is_satellite'])
 
@@ -668,6 +954,9 @@ class VocoAPIHandler(APIHandler):
                                             if self.adapter.persistent_data['is_satellite']:
                                                 
                                                 self.adapter.persistent_data['main_controller_hostname'] = str(request.body['main_controller_hostname'])
+                                                
+                                                if self.adapter.llm_assistant_started:
+                                                    self.adapter.start_ai_assistant() # this actually only stops the assistant in this case.
                                                 
                                                 #self.adapter.persistent_data['mqtt_server'] = str(request.body['mqtt_server'])
                                                 
@@ -701,12 +990,15 @@ class VocoAPIHandler(APIHandler):
                                                     if self.DEBUG:
                                                         print("- Satellite mode enabled")
                                                         
-                                                    
-                                                        
                                                 else:
                                                     update = 'Error: could not find IP address of prefered controller'
                                             else:
+                                                if self.DEBUG:
+                                                    print("- Satellite mode disabled")
+                                                    
+                                                # No longer a satellite
                                                 self.adapter.persistent_data['mqtt_server'] = 'localhost'
+                                                self.adapter.persistent_data['main_controller_ip'] = 'localhost'
                                                 self.adapter.persistent_data['main_controller_hostname'] = self.adapter.hostname
                                                 self.adapter.persistent_data['main_site_id'] = self.adapter.persistent_data['site_id'] #reset to default
                                                 self.adapter.initial_injection_completed = False
@@ -714,10 +1006,16 @@ class VocoAPIHandler(APIHandler):
                                                 self.adapter.should_restart_mqtt = True
                                                 self.adapter.run_mqtt()
                                                 self.adapter.run_snips() # this stops Snips first
+                                                
+                                                if self.adapter.llm_enabled and self.adapter.llm_assistant_enabled:
+                                                    self.adapter.check_available_memory()
+                                                    if self.adapter.llm_assistant_possible:
+                                                        self.adapter.llm_should_download = True
+                                                        self.adapter.assistant_loop_counter = self.adapter.llm_servers_watchdog_interval - 2
+                                                
                                                 state = True
                                                 update = 'Satellite mode disabled'
-                                                if self.DEBUG:
-                                                    print("- Satellite mode disabled")
+                                                
                                                 
                                             
                                         except Exception as ex:
@@ -738,7 +1036,9 @@ class VocoAPIHandler(APIHandler):
                                 return APIResponse(
                                     status=200,
                                     content_type='application/json',
-                                    content=json.dumps({'state' : state, 'update':update}),
+                                    content=json.dumps({'state' : state, 
+                                                        'update':update,
+                                                        'debug':self.adapter.DEBUG}),
                                 )
                             except Exception as ex:
                                 print("Error updating: " + str(ex))
