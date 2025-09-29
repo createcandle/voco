@@ -659,7 +659,9 @@ class VocoAdapter(Adapter):
         #self.response_wav = os.path.join(self.addon_path,"snips","response.wav")
         self.response_wav = os.path.join(os.sep,"tmp","response.wav")
         self.response2_wav = os.path.join(os.sep,"tmp","response2.wav")
-
+        
+        print("doing chmod +x on: " + str(self.snips_path) + "/snips*")
+        os.system("chmod +x " + str(self.snips_path) + "/snips*")
         
         # Check if (netbios) ip to hostname conversion tool is available
         self.nbtscan_available = None
@@ -6190,6 +6192,59 @@ class VocoAdapter(Adapter):
                 local_thing_titles_list = []
                 full_thing_titles_list = []
                 
+                # A small helper function that checks for poorly pronouncable strings
+                def too_difficult_to_pronounce(name):
+                    
+                    #if self.DEBUG:
+                    #    print("too_difficult_to_pronounce? " + str(name))
+                    seen_short_capitalized_before = False
+                    seen_combo_before = False
+                    seen_word_with_a_digit_before = False
+                    words = name.split()
+                    for word_index, word in enumerate(words):
+                        #if self.DEBUG:
+                        #    print(" - " + str(word_index) + ". " + str(word))
+                        word_has_letter = False
+                        word_has_digit = False
+                        
+                        if len(word) < 3 and word.isupper():
+                            if seen_short_capitalized_before:
+                                # Don't allow more than two very short abbrevations
+                                return True
+                            seen_short_capitalized_before = True
+                        
+                        for c in word:
+                            if c.isdigit():
+                                word_has_digit = True
+                                seen_word_with_a_digit_before = True
+                            else:
+                                if word_has_letter and word_has_digit:
+                                    # this word has a letter, then a number, and then a letter again. That's bad.
+                                    return True
+                                word_has_letter = True
+                                
+                        #if any(not c.isdigit() for c in word):
+                        #    word_has_letter = True
+                        #if any(c.isdigit() for c in word):
+                        #    word_has_digit = True
+                        #    seen_word_with_a_digit_before = True
+                            
+                        if word_has_letter and word_has_digit:
+                            if seen_combo_before:
+                                # two words with both a letter and a number in the string, that's bad
+                                return True
+                            seen_combo_before = True
+                            if len(words) > 2 and word_index > 0 and word_index < (len(words) - 1): 
+                                # spotted a word in the middle of the name that has both a letter and a number in it. That's bad.
+                                return True
+                        
+                        if word_has_digit and seen_word_with_a_digit_before:
+                            # two words with a number in it, that's bad
+                            return True
+                            
+                    return False
+                
+                
                 # Add things from this controller
                 for thing in self.things:
                     if 'title' in thing:
@@ -6201,14 +6256,33 @@ class VocoAdapter(Adapter):
                                 for word in thing['properties'][thing_property_key]['enum']:
                                     #property_string_name = clean_up_string_for_speaking(str(word).lower()).strip()
                                     property_string_name = clean_up_thing_string(str(word)) #.strip()
-                                    if len(property_string_name) > 1:
-                                        fresh_property_strings.add(clean_up_thing_string(property_string_name))
+                                    if len(str(property_string_name)) > 2:
+                                        if too_difficult_to_pronounce(property_string_name):
+                                            if self.DEBUG:
+                                                print("skipping property value that is too difficult to pronounce: " + str(property_string_name))
+                                        elif " " in property_string_name and any(char.isdigit() for char in property_string_name) and not (property_string_name[-1].isdigit() or (property_string_name[0].isdigit() and ( property_string_name[1] == " " or property_string_name[2] == " " )) ):
+                                            if self.DEBUG:
+                                                print("skipping property value string with both a space and a number in it (that is not the first or last character): " + str(property_string_name))
+                                        else:
+                                            if len(str(property_string_name)) > 3 and property_string_name.isupper():
+                                                property_string_name = property_string_name.lower()
+                                            fresh_property_strings.add(clean_up_thing_string(property_string_name))
+                                            
                         if 'title' in thing['properties'][thing_property_key]:
                             #property_title = clean_up_string_for_speaking(str(thing['properties'][thing_property_key]['title']).lower()).strip()
                             property_title = clean_up_thing_string(str(thing['properties'][thing_property_key]['title'])) #.strip()
-                            if len(property_title) > 1:
+                            if len(property_title) > 2:
                                 if property_title.startswith("Unknown ") == False:
-                                    fresh_property_titles.add(property_title)
+                                    if too_difficult_to_pronounce(property_title):
+                                        if self.DEBUG:
+                                            print("skipping property_title that is too difficult to pronounce: " + str(property_title))
+                                    elif " " in property_title and any(char.isdigit() for char in property_title) and not property_title[-1].isdigit():
+                                        if self.DEBUG:
+                                            print("skipping property_title with both a space and a number in it (that is not the last character): " + str(property_title))
+                                    else:
+                                        if len(str(property_title)) > 3 and property_title.isupper():
+                                            property_titlee = property_title.lower()
+                                        fresh_property_titles.add(property_title)
                         
                 # Add things from satellites (if this is not itself a satellite)
                 #if self.persistent_data['is_satellite'] == False:
