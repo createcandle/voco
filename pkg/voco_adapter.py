@@ -196,11 +196,12 @@ class VocoAdapter(Adapter):
             pass
         # Get initial audio_output options
         self.audio_controls = get_audio_controls()
-        print("audio controls: " + str(self.audio_controls))
+        if self.DEBUG:
+            print("audio controls: " + str(self.audio_controls))
 
         self.pipewire = False
         pipewire_check = run_command('which wpctl') 
-        if '/wpctl' in pipewire_check:
+        if "/wpctl" in str(pipewire_check):
             self.pipewire = True
             if self.DEBUG:
                 print("pipewire detected")
@@ -249,12 +250,13 @@ class VocoAdapter(Adapter):
             self.matrix_data_store_path = os.path.join(self.user_profile['dataDir'], self.addon_name)
         except:
             try:
-                print("ERROR: setting persistence file path failed, will try older method.")
+                if self.DEBUG:
+                    print("ERROR: setting persistence file path failed, will try older method.")
                 self.persistence_file_path = os.path.join(os.path.expanduser('~'), '.webthings', 'data', self.addon_name,'persistence.json')
                 self.matrix_data_store_path = os.path.join(os.path.expanduser('~'), '.webthings', 'data', self.addon_name)
             except:
-                
-                print("ERROR: Double error making persistence file path")
+                if self.DEBUG:
+                    print("ERROR: Double error making persistence file path")
                 self.persistence_file_path = "/home/pi/.webthings/data/" + self.addon_name + "/persistence.json"
                 self.matrix_data_store_path = "/home/pi/.webthings/data/" + self.addon_name
         
@@ -262,7 +264,8 @@ class VocoAdapter(Adapter):
         try:
             self.external_picture_drop_dir = os.path.join(self.user_profile['dataDir'], self.addon_name, 'sendme')
         except:
-            print("Error creating pictures dropoff dir path")
+            if self.DEBUG:
+                print("Error creating pictures dropoff dir path")
         
         
         if self.DEBUG:
@@ -282,7 +285,8 @@ class VocoAdapter(Adapter):
                         
         except Exception as ex:
             self.first_run = True
-            print("Error, could not load persistent data (if you just installed the add-on then this is normal): " + str(ex))
+            if self.DEBUG:
+                print("Error, could not load persistent data (if you just installed the add-on then this is normal): " + str(ex))
             self.persistent_data = {}
  
         
@@ -312,7 +316,8 @@ class VocoAdapter(Adapter):
         
         try:
             if 'audio_output' not in self.persistent_data:
-                print("audio_output was not in persistent data, adding it now.")
+                if self.DEBUG:
+                    print("audio_output was not in persistent data, adding it now.")
                 self.persistent_data['audio_output'] = str(self.audio_controls[0]['human_device_name'])
         except:
             print("Error fixing audio_output in persistent data. Falling back to headphone jack.")
@@ -324,32 +329,38 @@ class VocoAdapter(Adapter):
             
             if 'site_id' not in self.persistent_data:
                 random_site_id = generate_random_string(8)
-                print("site_id was not in persistent data, adding random one now: " + str(random_site_id))
+                if self.DEBUG:
+                    print("site_id was not in persistent data, adding random one now: " + str(random_site_id))
                 self.persistent_data['site_id'] = str(random_site_id)
                 self.save_to_persistent_data = True
             
             if 'listening' not in self.persistent_data:
-                print("listening was not in persistent data, adding it now.")
+                if self.DEBUG:
+                    print("listening was not in persistent data, adding it now.")
                 self.persistent_data['listening'] = True
                 self.save_to_persistent_data = True
             
             if 'feedback_sounds' not in self.persistent_data:
-                print("lfeedback_sounds was not in persistent data, adding it now.")
+                if self.DEBUG:
+                    print("lfeedback_sounds was not in persistent data, adding it now.")
                 self.persistent_data['feedback_sounds'] = True
                 self.save_to_persistent_data = True
             
             if 'action_times' not in self.persistent_data:
-                print("action_times was not in persistent data, adding it now.")
+                if self.DEBUG:
+                    print("action_times was not in persistent data, adding it now.")
                 self.persistent_data['action_times'] = []
                 self.save_to_persistent_data = True
 
             if 'speaker_volume' not in self.persistent_data:
-                print("speaker_volume was not in persistent data, adding it now (70).")
+                if self.DEBUG:
+                    print("speaker_volume was not in persistent data, adding it now (70).")
                 self.persistent_data['speaker_volume'] = 80
                 self.save_to_persistent_data = True
 
             if 'is_satellite' not in self.persistent_data:
-                print("action_times was not in persistent data, adding it now.")
+                if self.DEBUG:
+                    print("action_times was not in persistent data, adding it now.")
                 self.persistent_data['is_satellite'] = False
                 self.save_to_persistent_data = True
                 
@@ -358,17 +369,20 @@ class VocoAdapter(Adapter):
                 self.save_to_persistent_data = True
                 
             if 'mqtt_server' not in self.persistent_data:
-                print("action_times was not in persistent data, adding it now.")
+                if self.DEBUG:
+                    print("action_times was not in persistent data, adding it now.")
                 self.persistent_data['mqtt_server'] = 'localhost'
                 self.save_to_persistent_data = True
 
             if 'main_site_id' not in self.persistent_data: # to remember what the main voco server is, for satellites.
-                print("main_site_id was not in persistent data, adding it now.")
+                if self.DEBUG:
+                    print("main_site_id was not in persistent data, adding it now.")
                 self.persistent_data['main_site_id'] = self.persistent_data['site_id']
                 self.save_to_persistent_data = True
                 
             if 'main_controller_hostname' not in self.persistent_data: # to remember what the main voco server is, for satellites.
-                print("main_controller_hostname was not in persistent data, adding it now.")
+                if self.DEBUG:
+                    print("main_controller_hostname was not in persistent data, adding it now.")
                 self.persistent_data['main_controller_hostname'] = self.hostname
                 self.save_to_persistent_data = True
                 
@@ -377,22 +391,26 @@ class VocoAdapter(Adapter):
             #    self.persistent_data['main_controller_ip'] = 'localhost'
             
             if 'satellite_thing_titles' not in self.persistent_data:
-                print("satellite_thing_titles was not in persistent data, adding it now.")
+                if self.DEBUG:
+                    print("satellite_thing_titles was not in persistent data, adding it now.")
                 self.persistent_data['satellite_thing_titles'] = {} # a dictionary with per-satellite lists of thing titles received from those satellites
                 self.save_to_persistent_data = True
                 
             if 'local_thing_titles' not in self.persistent_data: # the previously known thing titles in the entire local network (including satellites)
-                print("local_thing_titles was not in persistent data, adding it now.")
+                if self.DEBUG:
+                    print("local_thing_titles was not in persistent data, adding it now.")
                 self.persistent_data['local_thing_titles'] = []
                 self.save_to_persistent_data = True
                 
             if 'all_thing_titles' not in self.persistent_data: # the previously known thing titles in the entire local network (including satellites)
-                print("all_thing_titles was not in persistent data, adding it now.")
+                if self.DEBUG:
+                    print("all_thing_titles was not in persistent data, adding it now.")
                 self.persistent_data['all_thing_titles'] = []
                 self.save_to_persistent_data = True
             
             if 'microphone_gain' not in self.persistent_data: # the previously known thing titles in the entire local network (including satellites)
-                print("microphone_gain was not in persistent data, adding it now.")
+                if self.DEBUG:
+                    print("microphone_gain was not in persistent data, adding it now.")
                 self.persistent_data['microphone_gain'] = 80
                 self.save_to_persistent_data = True
             
@@ -403,7 +421,8 @@ class VocoAdapter(Adapter):
             
                 
         except Exception as ex:
-            print("Error adding variables to persistent data: " + str(ex))
+            if self.DEBUG:
+                print("Error adding variables to persistent data: " + str(ex))
             
         
             
@@ -493,7 +512,8 @@ class VocoAdapter(Adapter):
             if self.DEBUG:
                 print("Gateway version: " + str(self.gateway_version))
         except:
-            print("self.gateway_version did not exist")
+            if self.DEBUG:
+                print("self.gateway_version did not exist")
         
         self.api_server = 'http://127.0.0.1:8080' # Where can the Gateway API be found? this will be replaced with https://127.0.0.1:4443 later on, if a test call to the api fails.
 
@@ -660,7 +680,8 @@ class VocoAdapter(Adapter):
         self.response_wav = os.path.join(os.sep,"tmp","response.wav")
         self.response2_wav = os.path.join(os.sep,"tmp","response2.wav")
         
-        print("doing chmod +x on: " + str(self.snips_path) + "/snips*")
+        if self.DEBUG:
+            print("doing chmod +x on: " + str(self.snips_path) + "/snips*")
         os.system("chmod +x " + str(self.snips_path) + "/snips*")
         
         # Check if (netbios) ip to hostname conversion tool is available
@@ -680,9 +701,11 @@ class VocoAdapter(Adapter):
             #print("checking if work path exists: " + str(self.work_path))
             if not os.path.isdir(self.work_path):
                 os.mkdir( self.work_path )
-                print("Work directory did not exist, created it now: " + str(self.work_path))
+                if self.DEBUG:
+                    print("Work directory did not exist, created it now: " + str(self.work_path))
         except Exception as ex:
-            print("Error: could not make sure work dir exists. Work path: " + str(self.work_path) + ". Error: " + str(ex))
+            if self.DEBUG:
+                print("Error: could not make sure work dir exists. Work path: " + str(self.work_path) + ". Error: " + str(ex))
             
         if os.path.isdir(self.work_path):
             #print("self.work_path: " + str(self.work_path))
@@ -704,10 +727,12 @@ class VocoAdapter(Adapter):
         # Pre-scan ALSA
         try:
             self.capture_devices = self.scan_alsa('capture')
-            print("Possible audio capture devices: " + str(self.capture_devices))
+            if self.DEBUG:
+                print("Possible audio capture devices: " + str(self.capture_devices))
             
         except Exception as ex:
-            print("Error scanning ALSA (audio devices): " + str(ex))
+            if self.DEBUG:
+                print("Error scanning ALSA (audio devices): " + str(ex))
         
         
         # Get token from persistent data. A config setting would then still override it.
@@ -724,7 +749,8 @@ class VocoAdapter(Adapter):
         try:
             self.add_from_config()
         except Exception as ex:
-            print("Error loading config: " + str(ex))
+            if self.DEBUG:
+                print("Error loading config: " + str(ex))
             
         #self.DEBUG = False
         
@@ -738,7 +764,7 @@ class VocoAdapter(Adapter):
         
         # Check if a respeaker hat is being used
         respeaker_check = run_command('aplay -l') 
-        if 'seeed' in respeaker_check:
+        if 'seeed' in str(respeaker_check):
             self.prefer_aplay = True
             if self.DEBUG:
                 print("respeaker hat detected, will use aplay instead of omxplayer")
@@ -819,7 +845,8 @@ class VocoAdapter(Adapter):
                 #print("Error handling API: " + str(ex))
                 
         except Exception as ex:
-            print("Error, couldn't load things at init: " + str(ex))
+            if self.DEBUG:
+                print("Error, couldn't load things at init: " + str(ex))
 
         if self.DEBUG:
             print("self.api_server is now: " + str(self.api_server))
@@ -859,23 +886,28 @@ class VocoAdapter(Adapter):
                 pass
             
             elif self.microphone == "Built-in microphone (0,0)":
-                print("Setting audio input to built-in (0,0)")
+                if self.DEBUG:
+                    print("Setting audio input to built-in (0,0)")
                 self.capture_card_id = 0
                 self.capture_device_id = 0
             elif self.microphone == "Attached device (1,0)":
-                print("Setting audio input to attached device (1,0)")
+                if self.DEBUG:
+                    print("Setting audio input to attached device (1,0)")
                 self.capture_card_id = 1
                 self.capture_device_id = 0
             elif self.microphone == "Attached device, channel 2 (1,1)":
-                print("Setting audio input to attached device, channel 2 (1,1)")
+                if self.DEBUG:
+                    print("Setting audio input to attached device, channel 2 (1,1)")
                 self.capture_card_id = 1
                 self.capture_device_id = 1
             elif self.microphone == "Second attached device (2,0)":
-                print("Setting audio input to second attached device (2,0)")
+                if self.DEBUG:
+                    print("Setting audio input to second attached device (2,0)")
                 self.capture_card_id = 2
                 self.capture_device_id = 0
             elif self.microphone == "Second attached device, channel 2 (2,1)":
-                print("Setting audio input to second attached device, channel 2 (2,1)")
+                if self.DEBUG:
+                    print("Setting audio input to second attached device, channel 2 (2,1)")
                 self.capture_card_id = 2
                 self.capture_device_id = 1
     
@@ -1085,7 +1117,7 @@ class VocoAdapter(Adapter):
                     
                     else:
                         microphone_controls = run_command('amixer -c ' + str(self.capture_card_id) + ' controls')
-                        for line in microphone_controls.split('\n'):
+                        for line in str(microphone_controls).split('\n'):
                             if self.DEBUG:
                                 print("microphone controls line: " + str(line))
                             if 'numid=' in line.lower() and 'capture volume' in line.lower():
@@ -1146,7 +1178,8 @@ class VocoAdapter(Adapter):
                     else:
                         self.current_control_name = ""
             except Exception as ex:
-                print("error getting initial audio settings: " + str(ex))
+                if self.DEBUG:
+                    print("error getting initial audio settings: " + str(ex))
                 self.current_simple_card_name = "ALSA"
                 self.current_card_id = 0
                 self.current_device_id = 0
@@ -1166,7 +1199,7 @@ class VocoAdapter(Adapter):
             if self.DEBUG:
                 print("aplay_pcm_check: " + str(aplay_pcm_check))
                 
-            if 'bluealsa' in aplay_pcm_check:
+            if 'bluealsa' in str(aplay_pcm_check):
                 self.bluealsa_available = True
                 if self.DEBUG:
                     print("BlueAlsa was detected as PCM option")
@@ -1176,7 +1209,7 @@ class VocoAdapter(Adapter):
                     
                 if self.persistent_data['bluetooth_device_mac'] != None:
                     bluetooth_check = run_command('sudo bluetoothctl info ' + self.persistent_data['bluetooth_device_mac'])
-                    if 'Icon: audio-card' in bluetooth_check and 'Connected: yes' in bluetooth_check:
+                    if 'Icon: audio-card' in str(bluetooth_check) and 'Connected: yes' in str(bluetooth_check):
                         return True
 
                 # if the current mac wasn't connected, check with the Bluetooth Pairing addon for updated information.
@@ -1297,7 +1330,8 @@ class VocoAdapter(Adapter):
                 """
                 
             if 'Speaker' in config:
-                print("-Speaker is present in the config data: " + str(config['Speaker']))
+                if self.DEBUG:
+                    print("-Speaker is present in the config data: " + str(config['Speaker']))
                 if str(config['Speaker']) != '':
                     self.speaker = str(config['Speaker'])               # If the prefered device in config also exists in hardware, then select it.
 
@@ -1490,7 +1524,8 @@ class VocoAdapter(Adapter):
                     print("-Prefer aplay: " + str(self.prefer_aplay))
         
         except Exception as ex:
-            print("Error loading voice setting(s) from config: " + str(ex))
+            if self.DEBUG:
+                print("Error loading voice setting(s) from config: " + str(ex))
 
             
         
@@ -1748,7 +1783,7 @@ class VocoAdapter(Adapter):
                     bluetooth_amixer_test = run_command('amixer -D bluealsa scontents')
                     if self.DEBUG:
                         print("bluetooth_amixer_test: " + str(bluetooth_amixer_test))
-                    if len(bluetooth_amixer_test) > 10:
+                    if len(str(bluetooth_amixer_test)) > 10:
                         if self.DEBUG:
                             print('bluetooth speaker seems to be connected')
                         output_to_bluetooth = True
@@ -1862,7 +1897,7 @@ class VocoAdapter(Adapter):
                 if self.DEBUG:
                     print("bluetooth_amixer_test: " + str(bluetooth_amixer_test))
                 
-                if len(bluetooth_amixer_test) > 10:
+                if len(str(bluetooth_amixer_test)) > 10:
                     bt_connected = True
                     #output_device_string = "bluealsa:DEV=" + str(self.persistent_data['bluetooth_device_mac'])
         
@@ -2134,7 +2169,7 @@ class VocoAdapter(Adapter):
                                 bluetooth_amixer_test = run_command('amixer -D bluealsa scontents')
                                 if self.DEBUG:
                                     print("bluetooth_amixer_test: " + str(bluetooth_amixer_test))
-                                if len(bluetooth_amixer_test) > 10:
+                                if len(str(bluetooth_amixer_test)) > 10:
                                     output_to_bluetooth = True
                 
                             # which audio player to use?
@@ -2293,6 +2328,7 @@ class VocoAdapter(Adapter):
             #print("--my_env = " + str(my_env))
             
             snips_check_output = run_command('ps aux | grep snips')
+            snips_check_output = str(snips_check_output)
             
             local_mqtt_ip = "localhost:" + str(self.mqtt_port) # TODO: "localhost" is hardcoded here    
             if self.DEBUG:
@@ -8482,7 +8518,7 @@ class VocoAdapter(Adapter):
     def is_mosquitto_up(self):
         result = False
         mosquitto_output = run_command('ps aux | grep mosquitto')
-        if 'mosquitto' in mosquitto_output:
+        if 'mosquitto' in str(mosquitto_output):
             result = True
             
         return result
