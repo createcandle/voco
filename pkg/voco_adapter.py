@@ -649,6 +649,11 @@ class VocoAdapter(Adapter):
         self.injection_in_progress = False # becomes true after an MQTT message is received that snips is injecting
         self.possible_injection_failure = False
         
+        
+        
+        self.info_to_show = ''
+        
+        
         #print("self.user_profile = " + str(self.user_profile))
         
         # Some paths
@@ -4459,7 +4464,7 @@ class VocoAdapter(Adapter):
                 #if self.should_restart_mqtt:
                 if self.mqtt_connected == False and self.mqtt_busy_connecting == False:
                     if self.DEBUG:
-                        print("This device is a satellite, so MQTT client is connecting to: " + str(self.persistent_data['mqtt_server']))
+                        print("This device is a satellite, so MQTT client is connecting to: " + str(self.persistent_data['mqtt_server']) + ", with port: " + str(self.mqtt_port))
                     self.mqtt_busy_connecting = True
                     self.mqtt_client.connect(str(self.persistent_data['mqtt_server']), int(self.mqtt_port), keepalive=60)
                 else:
