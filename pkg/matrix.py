@@ -1,5 +1,13 @@
 
 import os
+import sys
+
+sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'lib'))
+if os.path.exists('/usr/lib/aarch64-linux-gnu'):
+    sys.path.append('/usr/lib/aarch64-linux-gnu')
+    
+#sys.path.remove('/usr/lib/python3/dist-packages') # hide the globally installed packages
+
 import ssl
 import json
 import time
