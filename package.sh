@@ -29,7 +29,14 @@ export LD_LIBRARY_PATH="$HOME/.local/lib:/usr/local/lib:$LD_LIBRARY_PATH" LIBRAR
 if [ -z "${ADDON_ARCH}" ]; then
   TARFILE_SUFFIX=
 else
-  PYTHON_VERSION="$(python3 --version 2>&1 | cut -d' ' -f2 | cut -d. -f 1-2)"
+  if [ -z "${PYTHON_VERSION}" ]; then
+    # python version was explicitly provided
+  else
+    # assume the current python3 version is the target one
+    PYTHON_VERSION="$(python3 --version 2>&1 | cut -d' ' -f2 | cut -d. -f 1-2)"
+  fi
+
+  
   TARFILE_SUFFIX="-${ADDON_ARCH}-v${PYTHON_VERSION}"
 fi
 
@@ -89,7 +96,13 @@ mkdir -p lib package
 
 #pip3 install -r requirements.txt -t lib --no-binary :all: --prefix "" --no-cache-dir
 #pip3 install -r requirements.txt -t lib --no-binary :all: --prefix "" --default-timeout=180 --upgrade
-pip3 install -r requirements.txt -t lib --no-cache-dir --prefix "" --default-timeout=180 --upgrade
+
+
+if [ -z "${PYTHON_VERSION}" ]; then
+  /usr/bin/python"${PYTHON_VERSION}" -m pip install -r requirements.txt -t lib --no-cache-dir --prefix "" --default-timeout=180 --upgrade
+else
+  pip3 install -r requirements.txt -t lib --no-cache-dir --prefix "" --default-timeout=180 --upgrade
+fi
 
 if dpkg --print-architecture | grep -q 'armhf'; then
   echo "on 32 bit architecture, so skipping some AI python modules"
@@ -108,7 +121,7 @@ cp ./llm/wakeword/open_wake_word/* ./lib/openwakeword/resources/models/
 #rm -rf ./lib/cffi*
 
 # Put package together
-cp -r lib pkg LICENSE manifest.json *.py README.md snips snips64 tts tts64 models sounds css js images views package/
+cp -r lib pkg LICENSE manifest.json *.py README.md snips snips64 tts tts64 llm models sounds css js images views package/
 find package -type f -name '*.pyc' -delete
 find package -type f -name '._*' -delete
 find package -type d -empty -delete
