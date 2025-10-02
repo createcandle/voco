@@ -3810,12 +3810,12 @@ class VocoAdapter(Adapter):
                     ###command = command + ["--mqtt",mqtt_ip,"--alsa_capture","plughw:" + str(self.capture_card_id) + "," + str(self.capture_device_id),"--disable-playback"]
                     
                     # Pipewire
-                    if unique_command == 'snips-audio-server':
-                        if self.pipewire_enabled:
-                            command = command + ["--alsa_capture","default","--disable-playback"]
-                        else:
-                            command = command + ["--alsa_capture","plughw:" + str(self.capture_card_id) + "," + str(self.capture_device_id),"--disable-playback"]
-                        
+                    if self.pipewire_enabled:
+                        command = command + ["--alsa_capture","default","--disable-playback"]
+                    else:
+                        command = command + ["--alsa_capture","plughw:" + str(self.capture_card_id) + "," + str(self.capture_device_id),"--disable-playback"]
+                       
+                     
                         
                     #command = command + ["--disable-playback"]
                     
@@ -3833,14 +3833,7 @@ class VocoAdapter(Adapter):
                     #command = command + ["--mqtt",mqtt_ip]
                     #command = command + ["--mqtt",mqtt_ip]
                     #command = command + ["--audio",str(self.persistent_data['site_id']) + "127.0.0.1:" + str(self.mqtt_port)]
-                    
-                    # Pipewire
-                    if self.pipewire_enabled:
-                        command = command + ["--alsa_capture","default","--disable-playback"]
-                    else:
-                        command = command + ["--alsa_capture","plughw:" + str(self.capture_card_id) + "," + str(self.capture_device_id),"--disable-playback"]
-                    
-                    
+                      
                     #,"--no_vad_inhibitor"  see https://docs.snips.ai/articles/platform/voice-activity-detection
                     #else:
                     #command = command + ["-t",str(self.wakeword_sensitivity)] # "--no_vad_inhibitor"
