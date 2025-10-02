@@ -4,16 +4,7 @@ echo "in package.sh"
 lscpu
 echo ""
 pwd
-which python3
-which pip3
-#pip3 install --user --upgrade pip
-if [ -z "$(pip3 --version)" ]; then 
-  echo 'pip not found, attempting to install'; 
-  pip3 install --user pip
-else 
-  echo 'pip is already installed'; 
-  pip3 --version
-fi
+
 
 
 
@@ -97,12 +88,24 @@ mkdir -p lib package
 #pip3 install -r requirements.txt -t lib --no-binary :all: --prefix "" --no-cache-dir
 #pip3 install -r requirements.txt -t lib --no-binary :all: --prefix "" --default-timeout=180 --upgrade
 
+which python3
+which pip3
+#pip3 install --user --upgrade pip
+#if [ -z "$(pip3 --version)" ]; then 
+#  echo 'pip not found, attempting to install'; 
+#  pip3 install --user pip
+#else 
+#  echo 'pip is already installed'; 
+#  pip3 --version
+#fi
 
-if [ -z "${PYTHON_VERSION}" ]; then
-  /usr/bin/python"${PYTHON_VERSION}" -m pip install -r requirements.txt -t lib --no-cache-dir --prefix "" --default-timeout=180 --upgrade
-else
-  pip3 install -r requirements.txt -t lib --no-cache-dir --prefix "" --default-timeout=180 --upgrade
-fi
+#if [ -z "${PYTHON_VERSION}" ]; then
+#  /usr/bin/python"${PYTHON_VERSION}" -m pip install -r requirements.txt -t lib --no-cache-dir --prefix "" --default-timeout=180 --upgrade
+#else
+#  pip3 install -r requirements.txt -t lib --no-cache-dir --prefix "" --default-timeout=180 --upgrade
+#fi
+/usr/bin/python"${PYTHON_VERSION}" -m ensurepip --upgrade
+/usr/bin/python"${PYTHON_VERSION}" -m pip install -r requirements.txt -t lib --no-cache-dir --prefix "" --default-timeout=180 --upgrade
 
 if dpkg --print-architecture | grep -q 'armhf'; then
   echo "on 32 bit architecture, so skipping some AI python modules"
