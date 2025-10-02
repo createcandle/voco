@@ -57,7 +57,10 @@ jobs:
             case "${{ matrix.distro }}" in
               ubuntu*|jessie|stretch|buster|bullseye|bookworm)
                 apt-get update -q -y
-                apt-get install -q -y git
+                apt-get install -q -y git 
+                apt-get install -q -y "python${{ matrix.version }}"
+                alias python="python${{ matrix.version }}"
+                alias python3="python${{ matrix.version }}"
                 ls -al "${PWD}"
                 python3 --version
                 ;;
