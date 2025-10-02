@@ -98,7 +98,7 @@ jobs:
               ubuntu*|jessie|stretch|buster|bullseye|bookworm)
                 apt-get update -q -y
                 apt-get install -q -y git 
-                apt-get install -q -y "python${{ matrix.version }}"
+                apt-get install -q -y "python${{ matrix.version }}" python3-pip
                 alias python="python${{ matrix.version }}"
                 alias python3="python${{ matrix.version }}"
                 echo "___ PWD: $PWD ___"
