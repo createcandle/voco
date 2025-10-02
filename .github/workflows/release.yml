@@ -51,21 +51,31 @@ jobs:
       - name: Set release version
         run: echo "RELEASE_VERSION=${GITHUB_REF:10}" >> $GITHUB_ENV
       - uses: actions/checkout@v4
+        with:
+          path: './build'
+      - name: Make packaging script executable
+        run: |
+          chmod +x ./package.sh
       - uses: uraimo/run-on-arch-action@v3
         name: Build artifact
-        id: build
+        id: build_it
         with:
           arch: ${{ matrix.arch }}
           distro: ${{ matrix.distro }}
-          version: ${{ matrix.version }}
+          #version: ${{ matrix.version }}
 
           # Not required, but speeds up builds
-          # githubToken: ${{ github.token }}
+          githubToken: ${{ github.token }}
 
           # Create a build directory
           setup: |
+            echo "github workspace: $GITHUB_WORKSPACE/"
+            pwd
             mkdir -p "${PWD}/build"
-
+            #echo "build folder created?"
+            echo "PWD: $(PWD)"
+            ls
+            
           # Mount the build directory as /build in the container
           dockerRunArgs: |
             --volume "${PWD}/build:/build"
@@ -95,8 +105,8 @@ jobs:
                 ls -al "${PWD}"
                 echo "___ package.sh? ___"
                 find / -name package.sh
-                echo "___ build folder? ___"
-                find / -name build
+                #echo "___ build folder? ___"
+                #find / -name build
                 ;;
               fedora*)
                 dnf -y update
@@ -118,6 +128,7 @@ jobs:
 
           run: |
               cd build
+              ls
               chmod +x package.sh
               ADDON_ARCH="${{ matrix.platform }}" PYTHON_VERSION="${{ matrix.version }}" ./package.sh
 
@@ -126,7 +137,7 @@ jobs:
         # Items placed in /build in the container will be in
         # ${PWD}/build on the host.
         run: |
-          ls -al "${PWD}/build"
+          ls -al "${PWD}"
 
 
       - name: List after container
