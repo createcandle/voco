@@ -4,6 +4,8 @@ echo "in package.sh"
 lscpu
 echo ""
 pwd
+echo ""
+echo "PYTHON_VERSION from env: $PYTHON_VERSION"
 
 #if [ -z ${var+x} ]; then echo "var is unset"; else echo "var is set to '$var'"; fi
 
@@ -23,14 +25,16 @@ export LD_LIBRARY_PATH="$HOME/.local/lib:/usr/local/lib:$LD_LIBRARY_PATH" LIBRAR
 # Setup environment for building inside Dockerized toolchain
 [ $(id -u) = 0 ] && umask 0
 
+if [ -z "${VAR}" ]; then echo "VAR is unset or set to the empty string"; else echo "VAR is set to some string"; fi
+
 if [ -z "${PYTHON_VERSION}" ]; then
-    # python version was explicitly provided
-    echo "got Python version as a parameter: ${PYTHON_VERSION}"
-else
     echo "YIKES, did NOT get Python version as a parameter."
     # assume the current python3 version is the target one
     PYTHON_VERSION="$(python3 --version 2>&1 | cut -d' ' -f2 | cut -d. -f 1-2)"
-    echo "PYTHON_VERSION: $PYTHON_VERSION"
+    echo "PYTHON_VERSION from python3: $PYTHON_VERSION"
+else
+    # python version was explicitly provided
+    echo "got Python version as a parameter: ${PYTHON_VERSION}"
 fi
   
 
@@ -40,6 +44,9 @@ else
   TARFILE_SUFFIX="-${ADDON_ARCH}-v${PYTHON_VERSION}"
 fi
 
+echo "-----"
+echo "TARFILE_SUFFIX: $TARFILE_SUFFIX"
+echo "-----"
 # Install missing dependencies
 apt update -qq
 apt install -y cmake libasound2-dev libffi-dev portaudio19-dev
