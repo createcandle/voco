@@ -53,9 +53,9 @@ jobs:
       - uses: actions/checkout@v4
         with:
           path: './build'
-      - name: Make packaging script executable
-        run: |
-          chmod +x ./package.sh
+      #- name: Make packaging script executable
+      #  run: |
+      #    chmod +x ./package.sh
       - uses: uraimo/run-on-arch-action@v3
         name: Build artifact
         id: build_it
