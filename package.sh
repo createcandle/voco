@@ -17,17 +17,18 @@ export LD_LIBRARY_PATH="$HOME/.local/lib:/usr/local/lib:$LD_LIBRARY_PATH" LIBRAR
 # Setup environment for building inside Dockerized toolchain
 [ $(id -u) = 0 ] && umask 0
 
+if [ -z "${PYTHON_VERSION}" ]; then
+    # python version was explicitly provided
+    echo "got Python version as a parameter: ${PYTHON_VERSION}"
+else
+    # assume the current python3 version is the target one
+    PYTHON_VERSION="$(python3 --version 2>&1 | cut -d' ' -f2 | cut -d. -f 1-2)"
+fi
+  
+
 if [ -z "${ADDON_ARCH}" ]; then
   TARFILE_SUFFIX=
 else
-  if [ -z "${PYTHON_VERSION}" ]; then
-    # python version was explicitly provided
-  else
-    # assume the current python3 version is the target one
-    PYTHON_VERSION="$(python3 --version 2>&1 | cut -d' ' -f2 | cut -d. -f 1-2)"
-  fi
-
-  
   TARFILE_SUFFIX="-${ADDON_ARCH}-v${PYTHON_VERSION}"
 fi
 
