@@ -6,6 +6,7 @@ paho-mqtt
 requests
 aiofiles
 pycryptodome
+vodozemac
 python-olm
 matrix-nio[e2e]
 Pillow
