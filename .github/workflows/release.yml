@@ -132,14 +132,16 @@ jobs:
               ls
               echo "Python version from workflow matrix: ${{ matrix.version }}"
               chmod +x package.sh
-              ADDON_ARCH="${{ matrix.platform }}" PYTHON_VERSION="${{ matrix.version }}" ./package.sh
+              export PYTHON_VERSION="${{ matrix.version }}"
+              echo "PYTHON_VERSION: $PYTHON_VERSION"
+              ADDON_ARCH="${{ matrix.platform }}" ./package.sh
 
 
-      - name: Show the artifact
+      #- name: Show the artifact
         # Items placed in /build in the container will be in
         # ${PWD}/build on the host.
-        run: |
-          ls -al "${PWD}"
+      #  run: |
+      #    ls -al "${PWD}"
 
 
       - name: List after container
