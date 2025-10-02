@@ -102,6 +102,7 @@ jobs:
                 alias python="python${{ matrix.version }}"
                 alias python3="python${{ matrix.version }}"
                 echo "___ PWD: $PWD ___"
+                echo "=== matrix.version: ${{ matrix.version }}"
                 ls -al "${PWD}"
                 echo "___ package.sh? ___"
                 find / -name package.sh
@@ -129,6 +130,7 @@ jobs:
           run: |
               cd build
               ls
+              echo "Python version from workflow matrix: ${{ matrix.version }}"
               chmod +x package.sh
               ADDON_ARCH="${{ matrix.platform }}" PYTHON_VERSION="${{ matrix.version }}" ./package.sh
 
