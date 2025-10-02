@@ -1,7 +1,5 @@
-#ubuntu-22.04-arm
-
-
 name: Release
+#ubuntu-22.04-arm
 
 on:
   release:
@@ -16,15 +14,11 @@ jobs:
     # Run steps on a matrix of 4 arch/distro combinations
     strategy:
       matrix:
+        arch: [aarch64,armv7]
+        version: ['3.11']
         include:
-          - arch: aarch64
-            distro: bookworm
-			platform: 'linux-arm64'
-			version: '3.11'
-          - arch: armv7
-            distro: bookworm
-			platform: 'linux-arm'
-			version: '3.11'
+            - distro: bookworm
+			
     steps:
       - uses: actions/checkout@v4
       - uses: uraimo/run-on-arch-action@v3
@@ -33,14 +27,12 @@ jobs:
         with:
           arch: ${{ matrix.arch }}
           distro: ${{ matrix.distro }}
-          #base_image: ${{ matrix.base_image }}
-		  platform: ${{ matrix.platform }}
-
+          version: ${{ matrix.version }}
 		  
           # Not required, but speeds up builds
           # githubToken: ${{ github.token }}
 
-          # Create an build directory
+          # Create a build directory
           setup: |
             mkdir -p "${PWD}/build"
 
@@ -53,7 +45,7 @@ jobs:
             artifact_name: git-${{ matrix.distro }}_${{ matrix.arch }}
 
           # The shell to run commands with in the container
-		  shell: /bin/bash
+          shell: /bin/bash
 
           # Install some dependencies in the container. This speeds up builds if
           # you are also using githubToken. Any dependencies installed here will
@@ -66,17 +58,20 @@ jobs:
               ubuntu*|jessie|stretch|buster|bullseye|bookworm)
                 apt-get update -q -y
                 apt-get install -q -y git
-				ls -al "${PWD}"
+                ls -al "${PWD}"
+                python3 --version
                 ;;
               fedora*)
                 dnf -y update
                 dnf -y install git which
-				ls -al "${PWD}"
+                ls -al "${PWD}"
+                python3 --version
                 ;;
               alpine*)
                 apk update
                 apk add git
-				ls -al "${PWD}"
+                ls -al "${PWD}"
+                python3 --version
                 ;;
             esac
 
@@ -85,7 +80,7 @@ jobs:
           #  cp $(which git) "/build/${artifact_name}"
           #  echo "Produced artifact at /build/${artifact_name}"
 		  
-		  run: |
+          run: |
               cd build
               chmod +x package.sh
               ADDON_ARCH="${{ matrix.platform }}" ./package.sh
@@ -100,21 +95,21 @@ jobs:
 		  
       - name: List after container
         run: |
-	          ls -lh
-	        shell: bash
+            ls -lh
+            shell: bash
       
       - name: Upload Release Asset tgz
         uses: shogo82148/actions-upload-release-asset@v1
         with:
 	          #upload_url: ${{ github.event.release.upload_url }}
-	          upload_url: ${{ env.UPLOAD_URL }}
-	          asset_path: voco-${{ env.RELEASE_VERSION }}-${{ matrix.platform }}-v${{ matrix.version }}.tgz
-	          overwrite: true
+              upload_url: ${{ env.UPLOAD_URL }}
+              asset_path: voco-${{ env.RELEASE_VERSION }}-${{ matrix.platform }}-v${{ matrix.version }}.tgz
+              overwrite: true
       
       - name: Upload Release Asset shasum
-	        uses: shogo82148/actions-upload-release-asset@v1
-	        with:
-	          #upload_url: ${{ github.event.release.upload_url }}
-	          upload_url: ${{ env.UPLOAD_URL }}
-	          asset_path: voco-${{ env.RELEASE_VERSION }}-${{ matrix.platform }}-v${{ matrix.version }}.tgz.sha256sum
-	          overwrite: true
+        uses: shogo82148/actions-upload-release-asset@v1
+        with:
+	        #upload_url: ${{ github.event.release.upload_url }}
+            upload_url: ${{ env.UPLOAD_URL }}
+            asset_path: voco-${{ env.RELEASE_VERSION }}-${{ matrix.platform }}-v${{ matrix.version }}.tgz.sha256sum
+            overwrite: true
