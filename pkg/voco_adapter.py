@@ -637,7 +637,11 @@ class VocoAdapter(Adapter):
                 print("action_times was not in persistent data, adding it now.")
                 self.persistent_data['mqtt_server'] = '127.0.0.1'
                 self.save_to_persistent_data = True
+			elif self.persistent_data['mqtt_server'] == 'localhost':
+				self.persistent_data['mqtt_server'] = '127.0.0.1'
+				self.save_to_persistent_data = True
 
+			
             if 'main_site_id' not in self.persistent_data: # to remember what the main voco server is, for satellites.
                 print("main_site_id was not in persistent data, adding it now.")
                 self.persistent_data['main_site_id'] = self.persistent_data['site_id']
