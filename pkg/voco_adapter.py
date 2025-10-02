@@ -3684,7 +3684,7 @@ class VocoAdapter(Adapter):
         self.stop_snips()
         
         self.busy_starting_snips = True
-        time.sleep(.2)
+        time.sleep(2)
         try:
             
             if self.DEBUG:
