@@ -38,17 +38,20 @@ sudo apt update -qq
 sudo apt install -y cmake libasound2-dev libffi-dev portaudio19-dev
 #libolm-dev
 
-rm -rf olm
-git clone "https://gitlab.matrix.org/matrix-org/olm.git"
-cd olm
-git checkout 3.2.4
-mkdir build
-make
-cd python
-make olm-python3
-cd ..
-PREFIX=~/.local make install
-cd ..
+#rm -rf olm
+#git clone "https://gitlab.matrix.org/matrix-org/olm.git"
+#cd olm
+#git checkout 3.2.4
+#mkdir build
+#make
+#cd python
+#make olm-python3
+#cd ..
+#PREFIX=~/.local make install
+#cd ..
+
+#vodozemac 
+
 
 
 
