@@ -29,7 +29,7 @@ if [ -z "${PYTHON_VERSION}" ]; then
 else
     echo "YIKES, did NOT get Python version as a parameter."
     # assume the current python3 version is the target one
-    PYTHON_VERSION="$(python3 --version 2>&1 | cut -d' ' -f2 | cut -d. -f 1-2})"
+    PYTHON_VERSION="$(python3 --version 2>&1 | cut -d' ' -f2 | cut -d. -f 1-2)"
     echo "PYTHON_VERSION: $PYTHON_VERSION"
 fi
   
