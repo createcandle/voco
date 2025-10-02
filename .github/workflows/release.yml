@@ -93,6 +93,10 @@ jobs:
                 alias python3="python${{ matrix.version }}"
                 echo "___ PWD: $PWD ___"
                 ls -al "${PWD}"
+                echo "___ package.sh? ___"
+                find / -name package.sh
+                echo "___ build folder? ___"
+                find / -name build
                 ;;
               fedora*)
                 dnf -y update
