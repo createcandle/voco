@@ -2691,7 +2691,7 @@ class VocoAdapter(Adapter):
                 #os.system("sudo amixer cset numid=3 " + volume_percentage + "%")
                 if self.pipewire_enabled:
                     #os.system("amixer sset 'Master' " + str(self.system_volume_percentage) + "%") # amixer sset 'Master' 50%
-                    os.system("wpctl set-volume @DEFAULT_AUDIO_SINK@ " + str(volume_percentage) + "%")
+                    os.system("wpctl set-volume @DEFAULT_AUDIO_SINK@ " + str(self.system_volume_percentage) + "%")
                 else:
                     os.system("amixer cset numid=1 " + str(self.system_volume_percentage) + "%") # TODO: should this assume that the current selected mixer is the main output?
                 
