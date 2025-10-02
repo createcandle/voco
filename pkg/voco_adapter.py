@@ -3456,7 +3456,7 @@ class VocoAdapter(Adapter):
                 
                 
                 found_audio_control = False
-                if self.pipewire:
+                if self.pipewire_enabled:
                     found_audio_control = True
                 else:
                     for option in self.audio_controls:
