@@ -5,8 +5,11 @@ lscpu
 echo ""
 pwd
 
-
-
+if [ -d /usr/bin/ ]; then
+  ls /usr/bin/python*
+else
+  echo "yikes, no /usr/bin ?"
+fi
 
 version=$(grep '"version"' manifest.json | cut -d: -f2 | cut -d\" -f2)
 
