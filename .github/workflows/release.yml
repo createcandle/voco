@@ -115,7 +115,7 @@ jobs:
           run: |
               cd build
               chmod +x package.sh
-              ADDON_ARCH="${{ matrix.platform }}" ./package.sh
+              ADDON_ARCH="${{ matrix.platform }}" PYTHON_VERSION="${{ matrix.version }}" ./package.sh
 
 
       - name: Show the artifact
