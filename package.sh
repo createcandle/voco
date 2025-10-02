@@ -84,8 +84,19 @@ mkdir -p lib package
 #pip3 install --upgrade pip
 #/usr/local/bin/python3.9 -m pip install --upgrade pip
 
+#pip3 install -r requirements.txt -t lib --no-binary :all: --prefix "" --no-cache-dir
 #pip3 install -r requirements.txt -t lib --no-binary :all: --prefix "" --default-timeout=180 --upgrade
 pip3 install -r requirements.txt -t lib --no-cache-dir --prefix "" --default-timeout=180 --upgrade
+
+if dpkg --print-architecture | grep -q 'armhf'; then
+  echo "on 32 bit architecture, so skipping some AI python modules"
+else
+  echo "Adding some Python AI modules (for OpenWakeWord)"
+  pip3 install onnxruntime openwakeword -t lib --no-cache-dir --prefix "" --default-timeout=180 --upgrade
+fi
+
+
+
 
 mkdir -p ./lib/openwakeword/resources/models
 cp ./llm/wakeword/open_wake_word/* ./lib/openwakeword/resources/models/
