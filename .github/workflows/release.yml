@@ -66,19 +66,19 @@ jobs:
                 alias python="python${{ matrix.version }}"
                 alias python3="python${{ matrix.version }}"
                 ls -al "${PWD}"
-                python3 --version
+                #python3 --version
                 ;;
               fedora*)
                 dnf -y update
                 dnf -y install git which
                 ls -al "${PWD}"
-                python3 --version
+                #python3 --version
                 ;;
               alpine*)
                 apk update
                 apk add git
                 ls -al "${PWD}"
-                python3 --version
+                #python3 --version
                 ;;
             esac
 
