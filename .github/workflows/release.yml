@@ -6,12 +6,29 @@ on:
     types: [created]
 
 jobs:
+  get-release:
+    runs-on: ubuntu-24.04
+    steps:
+    - name: Get Release
+      id: get_release
+      uses: bruceadams/get-release@v1.3.2
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    - name: Dump upload url to file
+      run: echo '${{ steps.get_release.outputs.upload_url }}' > upload_url
+    - name: Upload upload_url
+      uses: actions/upload-artifact@v4
+      with:
+        name: upload_url
+        path: upload_url
+
   build_job:
+    needs: get-release
     # The host should always be linux
     runs-on: ubuntu-24.04
     name: Build on ${{ matrix.distro }} ${{ matrix.arch }}
-
-    # Run steps on a matrix of 4 arch/distro combinations
+    
+    # Run steps on a matrix of arch/distro combinations
     strategy:
       matrix:
         arch: [aarch64,armv7]
@@ -24,6 +41,15 @@ jobs:
           platform: linux-arm
 
     steps:
+      - name: Download upload_url
+        uses: actions/download-artifact@v4
+        with:
+          name: upload_url
+          path: upload_url
+      - name: Set upload_url
+        run: echo "UPLOAD_URL=$(cat upload_url/upload_url)" >> $GITHUB_ENV
+      - name: Set release version
+        run: echo "RELEASE_VERSION=${GITHUB_REF:10}" >> $GITHUB_ENV
       - uses: actions/checkout@v4
       - uses: uraimo/run-on-arch-action@v3
         name: Build artifact
@@ -65,14 +91,13 @@ jobs:
                 apt-get install -q -y "python${{ matrix.version }}"
                 alias python="python${{ matrix.version }}"
                 alias python3="python${{ matrix.version }}"
+                echo "___ PWD: $PWD ___"
                 ls -al "${PWD}"
-                #python3 --version
                 ;;
               fedora*)
                 dnf -y update
                 dnf -y install git which
                 ls -al "${PWD}"
-                #python3 --version
                 ;;
               alpine*)
                 apk update
