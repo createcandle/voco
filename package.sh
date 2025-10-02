@@ -123,9 +123,9 @@ mkdir -p lib package
 #else
 #  pip3 install -r requirements.txt -t lib --no-cache-dir --prefix "" --default-timeout=180 --upgrade
 #fi
-echo "calling ensurepip.  python binary would be: /usr/bin/python${PYTHON_VERSION}"
+#echo "calling ensurepip.  python binary would be: /usr/bin/python${PYTHON_VERSION}"
 #/usr/bin/python"${PYTHON_VERSION}" -m ensurepip --upgrade
-/usr/bin/python"${PYTHON_VERSION}" -m ensurepip
+#/usr/bin/python"${PYTHON_VERSION}" -m ensurepip
 
 echo "installong requirements"
 /usr/bin/python"${PYTHON_VERSION}" -m pip install -r requirements.txt -t lib --no-cache-dir --prefix "" --default-timeout=180 --upgrade
