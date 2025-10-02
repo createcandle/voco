@@ -74,8 +74,11 @@ fi
 
 # Prep new package
 echo "creating package"
-rm -rf lib
-rm -rf package
+#rm -rf lib
+if [ -d package ]; then
+  rm -rf package
+fi
+
 mkdir -p lib package
 
 # Pull down Python dependencies
@@ -89,8 +92,8 @@ mkdir -p lib package
 #pip3 install -r requirements.txt -t lib --no-binary :all: --prefix "" --no-cache-dir
 #pip3 install -r requirements.txt -t lib --no-binary :all: --prefix "" --default-timeout=180 --upgrade
 
-which python3
-which pip3
+#which python3
+#which pip3
 #pip3 install --user --upgrade pip
 #if [ -z "$(pip3 --version)" ]; then 
 #  echo 'pip not found, attempting to install'; 
@@ -105,7 +108,11 @@ which pip3
 #else
 #  pip3 install -r requirements.txt -t lib --no-cache-dir --prefix "" --default-timeout=180 --upgrade
 #fi
-/usr/bin/python"${PYTHON_VERSION}" -m ensurepip --upgrade
+echo "calling ensurepip.  python binary would be: /usr/bin/python${PYTHON_VERSION}"
+#/usr/bin/python"${PYTHON_VERSION}" -m ensurepip --upgrade
+/usr/bin/python"${PYTHON_VERSION}" -m ensurepip
+
+echo "installong requirements"
 /usr/bin/python"${PYTHON_VERSION}" -m pip install -r requirements.txt -t lib --no-cache-dir --prefix "" --default-timeout=180 --upgrade
 
 if dpkg --print-architecture | grep -q 'armhf'; then
