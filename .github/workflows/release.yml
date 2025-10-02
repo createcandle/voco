@@ -73,7 +73,7 @@ jobs:
             pwd
             mkdir -p "${PWD}/build"
             #echo "build folder created?"
-            echo "PWD: $(PWD)"
+            echo "PWD: ${PWD}"
             ls
             
           # Mount the build directory as /build in the container
