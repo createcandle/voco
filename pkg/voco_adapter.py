@@ -2746,8 +2746,11 @@ class VocoAdapter(Adapter):
             if self.DEBUG:
                 print("self.audio_controls: " + str(self.audio_controls))
         
-            try:        
+            try:
+                found_it = False
                 for option in self.audio_controls:
+                    if self.DEBUG:
+                        print("comparing: " + str(selection) + " =?= " + str(option['human_device_name']))
                     if str(option['human_device_name']) == str(selection):
                     
                         self.current_simple_card_name = option['simple_card_name']
@@ -2770,10 +2773,16 @@ class VocoAdapter(Adapter):
                             print("Error setting new audio_output selection:" + str(ex))
         
                         break
-            
+                        
+                if found_it == False:
+                    if self.DEBUG:
+                        print("Error, could not find selected audio device again in audio options: " + str(selection))
+                        print("Audio options: " + str(self.audio_controls))
+                        
             except Exception as ex:
                 if self.DEBUG:
                     print("Error in set_audio_output: " + str(ex))
+					
 
 
     # play specific sound effects
