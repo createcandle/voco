@@ -32,7 +32,7 @@ jobs:
         ]
         pair: [
 #          'python:3.7',
-          'python:3.9',
+#          'python:3.9',
           'python:3.11',
         ]
         include:
@@ -45,10 +45,10 @@ jobs:
 #          - pair: 'python:3.7'
 #            language: 'python'
 #            version: '3.7'
-          - pair: 'python:3.9'
-            language: 'python'
-            version: '3.9'
-          - pair: 'python:3.9'
+#          - pair: 'python:3.9'
+#            language: 'python'
+#            version: '3.9'
+          - pair: 'python:3.11'
             language: 'python'
             version: '3.11'
     runs-on: ${{ matrix.host-os }}
