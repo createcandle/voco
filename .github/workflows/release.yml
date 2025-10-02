@@ -38,8 +38,10 @@ jobs:
         include:
           - platform: 'linux-arm'
             host-os: 'ubuntu-latest'
+            archy: 'armv7'
           - platform: 'linux-arm64'
             host-os: 'ubuntu-latest'
+            archy: 'aarch64'
 #          - platform: 'linux-x64'
 #            host-os: 'ubuntu-latest'
 #          - pair: 'python:3.7'
@@ -72,9 +74,50 @@ jobs:
       run: chmod +x ./build.sh
     - name: Make packaging script executable
       run: chmod +x ./package.sh
-    - name: Build adapter
+    #- name: Build adapter
+    #  run: |
+    #    ./build.sh "${{ matrix.platform }}" "${{ matrix.language }}" "${{ matrix.version }}"
+    #  shell: bash
+
+    - uses: uraimo/run-on-arch-action@v2
+      name: Build it
+      id: runcmd
+      with:
+        arch: ${{ matrix.archy }}
+        distro: ubuntu22.04
+        setup: |
+          echo "."
+          echo ".."
+          echo "run-on-arch setup"
+          mkdir -p "${PWD}/build"
+          
+        # Mount the build directory as /build in the container
+        dockerRunArgs: |
+          --volume "${PWD}/build:/build"
+          #--volume "${PWD}/package:/package"
+
+        # Pass some environment variables to the container
+        #env: | # YAML, but pipe character is necessary
+          #artifact_name: git-${{ matrix.distro }}_${{ matrix.arch }}
+        
+        # Not required, but speeds up builds by storing container images in
+        # a GitHub package registry. Make sure there are no secrets in the disk image!
+        githubToken: ${{ github.token }}
+
+        shell: /bin/bash
+
+        install: |
+          echo "."
+          echo "INSTALL"
+          
+        run: |
+          cd build
+          chmod +x package.sh
+          ADDON_ARCH="${{ matrix.platform }}" ./package.sh
+     
+    - name: List after container
       run: |
-        ./build.sh "${{ matrix.platform }}" "${{ matrix.language }}" "${{ matrix.version }}"
+        ls -lh
       shell: bash
       
     - name: Upload Release Asset tgz
