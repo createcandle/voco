@@ -33,8 +33,8 @@ else
 fi
 
 # Install missing dependencies
-sudo apt update -qq
-sudo apt install -y cmake libasound2-dev libffi-dev portaudio19-dev
+apt update -qq
+apt install -y cmake libasound2-dev libffi-dev portaudio19-dev
 #libolm-dev
 
 #rm -rf olm
