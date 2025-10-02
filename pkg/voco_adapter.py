@@ -488,7 +488,7 @@ class VocoAdapter(Adapter):
             self.previous_hostname = self.hostname
                 
             # TODO: is this this necessary? Is was done to avoid mqtt connection issue (possibly a race condition)
-            #if self.persistent_data['mqtt_server'] == 'localhost':
+            #if self.persistent_data['mqtt_server'] == '127.0.0.1':
             #self.persistent_data['mqtt_server'] = self.ip_address
             
             #try:
@@ -635,7 +635,7 @@ class VocoAdapter(Adapter):
                 
             if 'mqtt_server' not in self.persistent_data:
                 print("action_times was not in persistent data, adding it now.")
-                self.persistent_data['mqtt_server'] = 'localhost'
+                self.persistent_data['mqtt_server'] = '127.0.0.1'
                 self.save_to_persistent_data = True
 
             if 'main_site_id' not in self.persistent_data: # to remember what the main voco server is, for satellites.
@@ -650,7 +650,7 @@ class VocoAdapter(Adapter):
                 
             if 'main_controller_ip' not in self.persistent_data: # to remember what the main voco server is, for satellites. Now used to send audio to STT server
                 print("main_controller_ip was not in persistent data, adding it now.")
-                self.persistent_data['main_controller_ip'] = 'localhost'
+                self.persistent_data['main_controller_ip'] = '127.0.0.1'
             
             if 'satellite_thing_titles' not in self.persistent_data:
                 print("satellite_thing_titles was not in persistent data, adding it now.")
@@ -2346,9 +2346,9 @@ class VocoAdapter(Adapter):
         #    if 'MQTT server' in config:
         #        if self.DEBUG:
         #            print("-MQTT server is present in the config data.")
-        #        if str(config['MQTT server']) != "localhost":
+        #        if str(config['MQTT server']) != 127.0.0.1":
         #            if self.DEBUG:
-        #                print("-MQTT server was not 'localhost'.")
+        #                print("-MQTT server was not '127.0.0.1'.")
         #            self.persistent_data['mqtt_server'] = str(config['MQTT server'])
         #        
         #            if 'Satellite' in config:
@@ -3734,7 +3734,7 @@ class VocoAdapter(Adapter):
             
             snips_check_output = run_command('ps aux | grep snips')
             
-            local_mqtt_ip = "localhost:" + str(self.mqtt_port) # TODO: "localhost" is hardcoded here    
+            local_mqtt_ip = "127.0.0.1:" + str(self.mqtt_port) # TODO: "127.0.0.1" is hardcoded here    
             if self.DEBUG:
                 print("\n\nlocal_mqtt_ip: " + str(local_mqtt_ip))
             
@@ -3743,7 +3743,7 @@ class VocoAdapter(Adapter):
                 
                 mqtt_ip = str(self.persistent_data['mqtt_server']) + ":" + str(self.mqtt_port)
             else:
-                mqtt_ip = "localhost:" + str(self.mqtt_port) # TODO: "localhost" is hardcoded here
+                mqtt_ip = "127.0.0.1:" + str(self.mqtt_port) # TODO: "127.0.0.1" is hardcoded here
             
             if self.DEBUG:
                 print("\n\nmqtt_ip: " + str(mqtt_ip))
@@ -3801,7 +3801,7 @@ class VocoAdapter(Adapter):
                     ###if self.persistent_data['is_satellite'] and ():
                     ###    mqtt_ip = str(self.persistent_data['mqtt_server']) + ":" + str(self.mqtt_port)
                     ###else:
-                    ###    mqtt_ip = "localhost:" + str(self.mqtt_port) # TODO: "localhost" is hardcoded here
+                    ###    mqtt_ip = "127.0.0.1:" + str(self.mqtt_port) # TODO: "127.0.0.1" is hardcoded here
                     
                     ###command = command + ["--mqtt",mqtt_ip,"--alsa_capture","plughw:" + str(self.capture_card_id) + "," + str(self.capture_device_id),"--disable-playback"]
                     
@@ -3825,7 +3825,7 @@ class VocoAdapter(Adapter):
                     command = command + ["-t",str(self.wakeword_sensitivity),"--hotword-id",str(self.persistent_data['site_id']) ] #,"--model",self.hey_candle_path + "=.5" ]
                     #command = command + ["--mqtt",mqtt_ip]
                     #command = command + ["--mqtt",mqtt_ip]
-                    #command = command + ["--audio",str(self.persistent_data['site_id']) + "localhost:" + str(self.mqtt_port)]
+                    #command = command + ["--audio",str(self.persistent_data['site_id']) + "127.0.0.1:" + str(self.mqtt_port)]
                     
                     #,"--no_vad_inhibitor"  see https://docs.snips.ai/articles/platform/voice-activity-detection
                     #else:
@@ -5988,7 +5988,7 @@ class VocoAdapter(Adapter):
             if self.disable_security == False:
                 self.mqtt_second_client.username_pw_set(username=self.mqtt_username, password=self.mqtt_password)
             
-            self.mqtt_second_client.connect("localhost", int(self.mqtt_port), keepalive=60)
+            self.mqtt_second_client.connect("127.0.0.1", int(self.mqtt_port), keepalive=60)
             
             self.mqtt_second_client.loop_start()
             
@@ -5999,7 +5999,7 @@ class VocoAdapter(Adapter):
         #if self.persistent_data['main_controller_ip'] != None:
             
 
-            #HOST = "localhost"
+            #HOST = "127.0.0.1"
             #PORT = 1883
         
         
@@ -6718,7 +6718,7 @@ class VocoAdapter(Adapter):
                 # TODO: To support satellites it might be necessary to 'throw the voice' via the Snips audio server:
                 #binaryFile = open(self.listening_sound, mode='rb')
                 #wav = bytearray(binaryFile.read())
-                #publish.single("hermes/audioServer/{}/playBytes/whateverId".format("default"), payload=wav, hostname="localhost", client_id="")
+                #publish.single("hermes/audioServer/{}/playBytes/whateverId".format("default"), payload=wav, hostname="127.0.0.1", client_id="")
         
         
  
@@ -6803,7 +6803,7 @@ class VocoAdapter(Adapter):
     #    try:
     #        print("starting mqtt client")
     #        self.mqtt_client = client.Client(client_id="extra_snips_detector")
-    #        HOST = "localhost"
+    #        HOST = "127.0.0.1"
     #        PORT = 1883
     #        self.mqtt_client.on_connect = self.on_connect
     #        self.mqtt_client.on_message = self.on_message
@@ -6833,9 +6833,9 @@ class VocoAdapter(Adapter):
         if self.persistent_data['is_satellite'] and str(self.persistent_data['mqtt_server']) == self.ip_address:
             if self.DEBUG:
                 print("Error, the MQTT server IP address was the device's own IP address. Because this is a satellite, this shouldn't be the case.")
-        elif self.persistent_data['is_satellite'] == False and str(self.persistent_data['mqtt_server']) != 'localhost':
+        elif self.persistent_data['is_satellite'] == False and str(self.persistent_data['mqtt_server']) != '127.0.0.1':
             if self.DEBUG:
-                print("Error, not a satellite, but mqtt_server was not localhost")
+                print("Error, not a satellite, but mqtt_server was not 127.0.0.1")
                 
         try:
             if self.DEBUG:
@@ -6877,7 +6877,7 @@ class VocoAdapter(Adapter):
                 except Exception as ex:
                     print("Error creating MQTT client: " + str(ex))
 
-                #HOST = "localhost"
+                #HOST = "127.0.0.1"
                 #PORT = 1883
             
             
@@ -6915,8 +6915,8 @@ class VocoAdapter(Adapter):
                 #if self.should_restart_mqtt:
                     self.mqtt_busy_connecting = True
                     if self.DEBUG:
-                        print("This device is NOT a satellite, so MQTT client is connecting to localhost:" + str(self.mqtt_port))
-                    self.mqtt_client.connect("localhost", int(self.mqtt_port), keepalive=60)
+                        print("This device is NOT a satellite, so MQTT client is connecting to 127.0.0.1:" + str(self.mqtt_port))
+                    self.mqtt_client.connect("127.0.0.1", int(self.mqtt_port), keepalive=60)
                 else:
                     print("MQTT is already connected or busy connecting.")
             
@@ -7608,7 +7608,7 @@ class VocoAdapter(Adapter):
                                 if self.DEBUG:
                                     print("wav saved as: " + str(do_stt_wav_file_path))
                     
-                                do_stt_command = 'curl http://localhost:' + str(self.llm_stt_port) + '/inference -H "Content-Type: multipart/form-data" -F file="@' + str(do_stt_wav_file_path) + '" -F temperature="0.2" -F temperature_inc="0.2" -F response_format="json"'
+                                do_stt_command = 'curl http://127.0.0.1:' + str(self.llm_stt_port) + '/inference -H "Content-Type: multipart/form-data" -F file="@' + str(do_stt_wav_file_path) + '" -F temperature="0.2" -F temperature_inc="0.2" -F response_format="json"'
                                 if self.DEBUG:
                                     print("\n\nVOCO LLM DO_STT CURL COMMAND: " + str(do_stt_command))
                                 do_stt_result = run_command(do_stt_command,30) # If this takes more than 30 seconds..
@@ -9782,7 +9782,7 @@ class VocoAdapter(Adapter):
                             if self.mqtt_client != None:
                                 self.send_mqtt_ping() # inform main controller of updated things list that this device manages
 
-                        #with Hermes("localhost:1883") as herm:
+                        #with Hermes("127.0.0.1:1883") as herm:
                         #    herm.request_injection(update_request)
                     
                         #self.last_injection_time = time.time() #datetime.utcnow().timestamp()
@@ -12502,8 +12502,8 @@ class VocoAdapter(Adapter):
                 # https://github.com/ggerganov/whisper.cpp/blob/master/examples/command/command.cpp
                 #stt_command = str(os.path.join(self.addon_dir_path,'llm','stt', 'command')) + " -m " + str(os.path.join(self.llm_stt_dir_path, str(self.persistent_data['llm_stt_model']))) + " -ac 768 -t 3 -c 0"
 
-                #stt_command = 'curl http://localhost:' + str(self.llm_stt_port) + '/inference -H "Content-Type: multipart/form-data" -F file="@' + str(self.last_recording_path) + '" -F temperature="0.2" -F temperature_inc="0.2" -F response_format="json"'
-                stt_command = 'curl http://localhost:' + str(self.llm_stt_port) + '/inference -H "Content-Type: multipart/form-data" -F file="@' + str(self.last_recording_path) + '" -F temperature="0.2" -F temperature_inc="0.2" -F response_format="json"'  # ' + str(self.persistent_data['main_controller_ip']) + '
+                #stt_command = 'curl http://127.0.0.1:' + str(self.llm_stt_port) + '/inference -H "Content-Type: multipart/form-data" -F file="@' + str(self.last_recording_path) + '" -F temperature="0.2" -F temperature_inc="0.2" -F response_format="json"'
+                stt_command = 'curl http://127.0.0.1:' + str(self.llm_stt_port) + '/inference -H "Content-Type: multipart/form-data" -F file="@' + str(self.last_recording_path) + '" -F temperature="0.2" -F temperature_inc="0.2" -F response_format="json"'  # ' + str(self.persistent_data['main_controller_ip']) + '
                 if self.DEBUG:
                     print("\n\nVOCO LLM STT CURL COMMAND: " + str(stt_command))
                     #print("\n⏰\nSTT START STOPWATCH: + " + str(time.time() - self.llm_stt_stopwatch) + ', ' + str(time.time() - self.llm_stt_stopwatch_start))
@@ -12773,7 +12773,7 @@ class VocoAdapter(Adapter):
                     '-t',
                     str(self.llm_stt_threads),
                     '--host',
-                    'localhost',
+                    '127.0.0.1',
                     '--port',
                     str(self.llm_stt_port)
                 ]
