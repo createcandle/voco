@@ -6,7 +6,15 @@ echo ""
 pwd
 which python3
 which pip3
-pip3 install --user --upgrade pip
+#pip3 install --user --upgrade pip
+if [ -z "$(pip3 --version)" ]; then 
+  echo 'pip not found, attempting to install'; 
+  pip3 install --user pip
+else 
+  echo 'pip is already installed'; 
+  pip3 --version
+fi
+
 
 
 version=$(grep '"version"' manifest.json | cut -d: -f2 | cut -d\" -f2)
