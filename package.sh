@@ -5,7 +5,10 @@ lscpu
 echo ""
 pwd
 
+#if [ -z ${var+x} ]; then echo "var is unset"; else echo "var is set to '$var'"; fi
+
 if [ -d /usr/bin/ ]; then
+  echo "python versions available:"
   ls /usr/bin/python*
 else
   echo "yikes, no /usr/bin ?"
@@ -24,8 +27,10 @@ if [ -z "${PYTHON_VERSION}" ]; then
     # python version was explicitly provided
     echo "got Python version as a parameter: ${PYTHON_VERSION}"
 else
+    echo "YIKES, did NOT get Python version as a parameter."
     # assume the current python3 version is the target one
-    PYTHON_VERSION="$(python3 --version 2>&1 | cut -d' ' -f2 | cut -d. -f 1-2)"
+    PYTHON_VERSION="$(python3 --version 2>&1 | cut -d' ' -f2 | cut -d. -f 1-2})"
+    echo "PYTHON_VERSION: $PYTHON_VERSION"
 fi
   
 
