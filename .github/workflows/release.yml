@@ -145,10 +145,10 @@ jobs:
       #    ls -al "${PWD}"
 
 
-      - name: List after container
-        run: |
-            ls -lh
-            shell: bash
+      #- name: List after container
+      #  run: |
+      #      ls -lh
+      #      shell: bash
       
       - name: Upload Release Asset tgz
         uses: shogo82148/actions-upload-release-asset@v1
