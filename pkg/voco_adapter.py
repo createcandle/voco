@@ -310,7 +310,7 @@ class VocoAdapter(Adapter):
         self.llm_assistant_enabled = True
         self.llm_assistant_continue_conversations = True
         self.llm_assistant_continue_conversation = 0
-        self.llm_assistant_binary_name = 'llamacpp'
+        self.llm_assistant_binary_name = 'llama-cli' + str(self.bit_extension)
         self.llm_assistant_countdown = 0
         self.llm_assistant_minimal_memory = 1100
         self.llm_assistant_not_enough_memory = False
@@ -321,7 +321,7 @@ class VocoAdapter(Adapter):
         self.llm_assistant_port = 8047
         self.llm_assistant_threads = 3
         #self.llm_assistant_prompt = ''
-        self.llm_assistant_name = 'Digital Athena'
+        self.llm_assistant_name = 'Candle'
         self.llm_assistant_prompt = "The following is a conversation between a curious researcher and their helpful AI assistant called {assistant_name}, which is a large language model trained on the sum of human knowledge."
         #self.llm_assistant_prompt = "<|im_start|>system \\n A conversation between a user and an LLM-based AI assistant. The assistant gives helpful and honest answers. <|im_end|> \\n <|im_start|>user \\n What is the capital of France? <|im_end|> \\n <|im_start|>assistant \\n Paris is the capital of France. \\n <|im_end|> \\n " #"<|im_start|>user \\n "
         # \n\n Researcher: What is the capital of Germany? \n" + str(self.llm_assistant_name) +": Berlin is the capital of Germany. \nResearcher:'
@@ -1426,6 +1426,7 @@ class VocoAdapter(Adapter):
                             },
             'TinyMistral 248M SFT v4':{'model':'TinyMistral-248M-SFT-v4.Q4_K_M.gguf',
                                 'size':156,
+                                'developer':True,
                                 'description':'This is a minuscule AI model of just 156Mb in size. It will likely produce useless answers to your questions.',
                                 'model_url':'https://huggingface.co/Felladrin/gguf-TinyMistral-248M-SFT-v4/resolve/main/TinyMistral-248M-SFT-v4.Q4_K_M.gguf',
                                 'prompts':{
@@ -1435,8 +1436,23 @@ class VocoAdapter(Adapter):
                                     'end':'<|im_end|>'
                                 }
                             },
+                            
+
+            'Danube 3 500M Chat':{'model':'h2o-danube3-500m-chat.Q4_0.gguf',
+                                'size':500,
+                                'description':'Danube is made in Europe.',
+                                'model_url':'https://huggingface.co/RichardErkhov/h2oai_-_h2o-danube3-500m-chat-gguf/resolve/main/h2o-danube3-500m-chat.Q4_0.gguf',
+                                'prompts':{
+                                    'system':'',
+                                    'user':'<|prompt|>{user_prompt}</s>',
+                                    'reverse':'<|answer|>',
+                                    'end':'</s>'
+                                }
+                                
+                            },
             'TinyLlama 1.1B Q2 Chat':{'model':'TinyLlama-1.1B-Chat-v1.0.Q2_K.gguf',
                                 'size':500,
+                                'developer':True,
                                 'description':'This is a minuscule AI model of just 500Mb in size. It makes many mistakes and does not contain a lot of knowledge, but it might be fun to try on low-memory systems.',
                                 'model_url':'https://huggingface.co/jartine/TinyLlama-1.1B-Chat-v1.0-GGUF/resolve/main/TinyLlama-1.1B-Chat-v1.0.Q2_K.gguf',
                                 'prompts':{
@@ -1448,6 +1464,7 @@ class VocoAdapter(Adapter):
                             },
             'TinyLlama 1.1B Q4 OpenOrca':{'model':'tinyllama-1.1b-1t-openorca.Q4_K_M.gguf',
                                 'size':700,
+                                'developer':True,
                                 'description':'A 700Mb model which contains slightly more knowledge. The default.',
                                 'model_url':'https://huggingface.co/TheBloke/TinyLlama-1.1B-1T-OpenOrca-GGUF/resolve/main/tinyllama-1.1b-1t-openorca.Q4_K_M.gguf',
                                 'prompts':{
@@ -1457,10 +1474,24 @@ class VocoAdapter(Adapter):
                                     'end':'<|im_end|>'
                                 }
                             },
+                            
+                            
+            'Gemma 3 1B Instruct':{'model':'gemma-3-1b-it-Q4_0.gguf',
+                                'size':750,
+                                'description':'Made by Google',
+                                'model_url':'https://huggingface.co/unsloth/gemma-3-1b-it-GGUF/resolve/main/gemma-3-1b-it-Q4_0.gguf',
+                                'prompts':{
+                                    'system':'<|im_start|>system\\n{system_message}<|im_end|>',
+                                    'user':'<|im_start|>user\\n{user_prompt}<|im_end|> \\n ',
+                                    'reverse':'<|im_start|>{assistant_name}',
+                                    'end':'<|im_end|>'
+                                }
+                            },
+                            
             'Unsloth 4Bit':{'model':'ent_val_personal_4bit_gguf-unsloth.Q4_K_M.gguf',
                                 'size':700,
                                 'developer':True,
-                                'description':'Unknown an anonymous model',
+                                'description':'Unknown and anonymous model',
                                 'model_url':'https://huggingface.co/omniquad/ent_val_personal_4bit_gguf/resolve/main/ent_val_personal_4bit_gguf-unsloth.Q4_K_M.gguf',
                                 'prompts':{
                                     'system':'<|im_start|>system\\n{system_message}<|im_end|>',
@@ -1471,6 +1502,7 @@ class VocoAdapter(Adapter):
                             },
             'Rocket 3B':{'model':'rocket-3b.Q5_K_M.gguf',
                                 'size':2000,
+                                'developer':True,
                                 'description':'Named after the small but powerful Rocket in the Guardians of the Galaxy movies.',
                                 'model_url':'https://huggingface.co/TheBloke/rocket-3B-GGUF/resolve/main/rocket-3b.Q5_K_M.gguf',
                                 'prompts':{
@@ -1494,6 +1526,7 @@ class VocoAdapter(Adapter):
                             },
             'Dolphin 2.6 Phi 2':{'model':'dolphin-2_6-phi-2.Q4_K_M.gguf',
                                 'size':1800,
+                                'developer':True,
                                 'description':'Based on the Phi-2 model made by Microsoft. It was mostly trained on educational textbooks, so it could help with school homework. It might give long-winded answers.',
                                 'model_url':'https://huggingface.co/TheBloke/dolphin-2_6-phi-2-GGUF/resolve/main/dolphin-2_6-phi-2.Q4_K_M.gguf',
                                 'prompts':{
@@ -1503,17 +1536,16 @@ class VocoAdapter(Adapter):
                                     'end':'<|im_end|>'
                                 }
                             },
-            'Basilisk 4B':{'model':'q4_k_m-basilisk-4B.gguf',
-                                'size':2100,
-                                'developer':True,
-                                'description':'Mysterious 4B model.',
-                                'model_url':'https://huggingface.co/Aryanne/Basilisk-4B-gguf/resolve/main/q4_k_m-basilisk-4B.gguf',
-                            },
-            'Qwen 1.5 4B chat':{'model':'qwen1_5-4b-chat-q4_k_m.gguf',
-                                'size':2500,
-                                'developer':True,
-                                'description':'A model made in China.',
-                                'model_url':'https://huggingface.co/Qwen/Qwen1.5-4B-Chat-GGUF/resolve/main/qwen1_5-4b-chat-q4_k_m.gguf',
+            'Phi 4 Mini':{'model':'Phi-4-mini-instruct-q4_0.gguf',
+                                'size':2400,
+                                'description':'Created by Microsoft.',
+                                'model_url':'https://huggingface.co/Mungert/Phi-4-mini-instruct-GGUF/resolve/main/Phi-4-mini-instruct-q4_0.gguf',
+                                'prompts':{
+                                    'system':'<|system|>{system_message}<|end|>',
+                                    'user':'<|user|>{user_prompt}<|end|>',
+                                    'reverse':'<|assistant|>{assistant_name}',
+                                    'end':'<|end|>'
+                                }
                             },
             'Mistral 7B Instruct':{'model':'mistral-7b-instruct-v0.1.Q4_K_M.gguf',
                                 'size':4000,
@@ -1529,6 +1561,7 @@ class VocoAdapter(Adapter):
                             },
             'Openhermes 2.5 Mistral 7b':{'model':'openhermes-2.5-mistral-7b.Q4_K_M.gguf',
                                 'size':4000,
+                                'developer':True,
                                 'description':'The OpenHermes version of the popular Mistral 7B model. Supposedly contains a lot of useful information.',
                                 'model_url':'https://huggingface.co/TheBloke/OpenHermes-2.5-Mistral-7B-GGUF/resolve/main/openhermes-2.5-mistral-7b.Q4_K_M.gguf',
                                 'prompts':{

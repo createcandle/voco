@@ -1,4 +1,4 @@
-"""Voco adapter for Candle Controller."""
+"""Voco AI wakeword for Candle Controller."""
 
 import os
 #from os import path
