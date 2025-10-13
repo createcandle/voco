@@ -92,6 +92,15 @@ class VocoDevice(Device):
                                 'type': 'boolean'
                             },
                             bool(self.adapter.persistent_data['feedback_sounds']) )
+                            
+            self.properties["assistant"] = VocoProperty(
+                            self,
+                            "assistant",
+                            {
+                                'title': "Assistant",
+                                'type': 'boolean'
+                            },
+                            bool(self.adapter.persistent_data['assistant']) )
 
             self.properties["timer"] = VocoProperty(
                             self,
@@ -215,6 +224,9 @@ class VocoProperty(Property):
             if self.title == 'feedback-sounds':
                 self.device.adapter.set_feedback_sounds(bool(value))
                 #self.update(value)
+                
+            if self.title == 'assistant':
+                self.device.adapter.set_assistant(bool(value))
 
             if self.title == 'listening':
                 self.device.adapter.was_listening_when_microphone_disconnected = bool(value) # if the user consciously changes this, then override the setting.

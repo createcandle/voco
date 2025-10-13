@@ -613,6 +613,11 @@ class VocoAdapter(Adapter):
                 print("lfeedback_sounds was not in persistent data, adding it now.")
                 self.persistent_data['feedback_sounds'] = True
                 self.save_to_persistent_data = True
+                
+            if 'assistant' not in self.persistent_data:
+                print("assistant was not in persistent data, adding it now.")
+                self.persistent_data['assistant'] = True
+                self.save_to_persistent_data = True
             
             if 'action_times' not in self.persistent_data:
                 print("action_times was not in persistent data, adding it now.")
@@ -1208,8 +1213,8 @@ class VocoAdapter(Adapter):
                 
         if 'llm_assistant_model' not in self.persistent_data:
             self.persistent_data['llm_assistant_model'] = 'voco'
-            if self.controller_pi_version > 4 and self.free_memory > self.llm_assistant_minimal_memory + 500:
-                self.persistent_data['llm_assistant_model'] = 'tinyllama-1.1b-1t-openorca.Q4_K_M.gguf'
+            if self.controller_pi_version > 4 and self.free_memory > self.llm_assistant_minimal_memory + 700:
+                self.persistent_data['llm_assistant_model'] = 'h2o-danube3-500m-chat.Q4_0.gguf'
         
         if 'llm_assistant_protocol' not in self.persistent_data:
             self.persistent_data['llm_assistant_protocol'] = 'basic'
@@ -5425,6 +5430,20 @@ class VocoAdapter(Adapter):
                 print("Error settings Snips feedback sounds preference: " + str(ex))
  
  
+    # Whether or not (voice) commands may be parsed by the AI assistant
+    def set_assistant(self,state):
+        if self.DEBUG:
+            print("User wants to switch assistant to: " + str(state))
+        try:
+            self.devices['voco'].properties['assistant'].update( bool(state) )
+            if bool(self.persistent_data['assistant']) != bool(state):
+                self.persistent_data['assistant'] = bool(state)
+                self.save_to_persistent_data = True #self.save_persistent_data()
+        except Exception as ex:
+            if self.DEBUG:
+                print("Error settings AI assistant command parsing preference: " + str(ex))
+    
+ 
     def set_sound_detected(self,state):
         if self.DEBUG:
             print("Updating sound detected property to: " + str(state))
@@ -6370,7 +6389,7 @@ class VocoAdapter(Adapter):
                     
                 if 'input' in payload:
                     #if self.llm_enabled and self.llm_assistant_enabled and self.llm_assistant_started:
-                    if (self.llm_enabled and self.llm_assistant_enabled and self.llm_assistant_started) or (self.fastest_controller_id != None and self.fastest_controller_last_ping_time > time.time() - 60):
+                    if (self.llm_enabled and self.llm_assistant_enabled and self.llm_assistant_started and self.persistent_data['assistant'] == True) or (self.fastest_controller_id != None and self.fastest_controller_last_ping_time > time.time() - 60):
                         if self.DEBUG:
                             print("intentNotRecognized: an assistant is available, so will attempt that with message: " + str(payload['input']))
                         self.ask_ai_assistant(payload['input'],intent=intent_message)
@@ -8597,7 +8616,7 @@ class VocoAdapter(Adapter):
                         print("__self.llm_assistant_started: " + str(self.llm_assistant_started))
                         
                     # TODO: check if this is a good idea
-                    if ((first_test and word_count == 3) or (word_count < 4 and time.time() - self.last_assistant_output_change_time < self.llm_assistant_conversation_seconds_threshold)) and self.llm_enabled and self.llm_stt_enabled and self.llm_stt_started and self.llm_assistant_enabled and self.llm_assistant_started:
+                    if ((first_test and word_count == 3) or (word_count < 4 and time.time() - self.last_assistant_output_change_time < self.llm_assistant_conversation_seconds_threshold)) and self.llm_enabled and self.llm_stt_enabled and self.llm_stt_started and self.llm_assistant_enabled and self.llm_assistant_started and self.persistent_data['assistant'] == True:
                         if self.DEBUG:
                             print("pretty much everything was missing. Making it so that this short command after a recent interaction with the assistant will also be quickly redirected to the assistant. A bit of a gamble.")
                         #return "Sorry, I don't understand. "
