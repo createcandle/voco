@@ -27,9 +27,10 @@ if os.path.exists('/usr/lib/aarch64-linux-gnu'):
 #print("")
 #print("BEFORE sys.path: " + str(sys.path))
 try:
-    sys.path.remove('/usr/lib/python3/dist-packages') # hide the globally installed packages
+	if '/usr/lib/python3/dist-packages' in sys.path:
+    	sys.path.remove('/usr/lib/python3/dist-packages') # hide the globally installed packages
 except Exception as ex:
-    print("could not remove path from sys.path")
+    print("could not remove path from sys.path: " + str(ex))
 #print("")
 #print("AFTER sys.path: " + str(sys.path))
 #print("")
