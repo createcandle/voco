@@ -266,7 +266,7 @@ def replace_dash_with_minus(match_obj):
 
 def clean_up_stt_result(sentence):
     sentence = sentence.strip()
-    sentence = re.sub("[\(\[].*?[\)\]]", "", sentence)
+    sentence = re.sub(r"[\(\[].*?[\)\]]", "", sentence)
     return sentence.strip()
 
 def clean_up_string_for_speaking(sentence): # Also used in thing scanner!
@@ -354,7 +354,7 @@ def clean_up_string_for_chatting(sentence):
             capitalized_parts = []
             for s in sentence.split('. '):
                 #print("s: " + str(s))
-                tmp = re.sub('^(\s*\w+)', lambda x:x.group(1).title(), s)
+                tmp = re.sub(r'^(\s*\w+)', lambda x:x.group(1).title(), s)
                 #print("tmp: " + str(tmp))
                 capitalized_parts.append(tmp)
                 try:

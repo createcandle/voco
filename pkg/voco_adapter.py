@@ -28,7 +28,7 @@ if os.path.exists('/usr/lib/aarch64-linux-gnu'):
 #print("BEFORE sys.path: " + str(sys.path))
 try:
 	if '/usr/lib/python3/dist-packages' in sys.path:
-        sys.path.remove('/usr/lib/python3/dist-packages')
+		sys.path.remove('/usr/lib/python3/dist-packages')
 except Exception as ex:
     print("could not remove path from sys.path: " + str(ex))
 #print("")
@@ -9834,9 +9834,9 @@ class VocoAdapter(Adapter):
                         if self.mqtt_second_client != None:
                             if self.DEBUG:
                                 print("\n[===]---")
-                                print("\/ self.force_injection: " + str(self.force_injection))
-                                print("\/ len(operations): " + str(len(operations)))
-                                print("\/")
+                                print("self.force_injection: " + str(self.force_injection))
+                                print("len(operations): " + str(len(operations)))
+                                print("")
                                 #print("\/ operations: " + str(json.dumps(operations, indent=4)))
                                 #print("\/")
                                 #print("\n\/ update_request json: " + str(json.dumps(update_request)))
@@ -9862,7 +9862,7 @@ class VocoAdapter(Adapter):
             
                 else:
                     if self.DEBUG2:
-                        print("\n\/ \/ \/ No need for injection\n")
+                        print("\nNo need for injection\n")
                 
                 
             
