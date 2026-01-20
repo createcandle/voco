@@ -95,7 +95,7 @@ jobs:
           # no secrets are present in the container state or logs.
           install: |
             case "${{ matrix.distro }}" in
-              ubuntu*|jessie|stretch|buster|bullseye|bookworm)
+              ubuntu*|jessie|stretch|buster|bullseye|bookworm|trixie)
                 apt-get update -q -y
                 apt-get install -q -y git 
                 apt-get install -q -y "python${{ matrix.version }}" python3-pip
