@@ -1,5 +1,4 @@
 name: Release
-#ubuntu-22.04-arm
 
 on:
   release:
@@ -7,6 +6,103 @@ on:
 
 jobs:
   get-release:
+    runs-on: ubuntu-24.04-arm
+    steps:
+    - name: Get Release
+      id: get_release
+      uses: bruceadams/get-release@v1.3.2
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    - name: Dump upload url to file
+      run: echo '${{ steps.get_release.outputs.upload_url }}' > upload_url
+    - name: Upload upload_url
+      uses: actions/upload-artifact@v4
+      with:
+        name: upload_url
+        path: upload_url
+
+  build:
+    needs: get-release
+    strategy:
+      matrix:
+        platform: [
+          'linux-arm64',
+#          'linux-x64',
+        ]
+        pair: [
+#          'python:3.7',
+          'python:3.9',
+          'python:3.11',
+          'python:3.13',
+        ]
+        include:
+#          - platform: 'linux-arm'
+#            host-os: 'ubuntu-latest'
+          - platform: 'linux-arm64'
+            host-os: 'ubuntu-24.04-arm'
+#          - platform: 'linux-x64'
+#            host-os: 'ubuntu-latest'
+#          - pair: 'python:3.7'
+#            language: 'python'
+#            version: '3.7'
+          - pair: 'python:3.9'
+            language: 'python'
+            version: '3.9'
+          - pair: 'python:3.11'
+            language: 'python'
+            version: '3.11'
+          - pair: 'python:3.13'
+            language: 'python'
+            version: '3.13'
+
+    runs-on: ${{ matrix.host-os }}
+
+    steps:
+    - name: Download upload_url
+      uses: actions/download-artifact@v4
+      with:
+        name: upload_url
+        path: upload_url
+    - name: Set upload_url
+      run: echo "UPLOAD_URL=$(cat upload_url/upload_url)" >> $GITHUB_ENV
+    - name: Set release version
+      run: echo "RELEASE_VERSION=${GITHUB_REF:10}" >> $GITHUB_ENV
+    - uses: actions/checkout@v3
+    - name: Use Python ${{ matrix.version }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.version }}
+#    - name: Make build script executable
+#      run: chmod +x ./build.sh
+    - name: Make packaging script executable
+      run: |
+        chmod +x ./package.sh
+    - name: Build addon
+      run: |
+        ./package.sh "${{ matrix.platform }}" "${{ matrix.language }}" "${{ matrix.version }}"
+      shell: bash
+    - name: Upload Release Asset tgz
+      uses: shogo82148/actions-upload-release-asset@v1
+      with:
+        #upload_url: ${{ github.event.release.upload_url }}
+        upload_url: ${{ env.UPLOAD_URL }}
+        asset_path: buttoninput-${{ env.RELEASE_VERSION }}-${{ matrix.platform }}-v${{ matrix.version }}.tgz
+        overwrite: true
+      
+    - name: Upload Release Asset shasum
+      uses: shogo82148/actions-upload-release-asset@v1
+      with:
+        #upload_url: ${{ github.event.release.upload_url }}
+        upload_url: ${{ env.UPLOAD_URL }}
+        asset_path: buttoninput-${{ env.RELEASE_VERSION }}-${{ matrix.platform }}-v${{ matrix.version }}.tgz.sha256sum
+        overwrite: true
+
+
+#
+#  ATTEMPT TO ALSO BUILD 32 BT VERSION
+#
+  
+  get-release_old:
     runs-on: ubuntu-24.04
     steps:
     - name: Get Release
@@ -22,7 +118,7 @@ jobs:
         name: upload_url
         path: upload_url
 
-  build_job:
+  build_job_old:
     needs: get-release
     # The host should always be linux
     runs-on: ubuntu-24.04
@@ -35,8 +131,6 @@ jobs:
         version: ['3.11','3.13']
         include:
         - distro: bookworm
-        - arch: aarch64
-          platform: linux-arm64
         - arch: armv7
           platform: linux-arm
 
@@ -65,7 +159,7 @@ jobs:
           #version: ${{ matrix.version }}
 
           # Not required, but speeds up builds
-          githubToken: ${{ github.token }}
+          # githubToken: ${{ github.token }}
 
           # Create a build directory
           setup: |
@@ -84,7 +178,7 @@ jobs:
           env: | # YAML, but pipe character is necessary
             artifact_name: git-${{ matrix.distro }}_${{ matrix.arch }}
 
-          # The shell to run commands with in the container
+          # The shell to run commands within the container
           shell: /bin/bash
 
           # Install some dependencies in the container. This speeds up builds if
