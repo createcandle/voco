@@ -25,8 +25,6 @@ export LD_LIBRARY_PATH="$HOME/.local/lib:/usr/local/lib:$LD_LIBRARY_PATH" LIBRAR
 # Setup environment for building inside Dockerized toolchain
 [ $(id -u) = 0 ] && umask 0
 
-if [ -z "${VAR}" ]; then echo "VAR is unset or set to the empty string"; else echo "VAR is set to some string"; fi
-
 if [ -z "${PYTHON_VERSION}" ]; then
     echo "YIKES, did NOT get Python version as a parameter."
     # assume the current python3 version is the target one
