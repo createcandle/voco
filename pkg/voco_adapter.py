@@ -27,8 +27,8 @@ if os.path.exists('/usr/lib/aarch64-linux-gnu'):
 #print("")
 #print("BEFORE sys.path: " + str(sys.path))
 try:
-	if '/usr/lib/python3/dist-packages' in sys.path:
-		sys.path.remove('/usr/lib/python3/dist-packages')
+    if '/usr/lib/python3/dist-packages' in sys.path:
+        sys.path.remove('/usr/lib/python3/dist-packages')
 except Exception as ex:
     print("could not remove path from sys.path: " + str(ex))
 #print("")
@@ -2329,9 +2329,9 @@ class VocoAdapter(Adapter):
                 if str(config['Speaker']) != '':
                     self.speaker = str(config['Speaker'])               # If the prefered device in config also exists in hardware, then select it.
 
-        except:
+        except Exception as ex:
             if self.DEBUG:
-                print("Error loading microphone settings")
+                print("Error loading microphone settings: " + str(ex))
         
         #if store_updated_settings:
         #    if self.DEBUG:
@@ -6134,7 +6134,7 @@ class VocoAdapter(Adapter):
             if rc == 7:
                 if self.DEBUG:
                     print("\nVoco is likely running twice\nAttemping to self-terminate\n")
-                os.system("pkill -f 'voco/main.py'")
+                #os.system("pkill -f 'voco/main.py'")
                 
                     
             else:
@@ -9834,10 +9834,10 @@ class VocoAdapter(Adapter):
                         if self.mqtt_second_client != None:
                             if self.DEBUG:
                                 print("\n[===]---")
-                                print("self.force_injection: " + str(self.force_injection))
-                                print("len(operations): " + str(len(operations)))
-                                print("")
-                                #print("\/ operations: " + str(json.dumps(operations, indent=4)))
+                                print(r"\/ self.force_injection: " + str(self.force_injection))
+                                print(r"\/ len(operations): " + str(len(operations)))
+                                print(r"\/")
+                                #print(r"\/ operations: " + str(json.dumps(operations, indent=4)))
                                 #print("\/")
                                 #print("\n\/ update_request json: " + str(json.dumps(update_request)))
                                 
@@ -9862,7 +9862,7 @@ class VocoAdapter(Adapter):
             
                 else:
                     if self.DEBUG2:
-                        print("\nNo need for injection\n")
+                        print(r"\n\/ \/ \/ No need for injection\n")
                 
                 
             
@@ -11689,14 +11689,9 @@ class VocoAdapter(Adapter):
     def look_for_mqtt_server(self):
         try:
             if self.DEBUG:
-                print("------------------ in look_for_mqtt_server.  self.currently_scanning_for_missing_mqtt_server: " + str(self.currently_scanning_for_missing_mqtt_server))
+                print("------------------ in look_for_mqtt_server")
             #if self.currently_scanning_for_missing_mqtt_server == False and self.persistent_data['is_satellite']: # and self.persistent_data['main_site_id'] != self.persistent_data['site_id']
-            if self.currently_scanning_for_missing_mqtt_server == True:
-                if self.DEBUG:
-                    print("look_for_mqtt_server: aborting, already busy looking for missing main mqtt server")
-                return
-			
-			if self.persistent_data['is_satellite']:
+            if self.persistent_data['is_satellite']:
                 if self.DEBUG:
                     print("------------------ This satellite wasn't already searching for missing main MQTT server, so the search process is starting now.")
                 
