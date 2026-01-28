@@ -45,9 +45,13 @@ fi
 echo "-----"
 echo "TARFILE_SUFFIX: $TARFILE_SUFFIX"
 echo "-----"
+
+# TEST - DISABLING
 # Install missing dependencies
-apt update -qq
-apt install -y cmake libasound2-dev libffi-dev portaudio19-dev
+#apt update -qq
+#apt install -y cmake libasound2-dev libffi-dev portaudio19-dev
+
+
 #libolm-dev
 
 #rm -rf olm
@@ -127,6 +131,7 @@ mkdir -p lib package
 
 echo "installong requirements"
 /usr/bin/python"${PYTHON_VERSION}" -m pip install -r requirements.txt -t lib --no-cache-dir --prefix "" --default-timeout=180 --upgrade
+#python3 -m pip install -r requirements.txt -t lib --no-cache-dir --prefix "" --default-timeout=180 --upgrade
 
 if dpkg --print-architecture | grep -q 'armhf'; then
   echo "on 32 bit architecture, so skipping some AI python modules"
