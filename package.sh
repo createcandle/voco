@@ -1,6 +1,9 @@
 #!/bin/bash -e
-
 echo "in package.sh"
+
+ADDON_ARCH="$1"
+echo "ADDON_ARCH: $ADDON_ARCH"
+echo
 lscpu
 echo ""
 pwd
