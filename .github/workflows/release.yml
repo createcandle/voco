@@ -127,8 +127,8 @@ jobs:
     # Run steps on a matrix of arch/distro combinations
     strategy:
       matrix:
-        arch: [aarch64,armv7]
-        version: ['3.11','3.13']
+        arch: [armv7]
+        version: ['3.11']
         include:
         - distro: bookworm
         - arch: armv7
