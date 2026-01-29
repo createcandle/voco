@@ -48,8 +48,18 @@ echo "-----"
 
 # TEST - DISABLING
 # Install missing dependencies
-#apt update -qq
-#apt install -y cmake libasound2-dev libffi-dev portaudio19-dev
+echo "Installing build dependencies via apt"
+#if groups $(whoami) | grep -q -w admin; then 
+if groups $(whoami) | grep -q adm; then 
+  echo "Is admin, no sudo needed"; 
+  apt update -qq
+  apt install -y cmake libasound2-dev libffi-dev portaudio19-dev
+else 
+  echo "Not admin, sudo needed for apt"; 
+  sudo apt update -qq
+  sudo apt install -y cmake libasound2-dev libffi-dev portaudio19-dev
+fi
+
 
 
 #libolm-dev
