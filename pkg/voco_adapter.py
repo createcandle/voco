@@ -11689,7 +11689,7 @@ class VocoAdapter(Adapter):
     def look_for_mqtt_server(self):
         try:
             if self.DEBUG:
-                print("------------------ in look_for_mqtt_server")
+                print("------------------ in look_for_mqtt_server.  self.currently_scanning_for_missing_mqtt_server: " + str(self.currently_scanning_for_missing_mqtt_server))
             #if self.currently_scanning_for_missing_mqtt_server == False and self.persistent_data['is_satellite']: # and self.persistent_data['main_site_id'] != self.persistent_data['site_id']
             if self.persistent_data['is_satellite']:
                 if self.DEBUG:
