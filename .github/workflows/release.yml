@@ -231,7 +231,7 @@ jobs:
               chmod +x package.sh
               export PYTHON_VERSION="${{ matrix.version }}"
               echo "PYTHON_VERSION: $PYTHON_VERSION"
-              ADDON_ARCH="${{ matrix.platform }}" ./package.sh
+              ADDON_ARCH="${{ matrix.platform }}" ./package.sh "${{ matrix.platform }}" "${{ matrix.language }}" "${{ matrix.version }}"
               ls -lh
               cp voco* ..
 
