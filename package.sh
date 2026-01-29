@@ -61,7 +61,7 @@ echo
 #  echo "user is admin"; 
 #fi
 
-if [ "$EUID" -ne 0 ]
+if [ "$EUID" -ne 0 ]; then
   sudo apt update -qq
   sudo apt install -y cmake libasound2-dev libffi-dev portaudio19-dev
 else
