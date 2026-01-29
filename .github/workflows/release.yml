@@ -141,7 +141,7 @@ jobs:
           name: upload_url_old
           path: upload_url_old
       - name: Display upload_url folder contents
-        run: ls upload_url
+        run: ls -lah upload_url_old
       - name: Set upload_url
         run: echo "UPLOAD_URL=$(cat upload_url/upload_url_old)" >> $GITHUB_ENV
       - name: Set release version
