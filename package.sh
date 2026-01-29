@@ -2,6 +2,8 @@
 echo "in package.sh"
 
 ADDON_ARCH="$1"
+#LANGUAGE_NAME="$2"
+#PYTHON_VERSION="$3"
 echo "ADDON_ARCH: $ADDON_ARCH"
 echo
 lscpu
