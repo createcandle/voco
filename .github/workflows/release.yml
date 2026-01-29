@@ -130,7 +130,7 @@ jobs:
         arch: [aarch64,armv7]
         version: ['3.11','3.13']
         include:
-        - distro: trixie
+        - distro: bookworm
         - arch: armv7
           platform: linux-arm
 
