@@ -48,7 +48,13 @@ echo "-----"
 
 # TEST - DISABLING
 # Install missing dependencies
-echo "Installing build dependencies via apt"
+echo
+echo "package.sh: installing build dependencies via apt"
+echo "whoami:"
+whoami
+echo "whoami groups:"
+groups $(whoami)
+echo
 #if groups $(whoami) | grep -q -w admin; then 
 if groups $(whoami) | grep -q adm; then 
   echo "Is admin, no sudo needed"; 
