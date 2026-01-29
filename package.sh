@@ -130,14 +130,14 @@ mkdir -p lib package
 #/usr/bin/python"${PYTHON_VERSION}" -m ensurepip
 
 echo "installong requirements"
-/usr/bin/python"${PYTHON_VERSION}" -m pip install -r requirements.txt -t lib --no-cache-dir --prefix "" --default-timeout=180 --upgrade
-#python3 -m pip install -r requirements.txt -t lib --no-cache-dir --prefix "" --default-timeout=180 --upgrade
+#/usr/bin/python"${PYTHON_VERSION}" -m pip install -r requirements.txt -t lib --no-cache-dir --prefix "" --default-timeout=180 --upgrade
+python3 -m pip install -r requirements.txt -t lib --no-cache-dir --prefix "" --default-timeout=180 --upgrade
 
 if dpkg --print-architecture | grep -q 'armhf'; then
   echo "on 32 bit architecture, so skipping some AI python modules"
 else
   echo "Adding some Python AI modules (for OpenWakeWord)"
-  pip3 install onnxruntime openwakeword -t lib --no-cache-dir --prefix "" --default-timeout=180 --upgrade
+  python3 -m pip install onnxruntime openwakeword -t lib --no-cache-dir --prefix "" --default-timeout=180 --upgrade
 fi
 
 
