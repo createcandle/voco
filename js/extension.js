@@ -1266,7 +1266,8 @@
 
                     if(body['is_satellite'] == false){
                         if(body['initial_injection_completed']){
-
+							document.getElementById('extension-voco-text-commands-container').classList.remove('extension-voco-hidden');
+							
                             if(body['busy_starting_snips']){
                                 document.getElementById('extension-voco-injection-busy').style.display = 'block';
                                 document.getElementById('extension-voco-text-commands-container').style.display = 'none';

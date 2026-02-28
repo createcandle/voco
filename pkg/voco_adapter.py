@@ -225,22 +225,23 @@ class VocoAdapter(Adapter):
         #print("self.user_profile: " + str(self.user_profile))
 
         #os.environ["LD_LIBRARY_PATH"] = os.path.join(self.user_profile['addonsDir'],self.addon_name,'snips') + ":" + os.path.join(self.user_profile['addonsDir'],self.addon_name,'snips64')
-        self.snips_path = os.path.join(self.user_profile['addonsDir'] ,self.addon_name, 'snips' + self.bit_extension)
-        os.environ["LD_LIBRARY_PATH"] = str(self.snips_path)
-
-        self.snips_fifo_path_file_object = None # receives stderr lines from snips subprocesses
+        self.snips_path = os.path.join(self.user_profile['addonsDir'], self.addon_name, 'snips' + self.bit_extension)
         
+
+        #self.snips_fifo_path_file_object = None # receives stderr lines from snips subprocesses
+        print("\nos.environ: ", str(os.environ))
         
         #self.lock = threading.Lock() # Not currently used, but can help threads print to stdout, for example.
 
         #self.threads = [] # Hold wakeword thread, maybe more in future?
-
+        
+        self.threads_must_stop = threading.Event()
         
         
         # Open Wakeword
         self.use_open_wakeword = False
-        if self.bit_extension == "64":
-            self.use_open_wakeword = True
+        #if self.bit_extension == "64":
+        #    self.use_open_wakeword = True
         self.wakeword_thread = None
         self.llm_wakeword_started = False
         self.llm_wakeword_failed = False
@@ -249,12 +250,12 @@ class VocoAdapter(Adapter):
         self.last_time_wakeword_detected = 0
         self.stop_talking_on_wakeword = True
         
+        
         # LLM AI
         self.llm_enabled = True
         
         self.try_again_via_stt = False
         self.try_again_via_assistant = False
-        
         
         self.llm_servers_watchdog_interval = 40 # should be at least 2
         self.restart_llm_servers = False
@@ -270,7 +271,7 @@ class VocoAdapter(Adapter):
         
         
         # TTS
-        self.llm_tts_enabled = True
+        self.llm_tts_enabled = False
         self.llm_tts_binary_name = 'piper'
         self.llm_tts_minimal_memory = 300
         self.llm_tts_not_enough_memory = False
@@ -283,7 +284,7 @@ class VocoAdapter(Adapter):
         
         
         # STT
-        self.llm_stt_enabled = True
+        self.llm_stt_enabled = False
         self.llm_stt_binary_name = 'whisper_server'
         self.llm_stt_minimal_memory = 600
         self.llm_stt_not_enough_memory = False
@@ -308,7 +309,7 @@ class VocoAdapter(Adapter):
         
         
         # Assistant
-        self.llm_assistant_enabled = True
+        self.llm_assistant_enabled = False
         self.llm_assistant_continue_conversations = True
         self.llm_assistant_continue_conversation = 0
         self.llm_assistant_binary_name = 'llama-cli' + str(self.bit_extension)
@@ -364,7 +365,7 @@ class VocoAdapter(Adapter):
         
         
         
-        
+        #self.intended_snips_proces_count_mismatch_count = 0
         
         
         
@@ -475,6 +476,7 @@ class VocoAdapter(Adapter):
         if not os.path.isdir(data_dir_path):
             os.mkdir(self.data_dir_path)
         
+        self.stderr_output_file = os.path.join(data_dir_path,'stderr.txt')
         
         self.bluetooth_persistence_file_path = os.path.join(self.user_profile['dataDir'], 'bluetoothpairing', 'persistence.json')
         
@@ -819,11 +821,17 @@ class VocoAdapter(Adapter):
         self.still_busy_booting = True # will be set to false on the first completed run_snips. Used to only say "hello I am listening" once.
         self.external_processes = [] # Will hold all the spawned processes      
         self.current_snips_session_id = ''
-        self.snips_clear_injections_first = False
-        self.snips_satellite_parts = ['snips-audio-server','snips-hotword'] # No longer needed, as the satellite now runs the full monty
-        self.intended_snips_proces_count = 6
-        #self.snips_parts = ['snips-hotword','snips-audio-server','snips-tts','snips-nlu','snips-injection','snips-dialogue','snips-asr']
-       
+        self.snips_satellite_parts = ['snips-audio-server','snips-hotword'] # No longer needed, as the satellite now runs the full version
+        self.intended_snips_proces_count = 7
+        self.snips_parts = [
+                            'snips-dialogue',
+                            'snips-audio-server',
+                            'snips-tts',
+                            'snips-asr',
+                            'snips-nlu',
+                            'snips-injection',
+                            'snips-hotword'
+                            ]
         
         #self.snips_main_site_id = None
         self.custom_assistant_url = None
@@ -839,6 +847,7 @@ class VocoAdapter(Adapter):
         self.stop_snips_on_microphone_unplug = False # should remain active for handling text messages
         self.popup_heard_sentence = False # show the sentence that voco heard in a quick popup
         self.last_time_stop_spoken = 0 # avoid rambling on when the user says "stop"
+        self.snips_stderr_messages = [] # holds messages received from snips subprocesses stderr
         
         # Satellite
         self.satellite_local_intent_parsing = False
@@ -898,7 +907,6 @@ class VocoAdapter(Adapter):
         self.voice_speed = "0.9"
         self.sound_detection = False
         
-        # These will be injected ino Snips for better recognition.
         #self.extra_properties = ["state","set point"]
         self.generic_properties = ["level","levels","value","values","states","all values","all levels"]
         #self.capabilities = ["temperature"]
@@ -914,17 +922,28 @@ class VocoAdapter(Adapter):
         self.last_slow_loop_time = time.time()
         self.addon_start_time = time.time()
         
-        self.slow_loop_interval = 15 # seconds. An injection can take up to 15 seconds, so this (and other safegaurds) makes sure they don't overlay.
+        self.slow_loop_interval = 15 # seconds.
         #self.attempting_injection = False
         self.current_utc_time = 0
         
+        
         # Injection
-        self.last_injection_time = time.time() - 60 #datetime.utcnow().timestamp() #0 # The last time the things/property names list was sent to Snips.
-        self.minimum_injection_interval = 20  # Minimum amount of seconds between new thing/property name injection attempts.
+        self.snips_clear_injections_first = True
+        self.minimum_injection_interval = 120  # Minimum amount of seconds between new thing/property name injection attempts.
+        self.last_injection_request_time = 0 #time.time() - self.minimum_injection_interval #datetime.utcnow().timestamp() #0 # The last time the things/property names list was sent to Snips.
+        self.last_injection_perform_time = 0
+        self.last_succesful_injection_time = time.time() - (3600 * 12)
         self.force_injection = True # On startup, force an injection of all the names
-        self.initial_injection_completed = False # Snips can't really understand the device and their properties until this is complete.
+        self.injection_level = 0 # increases as long as a more complicated injections keeps succeeding
+        
+        self.preparing_an_injection = False
+        self.injection_requested = False # becomes true once an injection message has been sent to MQTT
         self.injection_in_progress = False # becomes true after an MQTT message is received that snips is injecting
+        self.initial_injection_completed = False # Snips can't really understand the device and their properties until this is complete.
+        
         self.possible_injection_failure = False
+        
+        self.injection_timeout_count = 0
         
         #print("self.user_profile = " + str(self.user_profile))
         
@@ -1125,15 +1144,15 @@ class VocoAdapter(Adapter):
             #self.llm_assistant_context_size = 1024
         
         # Check if (netbios) ip to hostname conversion tool is available
-        self.nbtscan_available = None
-        try:
-            nbtscan_test = str(subprocess.check_output(['whereis','nbtscan']))
-            if '/nbtscan' in nbtscan_test:
-                self.nbtscan_available = True
-            else:
-                self.nbtscan_available = False
-        except:
-            self.nbtscan_available = False
+        self.nbtscan_available = False
+        #try:
+        #    nbtscan_test = str(subprocess.check_output(['whereis','nbtscan']))
+        #    if '/nbtscan' in nbtscan_test:
+        #        self.nbtscan_available = True
+        #    else:
+        #        self.nbtscan_available = False
+        #except:
+        #    self.nbtscan_available = False
 
 
         # Make sure the work directory exists
@@ -1204,26 +1223,26 @@ class VocoAdapter(Adapter):
         if 'llm_stt_model' not in self.persistent_data:
             #self.persistent_data['llm_stt_model'] = 'ggml-small.en.bin'
             self.persistent_data['llm_stt_model'] = 'voco'
-            if self.free_memory > self.llm_stt_minimal_memory + 500:
-                self.persistent_data['llm_stt_model'] = 'ggml-base.en.bin'
+            #if self.free_memory > self.llm_stt_minimal_memory + 500:
+            #    self.persistent_data['llm_stt_model'] = 'ggml-base.en.bin'
                 
         if 'llm_tts_model' not in self.persistent_data:
             self.persistent_data['llm_tts_model'] = 'voco'
-            if self.controller_pi_version > 4 and self.free_memory > self.llm_tts_minimal_memory + 500:
-                self.persistent_data['llm_tts_model'] = 'en_US-lessac-medium.onnx'
+            #if self.controller_pi_version > 4 and self.free_memory > self.llm_tts_minimal_memory + 500:
+            #    self.persistent_data['llm_tts_model'] = 'en_US-lessac-medium.onnx'
                 
         if 'llm_assistant_model' not in self.persistent_data:
             self.persistent_data['llm_assistant_model'] = 'voco'
-            if self.controller_pi_version > 4 and self.free_memory > self.llm_assistant_minimal_memory + 700:
-                self.persistent_data['llm_assistant_model'] = 'h2o-danube3-500m-chat.Q4_0.gguf'
+            #if self.controller_pi_version > 4 and self.free_memory > self.llm_assistant_minimal_memory + 700:
+            #    self.persistent_data['llm_assistant_model'] = 'h2o-danube3-500m-chat.Q4_0.gguf'
         
         if 'llm_assistant_protocol' not in self.persistent_data:
             self.persistent_data['llm_assistant_protocol'] = 'basic'
         
         if 'llm_wakeword_model' not in self.persistent_data:
             self.persistent_data['llm_wakeword_model'] = 'voco'
-            if self.controller_pi_version > 4:
-                self.persistent_data['llm_wakeword_model'] = 'hey_candle'
+            #if self.controller_pi_version > 4:
+            #    self.persistent_data['llm_wakeword_model'] = 'hey_candle'
 
         
         
@@ -1244,27 +1263,7 @@ class VocoAdapter(Adapter):
         # If debudding is disabled, then give the other addons time to load first before Voco scoops up all memory
         if self.DEBUG == False:
             sleep(5)
-            
-        #self.DEBUG = False
         
-        self.snips_parts = [
-                            'snips-dialogue',
-                            'snips-audio-server',
-                            'snips-tts',
-                            'snips-asr',
-                            'snips-nlu',
-                            'snips-injection',
-                            'snips-hotword'
-                            ]
-        
-        
-        if self.use_open_wakeword == False:
-            if self.DEBUG:
-                print("Not using openwakeword")
-            #self.snips_parts.append('snips-hotword')
-        else:
-            if self.DEBUG:
-                print("Using openwakeword")
         
         
         self.llm_wakeword_models = {
@@ -2048,6 +2047,19 @@ class VocoAdapter(Adapter):
         
         
         self.satellite_targets = avahi_detect_gateways()
+        
+        try:
+            self.rep = threading.Thread(target=self.read_external_processes) #, args=(self.voice_messages_queue,))
+            self.rep.daemon = True
+            self.rep.start()
+            if self.DEBUG:
+                print("started read_external_processes thread")
+        except Exception as ex:
+            if self.DEBUG:
+                print("caught error starting the read_external_processes thread: ", ex)
+            
+        
+        
         
         #self.save_persistent_data()
         if self.DEBUG:
@@ -3151,7 +3163,7 @@ class VocoAdapter(Adapter):
         #        print("pre-starting LLM TTS process")
         #    self.start_llm_tts()
         just_spoke = False
-        while self.running:
+        while not self.threads_must_stop.is_set():
 
             voice_message = ""
             
@@ -3698,18 +3710,23 @@ class VocoAdapter(Adapter):
         
         if self.record_running:
             if self.DEBUG:
-                print("Error. run_snips: deteteced that audio recording was busy. Stopping it.")
+                print("Error. run_snips: detetced that audio recording was busy. Stopping it.")
             self.stop_recording()
+
+        if self.mqtt_second_connected == False and self.still_busy_booting:
+            if self.DEBUG:
+                print("Error, run_snips aborted because MQTT didn't seem to be connected (yet), and it's still booting?")
+            return
         
         if self.busy_starting_snips:
             if self.DEBUG:
                 print("Error: run_snips: called while snips was already in the process of being started")
             return
+            
         
-        if self.mqtt_second_connected == False and self.still_busy_booting:
-            if self.DEBUG:
-                print("Error, run_snips aborted because MQTT didn't seem to be connected (yet), and it's still booting?")
-            return
+        
+        
+        
         
         #if self.persistent_data['is_satellite'] and self.persistent_data['listening'] == False: # On a satellite, don't even start the audio server if it's not supposed to be listening.
         #    return 
@@ -3719,32 +3736,59 @@ class VocoAdapter(Adapter):
         if self.DEBUG:
             print("running Snips (after killing potential running snips instances)")
         
-        """
-        if self.persistent_data['is_satellite']:
-            #commands = ['snips-satellite'] # seems to give a segmentation fault on Armv6?
-            commands = self.snips_satellite_parts
-            #commands = ['snips-audio-server']
-        else:
-            commands = self.snips_parts
-
-        """
-        commands = self.snips_parts
+       
         
+        snips_parts = [
+                            'snips-dialogue',
+                            'snips-audio-server',
+                            'snips-tts',
+                            'snips-asr',
+                            'snips-nlu',
+                            'snips-injection',
+                            'snips-hotword'
+                            ]
         
-        self.external_processes = []
+        #if self.persistent_data['llm_wakeword_model'] == 'voco':
+        #    snips_parts.append('snips-hotword')
         
-        self.stop_snips()
+        self.intended_snips_proces_count = len(snips_parts)
+        
+        snips_processes_count = self.is_snips_running_count()
+        if self.DEBUG:
+            print("run_snips: initial snips_processes_count: " + str(snips_processes_count))
+            
+        if snips_processes_count == self.intended_snips_proces_count:
+            if self.DEBUG:
+                print("run_snips: it seems that Snips is already running OK?  self.intended_snips_proces_count: ", self.intended_snips_proces_count)
+            return
         
         self.busy_starting_snips = True
-        time.sleep(2)
+        
+        
+        
+        commands = snips_parts.copy()
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        #self.external_processes = []
+        
+        #self.stop_snips()
+        
+        
+        #time.sleep(2)
         try:
             
             if self.DEBUG:
-                print("commands: " + str(commands))
+                print("run_snips: snips parts to start: " + json.dumps(commands,indent=2))
+                print("run_snips: self.intended_snips_proces_count: ", self.intended_snips_proces_count)
             
-            snips_processes_count = self.is_snips_running_count()
-            if self.DEBUG:
-                print("run_snips: initial snips_processes_count: " + str(snips_processes_count))
+            
             
             if snips_processes_count != 0:
                 if snips_processes_count < self.intended_snips_proces_count - 1: # If there is only one crashed part of snips, but the other part(s) are still running, then a repair will be attempted. If multiple parts are down, then fully restart snips.
@@ -3778,13 +3822,16 @@ class VocoAdapter(Adapter):
             my_env = os.environ.copy()
             #my_env["LD_LIBRARY_PATH"] = '{}:{}'.format(self.snips_path,self.arm_libs_path)
             my_env["LD_LIBRARY_PATH"] = '{}'.format(self.snips_path)
-
+            my_env["DISPLAY"] = ':0'
+            #my_env["LD_LIBRARY_PATH"] = str(self.snips_path)
             if self.DEBUG:
                 print("LD_LIBRARY_PATH= " + str(my_env["LD_LIBRARY_PATH"]))
 
             #print("--my_env = " + str(my_env))
             
-            snips_check_output = run_command('ps aux | grep snips')
+            snips_check_output = str(run_command('ps aux | grep snips'))
+            if self.DEBUG:
+                print("run_snips: snips_check_output: \n" + str(snips_check_output))
             
             local_mqtt_ip = "127.0.0.1:" + str(self.mqtt_port) # TODO: "127.0.0.1" is hardcoded here    
             if self.DEBUG:
@@ -3802,6 +3849,12 @@ class VocoAdapter(Adapter):
             """
             
             
+            if not 'snips-injection' in snips_check_output and self.snips_clear_injections_first:
+                self.snips_clear_injections_first = False
+                if self.DEBUG:
+                    print("run_snips: calling clear_snips_injections first")
+                self.clear_snips_injections()
+            
             extra_dialogue_manager_command = []
             clear_injections_command = []
             
@@ -3814,23 +3867,21 @@ class VocoAdapter(Adapter):
                     print("\n" + str(unique_command))
                 if unique_command in snips_check_output:
                     if self.DEBUG:
-                        print("This part of snips seems to already be running? It was in snips_check_output: " + str(unique_command))
+                        print("run_snips: this part of snips seems to already be running? It was in snips_check_output: " + str(unique_command))
                     #continue
                     if unique_command not in unique_command_counts:
                         unique_command_counts.append(unique_command)
-                    else:
-                        if self.DEBUG:
-                            print("Error: found a snips process running more than once")
                     
+                    continue
+                    
+                
                 
                 bin_path = os.path.join(self.snips_path, unique_command + self.bit_extension)
                 os.system('chmod +x ' + str(bin_path))
                 
                 command = [bin_path,"-u",self.work_path,"-a",self.assistant_path,"-c",self.toml_path]
                 
-                if self.snips_clear_injections_first:
-                    self.snips_clear_injections_first = False
-                    self.clear_snips_nlu()
+                
                 
                 if self.disable_security == False:
                     security_commands = ['--mqtt-username',self.mqtt_username,'--mqtt-password',self.mqtt_password]
@@ -3859,7 +3910,8 @@ class VocoAdapter(Adapter):
                     
                     # Pipewire
                     if self.pipewire_enabled:
-                        command = command + ["--alsa_capture","default","--disable-playback"]
+                        #command = command + ["--alsa_capture","default","--disable-playback"]
+                        command = command + ["--alsa_capture","pipewire","--disable-playback"]
                     else:
                         command = command + ["--alsa_capture","plughw:" + str(self.capture_card_id) + "," + str(self.capture_device_id),"--disable-playback"]
                        
@@ -3873,8 +3925,12 @@ class VocoAdapter(Adapter):
                     # "--alsa_playback","default:CARD=ALSA",
                     
                 if unique_command == 'snips-injection':
-                    command = command + ["-g",self.g2p_models_path]
-                    
+                    if os.path.exists(self.g2p_models_path):
+                        command = command + ["-g",self.g2p_models_path]
+                    else:
+                        if self.DEBUG:
+                            print("\nrun_snips: ERROR, g2p_models_path does not exist?")
+                            
                 if unique_command == 'snips-hotword' or unique_command == 'snips-satellite':
                     #if self.hey_candle:
                     command = command + ["-t",str(self.wakeword_sensitivity),"--hotword-id",str(self.persistent_data['site_id']) ] #,"--model",self.hey_candle_path + "=.5" ]
@@ -3901,9 +3957,9 @@ class VocoAdapter(Adapter):
                 if str(self.persistent_data['llm_wakeword_model']) == 'voco':
                     if self.DEBUG:
                         print("\n\nWARNING, NOT USING NEW WAKEWORD, IT IS SET TO VOCO\n\n")
-                    self.intended_snips_proces_count = 7
-                else:
-                    self.intended_snips_proces_count = 6
+                    #self.intended_snips_proces_count = 7
+                #else:
+                    #self.intended_snips_proces_count = 6
                     
                 if unique_command == 'snips-hotword' and self.use_open_wakeword and self.llm_wakeword_failed == False and str(self.persistent_data['llm_wakeword_model']) != 'voco':
                     if self.DEBUG:
@@ -3921,6 +3977,8 @@ class VocoAdapter(Adapter):
                 # Add IP and port
                 command = command + ["--mqtt",local_mqtt_ip]
                 
+                #command = command + ["2>",str(self.stderr_output_file)]
+                
                 if self.DEBUG:
                     print("--generated command = " + str(command))
                     #print("-- aka:\n " + str( ' '.join(command) ) + "\n")
@@ -3935,12 +3993,18 @@ class VocoAdapter(Adapter):
                     
                     if self.DEBUG:
                         new_process = Popen(command, env=my_env, stdout=sys.stdout, stderr=subprocess.PIPE, universal_newlines=True)
+                        #new_process = Popen(command, env=my_env, stdout=sys.stdout, universal_newlines=True)
                     else:
                         new_process = Popen(command, env=my_env, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, universal_newlines=True)
-                    flags = fcntl(new_process.stderr, F_GETFL)
-                    if self.DEBUG:
-                        print("run_snips: subprocess.PIPE flags: " + str(flags))
-                    fcntl(new_process.stderr, F_SETFL, flags | os.O_NONBLOCK)
+                    
+                    
+                    
+                        
+                    
+                    #flags = fcntl(new_process.stderr, F_GETFL)
+                    #if self.DEBUG:
+                    #    print("run_snips: subprocess.PIPE flags: " + str(flags))
+                    #fcntl(new_process.stderr, F_SETFL, flags | os.O_NONBLOCK)
                     
                     self.external_processes.append( new_process )
                     
@@ -4077,6 +4141,19 @@ class VocoAdapter(Adapter):
 
 
 
+    def read_external_processes(self):
+        print("in read_external_processes")
+        while not self.threads_must_stop.is_set():
+            for p in self.external_processes:
+                if p.stderr:
+                    err_msg = p.stderr.readline()
+                    self.snips_stderr_messages.append(err_msg) # .decode()
+            time.sleep(0.01)
+        if self.DEBUG:
+            print("read_external_processes closed")
+
+
+
     def clear_snips_injections(self):
         if self.DEBUG:
             print("\nin clear_snips_injections\n\n[---]\nCLEARING INJECTIONS\n\n")
@@ -4098,14 +4175,17 @@ class VocoAdapter(Adapter):
             
             #result_of_check_is_injections_dir_is_empty = run_command('ls ' + str(self.snips_data_injections_dir_path))
             
-            # Getting the list of directories 
-            injections_dir_contents_list = os.listdir(str(self.snips_data_injections_dir_path)) 
-            
+            # Getting the list of directories
+            if os.path.isdir(self.snips_data_injections_dir_path):
+                injections_dir_contents_list = os.listdir(str(self.snips_data_injections_dir_path)) 
+                if len(injections_dir_contents_list) > 20:
+                    if self.snips_data_injections_dir_path.startswith('/home/pi/.webthings/data/voco'):
+                        os.system('rm -rf ' + str(self.snips_data_injections_dir_path) + '/*')
             
             # Checking if the list is empty or not 
             if os.path.exists(self.snips_data_injections_dir_path):
                 print("\nERROR\nself.snips_data_injections_dir_path still exists")
-            else: 
+            else:
                 print("OK\nself.snips_data_injections_dir_path is empty directory")
                 state = True
             
@@ -4289,7 +4369,7 @@ class VocoAdapter(Adapter):
                         n_models = len(owwModel.models.keys())
     
                     
-                        while self.running and self.restart_wakeword == False and self.persistent_data['listening'] == True:
+                        while not self.threads_must_stop.is_set() and self.restart_wakeword == False and self.persistent_data['listening'] == True:
                             try:
                                 # Get audio
                                 audio = np.frombuffer(mic_stream.read(CHUNK, exception_on_overflow = False), dtype=np.int16)
@@ -4440,7 +4520,7 @@ class VocoAdapter(Adapter):
 
     def speak_welcome_message(self):
         if self.still_busy_booting:
-            
+            self.still_busy_booting = False
             first_message = ""
             
             try:
@@ -4516,18 +4596,39 @@ class VocoAdapter(Adapter):
         
         previous_action_times_count = 0
         #previouxs_injection_time = time.time()
-        while self.running:
+        while not self.threads_must_stop.is_set():
 
             voice_message = ""
             
             sleep(.1)
+            
+            
+            
             
                 
             if time.time() > self.current_utc_time + 1:
                 #if self.DEBUG:
                 #    print("\n😀\nCLOCK TICK " + str(int(time.time()) % 60) + "\n")
                 self.current_utc_time = int(time.time())
-                    
+                
+                
+                for snips_stderr in self.snips_stderr_messages:
+                    if self.DEBUG:
+                        print("clock: snips_stderr message: ", snips_stderr)
+                
+                    if ('ERROR:snips_injection_hermes' in str(snips_stderr) and 't load asr injection resources for injection' in str(snips_stderr)) or (
+                        'ERROR:snips' in str(snips_stderr) and 'Missing following file(s)' in str(snips_stderr)) or (
+                        'ERROR:snips_nlu' in str(snips_stderr) and 'No such file or directory' in str(snips_stderr)):
+                        if self.DEBUG:
+                            print("\n\nSNIPS FAILED TO START! INJECTION ISSUE\n\n")
+                        if self.clear_snips_injections():
+                            if self.DEBUG:
+                                print("clock: clearing snips injections directory was successful")
+                            self.should_restart_snips = True
+                        
+                self.snips_stderr_messages = []
+                
+                
                 if self.llm_assistant_process != None and self.llm_assistant_process.poll() == None and self.llm_assistant_process.stdout != None:
                     try:
                     
@@ -4591,7 +4692,7 @@ class VocoAdapter(Adapter):
                         pass
                     
                     
-                    if time.time() > self.llm_last_assistant_reponse_time + 180:
+                    if time.time() > self.llm_last_assistant_reponse_time + 120:
                         self.llm_chat_history = []
                     
                     if self.persistent_data['is_satellite'] and self.persistent_data['main_site_id'] == self.persistent_data['site_id']:
@@ -4626,7 +4727,8 @@ class VocoAdapter(Adapter):
                                     self.possible_injection_failure = True
                                 
                             # TODO: this doesn't work on satellites. Maybe it now should?
-                            if time.time() - self.addon_start_time > 240 and self.initial_injection_completed == False and self.persistent_data['is_satellite'] == False:
+                            # 36000 = 1 hour
+                            if time.time() - self.addon_start_time > 36000 and self.initial_injection_completed == False and self.persistent_data['is_satellite'] == False:
                                 print("clock: Error. Voco failed to load properly (initial_injection_completed was false). Attempting reboot of addon by closing proxy.")
                                 self.close_proxy()
                                 #sys.exit()
@@ -4650,15 +4752,31 @@ class VocoAdapter(Adapter):
                                 if self.should_restart_snips == False:
                                     #if self.DEBUG:
                                     #    print("clock: should_restart_snips is False")
-                                    if self.initial_injection_completed == False and self.injection_in_progress == False:
-                                        
-                                        if self.persistent_data['is_satellite'] == False:
-                                            if self.DEBUG:
-                                                print("Clock: attempting a forced injection since no injection complete message was received yet")
-                                            self.inject_updated_things_into_snips(True) # Force a new injection until it sticks
-                                        else:
-                                            if self.DEBUG:
-                                                print("clock:satellite: injection not complete and was asked to do a forced injection")
+                                    
+                                    if self.last_injection_request_time != 0 and time.time() - self.last_injection_request_time > 60 and self.injection_requested == True and self.injection_in_progress == False:
+                                        if self.DEBUG:
+                                            print("clock: 60 seconds after requesting an injection there is NO indication that the injection is in progress")
+                                    
+                                        #if self.initial_injection_completed == False and self.persistent_data['is_satellite'] == False:
+                                        #    if self.DEBUG:
+                                        #        print("Clock: attempting a forced injection since no injection complete message was received yet")
+                                        #    self.inject_updated_things_into_snips(True) # Force a new injection until it sticks
+                                    
+                                    if self.last_injection_request_time != 0 and time.time() - self.last_injection_request_time > 900 and self.injection_requested == True:
+                                        #self.injection_requested = False
+                                        #self.injection_in_progress = False
+                                        #self.possible_injection_failure = True
+                                        #self.initial_injection_completed = False
+                                        if self.DEBUG:
+                                            print("Clock: increasing injection timeout count")
+                                            
+                                        self.injection_timeout_count += 1
+                                        self.injection_requested = False
+                                        self.injection_in_progress = False
+                                        self.possible_injection_failure = True
+                                    
+                                    
+                                    
                                     
                                     #print("snips did not need to be restarted")
                                     # Check if hostname has changed. This is extremely rare, but it could happen.
@@ -4712,27 +4830,19 @@ class VocoAdapter(Adapter):
                                     #    self.fastest_controller_id = None
                                     
                                     
-                                    if self.persistent_data['is_satellite'] == False:
-                                        if self.DEBUG:
-                                            #print("Clock: Not a satellite, so calling normal inject_updated_things_into_snips")
-                                            pass
-                                        self.inject_updated_things_into_snips() # this will figure out if there are any changes necessitating an actual injection
-                                        
-                                    elif self.satellite_should_act_on_intent:
-                                        if self.DEBUG2:
-                                            print("Clock: satellite, but should_act_on_intent, so calling inject_updated_things_into_snips")
-                                        self.inject_updated_things_into_snips()
+                                    
                                 
                                     if self.DEBUG:
                                         #print("self.periodic_mqtt_attempts = " + str(self.periodic_mqtt_attempts))
                                         pass
+                                        
                                     if self.periodic_mqtt_attempts > 5:
                                         if self.DEBUG:
                                             print("clock: MQTT broker has not responded. It may be down permanently.")
                                         self.mqtt_connected = False
                                         self.set_status_on_thing("Main controller is unavailable")
                                 
-                                    if self.periodic_mqtt_attempts%5 == 4:
+                                    if self.mqtt_connected == False and self.periodic_mqtt_attempts%5 == 4:
                                         if self.DEBUG:
                                             print("clock: Should attempt to find correct MQTT server IP address")
                                         self.look_for_mqtt_server()
@@ -4753,6 +4863,20 @@ class VocoAdapter(Adapter):
                                         if self.DEBUG:
                                             print("clock: Should attempt to reconnect to main voco controller")
                                         #self.look_for_mqtt_server()
+                            
+                            
+                                    if self.mqtt_connected:
+                                        if self.persistent_data['is_satellite'] == False:
+                                            if self.DEBUG:
+                                                #print("Clock: Not a satellite, so calling normal inject_updated_things_into_snips")
+                                                pass
+                                            self.inject_updated_things_into_snips() # this will figure out if there are any changes necessitating an actual injection
+                                        
+                                        elif self.satellite_should_act_on_intent:
+                                            if self.DEBUG2:
+                                                print("Clock: satellite, but should_act_on_intent, so calling inject_updated_things_into_snips")
+                                            self.inject_updated_things_into_snips()
+                            
                             
                              
                             else:
@@ -5163,161 +5287,7 @@ class VocoAdapter(Adapter):
                         print("clock: self.should_restart_snips is True! Calling run_snips.")
                     self.run_snips()
                     
-                else:
-                    # check if running subprocesses are still running ok
-                    
-                    if self.missing_microphone == True and self.stop_snips_on_microphone_unplug:
-                        if self.DEBUG:
-                            print("clock: missing microphone, and stop_snips_on_microphone_unplug is true, so not restarting Snips.")
-                        pass
-                        #if self.DEBUG:
-                        #    print("will not restart snips since snips should be disabled while microphone is missing.")
-                    
-                    else:
-                            
-                        if self.initial_injection_completed == True:
-                        
-                            #if self.DEBUG:
-                            #    print("\n\n\nself.current_utc_time: ", self.current_utc_time)
-                            if self.current_utc_time % 3 == 0:
-                                #if self.DEBUG:
-                                #    print("DOING SNIPS CHECK")
-                                #subprocess_running_ok = True
-                                poll_error_count = 0
-                                for process in self.external_processes:
-                                    try:
-                                        
-                                        """
-                                        if self.DEBUG:
-                                            try:
-                                                print("communicating with process")
-                                                try:
-                                                    process.communicate(timeout=0.01)
-                                                except Exception as ex:
-                                                    print("screwit: " + str(ex))
-                                                    pass
-                                                if process.stdout != None:
-                                                    for line in process.stdout: #.read()
-                                                        print("process stdout: line: " + str(line.decode('utf-8')))
-                                                if process.stderr != None:
-                                                    for line in process.stderr: #.read()
-                                                        print("process stderr: line: " + str(line.decode('utf-8')))
-                                            except Exception as ex:
-                                                print("error getting stdout/stderr from running snips process: " + str(ex))
-                                        """
-                                        
-                                        # check if the process has exited
-                                        poll_result = process.poll()
-                                        #if self.DEBUG:
-                                        #    print("subprocess poll_result: " + str(poll_result) )
-                                        if poll_result != None:
-                                            if self.DEBUG:
-                                                print("clock: poll_result was not None. A subprocess stopped? It was: " + str(poll_result))
-                                            poll_error_count += 1
-                                            
-                                        
-                                            
-                                            
-                                #            process.terminate()
-                                #            subprocess_running_ok = False
-                                        #else:
-                                        #    if self.DEBUG:
-                                        #        print("doing process.communicate")
-                                        #        process.communicate(timeout=1)
-                                
-                                    except Exception as ex:
-                                        if self.DEBUG:
-                                            print("clock: subprocess poll error: " + str(ex))
-                                #if subprocess_running_ok == False:
-                                #    self.run_snips() # restart snips if any of its processes have ended/crashed
-
-                                if poll_error_count > 0:
-                                    if self.DEBUG:
-                                        print("clock: poll error count was: " + str(poll_error_count))
-                                    alternative_process_counter = self.is_snips_running_count()
-                                    if self.DEBUG:
-                                        print("clock: second opinion on Snips being down: self.is_snips_running_count() count: " + str(alternative_process_counter))
-                            
-                                    #self.intended_snips_proces_count = len(self.snips_parts)
-                                    if alternative_process_counter < self.intended_snips_proces_count:
-                                        self.should_restart_snips = True
-                                        if self.DEBUG:
-                                            print("clock: conclusion: too few snips parts are up, snips coordinator should be restarted")
-                            else:
-                                pass
-                                #if self.DEBUG:
-                                #    print("only checking if snips is running once every 3 seconds")
-                        else:
-                            #if self.DEBUG:
-                            #    print("clock: injection not yet complete, checking snips stdout/stderr every 3 seconds")
-                            
-                            process_index = 0
-                            for process in self.external_processes:
-                                #if self.DEBUG:
-                                #    print("clock: checking subprocess")
-                                if process.poll() == None:
-                                    #if self.DEBUG:
-                                    #    print("poll was none")
-                                    try:
-                                        if process.stderr != None:
-                                            #if self.DEBUG:
-                                            #    print("stdout was not None")
-                                            snips_stderr = str(os.read(process.stderr.fileno(), 10240))
-                                            if self.DEBUG:
-                                                print("clock: snips_stderr: " + str(snips_stderr))
-                                            
-                                            #if 'Loading stemmer' in snips_stderr:
-                                            #    print("Loading stemmer spotted")
-                                            
-                                            # ERROR:snips_injection_hermes: can\'t load asr injection resources for injection
-                                            # ERROR:snips_injection_hermes: can\'t load asr injection resources for injection: Injection { root_dir: "/home/pi/.webthings/data/voco/work/injections/20240211T232830988553128/inj_20240301T105446033445135.6bUhsj9NGvnc", date: 2024-03-01T10:54:46.033445135Z }\n -> caused by: Missing following file(s)
-                                            
-                                            if ('ERROR:snips_injection_hermes' in str(snips_stderr) and 't load asr injection resources for injection' in str(snips_stderr)) or (
-                                                'ERROR:snips' in str(snips_stderr) and 'Missing following file(s)' in str(snips_stderr)) or (
-                                                'ERROR:snips_nlu' in str(snips_stderr) and 'No such file or directory' in str(snips_stderr)):
-                                                if self.DEBUG:
-                                                    print("\n\nSNIPS FAILED TO START! INJECTION ISSUE\n\n") 
-                                                    print("clock: snips_stderr read: " + str(snips_stderr))
-                                        
-                                                if self.clear_snips_injections():
-                                                    if self.DEBUG:
-                                                        print("clock:Clearing snips injections directory was successful")
-                                                    self.should_restart_snips = True
-                                                    process.stderr.flush()
-                                                else:
-                                                    if self.DEBUG:
-                                                        print("\nclock: ERROR, self.clear_snips_injections failed\n")
-                                            
-                                        #else:
-                                        #    print("process.stdout was None")
-                                    except OSError:
-                                        # the os throws an exception if there is no data
-                                        #print('[No more data]')
-                                        #break
-                                        continue
-                                else:
-                                    if self.DEBUG:
-                                        print("Error, process poll was not None: " + str(self.snips_parts[process_index]))
-                                    
-                                    
-                                process_index += 1
-                                    
-                            """
-                            try:
-                                if self.snips_fifo_path_file_object != None:
-                                    lines = self.snips_fifo_path_file_object.readlines()
-                                    if self.DEBUG:
-                                        print("\n\n\n$\nSTDERR LINES: " + str(lines))
-                                    self.snips_fifo_path_file_object.truncate(0)
-                                    self.snips_fifo_path_file_object.seek(0)
-                                else:
-                                    if self.DEBUG:
-                                        print("Error, self.snips_fifo_path_file_object was None")
-                                    
-                            except Exception as ex:
-                                print("Error in trying to read subprocess mkfifo stderr buffer file: " + str(ex))
-                            """
-                            
+                  
                 if time.time() > self.current_utc_time + 1:
                     if self.DEBUG:
                         print("clock: WARNING, THE CLOCK TICK TOOK LONGER THAN A SECOND (final check): " + str(time.time() - self.current_utc_time))
@@ -5532,6 +5502,7 @@ class VocoAdapter(Adapter):
         self.send_mqtt_ping(broadcast=True,ping_type='goodbye')
         
         self.running = False
+        self.threads_must_stop.set()
         
         self.kill_llm()
             
@@ -5585,6 +5556,7 @@ class VocoAdapter(Adapter):
         #    os.system('rm ' + str(self.last_recording_path))
         self.delete_recordings()
         
+    
     
     def stop_snips(self):
         #self.snips_running = False
@@ -5709,9 +5681,19 @@ class VocoAdapter(Adapter):
                 print("stop_snips: snips seems to have indeed been stopped")
             
         self.external_processes = []
-
         
-        #time.sleep(.5)
+        self.voco_connected = False
+        self.force_injection = False
+        self.injection_requested = False
+        self.injection_in_progress = False
+        self.possible_injection_failure = False
+        self.initial_injection_completed = False
+        self.injection_timeout_count = 0
+        self.last_injection_request_time = 0
+        self.last_injection_perform_time = 0
+        
+        
+        time.sleep(.5)
         
         
 
@@ -6565,19 +6547,19 @@ class VocoAdapter(Adapter):
         
         
         
-        
         if msg.topic.startswith('hermes/injection/perform'):
             
-            self.last_injection_time = time.time() # if a site is injecting, all sites should wait a while before attempting their own injections.
+            self.last_injection_perform_time = time.time() # if a site is injecting, all sites should wait a while before attempting their own injections.
             self.injection_in_progress = True
+            self.preparing_an_injection = False
             if self.DEBUG:
-                print("INJECTION PERFORM MESSAGE RECEIVED")
+                print("INJECTION PERFORM MESSAGE RECEIVED - INJECTION IS NOW IN PROGRESS...")
             """
             if self.persistent_data['is_satellite']:
                 if self.DEBUG:
                     print("INJECTION PERFORM MESSAGE RECEIVED, but I am a satellite, so I'm ignoring it")
             else:
-                self.last_injection_time = time.time() # if a site is injecting, all sites should wait a while before attempting their own injections.
+                self.last_injection_request_time = time.time() # if a site is injecting, all sites should wait a while before attempting their own injections.
                 self.injection_in_progress = True
                 if self.DEBUG:
                     print("INJECTION PERFORM MESSAGE RECEIVED")
@@ -6586,13 +6568,28 @@ class VocoAdapter(Adapter):
         elif msg.topic.startswith('hermes/injection/complete'):
             if self.DEBUG:
                 print("INJECTION COMPLETE MESSAGE RECEIVED")
-            self.possible_injection_failure = False
-            self.injection_in_progress = False
             # Voco is now really ready
+            
+            if self.injection_level < 3:
+                self.injection_level += 1
+            self.last_succesful_injection_time = time.time()
+            
+            self.force_injection = False
+            self.injection_requested = False
+            self.injection_in_progress = False
+            self.possible_injection_failure = False
+            self.initial_injection_completed = True
+            self.injection_timeout_count = 0
+            self.last_injection_request_time = 0
+            self.last_injection_perform_time = 0
+            
             if self.initial_injection_completed == False:
                 self.speak_welcome_message()
-            self.initial_injection_completed = True
             self.still_busy_booting = False
+            self.preparing_an_injection = False
+            
+            if self.DEBUG:
+                print("self.injection_level is now: ", self.injection_level)
             
             """
             if self.persistent_data['is_satellite']:
@@ -9503,44 +9500,72 @@ class VocoAdapter(Adapter):
     # TODO: this is called more frequently than necessary
     def inject_updated_things_into_snips(self, force_injection=False):
         """ Teaches Snips what the user's devices and properties are called """
-        #if self.DEBUG:
-        #    print("Checking if new things/properties/strings should be injected into Snips")
+        if self.DEBUG:
+            print("Checking if new things/properties/strings should be injected into Snips.  self.injection_level:", self.injection_level, ", self.preparing_an_injection: ", self.preparing_an_injection)
         try:
+            
+            if self.mqtt_connected == False:
+                if self.DEBUG:
+                    print("inject_updated_things_into_snips: mqtt seems to be disconnected, aborting")
+                return
                 
+            
+            if self.injection_in_progress:
+                if self.DEBUG:
+                    print("inject_updated_things_into_snips: injection already in progress")
+                return
+                #if time.time() - self.last_injection_request_time > 900:
+                #    if self.DEBUG:
+                #        print("INJECTION IS STILL NOT COMPLETE AFTER 15 MINUTES. Assuming it failed.")
+                #    self.injection_in_progress = False
+                #else:
+                #    if self.DEBUG:
+                #        print("inject_updated_things_into_snips: injection already in progress. Aborting.")
+                #    return
+            
             if force_injection == True:
                 self.force_injection = True # sic (adding to self)
+            
+            if self.injection_level < 2:
+                self.force_injection = True
             
             if not self.got_good_things_list:
                 if self.DEBUG:
                     print("At inject_updated_things_into_snips, but no things list has ever been succesfully loaded form the API. Aborting.")
                 return
             
-            if self.last_injection_time + self.minimum_injection_interval > time.time(): # + self.minimum_injection_interval > datetime.utcnow().timestamp():
+            
+            
+            if self.last_injection_request_time + self.minimum_injection_interval > time.time(): # + self.minimum_injection_interval > datetime.utcnow().timestamp():
                 if self.DEBUG:
                     print("An injection has already recently been performed. Should wait a while...")
                 return
             
-            if time.time() - self.last_injection_time > 86400:
+            if time.time() - self.last_succesful_injection_time > 86400:
                 if self.DEBUG:
                     print("Forcing another injection since a day has passed")
                 self.force_injection = True
             
             if self.DEBUG:
-                #print("/\ /\ /\ inject_updated_things_into_snips: starting an attempt")
+                print("inject_updated_things_into_snips: starting an attempt")
                 pass
             
-            
+            if self.preparing_an_injection:
+                if self.DEBUG:
+                    print("error, already busy preparing an injection")
+                return
+            self.preparing_an_injection = True
             # Check if any new things have been created by the user.
-            #if datetime.utcnow().timestamp() - self.last_injection_time < self.minimum_injection_interval:
+            #if datetime.utcnow().timestamp() - self.last_injection_request_time < self.minimum_injection_interval:
             #    if self.DEBUG:
             #        print("Not enough time has passed - will not try to inject the new thing/property/string names.")
-            #        print(str(datetime.utcnow().timestamp() - self.last_injection_time) + " versus " + str(self.minimum_injection_interval))
+            #        print(str(datetime.utcnow().timestamp() - self.last_injection_request_time) + " versus " + str(self.minimum_injection_interval))
             #    return
                 
             #else: 
             #if True: # just a quick hack
                 #self.attempting_injection = True
-                #self.last_injection_time = datetime.utcnow().timestamp()
+                #self.last_injection_request_time = datetime.utcnow().timestamp()
             #if self.DEBUG:
             #    print("Checking if Snips should be updated with new thing/property/string names")
             
@@ -9552,6 +9577,10 @@ class VocoAdapter(Adapter):
             
             if self.try_updating_things():
                 
+                if self.DEBUG:
+                    print("inject_updated_things_into_snips: self.try_updating_things done")
+                    
+                    
                 local_thing_titles_list = []
                 full_thing_titles_list = []
                 
@@ -9780,6 +9809,11 @@ class VocoAdapter(Adapter):
                     #)
                     self.persistent_data['property_titles'] = list(fresh_property_titles)
                     
+                    if self.injection_timeout_count > 1 or self.injection_level < 1:
+                        if self.DEBUG:
+                            print("TRUNCATING property_titles.  self.injection_timeout_count,self.injection_level: ", self.injection_timeout_count, self.injection_level)
+                        fresh_property_titles = set(['state', 'volume', 'brightness','temperature'])
+                    
                     #if not self.persistent_data['is_satellite']:
                     fresh_property_titles.add('all')
                     
@@ -9806,7 +9840,12 @@ class VocoAdapter(Adapter):
                     fresh_property_strings.add('decrease')
                     
                     #if not self.persistent_data['is_satellite']:
-                        
+                    
+                    if self.injection_timeout_count > 0 or self.injection_level < 2:
+                        if self.DEBUG:
+                            print("TRUNCATING PROPERTY STRING INJECTION")
+                        fresh_property_strings = set(['on','off'])
+                    
                     
                     operation = ('addFromVanilla',{"string" : list(fresh_property_strings) })
                     operations.append(operation)
@@ -9843,7 +9882,8 @@ class VocoAdapter(Adapter):
                                 
                                 #print(str(json.dumps(operations)))
                             self.mqtt_second_client.publish('hermes/injection/perform', json.dumps(update_request))
-                            self.last_injection_time = time.time()
+                            self.injection_requested = True
+                            self.last_injection_request_time = time.time()
                             self.force_injection = False
                             
                             
@@ -9854,15 +9894,15 @@ class VocoAdapter(Adapter):
                         #with Hermes("127.0.0.1:1883") as herm:
                         #    herm.request_injection(update_request)
                     
-                        #self.last_injection_time = time.time() #datetime.utcnow().timestamp()
+                        #self.last_injection_request_time = time.time() #datetime.utcnow().timestamp()
                 
                     except Exception as ex:
                          if self.DEBUG:
                              print("Error during injection: " + str(ex))
             
                 else:
-                    if self.DEBUG2:
-                        print(r"\n\/ \/ \/ No need for injection\n")
+                    if self.DEBUG:
+                        print("No need for injection")
                 
                 
             
@@ -9875,7 +9915,7 @@ class VocoAdapter(Adapter):
                 print("Error during analysis and injection of your things into Snips: " + str(ex))
 
 
-
+        self.preparing_an_injection = False
 
 
 
@@ -11659,9 +11699,9 @@ class VocoAdapter(Adapter):
             else:
                 print("update_network_info: error, not a valid possible_ip: " + str(possible_ip))
             #if self.DEBUG:
-            #    print("My IP address = " + str(self.ip_address))
+            #    print("update_network_info: IP address is now: " + str(self.ip_address))
         except Exception as ex:
-            print("Error getting hostname: " + str(ex))
+            print("Error getting IP address: " + str(ex))
 
         # Get hostname
         try:
@@ -11670,19 +11710,19 @@ class VocoAdapter(Adapter):
             #    print("fresh hostname = " + str(self.hostname))
         except Exception as ex:
             if self.DEBUG:
-                print("Error getting hostname: " + str(ex) + ", setting hostname to ip_address instead")
+                print("update_network_info: caught error getting hostname: " + str(ex))
             if os.path.exists('/boot/firmware/hostname.txt'):
                 if self.DEBUG:
                     print("setting hostname from /boot/firmware/hostname.txt")
                 with open('/boot/firmware/hostname.txt') as f:
                     content = f.read()
-                    self.hostname = str(content).strip()
+                    self.hostname = str(content).strip().rstrip()
             else:
                 if self.DEBUG:
                     print("setting hostname to ip_address instead")
                 self.hostname = self.ip_address
             if self.DEBUG:
-                print("hostname is now: " + str(self.hostname))
+                print("update_network_info: hostname is now: " + str(self.hostname))
         
         
     # Test all the IP addresses in the network one by one until the main voco server is found
@@ -11792,7 +11832,7 @@ class VocoAdapter(Adapter):
         if self.busy_starting_snips:
             if self.DEBUG:
                 print("is snips running was called while snips was busy starting.. which is a bad idea. aborting and pretending everything is ok...")
-            return len(self.snips_parts)
+            return self.intended_snips_proces_count
         
         p1 = subprocess.Popen(["ps", "-A"], stdout=subprocess.PIPE)
         p2 = subprocess.Popen(['grep', 'snips'], stdin=p1.stdout, stdout=subprocess.PIPE)
@@ -11817,7 +11857,7 @@ class VocoAdapter(Adapter):
                     print("Snips actual process count mismatch. Setting should_restart_snips to True")
                 self.should_restart_snips = True
         
-                if snips_actual_processes_count > len(self.snips_parts):
+                if snips_actual_processes_count > 7:
                     if self.DEBUG:
                         print("DOING EMERGENCY KILL OF SNIPS, TOO MANY REAL PROCESSES")
                     self.set_status_on_thing("Error, too many processes")
@@ -12240,7 +12280,7 @@ class VocoAdapter(Adapter):
         # Make sure LLM models are downloaded first
         if self.llm_should_download:
             if self.DEBUG:
-                print("start_llm_servers: llm_enabled and llm_should_download was True")
+                print("start_llm_servers: llm_enabled and llm_should_download was True. Calling download_llm_models")
             self.llm_should_download = False
             self.download_llm_models()
 
@@ -12273,7 +12313,7 @@ class VocoAdapter(Adapter):
 
         self.assistant_loop_counter = 0 # how often the current assistant process has answered a question. It may get less coherent over time, so restarts are done when possible
 
-        while self.running:
+        while not self.threads_must_stop.is_set():
 
             # Download LLM models if a new on has been selected.
             if self.llm_enabled and self.llm_should_download:
