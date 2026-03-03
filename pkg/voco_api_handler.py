@@ -630,6 +630,7 @@ class VocoAPIHandler(APIHandler):
                                                         'hostname': self.adapter.hostname, 
                                                         'has_token':has_token, 
                                                         'is_satellite':is_sat, 
+                                                        'site_id':self.adapter.persistent_data['site_id'],
                                                         'main_site_id':self.adapter.persistent_data['main_site_id'],
                                                         'mqtt_others': self.adapter.mqtt_others,
                                                         'main_controller_hostname':self.adapter.persistent_data['main_controller_hostname'],

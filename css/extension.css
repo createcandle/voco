@@ -1524,6 +1524,14 @@ f #extension-voco-matrix-invite-management-output {
 }
 
 
+
+
+#extension-voco-site-id{
+	text-align:center;
+	padding:2rem;
+}
+
+
 /*  spinner  */
 
 #extension-voco-loading {

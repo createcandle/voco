@@ -1314,7 +1314,7 @@ class VocoAdapter(Adapter):
         
         self.llm_tts_models = {
             'Basic':{'model':'voco',
-                                'description':'Always use the basic voice. This assures the fastest response times, but may sound less natural.',
+                                'description':'The fastest voice. This assures quick responses, but may sound less natural.',
                                 'model_url':'',
                                 'downloaded':True
                             },
@@ -4147,7 +4147,8 @@ class VocoAdapter(Adapter):
             for p in self.external_processes:
                 if p.stderr:
                     err_msg = p.stderr.readline()
-                    self.snips_stderr_messages.append(err_msg) # .decode()
+                    if len(str(err_msg)) > 10:
+                        self.snips_stderr_messages.append(err_msg) # .decode()
             time.sleep(0.01)
         if self.DEBUG:
             print("read_external_processes closed")
@@ -4160,33 +4161,38 @@ class VocoAdapter(Adapter):
         state = False
         try:
             
-            bin_path = os.path.join(self.snips_path, 'snips-injection' + self.bit_extension)
-            os.system('chmod +x ' + str(bin_path))
-            my_env = os.environ.copy()
-            my_env["LD_LIBRARY_PATH"] = '{}'.format(self.snips_path)
-            command = [bin_path,"-u",self.work_path,"-a",self.assistant_path,"-c",self.toml_path] # 
-            clear_injections_command = command + ["clean","--all"]
-            clear_injections_command2 = 'LD_LIBRARY_PATH=' + str(my_env["LD_LIBRARY_PATH"]) + ' ' + ' '.join(clear_injections_command)
-            if self.DEBUG:
-                print("clear_injections_command2: " + str(clear_injections_command2))
-            os.system(clear_injections_command2)
-            if self.DEBUG:
-                print("old snips-injection data should in theory be cleaned")
+            if os.path.isdir(self.snips_data_injections_dir_path):
+                bin_path = os.path.join(self.snips_path, 'snips-injection' + self.bit_extension)
+                os.system('chmod +x ' + str(bin_path))
+                my_env = os.environ.copy()
+                my_env["LD_LIBRARY_PATH"] = '{}'.format(self.snips_path)
+                command = [bin_path,"-u",self.work_path,"-a",self.assistant_path,"-c",self.toml_path] # 
+                clear_injections_command = command + ["clean","--all"]
+                clear_injections_command2 = 'LD_LIBRARY_PATH=' + str(my_env["LD_LIBRARY_PATH"]) + ' ' + ' '.join(clear_injections_command)
+                if self.DEBUG:
+                    print("clear_injections_command2: " + str(clear_injections_command2))
+                os.system(clear_injections_command2)
+                if self.DEBUG:
+                    print("old snips-injection data should in theory be cleaned")
             
             #result_of_check_is_injections_dir_is_empty = run_command('ls ' + str(self.snips_data_injections_dir_path))
             
             # Getting the list of directories
             if os.path.isdir(self.snips_data_injections_dir_path):
                 injections_dir_contents_list = os.listdir(str(self.snips_data_injections_dir_path)) 
+                if self.DEBUG:
+                    print("number of files in injection dir after snips cleaned it: ", len(injections_dir_contents_list))
                 if len(injections_dir_contents_list) > 20:
                     if self.snips_data_injections_dir_path.startswith('/home/pi/.webthings/data/voco'):
                         os.system('rm -rf ' + str(self.snips_data_injections_dir_path) + '/*')
             
             # Checking if the list is empty or not 
             if os.path.exists(self.snips_data_injections_dir_path):
-                print("\nERROR\nself.snips_data_injections_dir_path still exists")
+                if self.DEBUG:
+                    print("\nERROR\nself.snips_data_injections_dir_path still exists")
             else:
-                print("OK\nself.snips_data_injections_dir_path is empty directory")
+                if self.DEBUG:
+                    print("OK\nself.snips_data_injections_dir_path is empty directory")
                 state = True
             
             #Popen(clear_injections_command, env=my_env, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
@@ -4613,18 +4619,20 @@ class VocoAdapter(Adapter):
                 
                 
                 for snips_stderr in self.snips_stderr_messages:
-                    if self.DEBUG:
-                        print("clock: snips_stderr message: ", snips_stderr)
-                
-                    if ('ERROR:snips_injection_hermes' in str(snips_stderr) and 't load asr injection resources for injection' in str(snips_stderr)) or (
-                        'ERROR:snips' in str(snips_stderr) and 'Missing following file(s)' in str(snips_stderr)) or (
-                        'ERROR:snips_nlu' in str(snips_stderr) and 'No such file or directory' in str(snips_stderr)):
+                    
+                    if len(snips_stderr) > 10:
                         if self.DEBUG:
-                            print("\n\nSNIPS FAILED TO START! INJECTION ISSUE\n\n")
-                        if self.clear_snips_injections():
+                            print("clock: snips_stderr message: ", snips_stderr)
+                
+                        if ('ERROR:snips_injection_hermes' in str(snips_stderr) and 't load asr injection resources for injection' in str(snips_stderr)) or (
+                            'ERROR:snips' in str(snips_stderr) and 'Missing following file(s)' in str(snips_stderr)) or (
+                            'ERROR:snips_nlu' in str(snips_stderr) and 'No such file or directory' in str(snips_stderr)):
                             if self.DEBUG:
-                                print("clock: clearing snips injections directory was successful")
-                            self.should_restart_snips = True
+                                print("\n\nSNIPS FAILED TO START! INJECTION ISSUE\n\n")
+                            if self.clear_snips_injections():
+                                if self.DEBUG:
+                                    print("clock: clearing snips injections directory was successful")
+                                self.should_restart_snips = True
                         
                 self.snips_stderr_messages = []
                 
@@ -4928,8 +4936,8 @@ class VocoAdapter(Adapter):
                                 
                         if (self.current_utc_time >= int(item['moment']) and self.current_utc_time < int(item['moment']) + 60) or item['type'] == 'countdown':
                             if self.DEBUG:
-                                print("\nclock: time has come for an action item (or is countdown)")
                                 if item['type'] != 'countdown':
+                                    print("\nclock: time has come for an action item (that's not a countdown)")
                                     print("non-countdown timer item:\n" + str(json.dumps(item,indent=4)))
                                 
                                 
@@ -9650,10 +9658,10 @@ class VocoAdapter(Adapter):
                                     property_string_name = clean_up_thing_string(str(word)) #.strip()
                                     if len(str(property_string_name)) > 2:
                                         if too_difficult_to_pronounce(property_string_name):
-                                            if self.DEBUG:
+                                            if self.DEBUG2:
                                                 print("skipping property value that is too difficult to pronounce: " + str(property_string_name))
                                         elif " " in property_string_name and any(char.isdigit() for char in property_string_name) and not (property_string_name[-1].isdigit() or (property_string_name[0].isdigit() and ( property_string_name[1] == " " or property_string_name[2] == " " )) ):
-                                            if self.DEBUG:
+                                            if self.DEBUG2:
                                                 print("skipping property value string with both a space and a number in it (that is not the first or last character): " + str(property_string_name))
                                         else:
                                             if len(str(property_string_name)) > 3 and property_string_name.isupper():
@@ -9666,10 +9674,10 @@ class VocoAdapter(Adapter):
                             if len(property_title) > 2:
                                 if property_title.startswith("Unknown ") == False:
                                     if too_difficult_to_pronounce(property_title):
-                                        if self.DEBUG:
+                                        if self.DEBUG2:
                                             print("skipping property_title that is too difficult to pronounce: " + str(property_title))
                                     elif " " in property_title and any(char.isdigit() for char in property_title) and not property_title[-1].isdigit():
-                                        if self.DEBUG:
+                                        if self.DEBUG2:
                                             print("skipping property_title with both a space and a number in it (that is not the last character): " + str(property_title))
                                     else:
                                         if len(str(property_title)) > 3 and property_title.isupper():
