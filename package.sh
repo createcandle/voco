@@ -155,7 +155,7 @@ mkdir -p lib package
 #/usr/bin/python"${PYTHON_VERSION}" -m ensurepip --upgrade
 #/usr/bin/python"${PYTHON_VERSION}" -m ensurepip
 
-echo "installong requirements"
+echo "install requirements"
 #/usr/bin/python"${PYTHON_VERSION}" -m pip install -r requirements.txt -t lib --no-cache-dir --prefix "" --default-timeout=180 --upgrade
 python3 -m pip install -r requirements.txt -t lib --no-cache-dir --prefix "" --default-timeout=180 --upgrade
 
@@ -164,6 +164,9 @@ if dpkg --print-architecture | grep -q 'armhf'; then
 else
   echo "Adding some Python AI modules (for OpenWakeWord)"
   python3 -m pip install onnxruntime openwakeword -t lib --no-cache-dir --prefix "" --default-timeout=180 --upgrade
+
+  python3 -m pip install KittenTTS@git+https://github.com/createcandle/KittenTTS -t lib --no-cache-dir --prefix ""
+  
 fi
 
 
