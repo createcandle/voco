@@ -18,11 +18,28 @@
 from __future__ import print_function
 has_fuzz = False
 import os
+import re
 #from os import path
 import sys
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'lib'))
 if os.path.exists('/usr/lib/aarch64-linux-gnu'):
     sys.path.append('/usr/lib/aarch64-linux-gnu')
+
+from .util import *
+
+print("echo $XDG_RUNTIME_DIR: ", run_command('echo $XDG_RUNTIME_DIR'))
+
+if os.path.isdir('/home/pi/.dbus/session-bus'):
+    dbus_session_lines = run_command('cat /home/pi/.dbus/session-bus/* | grep -v ^# ')
+    if isinstance(dbus_session_lines,str):
+        print("dbus_session_lines: \n" + str(dbus_session_lines) + "\n")
+        for line in dbus_session_lines.splitlines():
+            if '=' in line and line.startswith('DBUS_SESSION_BUS'):
+                dbus_atribute_key = line.split('=', 1)[0]
+                dbus_atribute_value = line.split('=', 1)[1]
+                if isinstance(dbus_atribute_value,str) and len(str(dbus_atribute_value).strip()):
+                    os.environ[ str(dbus_atribute_key).strip() ] = re.escape(str(dbus_atribute_value))
+
 
 #print("")
 #print("BEFORE sys.path: " + str(sys.path))
@@ -107,7 +124,7 @@ except:
     print("ERROR, pytz is not installed. try 'pip3 install pytz'")
 
 from gateway_addon import Database, Adapter
-from .util import *
+
 from .voco_device import *
 from .voco_notifier import *
 
@@ -281,6 +298,9 @@ class VocoAdapter(Adapter):
         self.llm_tts_started = False
         self.llm_tts_waiting_for_speaking_to_finish = False
         self.last_tts_speaking_offset = 0
+        
+        self.kitten_tts_instance = None
+        self.kitten_tts_voices = ['Bella', 'Jasper', 'Luna', 'Bruno', 'Rosie', 'Hugo', 'Kiki', 'Leo']
         
         
         # STT
@@ -1318,6 +1338,26 @@ class VocoAdapter(Adapter):
                                 'model_url':'',
                                 'downloaded':True
                             },
+                            
+            'Bruno':{'model':'KittenTTS_bruno',
+                                'size':61,
+                                'description':'A bass-heavy male voice',
+                                'model_url':''
+                            },
+            'Jasper':{'model':'KittenTTS_jasper',
+                                'size':61,
+                                'description':'An male voice',
+                                'model_url':''
+                            },
+            'Luna':{'model':'KittenTTS_Luna',
+                                'description':'A female voice',
+                                'model_url':''
+                            },
+            'Rosie':{'model':'KittenTTS_rosie',
+                                'description':'A slow speaking female voice',
+                                'model_url':''
+                            },
+                            
             'American default':{'model':'en_US-lessac-medium.onnx',
                                 'size':61,
                                 'description':'A default male American voice. Technically the highest quality, but requires more memory and may also be slower to generate.',
@@ -2999,7 +3039,7 @@ class VocoAdapter(Adapter):
         if self.DEBUG:
             print("audio play command: " + str( ' '.join(sound_command) ))
             aplay_timer = time.time()
-        my_env = os.environ.copy()
+        my_env = get_env()
         subprocess.run(sound_command, capture_output=True, shell=False, check=False, encoding=None, errors=None, text=None, env=my_env, universal_newlines=None)
         if self.DEBUG:
             print("audio play done")
@@ -3066,7 +3106,7 @@ class VocoAdapter(Adapter):
             sleep(.1)
             # Could this cause a loop? Disabling for now.
             #really_speak(voice_message,intent)
-            self.send_pairing_prompt("Could not speak: " + str(voice_message))
+            self.send_pairing_prompt("AI could not speak: " + str(voice_message))
             return
             
         try:
@@ -3101,23 +3141,44 @@ class VocoAdapter(Adapter):
                 
                 cached_response_file_path = os.path.join(self.llm_tts_cache_dir_path,potential_cached_name + '.wav')
                 if not os.path.exists(cached_response_file_path):
-                    tts_command = 'echo "' + str(voice_message) + '" | ' + str(self.llm_tts_binary_path) + ' --model ' + str(self.llm_models['tts']['active']) + ' -f ' + str(cached_response_file_path)
-                    #tts_command += ' -f ' + str(cached_response_file_path) # --sentence_silence 1
-                    if self.DEBUG:
-                        print("Attempting to create cached TTS response.  tts_command:  " + str(tts_command))
-                    os.system(tts_command)
+                    
+                    # generate commonly spoken sentence using KittenTTS
+                    if self.kitten_tts_instance != None and str(self.llm_models['tts']['active']) in self.kitten_tts_voices:
+                        if self.DEBUG:
+                            print("Attempting to create cached TTS response using KittenTTS: " + str(self.llm_models['tts']['active']))
+                        self.kitten_tts_generate(str(voice_message), str(cached_response_file_path), str(self.llm_models['tts']['active']))
+                        
+                        
+                    # generate commonly spoken sentence using Piper
+                    else:
+                        tts_command = 'echo "' + str(voice_message) + '" | ' + str(self.llm_tts_binary_path) + ' --model ' + str(self.llm_models['tts']['active']) + ' -f ' + str(cached_response_file_path)
+                        #tts_command += ' -f ' + str(cached_response_file_path) # --sentence_silence 1
+                        if self.DEBUG:
+                            print("Attempting to create cached TTS response using Piper.  tts_command:  " + str(tts_command))
+                        os.system(tts_command)
                 else:
                     if self.DEBUG:
                         print("response found in wav cache: " + str(cached_response_file_path))
                 self.play_wav(cached_response_file_path)
                 
             else:
-                if self.llm_tts_process == None or (self.llm_tts_process != None and self.llm_tts_process.poll() != None):
+                if (self.kitten_tts_instance == None and self.llm_tts_process == None) or (self.kitten_tts_instance == None and self.llm_tts_process != None and self.llm_tts_process.poll() != None):
                     if self.DEBUG:
-                        print("llm_speak: LLM TTS process needs to be started first, as it doesn't seem to be running")
+                        print("llm_speak: LLM TTS process needs to be (re)started first, as it doesn't seem to be running")
                     self.start_llm_tts()
                 
-                if self.llm_tts_process.poll() == None:
+                if self.kitten_tts_instance != None and str(self.llm_models['tts']['active']) in self.kitten_tts_voices:
+                    self.kitten_tts_generate(str(voice_message))
+                    
+                    if self.DEBUG:
+                        print("KittenTTS should have generated\n")
+                        
+                    if self.DEBUG:
+                        print("\n⏰\nSTOPWATCH: + " + str(time.time() - self.llm_stt_stopwatch) + ', ' + str(time.time() - self.llm_stt_stopwatch_start))
+                    self.llm_stt_stopwatch = time.time()
+                    
+                    
+                elif self.llm_tts_process.poll() == None:
                     if self.DEBUG:
                         print("llm_speak: LLM TTS Process is running")
                     json_voice_message = '{ "text": "' + str(voice_message).replace('"', '\\"') + '","volume_level":"' + str( int(self.persistent_data['speaker_volume'])/100) + '"}\n'
@@ -3144,6 +3205,8 @@ class VocoAdapter(Adapter):
             if self.DEBUG:
                 print("Error in llm_speak: " + str(ex))
         #echo 'This sentence is spoken first. This sentence is synthesized while the first sentence is spoken.' |   ./piper --model en_US-lessac-medium.onnx --output-raw |   aplay -r 22050 -f S16_LE -t raw -
+
+
 
     def clear_llm_tts_cache(self):
         if self.DEBUG:
@@ -3218,7 +3281,14 @@ class VocoAdapter(Adapter):
                     
                     
             try:
-                if self.llm_assistant_continue_conversations and self.llm_tts_started and self.llm_tts_process != None and self.llm_tts_process.poll() == None and self.llm_tts_process.stdout != None:
+                
+                if self.llm_assistant_continue_conversations and self.llm_tts_started and self.kitten_tts_instance != None:
+                    if self.DEBUG:
+                        print("speak_thread: continueing conversation while KittenTTS (TODO)")
+                
+                
+                
+                elif self.llm_assistant_continue_conversations and self.llm_tts_started and self.llm_tts_process != None and self.llm_tts_process.poll() == None and self.llm_tts_process.stdout != None:
                     try:
                     
                         #if self.DEBUG:
@@ -3288,7 +3358,7 @@ class VocoAdapter(Adapter):
                         self.speak(self.main_controller_missing_warning)
                     
     
-    # Entry point for adding new messages that should be spoken/outputted. This adds them to the queue that spread_thread manages.
+    # Entry point for adding new messages that should be spoken/outputted. This adds them to the queue that speak_thread manages.
     def speak(self, voice_message="",intent='default'):
         try:
             
@@ -3305,7 +3375,7 @@ class VocoAdapter(Adapter):
                     print("- speak: intent was not set, so setting siteId to own siteId (speaking it here)")
                 intent = {'siteId':self.persistent_data['site_id']}
             
-            if 'siteId' in intent and intent['siteId'].endswith(self.persistent_data['site_id']) and str(voice_message).lower().startswith('show '):
+            if 'siteId' in intent and intent['siteId'].endswith(self.persistent_data['site_id']) and str(voice_message).lower().startswith('show '): # E.g. Show me a recipe for ...
                 if self.DEBUG:
                     print("voice message starts with 'show '. ")
                 self.info_to_show = voice_message
@@ -3342,7 +3412,7 @@ class VocoAdapter(Adapter):
 
 
             if voice_message == self.main_controller_missing_warning:
-                if self.last_time_main_controller_missing_warning_spoken < time.time() - 300:
+                if self.last_time_main_controller_missing_warning_spoken < time.time() - 60:
                     self.last_time_main_controller_missing_warning_spoken = time.time()
                 else:
                     if self.DEBUG:
@@ -3699,6 +3769,41 @@ class VocoAdapter(Adapter):
 
 
 
+
+
+
+    def kitten_tts_generate(self,sentence=None,filename=None,voice=None):
+        if self.DEBUG:
+            print("in kitten_tts_generate. sentence, filename, voice: ", sentence, filename, voice)
+        if isinstance(sentence,str) and len(sentence):
+            
+            if voice == None:
+                voice = str(self.llm_models['tts']['active'])
+                
+            if str(voice) in self.kitten_tts_voices:
+                audio = self.kitten_tts_instance.generate(sentence, voice=voice )
+                
+                if isinstance(filename,str):
+                    if filename.endswith('.wav'):
+                        if self.DEBUG:
+                            print("kitten_tts_generate: saving audio to file: ", filename)
+                        import soundfile
+                        soundfile.write(str(filename), audio, 24000)
+                    else:
+                        if self.DEBUG:
+                            print("kitten_tts_generate: provided filename should end with .wav: ", filename)
+                else:
+                    if self.DEBUG:
+                        print("kitten_tts_generate: speaking generated audio")
+                    import sounddevice as sd
+                    sd.play(audio, samplerate=24_000)
+            else:
+                if self.DEBUG:
+                    print("\nERROR: kitten_tts_generate: invalid voice: ", voice)
+        else:
+            if self.DEBUG:
+                print("\nERROR: kitten_tts_generate: invalid sentence provided: ", sentence)
+
 #
 #  RUN SNIPS
 #
@@ -3737,6 +3842,8 @@ class VocoAdapter(Adapter):
             print("running Snips (after killing potential running snips instances)")
         
        
+       # Command to start the audio server (which has a tendency to crash..)
+       # LD_LIBRARY_PATH=/home/pi/.webthings/addons/voco/snips64 /home/pi/.webthings/addons/voco/snips64/snips-audio-server64 -u /home/pi/.webthings/data/voco/work -a /home/pi/.webthings/addons/voco/models/assistant -c /home/pi/.webthings/addons/voco/models/candle.toml --mqtt-username candle --mqtt-password smarthome --bind wckkuzuu@mqtt --alsa_capture pipewire --disable-playback --mqtt 127.0.0.1:1885
         
         snips_parts = [
                             'snips-dialogue',
@@ -3818,20 +3925,28 @@ class VocoAdapter(Adapter):
         
         try:
             #time.sleep(1.11)
-        
-            my_env = os.environ.copy()
+            #my_env = get_env()
+            
+            my_env = get_env()
             #my_env["LD_LIBRARY_PATH"] = '{}:{}'.format(self.snips_path,self.arm_libs_path)
             my_env["LD_LIBRARY_PATH"] = '{}'.format(self.snips_path)
-            my_env["DISPLAY"] = ':0'
-            #my_env["LD_LIBRARY_PATH"] = str(self.snips_path)
+            
+            
             if self.DEBUG:
-                print("LD_LIBRARY_PATH= " + str(my_env["LD_LIBRARY_PATH"]))
-
+                print("run_snips: my_env: ", json.dumps(my_env,indent=4))
             #print("--my_env = " + str(my_env))
             
-            snips_check_output = str(run_command('ps aux | grep snips'))
+            snips_check_output = run_command('ps aux | grep snips')
+            
             if self.DEBUG:
-                print("run_snips: snips_check_output: \n" + str(snips_check_output))
+                print("run_snips: snips_check_output before removing defunct: \n" + str(snips_check_output))
+            
+            if isinstance(snips_check_output,str):
+                snips_check_output = "\n".join([x for x in snips_check_output.splitlines() if not 'defunct' in str(x)])
+                if self.DEBUG:
+                    print("run_snips: snips_check_output after removing defunct: \n" + str(snips_check_output))
+            else:
+                snips_check_output = ''
             
             local_mqtt_ip = "127.0.0.1:" + str(self.mqtt_port) # TODO: "127.0.0.1" is hardcoded here    
             if self.DEBUG:
@@ -3992,7 +4107,7 @@ class VocoAdapter(Adapter):
                     #self.external_processes.append( Popen(command, env=my_env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL) )
                     
                     if self.DEBUG:
-                        new_process = Popen(command, env=my_env, stdout=sys.stdout, stderr=subprocess.PIPE, universal_newlines=True)
+                        new_process = Popen(command, env=my_env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
                         #new_process = Popen(command, env=my_env, stdout=sys.stdout, universal_newlines=True)
                     else:
                         new_process = Popen(command, env=my_env, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, universal_newlines=True)
@@ -4164,7 +4279,7 @@ class VocoAdapter(Adapter):
             if os.path.isdir(self.snips_data_injections_dir_path):
                 bin_path = os.path.join(self.snips_path, 'snips-injection' + self.bit_extension)
                 os.system('chmod +x ' + str(bin_path))
-                my_env = os.environ.copy()
+                my_env = get_env()
                 my_env["LD_LIBRARY_PATH"] = '{}'.format(self.snips_path)
                 command = [bin_path,"-u",self.work_path,"-a",self.assistant_path,"-c",self.toml_path] # 
                 clear_injections_command = command + ["clean","--all"]
@@ -4609,9 +4724,6 @@ class VocoAdapter(Adapter):
             sleep(.1)
             
             
-            
-            
-                
             if time.time() > self.current_utc_time + 1:
                 #if self.DEBUG:
                 #    print("\n😀\nCLOCK TICK " + str(int(time.time()) % 60) + "\n")
@@ -4620,7 +4732,7 @@ class VocoAdapter(Adapter):
                 
                 for snips_stderr in self.snips_stderr_messages:
                     
-                    if len(snips_stderr) > 10:
+                    if len(str(snips_stderr)) > 10:
                         if self.DEBUG:
                             print("clock: snips_stderr message: ", snips_stderr)
                 
@@ -4694,10 +4806,16 @@ class VocoAdapter(Adapter):
                 if time.time() - self.slow_loop_interval > self.last_slow_loop_time: # + self.minimum_injection_interval > datetime.utcnow().timestamp():
                     self.last_slow_loop_time = time.time()
                     
+                    running_snips_processes_count = self.is_snips_running_count()
                     if self.DEBUG:
-                        #print("___\n\n   Clock: 15 seconds have passed. Time: " + str(int(time.time()) % 60))
-                        #print("   self.periodic_voco_attempts: " + str(self.periodic_voco_attempts))
+                        print("___\n\n   Clock: 15 seconds have passed. Time: " + str(int(time.time()) % 60))
+                        print("   self.periodic_voco_attempts: " + str(self.periodic_voco_attempts))
+                        print("   self.intended_snips_proces_count: ", self.intended_snips_proces_count)
+                        print("   running_snips_processes_count: ", running_snips_processes_count)
                         pass
+                    
+                    
+                    
                     
                     
                     if time.time() > self.llm_last_assistant_reponse_time + 120:
@@ -4714,6 +4832,10 @@ class VocoAdapter(Adapter):
                             if self.DEBUG:
                                 #print("MQTT client object exists. mqtt_connected_succesfully_at_least_once: " + str(self.mqtt_connected_succesfully_at_least_once))
                                 pass
+                            
+                            # The main broadcast ping that informs other controllers of this controller's existence and information
+                            self.send_mqtt_ping(broadcast=True) # broadcast ping
+                                
                         else:
                             if self.DEBUG:
                                 print("clock: MQTT client object doesn't exist yet.")
@@ -4737,7 +4859,7 @@ class VocoAdapter(Adapter):
                             # TODO: this doesn't work on satellites. Maybe it now should?
                             # 36000 = 1 hour
                             if time.time() - self.addon_start_time > 36000 and self.initial_injection_completed == False and self.persistent_data['is_satellite'] == False:
-                                print("clock: Error. Voco failed to load properly (initial_injection_completed was false). Attempting reboot of addon by closing proxy.")
+                                print("\n\nclock: ERROR. Voco failed to load properly (initial_injection_completed was false). Attempting reboot of addon by closing proxy.\n\n")
                                 self.close_proxy()
                                 #sys.exit()
                                 
@@ -4757,9 +4879,11 @@ class VocoAdapter(Adapter):
                                 #    self.run_snips()
                                 
                                 #else:
-                                if self.should_restart_snips == False:
-                                    #if self.DEBUG:
-                                    #    print("clock: should_restart_snips is False")
+                                if self.should_restart_snips == True:
+                                    if self.DEBUG:
+                                        print("clock: should_restart_snips is True")
+                                    
+                                else:
                                     
                                     if self.last_injection_request_time != 0 and time.time() - self.last_injection_request_time > 60 and self.injection_requested == True and self.injection_in_progress == False:
                                         if self.DEBUG:
@@ -4827,8 +4951,7 @@ class VocoAdapter(Adapter):
                                     if self.persistent_data['is_satellite'] and self.this_is_main_controller == False:
                                         self.periodic_voco_attempts += 1
                                 
-                                    # The main broadcast ping that informs other controllers of this controller's existence and information
-                                    self.send_mqtt_ping(broadcast=True) # broadcast ping
+                                    
                                     
                                     #if time.time() > self.fastest_controller_last_ping_time + 60 and self.fastest_controller_id != self.persistent_data['site_id']:
                                     #    if self.DEBUG:
@@ -5220,7 +5343,7 @@ class VocoAdapter(Adapter):
                             self.missing_microphone = True
                             if self.still_busy_booting == False:
                                 self.speak("The microphone has been disconnected.")
-                            if self.stop_snips_on_microphone_unplug:
+                            if self.stop_snips_on_microphone_unplug: # Deprecated, as Voco should still be able to handle text messages
                                 if self.DEBUG:
                                     print("clock: microphone was disconnected. Stopping Snips.")
                                 self.stop_snips()
@@ -5575,7 +5698,7 @@ class VocoAdapter(Adapter):
             
         if self.busy_starting_snips:
             if self.DEBUG:
-                print("snips is in the process of starting, so stopping it now is a bad idea")
+                print("stop_snips: snips is in the process of starting, so stopping it now is a bad idea")
             return
             
         process_count = self.is_snips_running_count()
@@ -5589,88 +5712,33 @@ class VocoAdapter(Adapter):
         
         try:
             for process in self.external_processes:
-                if self.DEBUG:
-                    print("stop_snips function is attempting to terminate external process: " + str(process))
-                try:
-                    
-                    try:
-                        poll_result = process.poll()
-                        if self.DEBUG:
-                            print("subprocess poll: " + str(poll_result) )
-                        if poll_result == None:
-                            if self.DEBUG:
-                                print("- poll_result was None, so subprocess seems to still be running")
-                        else:
-                            if self.DEBUG:
-                                print("- poll_result was not None, so subprocess seems to have exited?")
-                                
-                                
-                                
-                    except Exception as ex:
-                        if self.DEBUG:
-                            print("subprocess poll error: " + str(ex))
-                    
-                    # Get the process id & try to terminate it gracefuly
-                    pid = process.pid
-                    if self.DEBUG:
-                        print("pid = " + str(pid))
+                if process.poll() == None:
+                    process.kill()
+            
+            time.sleep(.2)
+            
+            for process in self.external_processes:
+                if process.poll() == None:
                     process.terminate()
-                    time.sleep(0.1)
-                    process.poll()
-                    
-                    """
-                    try:
-                        process.call()
-                        if self.DEBUG:
-                            print("did process.call")
-                    except Exception as ex:
-                        if self.DEBUG:
-                            print("process.call failed: " + str(ex))
-                    """
-                    
-                    try:    
-                        process.kill()
-                        if self.DEBUG:
-                            print('did process.kill. It finished with return code: %d' % process.returncode)
-                    except Exception as ex:
-                        if self.DEBUG:
-                            print("Stop_snips: error doing process.kill on subprocess? This could be ok. Error message: " + str(ex))
-                    
-                    
-                    # Check if the process has really terminated & force kill if not.
-                    """
-                    try:
-                        os.kill(pid, 0)
-                        if self.DEBUG:
-                            print("did os.kill")
-                    except Exception as ex:
-                        if self.DEBUG:
-                            print("Error doing os.kill on subprocess PID? Terminated gracefully already?: " + str(ex))
-                    """
-
-                    #process.stdin.close()
-                    #print('Waiting for process to exit')
-                    #process.wait()
-                    
-                    
-                    #process.terminate()
-                    #process.wait()
-                    #process.close()
-                    
-                    
-                    
-                    #snips-injection clean --all
-                    
-                except Exception as ex:
+            
+            time.sleep(.2)
+            
+            for process in self.external_processes:
+                if process.poll() == None:
+                    process.terminate()
+            
+            time.sleep(.2)
+            for process in self.external_processes:
+                if process.poll() == None:
                     if self.DEBUG:
-                        print("stop_snips function was unable to close external process: " + str(ex))
-                    pass
-                #print("Terminated Snips process")
+                        print("ERROR, snips subprocess does not want to stop.  process.pid: ", process.pid)
+                    
         except Exception as ex:
-            print("Error terminating the snips process: " + str(ex))
+            if self.DEBUG:
+                print("stop_snips: caught error terminating the snips process: " + str(ex))
 
         if self.DEBUG:
-            print("self.external_processes should now be zero length: " + str(len(self.external_processes)))
+            print("stop_snips: self.external_processes should now be zero length: " + str(len(self.external_processes)))
 
         if self.DEBUG:
             print("")
@@ -5679,7 +5747,7 @@ class VocoAdapter(Adapter):
         process_count = self.is_snips_running_count()
         if process_count > 0:
             if self.DEBUG:
-                print("it was necessary to kill snips using pkill")
+                print("stop_snips: it was necessary to kill snips using pkill")
             
             os.system("pkill -f snips")
             
@@ -11842,6 +11910,55 @@ class VocoAdapter(Adapter):
                 print("is snips running was called while snips was busy starting.. which is a bad idea. aborting and pretending everything is ok...")
             return self.intended_snips_proces_count
         
+ 
+        if self.DEBUG:
+            print("len(self.external_processes) before: ", len(self.external_processes))
+            
+        def subprocess_has_died(existing_process):
+            if self.DEBUG:
+                print("existing_process: ", existing_process)
+            dead_check = existing_process.poll()
+            if dead_check is None:
+                print("subprocess is alive")
+                return False
+            else:
+                print("SUBPROCESS SEEMS DEAD")
+                try:
+                    if existing_process.stderr:
+                        stderr_output = existing_process.stderr.read()
+                        print(f"Std ERR: {stderr_output}")
+                    
+                    if existing_process.stdout:
+                        stdout_output = existing_process.stdout.read()
+                        print(f"Std OUT: {stdout_output}")
+                except Exception as ex:
+                    print("caufght error getting stderr/stdout from dead subprocess: ", er)
+                
+                
+                #print(dir(existing_process))
+            return True
+            
+        
+        self.external_processes = [x for x in self.external_processes if not subprocess_has_died(x)]
+        
+        if self.DEBUG:
+            print("len(self.external_processes) after: ", len(self.external_processes))
+        
+        snips_actual_processes_count = 0
+        snips_defunct_count = 0
+        ps_aux_output = run_command('ps aux | grep snips')
+        if isinstance(ps_aux_output,str):
+            for line in ps_aux_output.splitlines():
+                if 'defunct' in line:
+                    snips_defunct_count += 1
+                    if self.DEBUG:
+                        print("spotted defunct snips process: ", line)
+                    #self.should_restart_snips = True
+                elif 'snips-' in line:
+                    snips_actual_processes_count += 1
+                    
+            
+        """
         p1 = subprocess.Popen(["ps", "-A"], stdout=subprocess.PIPE)
         p2 = subprocess.Popen(['grep', 'snips'], stdin=p1.stdout, stdout=subprocess.PIPE)
 
@@ -11853,9 +11970,11 @@ class VocoAdapter(Adapter):
                 if self.DEBUG:
                     print(" -- real snips process: " + str(s))
                 snips_actual_processes_count += 1
-                
+        """
+                    
         try:
             if self.DEBUG:
+                print(" -- is_snips_running_count: snips_defunct_count: " + str(snips_defunct_count))
                 print(" -- is_snips_running_count: sub processes count: " + str(len(self.external_processes)))
                 print(" -- is_snips_running_count: snips_actual_processes_count = " + str(snips_actual_processes_count))
         
@@ -11867,9 +11986,13 @@ class VocoAdapter(Adapter):
         
                 if snips_actual_processes_count > 7:
                     if self.DEBUG:
-                        print("DOING EMERGENCY KILL OF SNIPS, TOO MANY REAL PROCESSES")
+                        print("WAYY TO MANY SNIPS PROCESSES SPOTTED: ", snips_actual_processes_count)
                     self.set_status_on_thing("Error, too many processes")
-                    os.system("pkill -f snips")
+                    
+                    if snips_actual_processes_count > 20:
+                        if self.DEBUG:
+                            print("DOING EMERGENCY KILL OF SNIPS, TOO MANY REAL PROCESSES")
+                        os.system("pkill -f snips")
         
             # satellites now run same number of snips processes as the main controller, thanks to Raspberry Pi Zero 2.
             #if self.persistent_data['is_satellite'] and len(self.external_processes) == 4:
@@ -12445,9 +12568,17 @@ class VocoAdapter(Adapter):
                                 print("Second follow-up attempt to less nicely stop existing TTS process also failed, with error: " + str(ex))
 
                 if self.llm_tts_process.poll() == None:
-                    if self.DEBUG:
-                        print("start_llm_tts: using pkill to stop existing TTS process...")
-                    os.system('pkill -f ' + str(self.llm_tts_binary_name))
+                    self.llm_tts_process.kill()
+                    time.sleep(.1)
+                    if self.llm_tts_process.poll() == None:
+                        if self.DEBUG:
+                            print("start_llm_tts: resorting to .terminate stop existing TTS process...")
+                        self.llm_tts_process.terminate()
+                        time.sleep(.1)
+                    if self.llm_tts_process.poll() == None:
+                        if self.DEBUG:
+                            print("start_llm_tts: using pkill to stop existing TTS process...")
+                        os.system('pkill -f ' + str(self.llm_tts_binary_name))
                 else:
                     if self.DEBUG:
                         print("LLM TTS PROCESS SEEMS TO HAVE STOPPED PROPERLY")
@@ -12461,17 +12592,23 @@ class VocoAdapter(Adapter):
         if self.llm_models['tts']['active'] == None:
             if self.DEBUG2:
                 print("\n\nstart_llm_tts: ERROR, tts active model was still None. Aborting start of STT server.\n\n")
+            if self.kitten_tts_instance != None:
+                self.kitten_tts_instance = None
             self.llm_tts_started = False
             return
 
         if str(self.persistent_data['llm_tts_model']) == 'voco':
             if self.DEBUG:
                 print("not starting LLM TTS, llm_tts_model in persistent data is set to voco")
+            
+            if self.kitten_tts_instance != None:
+                self.kitten_tts_instance = None
+                
             self.llm_tts_started = False
             return
 
 
-        # actually start Piper
+        # actually start Piper or load KittenTTS
         
         self.llm_stt_not_enough_memory = False
         
@@ -12481,55 +12618,85 @@ class VocoAdapter(Adapter):
             
             if self.free_memory > self.llm_tts_minimal_memory:
                 
-                my_env = os.environ.copy()
-
-                # speed of voice can be controlled too with
-                # --length_scale 1.0
-
-                tts_command = [
-                    str(self.llm_tts_binary_path),
-                    "--model",
-                    str(self.llm_models['tts']['active']),
-                    "--json-input",
-                    "--server",
-                    "--output-raw",
-                    "--sentence_silence",
-                    "0.3",
-                    "|",
-                    "aplay"
-                ]
-
-                if self.pipewire_enabled == False:
-                    if self.DEBUG:
-                        print("No pipewire, so adding device parameter to Piper: " + str(self.llm_tts_output_device_string))
-                    tts_command = tts_command + ["-D",str(self.llm_tts_output_device_string)]
-
-                tts_command_part2 = [
-                    "-r"
-                    "22050",
-                    "-f"
-                    "S16_LE",
-                    "-t",
-                    "raw",
-                    "-"
-                ]
-                tts_command = tts_command + tts_command_part2
-
-                tts_command = ' '.join(tts_command)
-                if self.DEBUG:
-                    print("tts_command: " + str(tts_command))
-
-                self.llm_tts_process = Popen(tts_command, env=my_env, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, universal_newlines=True,text=True,bufsize=1,shell=True) # ,preexec_fn=os.setsid
-                os.set_blocking(self.llm_tts_process.stdout.fileno(), False)
-                if self.llm_tts_process.poll() == None:
-                    if self.DEBUG:
-                        print("\n\n\n[OK]\nLLM TTS PROCESS STARTED SUCCESFULLY")
-                    self.llm_tts_started = True
-
+                
+                # use KittenTTS
+                if str(self.persistent_data['llm_tts_model']) == 'Bruno' or str(self.persistent_data['llm_tts_model']) == 'Jasper' or str(self.persistent_data['llm_tts_model']) == 'Luna' or str(self.persistent_data['llm_tts_model']) == 'Rosie':
+                    
+                    if self.kitten_tts_instance == None:
+                        if self.DEBUG:
+                            print("Loading KittenTTS into memory")
+                        from kittentts import KittenTTS
+                        import soundfile
+                        #self.soundfile_instance = 
+                        #sf.write(str(voice) + '-mini.wav', audio, 24000)
+                        
+                        self.kitten_tts_instance = KittenTTS("KittenML/kitten-tts-mini-0.8")
+                    
+                    
+                    if self.kitten_tts_instance != None:
+                        if self.DEBUG:
+                            print("KittenTTS should now be loaded into memory")
+                        self.llm_tts_started = False
+                    
+                
+                # use Piper
                 else:
+                        
+                    if self.kitten_tts_instance != None:
+                        self.kitten_tts_instance = None
+                        
+                    my_env = get_env()
+
+                    # speed of voice can be controlled too with
+                    # --length_scale 1.0
+
+                    tts_command = [
+                        str(self.llm_tts_binary_path),
+                        "--model",
+                        str(self.llm_models['tts']['active']),
+                        "--json-input",
+                        "--server",
+                        "--output-raw",
+                        "--sentence_silence",
+                        "0.3",
+                        "|",
+                        "aplay"
+                    ]
+
+                    if self.pipewire_enabled == False:
+                        if self.DEBUG:
+                            print("No pipewire, so adding device parameter to Piper: " + str(self.llm_tts_output_device_string))
+                        tts_command = tts_command + ["-D",str(self.llm_tts_output_device_string)]
+
+                    tts_command_part2 = [
+                        "-r"
+                        "22050",
+                        "-f"
+                        "S16_LE",
+                        "-t",
+                        "raw",
+                        "-"
+                    ]
+                    tts_command = tts_command + tts_command_part2
+
+                    tts_command = ' '.join(tts_command)
                     if self.DEBUG:
-                        print("ERROR, LLM TTS PROCESS FAILED TO START")
-                    self.llm_tts_started = False
+                        print("tts_command: " + str(tts_command))
+
+                    self.llm_tts_process = Popen(tts_command, env=my_env, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, universal_newlines=True,text=True,bufsize=1,shell=True) # ,preexec_fn=os.setsid
+                    os.set_blocking(self.llm_tts_process.stdout.fileno(), False)
+                    if self.llm_tts_process.poll() == None:
+                        if self.DEBUG:
+                            print("\n\n\n[OK]\nLLM TTS PROCESS STARTED SUCCESFULLY")
+                        self.llm_tts_started = True
+
+                    else:
+                        if self.DEBUG:
+                            print("ERROR, LLM TTS PROCESS FAILED TO START")
+                        self.llm_tts_started = False
+                
+                
+                
             else:
                 if self.DEBUG:
                     print("ERROR,LLM TTS PROCESS NOT STARTED (not enough memory)")
@@ -12578,13 +12745,13 @@ class VocoAdapter(Adapter):
         #    return
 
         # Check if the LLM STT server is still running OK
-        if self.llm_stt_process == None:
+        if self.llm_stt_process == None and self.kitten_tts_instance == None:
             if self.DEBUG:
                 print("llm_stt: WARNING, stt process is none")
             self.llm_stt_started = False
-        elif self.llm_stt_process.poll() != None:
+        elif self.kitten_tts_instance == None and self.llm_stt_process.poll() != None:
             if self.DEBUG:
-                print("llm_stt: WARNING, stt process has stopped!")
+                print("llm_stt: WARNING, Piper stt process has stopped!")
             self.llm_stt_started = False
         #else:
         #    print("llm_stt: stt process seems to be running OK")
@@ -12854,10 +13021,18 @@ class VocoAdapter(Adapter):
 
         if self.llm_stt_process != None or (self.llm_stt_process != None and self.llm_stt_process.poll() == None):
             if self.DEBUG:
-                print(" - llm_stt_server seems to already be running! Killing it first")
+                print(" - llm_stt_server seems to already be running! Killing subprocess first")
             self.llm_stt_process.kill()
             time.sleep(0.1)
-            os.system('pkill -f ' + str(self.llm_stt_binary_name))
+            if self.llm_stt_process.poll() == None:
+                if self.DEBUG:
+                    print(" - resorting to .terminate to stop llm_stt subprocess")
+                self.llm_stt_process.terminate()
+                time.sleep(0.1)
+            if self.llm_stt_process.poll() == None:
+                if self.DEBUG:
+                    print(" - WARNING, resorting to pkill to stop llm_stt subprocess")
+                os.system('pkill -f ' + str(self.llm_stt_binary_name))
 
         self.llm_stt_started = False
         #/home/pi/.webthings/addons/voco/llm/stt/server -m /home/pi/.webthings/data/voco/llm/stt/ggml-base.en.bin -t 3  --host 0.0.0.0 --port 8046 --public /home/pi/.webthings/data/voco/recording/
@@ -12875,7 +13050,7 @@ class VocoAdapter(Adapter):
             if self.free_memory > self.llm_stt_minimal_memory:
                 if self.DEBUG:
                     print("- Enough memory to start STT server")
-                my_env = os.environ.copy()
+                my_env = get_env()
 
                 #'--audio_ctx',
                 #'0',
@@ -12967,8 +13142,18 @@ class VocoAdapter(Adapter):
 
         if self.llm_assistant_process != None and self.llm_assistant_process.poll() == None:
             if self.DEBUG:
-                print("start_ai_assistant: using pkill to stop existing assistant process...")
-            os.system('pkill -f ' + str(self.llm_assistant_binary_name))
+                print("attempting to .kill assistant subprocess")
+            self.llm_assistant_process.kill()
+            time.sleep(0.1)
+            if self.llm_assistant_process.poll() == None:
+                if self.DEBUG:
+                    print("resorting to .terminate to stop assistant subprocess")
+                self.llm_assistant_process.terminate()
+                time.sleep(0.1)
+            if self.llm_assistant_process.poll() == None:
+                if self.DEBUG:
+                    print("start_ai_assistant: WARNING, resorting to pkill to stop existing assistant process...")
+                os.system('pkill -f ' + str(self.llm_assistant_binary_name))
         else:
             if self.DEBUG2:
                 print("AI ASSISTANT PROCESS SEEMS TO HAVE STOPPED PROPERLY")
@@ -13074,7 +13259,7 @@ class VocoAdapter(Adapter):
                         print("LLM Assistant: in_suffix     : " + str(in_suffix))
                         print("LLM Assistant: system prompt : \n--->" + str(assistant_prompt) + "<---\n")
 
-                    my_env = os.environ.copy()
+                    my_env = get_env()
 
                     with open(self.llm_assistant_output_file_path, "w") as myfile:
                         myfile.write("")

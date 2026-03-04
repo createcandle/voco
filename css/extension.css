@@ -48,6 +48,7 @@ body:not(.developer) .extension-voco-show-if-developer {
     background-color: rgba(0, 0, 0, .1);
     overflow-wrap: break-word;
     word-wrap: break-word;
+	clear:both;
 }
 
 /*
@@ -1754,5 +1755,23 @@ f #extension-voco-matrix-invite-management-output {
 	#extension-voco-text-input-more-buttons-container:not(.extension-voco-text-input-more-buttons-expanded){
 		flex-direction:row;
 	}
+
+	#extension-voco-content #extension-voco-satellites-tutorial-image{
+	    display: block;
+	    margin: 0 auto;
+	    float: left;
+	    max-width: 40%;
+	    margin-right: 4rem;
+	    /* border-bottom: 4rem solid transparent; */
+	    box-sizing: border-box;
+	    padding-bottom: 2rem;
+	}
+	
+	#extension-voco-satellites-tutorial-image + p:first-of-type{
+		font-size:2rem;
+		line-height:160%;
+		margin-bottom:1rem;
+	}
+	
 
 }

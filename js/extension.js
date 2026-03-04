@@ -187,7 +187,7 @@
 			}
 
 
-
+			document.getElementById('menu-button').classList.remove('hidden');
 
 			const list = document.getElementById('extension-voco-list');
 
@@ -1003,6 +1003,9 @@
                             }
                             else if(body.possible_injection_failure){
                                 this.view.querySelector('#extension-voco-injection-failure').style.display = 'block';
+                            }
+                            else if(body.possible_injection_failure == false){
+                                this.view.querySelector('#extension-voco-injection-failure').style.display = 'none';
                             }
                         }
                     }
