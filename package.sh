@@ -179,7 +179,7 @@ cp ./llm/wakeword/open_wake_word/* ./lib/openwakeword/resources/models/
 #rm -rf ./lib/cffi*
 
 # Put package together
-cp -r lib pkg LICENSE manifest.json *.py README.md snips snips64 tts tts64 llm models sounds css js images views package/
+cp -r lib pkg LICENSE manifest.json *.py README.md snips snips64 tts tts64 llm models sounds audio css js images views package/
 find package -type f -name '*.pyc' -delete
 find package -type f -name '._*' -delete
 find package -type d -empty -delete
