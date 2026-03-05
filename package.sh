@@ -165,6 +165,7 @@ else
   echo "Adding some Python AI modules (for OpenWakeWord)"
   python3 -m pip install onnxruntime openwakeword -t lib --no-cache-dir --prefix "" --default-timeout=180 --upgrade
 
+  echo "Installing KittenTTS"
   python3 -m pip install KittenTTS@git+https://github.com/createcandle/KittenTTS -t lib --no-cache-dir --prefix ""
   
 fi
