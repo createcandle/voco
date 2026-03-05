@@ -184,27 +184,27 @@ else
   python3 -m pip install onnxruntime openwakeword -t lib --no-cache-dir --prefix "" --default-timeout=180 --upgrade
 
   echo "Installing spacy & co"
-  python3 -m pip install transformers -t lib --no-cache-dir --prefix ""
-  python3 -m pip install blis -t lib --no-cache-dir --prefix ""
-  python3 -m pip install thinc==8.3.10  -t lib --no-cache-dir --prefix "" --upgrade
-  python3 -m pip install curated-tokenizers -t lib --no-cache-dir --prefix ""
-  python3 -m pip install spacy -t lib --no-cache-dir --prefix ""
-  python3 -m pip install spacy-curated-transformers -t lib --no-cache-dir --prefix ""
+  #python3 -m pip install transformers -t lib --no-cache-dir --prefix ""
+  #python3 -m pip install blis -t lib --no-cache-dir --prefix ""
+  #python3 -m pip install thinc==8.3.10  -t lib --no-cache-dir --prefix "" --upgrade
+  #python3 -m pip install curated-tokenizers -t lib --no-cache-dir --prefix ""
+  #python3 -m pip install spacy -t lib --no-cache-dir --prefix ""
+  #python3 -m pip install spacy-curated-transformers -t lib --no-cache-dir --prefix ""
 
   echo ""
   echo ""
-  echo "Installing Kitten_requirements"
-  python3 -m pip install -r kitten_requirements.txt -t lib --no-cache-dir --prefix ""
+  echo "Installing requirements"
+  python3 -m pip install -r requirements.txt -t lib --no-cache-dir --prefix ""
   
   echo ""
   echo ""
-  echo "Installing misaki"
-  python3 -m pip install misaki@git+https://github.com/createcandle/misaki -t lib --no-cache-dir --prefix ""
+  #echo "Installing misaki"
+  #python3 -m pip install misaki@git+https://github.com/createcandle/misaki -t lib --no-cache-dir --prefix ""
 
   echo ""
   echo ""
-  echo "Installing KittenTTS"
-  python3 -m pip install KittenTTS@git+https://github.com/createcandle/KittenTTS -t lib --no-cache-dir --prefix ""
+  #echo "Installing KittenTTS"
+  #python3 -m pip install KittenTTS@git+https://github.com/createcandle/KittenTTS -t lib --no-cache-dir --prefix ""
     
 fi
 
