@@ -179,11 +179,11 @@ if dpkg --print-architecture | grep -q 'armhf'; then
 
 else
 
-  echo ""
-  echo "Adding some Python AI modules (for OpenWakeWord)"
-  python3 -m pip install onnxruntime openwakeword -t lib --no-cache-dir --prefix "" --default-timeout=180 --upgrade
+  #echo ""
+  #echo "Adding some Python AI modules (for OpenWakeWord)"
+  #python3 -m pip install onnxruntime openwakeword -t lib --no-cache-dir --prefix "" --default-timeout=180 --upgrade
 
-  echo "Installing spacy & co"
+  #echo "Installing spacy & co"
   #python3 -m pip install transformers -t lib --no-cache-dir --prefix ""
   #python3 -m pip install blis -t lib --no-cache-dir --prefix ""
   #python3 -m pip install thinc==8.3.10  -t lib --no-cache-dir --prefix "" --upgrade
