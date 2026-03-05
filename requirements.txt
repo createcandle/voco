@@ -24,5 +24,6 @@ transformers
 onnxruntime
 soundfile
 huggingface_hub
+openwakeword
 git+https://github.com/createcandle/misaki
 git+https://github.com/createcandle/KittenTTS
