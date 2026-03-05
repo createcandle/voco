@@ -166,6 +166,9 @@ else
   echo "Adding some Python AI modules (for OpenWakeWord)"
   python3 -m pip install onnxruntime openwakeword -t lib --no-cache-dir --prefix "" --default-timeout=180 --upgrade
 
+
+  python3 -m pip install spacy -t lib --no-cache-dir --prefix ""
+
   echo "Installing Kitten_requirements"
   python3 -m pip install -r kitten_requirements.txt -t lib --no-cache-dir --prefix ""
 
