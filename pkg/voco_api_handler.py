@@ -404,10 +404,15 @@ class VocoAPIHandler(APIHandler):
                                             self.adapter.persistent_data['llm_tts_model'] = str(request.body['llm_tts_model'])
                                             if self.DEBUG:
                                                 print("self.adapter.persistent_data['llm_tts_model'] is now: ", self.adapter.persistent_data['llm_tts_model'])
-                                            self.adapter.llm_should_download = True
+                                            
                                             self.adapter.clear_llm_tts_cache()
                                             #self.adapter.download_llm_models()
-                                    
+                                            self.adapter.llm_should_download = True
+                                            
+                                            #if 'KittenTTS' in self.adapter.persistent_data['llm_tts_model']: 
+                                            #start_llm_tts
+                                            
+                                            
                                     if 'llm_stt_model' in request.body:
                                         if self.DEBUG:
                                             print("set_llm: STT")
@@ -590,7 +595,7 @@ class VocoAPIHandler(APIHandler):
                                     print("Error getting is_satellite from persistent data")
                             
                             
-                                if self.adapter.persistent_data['mqtt_server'] not in self.adapter.gateways_ip_list and self.adapter.persistent_data['mqtt_server'] != 'localhost':
+                                if self.adapter.persistent_data['mqtt_server'] not in self.adapter.gateways_ip_list and self.adapter.persistent_data['mqtt_server'] != 'localhost' and self.adapter.persistent_data['mqtt_server'] != '0.0.0.0' and self.adapter.persistent_data['mqtt_server'] != '127.0.0.1':
                                     if self.DEBUG:
                                         print("Warning, the current persistent_data['mqtt_server'] IP was not actually spotted in the network by the ARP scan: " + str(self.adapter.persistent_data['mqtt_server']) )
                             

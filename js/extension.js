@@ -1665,7 +1665,7 @@
 									injection_progress_el.innerHTML = '<h3>Learning complete</h3>';
 								}
 								else{
-									injection_progress_el.innerHTML = '<h3>Learning..  ' + (body['injection_level']+1) + '/3</h3>';
+									injection_progress_el.innerHTML = '<h3>Learning.. </h3>'; //  ' + (body['injection_level']+1) + '/3
 								}
 								
 								const learning_levels = ['Names of things','Names of properties','Selectable values'];
@@ -2369,7 +2369,9 @@
 						llm_options_list_el.innerHTML = '';
 						var counter = 0;
 						for (const [llm_name, llm_details] of Object.entries(llm_models[llm_type]['list'])) {
-	  						//console.log(`${llm_name}: ${llm_details}`);
+	  						if(this.debug){
+								console.log(`\nname & details:\n${llm_name}: ${llm_details}`);
+							}
 							counter++;
 
 	  						let llm_item_el = document.createElement('li');
@@ -2484,6 +2486,12 @@
 							else if(typeof llm_models[llm_type]['active'] == 'string' && (llm_models[llm_type]['active'].endsWith(model_name) || llm_models[llm_type]['active'].endsWith(model_name + '.tflite'))){
 								if(this.debug){
 									console.log("Voco debug: SPOTTED the active model: ", llm_type, " -> ",model_name);
+								}
+								radio_el.checked = true;
+							}
+							else if(typeof llm_models[llm_type]['active'] == 'string' && llm_models[llm_type]['active'] == llm_name){
+								if(this.debug){
+									console.log("Voco debug: SPOTTED the active model (which does not have a download URL): ", llm_type, " -> ", llm_name);
 								}
 								radio_el.checked = true;
 							}

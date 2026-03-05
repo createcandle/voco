@@ -27,12 +27,12 @@ if os.path.exists('/usr/lib/aarch64-linux-gnu'):
 
 from .util import *
 
-print("echo $XDG_RUNTIME_DIR: ", run_command('echo $XDG_RUNTIME_DIR'))
+#print("echo $XDG_RUNTIME_DIR: ", run_command('echo $XDG_RUNTIME_DIR'))
 
 if os.path.isdir('/home/pi/.dbus/session-bus'):
     dbus_session_lines = run_command('cat /home/pi/.dbus/session-bus/* | grep -v ^# ')
     if isinstance(dbus_session_lines,str):
-        print("dbus_session_lines: \n" + str(dbus_session_lines) + "\n")
+        #print("dbus_session_lines: \n" + str(dbus_session_lines) + "\n")
         for line in dbus_session_lines.splitlines():
             if '=' in line and line.startswith('DBUS_SESSION_BUS'):
                 dbus_atribute_key = line.split('=', 1)[0]
@@ -180,7 +180,7 @@ class VocoAdapter(Adapter):
 
     try:
         from .matrix import start_matrix,start_matrix_client_async,matrix_create_room,matrix_load_room,matrix_main,matrix_audio_file_callback,matrix_message_callback,matrix_sync_callback,matrix_account_callback,matrix_room_account_callback,matrix_ephemeral_callback,matrix_to_device_callback,room_key_request_callback,send_message_to_matrix,send_message_to_matrix_async,create_matrix_account,register_loop,sync_loop,login_test,login_loop,get_or_create_eventloop
-        print("succesfully imported matrix.py file")
+        #print("succesfully imported matrix.py file")
     except Exception as ex:
         print("ERROR loading matrix.py: " + str(ex))
         
@@ -196,7 +196,7 @@ class VocoAdapter(Adapter):
         #print(str( os.path.join(os.path.dirname(os.path.abspath(__file__)), 'lib') ))
         self.pairing = False
         self.DEBUG = False
-        self.DEBUG2 = False # TODO: TEMPORARY EXTRA DEBUG INFO
+        self.DEBUG2 = False #False # TODO: TEMPORARY EXTRA DEBUG INFO
         self.DEV = False # not used anymore?
         self.addon_name = 'voco'
         self.name = self.__class__.__name__ # VocoAdapter
@@ -238,6 +238,8 @@ class VocoAdapter(Adapter):
         else:
             self.hardware_score = -100 # avoid 32 it systems
             
+        self.internal_ip = "0.0.0.0"
+            
         #print("self.manager_proxy = " + str(self.manager_proxy))
         #print("self.user_profile: " + str(self.user_profile))
 
@@ -246,7 +248,7 @@ class VocoAdapter(Adapter):
         
 
         #self.snips_fifo_path_file_object = None # receives stderr lines from snips subprocesses
-        print("\nos.environ: ", str(os.environ))
+        #print("\nos.environ: ", str(os.environ))
         
         #self.lock = threading.Lock() # Not currently used, but can help threads print to stdout, for example.
 
@@ -393,7 +395,7 @@ class VocoAdapter(Adapter):
         
         # A chat between a curious user and an artificial intelligence assistant. The assistant gives helpful, detailed, and polite answers to the user's questions. USER: {prompt} ASSISTANT:
         
-        self.controller_model = run_command("cat /proc/device-tree/model")
+        self.controller_model = str(run_command("cat /proc/device-tree/model")).strip()
         #print("self.controller_model: " + str(self.controller_model))
         self.controller_pi_version = 3
         if 'aspberry' in self.controller_model:
@@ -487,8 +489,8 @@ class VocoAdapter(Adapter):
         except:
             pass
         # Get initial audio_output options
-        self.audio_controls = get_audio_controls(True) # True = debug enabled
-        print("audio controls: " + str(self.audio_controls))
+        self.audio_controls = get_audio_controls(False) # True = debug enabled
+        #print("audio controls: " + str(self.audio_controls))
 
         
         # Make the data dir if it's missing
@@ -623,27 +625,27 @@ class VocoAdapter(Adapter):
             
             if 'site_id' not in self.persistent_data:
                 random_site_id = generate_random_string(8)
-                print("site_id was not in persistent data, adding random one now: " + str(random_site_id))
+                #print("site_id was not in persistent data, adding random one now: " + str(random_site_id))
                 self.persistent_data['site_id'] = str(random_site_id)
                 self.save_to_persistent_data = True
             
             if 'listening' not in self.persistent_data:
-                print("listening was not in persistent data, adding it now.")
+                #print("listening was not in persistent data, adding it now.")
                 self.persistent_data['listening'] = True
                 self.save_to_persistent_data = True
             
             if 'feedback_sounds' not in self.persistent_data:
-                print("lfeedback_sounds was not in persistent data, adding it now.")
+                #print("lfeedback_sounds was not in persistent data, adding it now.")
                 self.persistent_data['feedback_sounds'] = True
                 self.save_to_persistent_data = True
                 
             if 'assistant' not in self.persistent_data:
-                print("assistant was not in persistent data, adding it now.")
+                #print("assistant was not in persistent data, adding it now.")
                 self.persistent_data['assistant'] = True
                 self.save_to_persistent_data = True
             
             if 'action_times' not in self.persistent_data:
-                print("action_times was not in persistent data, adding it now.")
+                #print("action_times was not in persistent data, adding it now.")
                 self.persistent_data['action_times'] = []
                 self.save_to_persistent_data = True
 
@@ -662,7 +664,7 @@ class VocoAdapter(Adapter):
                 self.save_to_persistent_data = True
                 
             if 'mqtt_server' not in self.persistent_data:
-                print("action_times was not in persistent data, adding it now.")
+                #print("action_times was not in persistent data, adding it now.")
                 self.persistent_data['mqtt_server'] = '127.0.0.1'
                 self.save_to_persistent_data = True
             elif self.persistent_data['mqtt_server'] == 'localhost':
@@ -671,36 +673,36 @@ class VocoAdapter(Adapter):
 
 			
             if 'main_site_id' not in self.persistent_data: # to remember what the main voco server is, for satellites.
-                print("main_site_id was not in persistent data, adding it now.")
+                #print("main_site_id was not in persistent data, adding it now.")
                 self.persistent_data['main_site_id'] = self.persistent_data['site_id']
                 self.save_to_persistent_data = True
                 
             if 'main_controller_hostname' not in self.persistent_data: # to remember what the main voco server is, for satellites.
-                print("main_controller_hostname was not in persistent data, adding it now.")
+                #print("main_controller_hostname was not in persistent data, adding it now.")
                 self.persistent_data['main_controller_hostname'] = self.hostname
                 self.save_to_persistent_data = True
                 
             if 'main_controller_ip' not in self.persistent_data: # to remember what the main voco server is, for satellites. Now used to send audio to STT server
-                print("main_controller_ip was not in persistent data, adding it now.")
+                #print("main_controller_ip was not in persistent data, adding it now.")
                 self.persistent_data['main_controller_ip'] = '127.0.0.1'
             
             if 'satellite_thing_titles' not in self.persistent_data:
-                print("satellite_thing_titles was not in persistent data, adding it now.")
+                #print("satellite_thing_titles was not in persistent data, adding it now.")
                 self.persistent_data['satellite_thing_titles'] = {} # a dictionary with per-satellite lists of thing titles received from those satellites
                 self.save_to_persistent_data = True
                 
             if 'local_thing_titles' not in self.persistent_data: # the previously known thing titles in the entire local network (including satellites)
-                print("local_thing_titles was not in persistent data, adding it now.")
+                #print("local_thing_titles was not in persistent data, adding it now.")
                 self.persistent_data['local_thing_titles'] = []
                 self.save_to_persistent_data = True
                 
             if 'all_thing_titles' not in self.persistent_data: # the previously known thing titles in the entire local network (including satellites)
-                print("all_thing_titles was not in persistent data, adding it now.")
+                #print("all_thing_titles was not in persistent data, adding it now.")
                 self.persistent_data['all_thing_titles'] = []
                 self.save_to_persistent_data = True
             
             if 'microphone_gain' not in self.persistent_data: # the previously known thing titles in the entire local network (including satellites)
-                print("microphone_gain was not in persistent data, adding it now.")
+                #print("microphone_gain was not in persistent data, adding it now.")
                 self.persistent_data['microphone_gain'] = 80
                 self.save_to_persistent_data = True
             
@@ -724,7 +726,7 @@ class VocoAdapter(Adapter):
             
         if str(self.persistent_data['llm_tts_model']) != 'voco':
             self.llm_tts_enabled = True
-        
+
         if str(self.persistent_data['llm_assistant_model']) != 'voco':
             self.llm_assistant_enabled = True
         
@@ -903,6 +905,8 @@ class VocoAdapter(Adapter):
         self.mqtt_client = None
         self.mqtt_port = 1885
         self.mqtt_connected = False
+        self.recent_first_mqtt_error_count = 0
+        self.recent_second_mqtt_error_count = 0
         
         self.voco_connected = True
         self.mqtt_others = {}
@@ -994,8 +998,12 @@ class VocoAdapter(Adapter):
         self.data_dir_path = os.path.join(self.user_profile['dataDir'], self.addon_name)
         self.llm_data_dir_path = os.path.join(self.data_dir_path, 'llm')
         
+        self.kitten_tts_download_folder = os.path.join(self.llm_data_dir_path,'tts','kittentts')
+        if not os.path.exists(self.kitten_tts_download_folder):
+            os.system('mkdir -p ' + str(self.kitten_tts_download_folder))
         
         self.snips_fifo_path = os.path.join(self.data_dir_path, 'snips_fifo')
+        
         
         #if os.path.exists(str(self.snips_fifo_path)):
         #    os.system('rm ' + str(self.snips_fifo_path))
@@ -1240,10 +1248,10 @@ class VocoAdapter(Adapter):
         # Pre-scan ALSA
         try:
             self.capture_devices = self.scan_alsa('capture')
-            print("Possible audio capture devices: " + str(self.capture_devices))
+            #print("Possible audio capture devices: " + str(self.capture_devices))
             
         except Exception as ex:
-            print("Error scanning ALSA (audio devices): " + str(ex))
+            print("caught error scanning ALSA (audio devices): " + str(ex))
         
         
         # Get token from persistent data. A config setting would then still override it.
@@ -1354,23 +1362,23 @@ class VocoAdapter(Adapter):
                                 'downloaded':True
                             },
                             
-            'Bruno':{'model':'KittenTTS_bruno',
-                                'size':400,
+            'Bruno':{'model':'KittenTTS_Bruno',
+                                'size':80,
                                 'description':'A bass-heavy male voice',
                                 'model_url':''
                             },
-            'Jasper':{'model':'KittenTTS_jasper',
-                                'size':400,
+            'Jasper':{'model':'KittenTTS_Jasper',
+                                'size':80,
                                 'description':'An male voice',
                                 'model_url':''
                             },
-            'Luna':{'model':'KittenTTS_luna',
-                                'size':400,
+            'Luna':{'model':'KittenTTS_Luna',
+                                'size':80,
                                 'description':'A female voice',
                                 'model_url':''
                             },
-            'Rosie':{'model':'KittenTTS_rosie',
-                                'size':400,
+            'Rosie':{'model':'KittenTTS_Rosie',
+                                'size':80,
                                 'description':'A slow speaking female voice',
                                 'model_url':''
                             },
@@ -1856,12 +1864,13 @@ class VocoAdapter(Adapter):
         
         else:
             if self.microphone == 'Auto':
-                print("microphone: auto: selected last device in this list: " + str(self.capture_devices))
+                #print("microphone: auto: selected last device in this list: " + str(self.capture_devices))
                 self.microphone = self.capture_devices[ len(self.capture_devices) - 1 ] # select the last microphone from the list, which will match the initial record card ID and record device ID that scan_alsa has extracted earlier.
                 if self.DEBUG:
                     print("Microphone was auto-detected. Set to: " + str(self.microphone))
             else:
-                print("Microphone is not set to auto")
+                if self.DEBUG:
+                    print("Microphone is not set to auto")
 
         if not self.microphone in self.capture_devices:
             if self.DEBUG:
@@ -1875,31 +1884,38 @@ class VocoAdapter(Adapter):
                 pass
                 
             elif self.microphone == "Built-in microphone (0,0)":
-                print("Setting audio input to built-in (0,0)")
+                if self.DEBUG:
+                    print("Setting audio input to built-in (0,0)")
                 self.capture_card_id = 0
                 self.capture_device_id = 0
             elif self.microphone == "Attached device (1,0)":
-                print("Setting audio input to attached device (1,0)")
+                if self.DEBUG:
+                    print("Setting audio input to attached device (1,0)")
                 self.capture_card_id = 1
                 self.capture_device_id = 0
             elif self.microphone == "Attached device, channel 2 (1,1)":
-                print("Setting audio input to attached device, channel 2 (1,1)")
+                if self.DEBUG:
+                    print("Setting audio input to attached device, channel 2 (1,1)")
                 self.capture_card_id = 1
                 self.capture_device_id = 1
             elif self.microphone == "Second attached device (2,0)":
-                print("Setting audio input to second attached device (2,0)")
+                if self.DEBUG:
+                    print("Setting audio input to second attached device (2,0)")
                 self.capture_card_id = 2
                 self.capture_device_id = 0
             elif self.microphone == "Second attached device, channel 2 (2,1)":
-                print("Setting audio input to second attached device, channel 2 (2,1)")
+                if self.DEBUG:
+                    print("Setting audio input to second attached device, channel 2 (2,1)")
                 self.capture_card_id = 2
                 self.capture_device_id = 1
             elif self.microphone == "Third attached device (3,0)":
-                print("Setting audio input to third attached device (3,0)")
+                if self.DEBUG:
+                    print("Setting audio input to third attached device (3,0)")
                 self.capture_card_id = 3
                 self.capture_device_id = 0
             elif self.microphone == "Third attached device, channel 2 (3,1)":
-                print("Setting audio input to third attached device, channel 2 (3,1)")
+                if self.DEBUG:
+                    print("Setting audio input to third attached device, channel 2 (3,1)")
                 self.capture_card_id = 3
                 self.capture_device_id = 1
 
@@ -2116,6 +2132,14 @@ class VocoAdapter(Adapter):
                 print("caught error starting the read_external_processes thread: ", ex)
             
         
+        if str(self.persistent_data['llm_tts_model']).startswith('KittenTTS') and self.kitten_tts_instance == None:
+            if self.DEBUG:
+                print("pre-loading Kitten TTS during main init")
+            from kittentts import KittenTTS
+            self.kitten_tts_instance = KittenTTS("KittenML/kitten-tts-mini-0.8", self.kitten_tts_download_folder)
+            self.kitten_tts_generate('Hello','/tmp/kitten_hi.wav')
+        
+        
         
         
         #self.save_persistent_data()
@@ -2250,7 +2274,7 @@ class VocoAdapter(Adapter):
         
         if self.DEBUG:
             if found_audio_control == False:
-                print("ERROR, update_speaker_variables did not find target audio_output: " + str(self.persistent_data['audio_output']) + ", in: " + str(self.audio_controls))
+                print("\nERROR, update_speaker_variables did not find target audio_output: " + str(self.persistent_data['audio_output']) + ", in: " + str(self.audio_controls))
             print("speaker variable self.current_control_name is now: " + str(self.current_control_name ))
 
 
@@ -2394,7 +2418,7 @@ class VocoAdapter(Adapter):
                 """
                 
             if 'Speaker' in config:
-                print("-Speaker is present in the config data: " + str(config['Speaker']))
+                #print("-Speaker is present in the config data: " + str(config['Speaker']))
                 if str(config['Speaker']) != '':
                     self.speaker = str(config['Speaker'])               # If the prefered device in config also exists in hardware, then select it.
 
@@ -3115,7 +3139,10 @@ class VocoAdapter(Adapter):
         if self.DEBUG:
             print("in llm_speak. Generating voice via LLM: " + str(voice_message))
             print("self.llm_tts_model: " + str(self.llm_models['tts']['active']))
-        if self.llm_models['tts']['active'] == None or not os.path.exists(str(self.llm_models['tts']['active'])):
+            
+        if str(self.persistent_data['llm_tts_model'].startswith('KittenTTS')) and self.llm_models['tts']['active'] != None:
+            pass
+        elif self.llm_models['tts']['active'] == None or not os.path.exists(str(self.llm_models['tts']['active'])):
             if self.DEBUG:
                 print("aborting llm_speak and falling back to normal speak, self.llm_models['tts']['active'] was None or the model file did not exist.")
                 print(" - self.llm_models['tts']['active']: " + str(self.llm_models['tts']['active']))
@@ -3151,6 +3178,7 @@ class VocoAdapter(Adapter):
             #if self.DEBUG:
             #    print("tts_command: " + str(tts_command))
             
+            
             if self.use_audio_cache and voice_message.strip() in self.llm_tts_common_responses:
                 potential_cached_name = clean_up_filename_string(voice_message.strip())
                 if self.DEBUG:
@@ -3159,11 +3187,13 @@ class VocoAdapter(Adapter):
                 cached_response_file_path = os.path.join(self.llm_tts_cache_dir_path,potential_cached_name + '.wav')
                 if not os.path.exists(cached_response_file_path):
                     
+                    
                     # generate commonly spoken sentence using KittenTTS
-                    if self.kitten_tts_instance != None and str(self.llm_models['tts']['active']) in self.kitten_tts_voices:
+                    #if self.kitten_tts_instance != None and str(self.llm_models['tts']['active']) in self.kitten_tts_voices:
+                    if str(self.persistent_data['llm_tts_model'].startswith('KittenTTS')) and self.kitten_tts_instance != None:
                         if self.DEBUG:
-                            print("Attempting to create cached TTS response using KittenTTS: " + str(self.llm_models['tts']['active']))
-                        self.kitten_tts_generate(str(voice_message), str(cached_response_file_path), str(self.llm_models['tts']['active']))
+                            print("Attempting to create cached TTS response using KittenTTS: active: " + str(self.llm_models['tts']['active']))
+                        self.kitten_tts_generate(str(voice_message), str(cached_response_file_path), str(self.llm_models['tts']['active']).capitalize())
                         
                         
                     # generate commonly spoken sentence using Piper
@@ -3184,7 +3214,9 @@ class VocoAdapter(Adapter):
                         print("llm_speak: LLM TTS process needs to be (re)started first, as it doesn't seem to be running")
                     self.start_llm_tts()
                 
-                if self.kitten_tts_instance != None and str(self.llm_models['tts']['active']) in self.kitten_tts_voices:
+                if self.DEBUG:
+                    print("kitten voice? str(self.llm_models['tts']['active']).capitalize(): ", str(self.llm_models['tts']['active']).capitalize())
+                if self.kitten_tts_instance != None and str(self.llm_models['tts']['active']).capitalize() in self.kitten_tts_voices:
                     self.kitten_tts_generate(str(voice_message))
                     
                     if self.DEBUG:
@@ -3195,7 +3227,7 @@ class VocoAdapter(Adapter):
                     self.llm_stt_stopwatch = time.time()
                     
                     
-                elif self.llm_tts_process.poll() == None:
+                elif self.llm_tts_process and self.llm_tts_process.poll() == None:
                     if self.DEBUG:
                         print("llm_speak: LLM TTS Process is running")
                     json_voice_message = '{ "text": "' + str(voice_message).replace('"', '\\"') + '","volume_level":"' + str( int(self.persistent_data['speaker_volume'])/100) + '"}\n'
@@ -3215,6 +3247,23 @@ class VocoAdapter(Adapter):
                 else:
                     if self.DEBUG:
                         print("\nERROR, LLM TTS Process still isn't running properly\n")
+
+                        print("\n[...] falling back to NanoTTS")
+                    
+                    environment = os.environ.copy()
+                    nanotts_volume = int(self.persistent_data['speaker_volume']) / 100
+                    if self.DEBUG:
+                        print("nanotts_volume = " + str(nanotts_volume))
+                        
+                    # generate NanoTTS wave file
+                    self.echo_process = subprocess.Popen(('echo', str(voice_message)), stdout=subprocess.PIPE)
+                    nanotts_start_command_array = [self.nanotts_path,'-l',str(os.path.join(self.lang_path)),'-v',str(self.voice_accent),'--volume',str(nanotts_volume),'--speed',str(self.voice_speed),'--pitch',str(self.voice_pitch),'-w','-o',self.response_wav]
+                    self.nanotts_process = subprocess.run(nanotts_start_command_array, capture_output=True, stdin=self.echo_process.stdout, env=environment)
+                    if self.DEBUG:
+                        print("NanoTTS start command: ")
+                        print("export LD_LIBRARY_PATH=" + '{}:{}'.format(self.tts_path,self.arm_libs_path) + ";echo " + str(voice_message) + " | " + str( ' '.join(nanotts_start_command_array) ) + "\n")
+                
+                    self.play_wav(self.response_wav)
             
                 
         
@@ -3299,13 +3348,24 @@ class VocoAdapter(Adapter):
                     
             try:
                 
+                """
                 if self.llm_assistant_continue_conversations and self.llm_tts_started and self.kitten_tts_instance != None:
                     if self.DEBUG:
-                        print("speak_thread: continueing conversation while KittenTTS (TODO)")
+                        print("\nspeak_thread: continuing conversation while KittenTTS (TODO)")
+                    try:
+                        
+                        self.llm_tts_waiting_for_speaking_to_finish = True
+                        self.llm_tts_really_done_speaking_time = time.time() + 2
+                        
+                    except Exception as ex:
+                        if self.DEBUG:
+                            print("speak_thread: caught error calling kitten: " + str(ex))
                 
                 
+                el
+                """
                 
-                elif self.llm_assistant_continue_conversations and self.llm_tts_started and self.llm_tts_process != None and self.llm_tts_process.poll() == None and self.llm_tts_process.stdout != None:
+                if self.llm_assistant_continue_conversations and self.llm_tts_started and self.llm_tts_process != None and self.llm_tts_process.poll() == None and self.llm_tts_process.stdout != None:
                     try:
                     
                         #if self.DEBUG:
@@ -3732,7 +3792,7 @@ class VocoAdapter(Adapter):
         if self.pipewire_enabled:
             if self.DEBUG:
                 print("doing mute via pipewire (blocked)")
-            #run_command('wpctl set-volume @DEFAULT_AUDIO_SINK@ 0%')
+            run_command('wpctl set-volume @DEFAULT_AUDIO_SINK@ 0%')
             self.currently_muted = True
             
         elif str(self.current_control_name) != "" and str(self.persistent_data['audio_output']) != 'Bluetooth speaker':
@@ -3812,8 +3872,9 @@ class VocoAdapter(Adapter):
             
             if voice == None:
                 voice = str(self.llm_models['tts']['active'])
-                
-            if str(voice) in self.kitten_tts_voices:
+            
+            voice = str(voice).capitalize()
+            if voice in self.kitten_tts_voices:
                 audio = self.kitten_tts_instance.generate(sentence, voice=voice )
                 
                 if isinstance(filename,str):
@@ -3981,7 +4042,7 @@ class VocoAdapter(Adapter):
             else:
                 snips_check_output = ''
             
-            local_mqtt_ip = "127.0.0.1:" + str(self.mqtt_port) # TODO: "127.0.0.1" is hardcoded here    
+            local_mqtt_ip = str(self.internal_ip) + ":" + str(self.mqtt_port)
             if self.DEBUG:
                 print("\n\nlocal_mqtt_ip: " + str(local_mqtt_ip))
             
@@ -4029,6 +4090,9 @@ class VocoAdapter(Adapter):
                 
                 command = [bin_path,"-u",self.work_path,"-a",self.assistant_path,"-c",self.toml_path]
                 
+                
+                if os.path.isdir('/home/pi/.webthings/ssl'):
+                    command = command + ["--mqtt-tls-capath","/home/pi/.webthings/ssl"]
                 
                 
                 if self.disable_security == False:
@@ -4081,7 +4145,8 @@ class VocoAdapter(Adapter):
                             
                 if unique_command == 'snips-hotword' or unique_command == 'snips-satellite':
                     #if self.hey_candle:
-                    command = command + ["-t",str(self.wakeword_sensitivity),"--hotword-id",str(self.persistent_data['site_id']) ] #,"--model",self.hey_candle_path + "=.5" ]
+                    command = command + ["-t",str(self.wakeword_sensitivity)] #,"--model",self.hey_candle_path + "=.5" ]
+                    command = command + ["--hotword-id",str(self.persistent_data['site_id'])]
                     #command = command + ["--mqtt",mqtt_ip]
                     #command = command + ["--mqtt",mqtt_ip]
                     #command = command + ["--audio",str(self.persistent_data['site_id']) + "127.0.0.1:" + str(self.mqtt_port)]
@@ -4097,14 +4162,30 @@ class VocoAdapter(Adapter):
                 
                 elif unique_command == 'snips-dialogue':
                     command = command + ["--session-timeout","10"]
+                    #command = command + ["--hotword-coalescing-duration","1"]
+                    #command = command + ["--site-group","1"] # which site-ID's should coalesce their hotwords
+                    
+                    if 'satellite_thing_titles' in self.persistent_data:
+                        known_satellites = list(self.persistent_data['satellite_thing_titles'].keys())
+                        if len(known_satellites):
+                            if not str(self.persistent_data['site_id']) in known_satellites:
+                                known_satellites.append(str(self.persistent_data['site_id']))
+                            if len(known_satellites) > 1:
+                                site_group = ",".join(known_satellites)
+                                if self.DEBUG:
+                                    print("adding site-group to dialogue for hotword coalescing: ", site_group)
+                                command = command + ["--site-group",site_group] # which site-ID's should coalesce their hotwords
+                            
+                    # --default-site-id
+                    
+                    
+                    
                    
                     
                 #    extra_dialogue_manager_command = command.copy()
                 #    extra_dialogue_manager_command = extra_dialogue_manager_command + ["--mqtt",mqtt_ip]
                 
-                if str(self.persistent_data['llm_wakeword_model']) == 'voco':
-                    if self.DEBUG:
-                        print("\n\nWARNING, NOT USING NEW WAKEWORD, IT IS SET TO VOCO\n\n")
+                
                     #self.intended_snips_proces_count = 7
                 #else:
                     #self.intended_snips_proces_count = 6
@@ -4119,8 +4200,10 @@ class VocoAdapter(Adapter):
                     continue
                     
                 elif unique_command == 'snips-hotword' and str(self.persistent_data['llm_wakeword_model']) != 'voco' and self.llm_wakeword_failed:
+                    if self.DEBUG:
+                        print("run_snips: falling back to snips-hotword as self.llm_wakeword_failed is True")
                     self.intended_snips_proces_count = 7
-                
+                    
                 
                 # Add IP and port
                 command = command + ["--mqtt",local_mqtt_ip]
@@ -4290,7 +4373,7 @@ class VocoAdapter(Adapter):
 
 
     def read_external_processes(self):
-        print("in read_external_processes")
+        #print("in read_external_processes")
         while not self.threads_must_stop.is_set():
             for p in self.external_processes:
                 if p.stderr:
@@ -4845,10 +4928,19 @@ class VocoAdapter(Adapter):
                         print("   self.periodic_voco_attempts: " + str(self.periodic_voco_attempts))
                         print("   self.intended_snips_proces_count: ", self.intended_snips_proces_count)
                         print("   running_snips_processes_count: ", running_snips_processes_count)
+                        print("   self.recent_first_mqtt_error_count: ", self.recent_first_mqtt_error_count)
+                        print("   self.recent_second_mqtt_error_count: ", self.recent_second_mqtt_error_count)
                         pass
                     
+                    if self.recent_first_mqtt_error_count > 2:
+                        if self.DEBUG:
+                            print("Many MQTT errors on the FIRST client in the last 15 seconds: ", self.recent_first_mqtt_error_count)
+                    if self.recent_second_mqtt_error_count > 2:
+                        if self.DEBUG:
+                            print("Many MQTT errors on the SECOND client in the last 15 seconds: ", self.recent_second_mqtt_error_count)
                     
-                    
+                    self.recent_first_mqtt_error_count = 0
+                    self.recent_second_mqtt_error_count = 0
                     
                     
                     if time.time() > self.llm_last_assistant_reponse_time + 120:
@@ -5666,29 +5758,33 @@ class VocoAdapter(Adapter):
             
         self.send_mqtt_ping(broadcast=True,ping_type='goodbye')
         
+        
+        # inform main server we're no longer up and running. We ask the main server to ignore our things.
+        if self.persistent_data['is_satellite']:
+            self.satellite_should_act_on_intent = False
+            self.send_mqtt_ping(broadcast=True)
+            
         self.running = False
         self.threads_must_stop.set()
         
         self.kill_llm()
-            
+        print("unload: beyond kill_llm")
+        
         if self.matrix_started:
             self.matrix_started = False
             if self.DEBUG:
                 print("should send message to Matrix that Voco is going offline")
             time.sleep(.5)
             
-        
-        
-        # inform main server we're no longer up and running. We ask the main server to ignore our things.
-        if self.persistent_data['is_satellite']:
-            self.satellite_should_act_on_intent = False
-            self.send_mqtt_ping(broadcast=True)
-        
         self.save_persistent_data()
+        
+        self.stop_snips()
+        print("unload: beyond stop_snips")
+        
         if self.mqtt_client != None:
             self.mqtt_client.disconnect() # disconnect
             self.mqtt_client.loop_stop()
-        self.stop_snips()
+        
         
         
             
@@ -6149,7 +6245,7 @@ class VocoAdapter(Adapter):
             if self.disable_security == False:
                 self.mqtt_second_client.username_pw_set(username=self.mqtt_username, password=self.mqtt_password)
             
-            self.mqtt_second_client.connect("127.0.0.1", int(self.mqtt_port), keepalive=60)
+            self.mqtt_second_client.connect('127.0.0.1', int(self.mqtt_port), keepalive=60)
             
             self.mqtt_second_client.loop_start()
             
@@ -6206,6 +6302,7 @@ class VocoAdapter(Adapter):
                 self.run_snips()
 
         else:
+            self.recent_second_mqtt_error_count += 1
             if self.DEBUG:
                 print("Error: on_second_connect: connection rc was not 0! It was: " + str(rc))
                 print("- NOT STARTING SNIPS!")
@@ -7009,9 +7106,9 @@ class VocoAdapter(Adapter):
         if self.persistent_data['is_satellite'] and str(self.persistent_data['mqtt_server']) == self.ip_address:
             if self.DEBUG:
                 print("Error, the MQTT server IP address was the device's own IP address. Because this is a satellite, this shouldn't be the case.")
-        elif self.persistent_data['is_satellite'] == False and str(self.persistent_data['mqtt_server']) != '127.0.0.1':
+        elif self.persistent_data['is_satellite'] == False and str(self.persistent_data['mqtt_server']) != '127.0.0.1' and str(self.persistent_data['mqtt_server']) != '0.0.0.0':
             if self.DEBUG:
-                print("Error, not a satellite, but mqtt_server was not 127.0.0.1")
+                print("Error, not a satellite, but mqtt_server was not 127.0.0.1 / 0.0.0.0")
                 
         try:
             if self.DEBUG:
@@ -7091,8 +7188,8 @@ class VocoAdapter(Adapter):
                 #if self.should_restart_mqtt:
                     self.mqtt_busy_connecting = True
                     if self.DEBUG:
-                        print("This device is NOT a satellite, so MQTT client is connecting to 127.0.0.1:" + str(self.mqtt_port))
-                    self.mqtt_client.connect("127.0.0.1", int(self.mqtt_port), keepalive=60)
+                        print("This device is NOT a satellite, so MQTT client is connecting to: " + str(self.internal_ip) + ":" + str(self.mqtt_port))
+                    self.mqtt_client.connect(str(self.internal_ip), int(self.mqtt_port), keepalive=60)
                 else:
                     print("MQTT is already connected or busy connecting.")
             
@@ -7165,6 +7262,7 @@ class VocoAdapter(Adapter):
                 
             
         elif rc != 0:
+            self.recent_first_mqtt_error_count += 1
             if self.DEBUG:
                 print("In on_disconnect, and MQTT return code was NOT 0 - (disconnect error!). It was: " + str(rc))
                 print("self.mqtt_connected: " + str(self.mqtt_connected))
@@ -9768,6 +9866,9 @@ class VocoAdapter(Adapter):
                                         else:
                                             if len(str(property_string_name)) > 3 and property_string_name.isupper():
                                                 property_string_name = property_string_name.lower()
+                                                if self.DEBUG:
+                                                    print("property_string_name should now be lower-case: ", property_title)
+                                            #print("property_string_name not too difficult to pronounce?: ", property_string_name)
                                             fresh_property_strings.add(clean_up_thing_string(property_string_name))
                                             
                         if 'title' in thing['properties'][thing_property_key]:
@@ -9780,10 +9881,12 @@ class VocoAdapter(Adapter):
                                             print("skipping property_title that is too difficult to pronounce: " + str(property_title))
                                     elif " " in property_title and any(char.isdigit() for char in property_title) and not property_title[-1].isdigit():
                                         if self.DEBUG2:
-                                            print("skipping property_title with both a space and a number in it (that is not the last character): " + str(property_title))
+                                            print("skipping property_title with both a space and a number in it (and the number is not the last character): " + str(property_title))
                                     else:
                                         if len(str(property_title)) > 3 and property_title.isupper():
-                                            property_titlee = property_title.lower()
+                                            property_title = property_title.lower()
+                                            if self.DEBUG:
+                                                print("property_title should now be lower-case: ", property_title)
                                         fresh_property_titles.add(property_title)
                         
                 # Add things from satellites (if this is not itself a satellite)
@@ -9792,6 +9895,9 @@ class VocoAdapter(Adapter):
                 
                 # keep a copy of the local-only thing titles list
                 local_thing_titles_list = full_thing_titles_list.copy()
+
+                if self.DEBUG:
+                    print("fresh_property_titles: " + str(fresh_property_titles))
 
                 #satellites_thing_titles = [] # holds a list of only the titles of things on satellites. Used later to create a full list of local + satellite things
                 
@@ -9802,8 +9908,21 @@ class VocoAdapter(Adapter):
                     for sat_thing_title in self.persistent_data['satellite_thing_titles'][sat]:
                         #if self.DEBUG:
                         #    print("-- " + str(sat_thing_title))
-                        full_thing_titles_list.append(sat_thing_title) # this will contain any new local thing titles too
-                        #satellites_thing_titles.append(sat_thing_title) # this will contain any new satellite thing titles too
+                        if not sat_thing_title in full_thing_titles_list:
+                            if too_difficult_to_pronounce(sat_thing_title):
+                                if self.DEBUG2:
+                                    print("skipping sat_thing_title that is too difficult to pronounce: " + str(sat_thing_title))
+                            elif " " in sat_thing_title and any(char.isdigit() for char in sat_thing_title) and not sat_thing_title[-1].isdigit():
+                                if self.DEBUG2:
+                                    print("skipping property_title with both a space and a number in it (and the number is not the last character): " + str(property_title))
+                            else:
+                                if len(str(sat_thing_title)) > 3 and sat_thing_title.isupper():
+                                    sat_thing_title = sat_thing_title.lower()
+                                    if self.DEBUG:
+                                        print("sat_thing_title should now be lower-case: ", sat_thing_title)
+                                
+                                full_thing_titles_list.append(sat_thing_title)
+                                
                     
                 #if self.DEBUG:
                 #    print("Inject: full_thing_titles_list: " + str(full_thing_titles_list))
@@ -9823,6 +9942,8 @@ class VocoAdapter(Adapter):
                     if len(thing_name) > 1:
                         #if self.DEBUG:
                         #    print(" thing title after cleaning:" + thing_name)
+                        if self.DEBUG:
+                            print("!!?? adding thing_name from full_thing_titles_list: ", thing_name)
                         fresh_thing_titles.add(thing_name)
                         #self.my_thing_title_list.append(thing_name)
                     
@@ -9955,6 +10076,15 @@ class VocoAdapter(Adapter):
                         if self.DEBUG:
                             print("TRUNCATING PROPERTY STRING INJECTION")
                         fresh_property_strings = set(['on','off'])
+                    
+                    try:
+                        for final_property_string in list(fresh_property_strings):
+                            if too_difficult_to_pronounce(final_property_string):
+                                if self.DEBUG:
+                                    print("ERROR, spotted final_property_string that was too difficult to pronounce: ", final_property_string)
+                                fresh_property_strings.remove(final_property_string)
+                    except Exception as ex:
+                        print("caught error pruning fresh_property_strings that are too difficult to pronounce: ", ex)
                     
                     
                     operation = ('addFromVanilla',{"string" : list(fresh_property_strings) })
@@ -12359,6 +12489,18 @@ class VocoAdapter(Adapter):
                         if self.DEBUG:
                             print(key + " uses voco only")
                         self.llm_models[key]['active'] = None
+                        
+                    elif str(self.persistent_data[persistent_key]).startswith('KittenTTS'):
+                        if self.DEBUG:
+                            print(key + " uses KittenTTS")
+                        self.llm_tts_enabled = True
+                        self.llm_models[key]['active'] = str(self.persistent_data[persistent_key]).replace('KittenTTS_','').capitalize()
+                        if os.path.exists( os.path.join(self.kitten_tts_download_folder,'models--KittenML--kitten-tts-mini-0.8') ):
+                            self.llm_models[key]['list'][model_name]['downloaded'] = True
+                        #self.restart_llm_servers = True
+                        if self.DEBUG:
+                            print("DOWNLOAD MODELS: READY TO GO WITH KITTEN_TTS (hopefully)")
+                        
                     else:
                         if self.DEBUG:
                             print("download_llm_models: checking model: " + str(self.llm_models[key]['list'][model_name]['model']) + " =?= " + str(self.persistent_data[persistent_key]))
@@ -12366,31 +12508,38 @@ class VocoAdapter(Adapter):
                             if not os.path.exists(model_file_test_path):
                                 if self.DEBUG:
                                     print("Prefered LLM model has not been downloaded (yet): " + str(model_file_test_path))
-                                if self.free_disk_space > model_file_size and 'model_url' in self.llm_models[key]['list'][model_name] and self.llm_models[key]['list'][model_name]['model_url'].startswith('http'):
-                                    if self.DEBUG:
-                                        print("DOWNLOADING MODEL: " + str(model_file_test_path))
-                                    os.system('wget ' + str(self.llm_models[key]['list'][model_name]['model_url']) + ' -O ' + str(model_file_test_path))
-                                    if key == 'tts':
-                                        os.system('wget ' + str(self.llm_models[key]['list'][model_name]['model_url']) + '.json -O ' + str(model_file_test_path) + '.json')
-
-                                    #self['llm_' + key + '_model'] = model_file_test_path
-                                    if os.path.exists(model_file_test_path):
+                                if self.free_disk_space > model_file_size:
+                                    
+                                    if 'model_url' in self.llm_models[key]['list'][model_name] and str(self.llm_models[key]['list'][model_name]['model_url']).startswith('http'):
                                         if self.DEBUG:
-                                            print("MODEL FILE NOW EXISTS")
-                                        self.llm_models[key]['active'] = model_file_test_path
-                                        
+                                            print("DOWNLOADING MODEL: " + str(model_file_test_path))
+                                        os.system('wget ' + str(self.llm_models[key]['list'][model_name]['model_url']) + ' -O ' + str(model_file_test_path))
                                         if key == 'tts':
-                                            downloaded_tts_model = True
-                                        elif key == 'stt':
-                                            downloaded_stt_model = True
-                                        elif key == 'assistant':
-                                            downloaded_assistant_model = True
-                                            if 'protocol' in self.llm_models[key]['list'][model_name]:
-                                                self.llm_models[key]['protocol'] = str(self.llm_models[key]['list'][model_name]['protocol'])
-                                                if str(self.llm_models[key]['list'][model_name]['protocol']) in self.llm_assistant_protocols:
-                                                    self.llm_assistant_protocol = str(self.llm_models[key]['list'][model_name]['protocol'])
-                                                    if self.DEBUG:
-                                                        print("setting active LLM Assistant protocol to: " + str(self.llm_assistant_protocol))
+                                            os.system('wget ' + str(self.llm_models[key]['list'][model_name]['model_url']) + '.json -O ' + str(model_file_test_path) + '.json')
+
+                                        #self['llm_' + key + '_model'] = model_file_test_path
+                                        if os.path.exists(model_file_test_path):
+                                            if self.DEBUG:
+                                                print("MODEL FILE NOW EXISTS")
+                                            self.llm_models[key]['active'] = model_file_test_path
+                                        
+                                            if key == 'tts':
+                                                downloaded_tts_model = True
+                                            elif key == 'stt':
+                                                downloaded_stt_model = True
+                                            elif key == 'assistant':
+                                                downloaded_assistant_model = True
+                                                if 'protocol' in self.llm_models[key]['list'][model_name]:
+                                                    self.llm_models[key]['protocol'] = str(self.llm_models[key]['list'][model_name]['protocol'])
+                                                    if str(self.llm_models[key]['list'][model_name]['protocol']) in self.llm_assistant_protocols:
+                                                        self.llm_assistant_protocol = str(self.llm_models[key]['list'][model_name]['protocol'])
+                                                        if self.DEBUG:
+                                                            print("setting active LLM Assistant protocol to: " + str(self.llm_assistant_protocol))
+                                    
+                                    elif 'model_url' in self.llm_models[key]['list'][model_name] and str(self.llm_models[key]['list'][model_name]['model_url']) == '':
+                                        if self.DEBUG:
+                                            print("setting active model: ", key, model_name)
+                                        self.llm_models[key]['active'] = model_name
                                                     
                                 else:
                                     if self.DEBUG:
@@ -12416,6 +12565,11 @@ class VocoAdapter(Adapter):
 
                     if self.llm_models[key]['list'][model_name]['model'] == 'voco':
                         self.llm_models[key]['list'][model_name]['downloaded'] = True
+                    elif self.llm_models[key]['list'][model_name]['model'].startsWith('KittenTTS'):
+                        if os.path.exists( os.path.join(self.kitten_tts_download_folder,'models--KittenML--kitten-tts-mini-0.8') ):
+                            self.llm_models[key]['list'][model_name]['downloaded'] = True
+                        else:
+                            self.llm_models[key]['list'][model_name]['downloaded'] = False
                     else:
                         self.llm_models[key]['list'][model_name]['downloaded'] = bool(os.path.exists(model_file_test_path))
 
@@ -12446,7 +12600,11 @@ class VocoAdapter(Adapter):
 
     def start_llm_servers(self):
         if self.DEBUG:
-            print("in start_llm_servers thread")
+            print("\nin start_llm_servers thread")
+            print("self.llm_should_download   : ", self.llm_should_download)
+            print("self.llm_tts_enabled       : ", self.llm_tts_enabled)
+            print("self.llm_stt_enabled       : ", self.llm_stt_enabled)
+            print("self.llm_assistant_enabled : ", self.llm_assistant_enabled)
 
         if self.llm_enabled == False:
             if self.DEBUG:
@@ -12523,7 +12681,8 @@ class VocoAdapter(Adapter):
                 
                 try:
                     if self.llm_tts_enabled:
-                        if self.llm_tts_process == None or (self.llm_tts_process != None and self.llm_tts_process.poll() != None):
+                        #if self.llm_tts_process == None or (self.llm_tts_process != None and self.llm_tts_process.poll() != None):
+                        if (self.kitten_tts_instance == None and self.llm_tts_process == None) or (self.kitten_tts_instance == None and self.llm_tts_process != None and self.llm_tts_process.poll() != None):
                             if self.DEBUG2:
                                 print("\nLLM servers thread: TTS server doesn't seem to be running. Attempting restart\n")
                             self.llm_tts_started = False
@@ -12531,7 +12690,7 @@ class VocoAdapter(Adapter):
 
                     if self.llm_stt_enabled:
                         if self.llm_stt_process == None or (self.llm_stt_process != None and self.llm_stt_process.poll() != None):
-                            if self.DEBUG2:
+                            if self.DEBUG:
                                 print("\nLLM servers thread: STT server doesn't seem to be running. Attempting restart\n")
                             self.llm_stt_started = False
                             self.start_llm_stt_server()
@@ -12628,14 +12787,17 @@ class VocoAdapter(Adapter):
                     if self.DEBUG:
                         print("LLM TTS PROCESS SEEMS TO HAVE STOPPED PROPERLY")
                 self.llm_tts_process = None
-
+        else:
+            
+            if self.DEBUG and not str(self.persistent_data['llm_tts_model']).startswith('KittenTTS'):
+                print("\n\nstart_llm_tts: TTS PROCESS NOT YET RUNNING  \n\n")
         #os.system('pkill -f piper')
 
 
         self.last_tts_speaking_offset = 0
 
-        if self.llm_models['tts']['active'] == None:
-            if self.DEBUG2:
+        if self.llm_models['tts']['active'] == None and not str(self.persistent_data['llm_tts_model']).startswith('KittenTTS'):
+            if self.DEBUG:
                 print("\n\nstart_llm_tts: ERROR, tts active model was still None. Aborting start of STT server.\n\n")
             if self.kitten_tts_instance != None:
                 self.kitten_tts_instance = None
@@ -12663,26 +12825,44 @@ class VocoAdapter(Adapter):
             
             if self.free_memory > self.llm_tts_minimal_memory:
                 
+                if self.DEBUG:
+                    print("start_llm_tts: kitten? self.persistent_data['llm_tts_model']: ", self.persistent_data['llm_tts_model'])
                 
                 # use KittenTTS
-                if str(self.persistent_data['llm_tts_model']) == 'Bruno' or str(self.persistent_data['llm_tts_model']) == 'Jasper' or str(self.persistent_data['llm_tts_model']) == 'Luna' or str(self.persistent_data['llm_tts_model']) == 'Rosie':
+                if str(self.persistent_data['llm_tts_model']).startswith('KittenTTS'):
                     
                     if self.kitten_tts_instance == None:
                         if self.DEBUG:
-                            print("Loading KittenTTS into memory")
-                        from kittentts import KittenTTS
-                        import soundfile
-                        #self.soundfile_instance = 
-                        #sf.write(str(voice) + '-mini.wav', audio, 24000)
+                            print("start_llm_tts: loading KittenTTS into memory")
+                            
+                        if os.path.isfile('/tmp/kitten_hi.wav'):
+                            os.system('rm /tmp/kitten_hi.wav')
+                            
+                        try:
+                            from kittentts import KittenTTS
+                            
+                            #self.soundfile_instance = 
+                            #sf.write(str(voice) + '-mini.wav', audio, 24000)
                         
-                        self.kitten_tts_instance = KittenTTS("KittenML/kitten-tts-mini-0.8")
-                    
-                    
-                    if self.kitten_tts_instance != None:
+                            self.kitten_tts_instance = KittenTTS("KittenML/kitten-tts-mini-0.8", self.kitten_tts_download_folder)
+                            
+                            self.kitten_tts_generate('hi','/tmp/kitten_hi.wav')
+                        except Exception as ex:
+                            print("start_llm_tts: caught an error loading KittenTTS: ", ex)
+                        
+                    else:
                         if self.DEBUG:
-                            print("KittenTTS should now be loaded into memory")
-                        self.llm_tts_started = False
+                            print("start_llm_tts: kitten TTS instance already seems to exist")
                     
+                    
+                    if self.kitten_tts_instance != None and os.path.isfile('/tmp/kitten_hi.wav'):
+                        if self.DEBUG:
+                            print("start_llm_tts: KittenTTS should now be loaded into memory")
+                        self.llm_tts_started = True
+                        
+                    else:
+                        if self.DEBUG:
+                            print("\nstart_llm_tts: ERROR, failed to load KittenTTS, or kitten_hi.wav not generated")
                 
                 # use Piper
                 else:
@@ -13061,7 +13241,7 @@ class VocoAdapter(Adapter):
 
 
     def start_llm_stt_server(self):
-        if self.DEBUG2:
+        if self.DEBUG:
             print("in start_llm_stt_server")
 
         if self.llm_stt_process != None or (self.llm_stt_process != None and self.llm_stt_process.poll() == None):

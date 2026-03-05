@@ -320,6 +320,7 @@ def clean_up_thing_string(sentence):
         sentence = sentence.replace(',', ' ')
         sentence = sentence.replace('  ', ' ')
         
+        # remove IP addresses
         ips = re.findall(r'(?:\d{1,3}\.)+(?:\d{1,3})', sentence.rstrip())
         #print("ips: " + str(ips))
         if len(ips) > 0:
