@@ -14,3 +14,15 @@ pyaudio
 sounddevice
 soundfile
 numpy
+thinc==8.3.10
+num2words
+spacy==3.8.11
+spacy-curated-transformers
+phonemizer-fork
+espeakng-loader
+transformers
+onnxruntime
+soundfile
+huggingface_hub
+git+https://github.com/createcandle/misaki
+git+https://github.com/createcandle/KittenTTS
