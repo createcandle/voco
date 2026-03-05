@@ -186,7 +186,7 @@ else
   echo "Installing spacy & co"
   python3 -m pip install transformers -t lib --no-cache-dir --prefix ""
   python3 -m pip install blis -t lib --no-cache-dir --prefix ""
-  python3 -m pip install thinc -t lib --no-cache-dir --prefix ""
+  python3 -m pip install thinc==8.3.10  -t lib --no-cache-dir --prefix "" --upgrade
   python3 -m pip install curated-tokenizers -t lib --no-cache-dir --prefix ""
   python3 -m pip install spacy -t lib --no-cache-dir --prefix ""
   python3 -m pip install spacy-curated-transformers -t lib --no-cache-dir --prefix ""
