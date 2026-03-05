@@ -685,6 +685,7 @@ class VocoAdapter(Adapter):
             if 'main_controller_ip' not in self.persistent_data: # to remember what the main voco server is, for satellites. Now used to send audio to STT server
                 #print("main_controller_ip was not in persistent data, adding it now.")
                 self.persistent_data['main_controller_ip'] = '127.0.0.1'
+                self.save_to_persistent_data = True
             
             if 'satellite_thing_titles' not in self.persistent_data:
                 #print("satellite_thing_titles was not in persistent data, adding it now.")
@@ -717,16 +718,34 @@ class VocoAdapter(Adapter):
         except Exception as ex:
             print("Error adding variables to persistent data: " + str(ex))
             
+        if not 'llm_wakeword_model' in self.persistent_data:
+            self.persistent_data['llm_wakeword_model'] = 'voco'
+            self.save_to_persistent_data = True
         
         if str(self.persistent_data['llm_wakeword_model']) != 'voco':
             self.llm_wakeword_enabled = True
         
+        
+        if not 'llm_wakeword_model' in llm_stt_model:
+            self.persistent_data['llm_stt_model'] = 'voco'
+            self.save_to_persistent_data = True
+        
         if str(self.persistent_data['llm_stt_model']) != 'voco':
             self.llm_stt_enabled = True
+            
+            
+        if not 'llm_tts_model' in llm_stt_model:
+            self.persistent_data['llm_tts_model'] = 'voco'
+            self.save_to_persistent_data = True
             
         if str(self.persistent_data['llm_tts_model']) != 'voco':
             self.llm_tts_enabled = True
 
+
+        if not 'llm_assistant_model' in llm_stt_model:
+            self.persistent_data['llm_assistant_model'] = 'voco'
+            self.save_to_persistent_data = True
+            
         if str(self.persistent_data['llm_assistant_model']) != 'voco':
             self.llm_assistant_enabled = True
         
