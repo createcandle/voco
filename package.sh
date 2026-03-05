@@ -168,6 +168,8 @@ echo "PYTHONPATH=$PYTHONPATH"
 echo ""
 
 
+pip install -U pip setuptools wheel
+
 echo "install requirements"
 #/usr/bin/python"${PYTHON_VERSION}" -m pip install -r requirements.txt -t lib --no-cache-dir --prefix "" --default-timeout=180 --upgrade
 python3 -m pip install -r requirements.txt -t lib --no-cache-dir --prefix "" --default-timeout=180 --upgrade
