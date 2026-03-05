@@ -494,8 +494,8 @@ class VocoAdapter(Adapter):
 
         
         # Make the data dir if it's missing
-        data_dir_path = os.path.join(self.user_profile['dataDir'], self.addon_name)
-        if not os.path.isdir(data_dir_path):
+        self.data_dir_path = os.path.join(self.user_profile['dataDir'], self.addon_name)
+        if not os.path.isdir(self.data_dir_path):
             os.mkdir(self.data_dir_path)
         
         self.stderr_output_file = os.path.join(data_dir_path,'stderr.txt')
