@@ -83,7 +83,7 @@ body.developer .extension-voco-timer-item-owner:not(:empty):before{
     border-radius: 0.7rem;
     overflow: hidden;
     font-size: 0;
-    width: 80%;
+    width: 90%;
     max-width: 50rem;
     margin: 4rem auto 0 auto;
     display: flex;
@@ -154,6 +154,31 @@ body #extension-voco-view .extension-voco-tab-selected {
 .extension-voco-italic {
     font-style: italic;
 }
+
+
+.extension-voco-busy-updating{
+    opacity:.4;
+    /*background: linear-gradient(180deg, rgba(0,0,0,0), rgba(0,0,0,.8));*/
+    background:transparent;
+    background-size: 300% 300%!important;
+    background-image: linear-gradient(
+          -90deg, 
+          rgba(59,173,227,.5) 0%, 
+		  rgba(59,173,227,.5) 30%, 
+          rgba(87,111,230,.5) 50%, 
+          rgba(152,68,183,.5) 51%, 
+		  rgba(59,173,227,.5) 60%,
+          rgba(59,173,227,.5) 100%
+    )!important;
+    animation: extension-voco-bg-sweep-to-right 2s ease infinite;
+}
+
+@keyframes extension-voco-bg-sweep-to-right { 
+  0%{background-position:100% 50%}
+  100%{background-position:0% 50%}
+}
+
+
 
 
 #extension-voco-content-container {
@@ -915,6 +940,7 @@ body #extension-voco-view .extension-voco-tab-selected {
     border-radius: .5rem;
 }
 
+
 .extension-voco-warning {
     max-width: 60rem;
     margin: 2rem auto;
@@ -957,7 +983,24 @@ body #extension-voco-view .extension-voco-tab-selected {
 }
 
 
+/*  Injection levels  */
 
+#extension-voco-injection-learning-progress{
+	height:auto;
+	max-height:300px;
+	display:flex;
+	flex-direction:column;
+	max-width:40rem;
+}
+
+#extension-voco-injection-learning-progress > div{
+	display:flex;
+	justify-content:space-between;
+}
+
+.extension-voco-injection-learning-checkbox{
+	font-size:2rem;
+}
 
 
 
@@ -1679,6 +1722,10 @@ f #extension-voco-matrix-invite-management-output {
     }
 
     #extension-voco-server-list-toggle {}
+		
+	.extension-voco-tab-buttons{
+		width:80%;
+	}
 }
 
 

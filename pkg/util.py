@@ -1105,7 +1105,7 @@ def get_env():
     if not "XDG_RUNTIME_DIR" in my_env:
         user_index = run_command('id -u')
         if isinstance(user_index,str):
-            print("user_index: -->" + str(user_index) + "<--")
+            #print("user_index: -->" + str(user_index) + "<--")
             user_index = str(user_index).strip().rstrip()
             if user_index.isdigit():
                 my_env["XDG_RUNTIME_DIR"] = "/run/user/" + str(user_index)
@@ -1114,10 +1114,11 @@ def get_env():
         dbus_session_lines = run_command('cat /home/pi/.dbus/session-bus/* | grep -v ^# ')
         if isinstance(dbus_session_lines,str):
             for line in dbus_session_lines.splitlines():
-                print("DBUS line: -->" + str(line) + "<--" )
+                #print("DBUS line: -->" + str(line) + "<--" )
                 if '=' in line and line.startswith('DBUS_SESSION_BUS'):
                     dbus_value = re.escape(str(line.split('=', 1)[1]))
-                    print("dbus_value: -->" + str(dbus_value) + "<--")
-                    my_env[ str(line.split('=', 1)[0]).strip() ] = dbus_value.replace("\\'","\\\\'")
+                    #print("dbus_value: -->" + str(dbus_value) + "<--")
+                    dbus_value = dbus_value.replace("'","")
+                    my_env[ str(line.split('=', 1)[0]).strip() ] = dbus_value
                     
     return my_env

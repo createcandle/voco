@@ -31,9 +31,11 @@
             <div class="extension-voco-spinner">
                 <div></div><div></div><div></div><div></div>
             </div>
-            <p>Voco is still starting. This includes learning the names of all your devices. This should normally take no more than about 30 seconds, depending on how many things you have.</p>
+            <p>Voco is still starting. This includes learning the names of all your devices. This should normally take a few minutes, depending on how many things you have.</p>
         </div>
-        
+		
+		<div id="extension-voco-injection-learning-progress" class="extension-voco-vlak extension-voco-hidden"></div>
+
 		<div id="extension-voco-injection-failure" class="extension-voco-warning" style="display:none">
 			<p>Voco seems to have trouble learning the names of your devices. Please make sure all the names of your things can be spoken. Avoid using any characters outside of the Latin alphabet. For example, do not use  # ! ? % & ( ) / ; + = .</p>
 		</div>
@@ -66,6 +68,10 @@
 			<div id="extension-voco-text-input-container">
 				<textarea id="extension-voco-text-input-field" placeholder="What time is it?"></textarea>
 				<div id="extension-voco-text-input-buttons-container">
+					<select id="extension-voco-text-input-origin-type-select" class="extension-voco-show-if-developer">
+						<option value="text" selected>Text</option>
+						<option value="voice">Voice</option>
+					</select>
 					<button id="extension-voco-text-input-send-button" class="text-button">Send</button>
 					<button id="extension-voco-text-input-reset-button" class="text-button" title="Restart the AI assistant. It will forget what it has been talking about">Reset</button>
 					

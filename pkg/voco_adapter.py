@@ -716,6 +716,21 @@ class VocoAdapter(Adapter):
             print("Error adding variables to persistent data: " + str(ex))
             
         
+        if str(self.persistent_data['llm_wakeword_model']) != 'voco':
+            self.llm_wakeword_enabled = True
+        
+        if str(self.persistent_data['llm_stt_model']) != 'voco':
+            self.llm_stt_enabled = True
+            
+        if str(self.persistent_data['llm_tts_model']) != 'voco':
+            self.llm_tts_enabled = True
+        
+        if str(self.persistent_data['llm_assistant_model']) != 'voco':
+            self.llm_assistant_enabled = True
+        
+        
+        
+        
             
         # This is also used to guess opposite enum values (string properties with a set number of options, which are often shown as a dropdown)
         self.opposites = {
@@ -1340,20 +1355,22 @@ class VocoAdapter(Adapter):
                             },
                             
             'Bruno':{'model':'KittenTTS_bruno',
-                                'size':61,
+                                'size':400,
                                 'description':'A bass-heavy male voice',
                                 'model_url':''
                             },
             'Jasper':{'model':'KittenTTS_jasper',
-                                'size':61,
+                                'size':400,
                                 'description':'An male voice',
                                 'model_url':''
                             },
-            'Luna':{'model':'KittenTTS_Luna',
+            'Luna':{'model':'KittenTTS_luna',
+                                'size':400,
                                 'description':'A female voice',
                                 'model_url':''
                             },
             'Rosie':{'model':'KittenTTS_rosie',
+                                'size':400,
                                 'description':'A slow speaking female voice',
                                 'model_url':''
                             },
@@ -1717,9 +1734,9 @@ class VocoAdapter(Adapter):
         
         self.llm_models = { 
                             'wakeword': {'list':self.llm_wakeword_models,'active':self.persistent_data['llm_wakeword_model']},
-                            'tts': {'list':self.llm_tts_models,'active':None},
-                            'stt': {'list':self.llm_stt_models,'active':None},
-                            'assistant': {'list':self.llm_assistant_models,'active':None,}
+                            'tts': {'list':self.llm_tts_models,'active':self.persistent_data['llm_tts_model']},
+                            'stt': {'list':self.llm_stt_models,'active':self.persistent_data['llm_stt_model']},
+                            'assistant': {'list':self.llm_assistant_models,'active':self.persistent_data['llm_assistant_model']}
                         }
         
         
@@ -3612,11 +3629,27 @@ class VocoAdapter(Adapter):
     
                     # Choose between LLM speech generation and NanoTTS
                     
+                    if self.DEBUG:
+                        print("")
+                        print(". . . . . . . . . . . . . . . .")
+                        print("self.llm_enabled: ", self.llm_enabled)
+                        print("self.llm_tts_enabled: ", self.llm_tts_enabled)
+                        print("self.llm_tts_started: ", self.llm_tts_started)
+                        print("self.llm_models['tts']['active']: ", self.llm_models['tts']['active'])
+                        print("os.path.exists(self.llm_models['tts']['active']): ",  os.path.exists(str(self.llm_models['tts']['active'])))
+                        print("self.persistent_data['llm_tts_model']: ", self.persistent_data['llm_tts_model']) 
+                        print("model starts with KittenTTS? ", str(self.persistent_data['llm_tts_model'].startswith('KittenTTS')))
+                        
+                    if self.llm_enabled and self.llm_tts_enabled == True and isinstance(self.persistent_data['llm_tts_model'],str) and str(self.persistent_data['llm_tts_model']).startswith('KittenTTS') and self.llm_tts_started == False:
+                        if self.DEBUG:
+                            print("need to start KittenTTS first")
+                        self.start_llm_tts()
+                        
                     if (self.llm_enabled 
                             and self.llm_tts_enabled 
                             and self.llm_tts_started
                             and self.llm_models['tts']['active'] != None 
-                            and os.path.exists(self.llm_models['tts']['active']) 
+                            and ( str(self.persistent_data['llm_tts_model']).startswith('KittenTTS') or os.path.exists(self.llm_models['tts']['active']) )
                             and self.persistent_data['llm_tts_model'] != 'voco' 
                             ):
                             
@@ -5071,8 +5104,9 @@ class VocoAdapter(Adapter):
                                     if 'siteId' in item['intent_message']:
                                         
                                         if str(item['intent_message']['siteId']) == self.persistent_data['site_id']:
-                                            if self.DEBUG:
-                                                print("clock: timer item is owned by this controller")
+                                            #if self.DEBUG:
+                                            #    print("clock: timer item is owned by this controller")
+                                            pass
                                         else:
                                             if self.DEBUG:
                                                 print("clock: timer item is owned by another controller (a.k.a. cosmetic; only in the list for show)")
@@ -11602,7 +11636,7 @@ class VocoAdapter(Adapter):
             if self.DEBUG:
                 print("parse_text: local command")
                 
-            if origin == 'text' or origin == 'matrix' or origin == 'llm_stt':
+            if origin == 'text' or origin == 'matrix' or origin == 'llm_stt' or origin == 'voice':
                 self.parse_payload_transfer = {'siteId':str(self.persistent_data['site_id']),'origin':origin}
                 self.query_intent(self.last_text_command, {'siteId':str(self.persistent_data['site_id']),'origin':origin})
             
@@ -11901,8 +11935,8 @@ class VocoAdapter(Adapter):
     
     
     def is_snips_running_count(self):
-        if self.DEBUG:
-            print("In is_snips_running_count")
+        #if self.DEBUG:
+        #    print("In is_snips_running_count")
         
         
         if self.busy_starting_snips:
@@ -11911,38 +11945,48 @@ class VocoAdapter(Adapter):
             return self.intended_snips_proces_count
         
  
-        if self.DEBUG:
-            print("len(self.external_processes) before: ", len(self.external_processes))
+        #if self.DEBUG:
+        #    print("len(self.external_processes) before: ", len(self.external_processes))
             
-        def subprocess_has_died(existing_process):
-            if self.DEBUG:
-                print("existing_process: ", existing_process)
+        def subprocess_has_died(existing_process, debugging=False):
+            #if self.DEBUG:
+            #    print("existing_process: ", existing_process)
+            
+            
+            try:
+                if existing_process.stderr:
+                    stderr_output = existing_process.stderr.read()
+                    if debugging:
+                        print(f"Std ERR: {stderr_output}")
+                
+                if existing_process.stdout:
+                    stdout_output = existing_process.stdout.read()
+                    if debugging:
+                        print(f"Std OUT: {stdout_output}")
+            except Exception as ex:
+                if debugging:
+                    print("caught error getting stderr/stdout from subprocess: ", ex)
+            
+            
             dead_check = existing_process.poll()
             if dead_check is None:
-                print("subprocess is alive")
+                #print("subprocess is alive")
                 return False
             else:
-                print("SUBPROCESS SEEMS DEAD")
-                try:
-                    if existing_process.stderr:
-                        stderr_output = existing_process.stderr.read()
-                        print(f"Std ERR: {stderr_output}")
-                    
-                    if existing_process.stdout:
-                        stdout_output = existing_process.stdout.read()
-                        print(f"Std OUT: {stdout_output}")
-                except Exception as ex:
-                    print("caufght error getting stderr/stdout from dead subprocess: ", er)
+                if debugging:
+                    print("SUBPROCESS SEEMS DEAD")
+            
+            
                 
                 
                 #print(dir(existing_process))
             return True
             
         
-        self.external_processes = [x for x in self.external_processes if not subprocess_has_died(x)]
+        self.external_processes = [x for x in self.external_processes if not subprocess_has_died(x,self.DEBUG)]
         
-        if self.DEBUG:
-            print("len(self.external_processes) after: ", len(self.external_processes))
+        #if self.DEBUG:
+        #    print("len(self.external_processes) after: ", len(self.external_processes))
         
         snips_actual_processes_count = 0
         snips_defunct_count = 0
@@ -11973,10 +12017,10 @@ class VocoAdapter(Adapter):
         """
                     
         try:
-            if self.DEBUG:
-                print(" -- is_snips_running_count: snips_defunct_count: " + str(snips_defunct_count))
-                print(" -- is_snips_running_count: sub processes count: " + str(len(self.external_processes)))
-                print(" -- is_snips_running_count: snips_actual_processes_count = " + str(snips_actual_processes_count))
+            #if self.DEBUG:
+            #    print(" -- is_snips_running_count: snips_defunct_count: " + str(snips_defunct_count))
+            #    print(" -- is_snips_running_count: sub processes count: " + str(len(self.external_processes)))
+            #    print(" -- is_snips_running_count: snips_actual_processes_count = " + str(snips_actual_processes_count))
         
         
             if snips_actual_processes_count != 0 and snips_actual_processes_count != self.intended_snips_proces_count:
@@ -12010,7 +12054,8 @@ class VocoAdapter(Adapter):
                 self.close_proxy() #restart the addon
 
         except Exception as ex:
-            print("Error in is_snips_running_count: " + str(ex))
+            if self.DEBUG:
+                print("caught error in is_snips_running_count: " + str(ex))
             
         #return bool(len(self.external_processes))
         return snips_actual_processes_count

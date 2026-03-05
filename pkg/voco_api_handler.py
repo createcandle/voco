@@ -399,9 +399,11 @@ class VocoAPIHandler(APIHandler):
                                     
                                     if 'llm_tts_model' in request.body:
                                         if self.DEBUG:
-                                            print("set_llm: TTS")
+                                            print("set_llm: TTS:  ", self.adapter.persistent_data['llm_tts_model'], " -> ", str(request.body['llm_tts_model']))
                                         if self.adapter.persistent_data['llm_tts_model'] != str(request.body['llm_tts_model']):
                                             self.adapter.persistent_data['llm_tts_model'] = str(request.body['llm_tts_model'])
+                                            if self.DEBUG:
+                                                print("self.adapter.persistent_data['llm_tts_model'] is now: ", self.adapter.persistent_data['llm_tts_model'])
                                             self.adapter.llm_should_download = True
                                             self.adapter.clear_llm_tts_cache()
                                             #self.adapter.download_llm_models()
@@ -676,8 +678,8 @@ class VocoAPIHandler(APIHandler):
                                 if self.adapter.matrix_busy_registering == False:
                                     if 'refresh_matrix_members' in request.body:
                                         if bool(request.body['refresh_matrix_members']) == True:
-                                            if self.DEBUG:
-                                                print("poll has asked for a periodic refresh of the matrix members list")
+                                            #if self.DEBUG:
+                                            #    print("poll has asked for a periodic refresh of the matrix members list")
                                             self.adapter.refresh_matrix_members = True
                                             
                                 # get generated text
@@ -781,7 +783,8 @@ class VocoAPIHandler(APIHandler):
                                                         'llm_tts_started': self.adapter.llm_tts_started,
                                                         'llm_stt_started': self.adapter.llm_stt_started,
                                                         'llm_wakeword_started': self.adapter.llm_wakeword_started,
-                                                        'llm_assistant_started': self.adapter.llm_assistant_started
+                                                        'llm_assistant_started': self.adapter.llm_assistant_started,
+                                                        'injection_level':self.adapter.injection_level
                                                         })
                                 )
                                 
@@ -816,7 +819,8 @@ class VocoAPIHandler(APIHandler):
                                     print("handling /parse. Incoming text: " + str(request.body['text']))
                                 self.adapter.last_text_response = [];
                                 self.adapter.last_text_command = str(request.body['text'])
-                                self.adapter.parse_text(site_id=self.adapter.persistent_data['site_id'],origin="text")
+                                origin_type = str(request.body['origin_type'])
+                                self.adapter.parse_text(site_id=self.adapter.persistent_data['site_id'],origin=origin_type) # "text")
                                 return APIResponse(
                                     status=200,
                                     content_type='application/json',

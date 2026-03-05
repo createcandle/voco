@@ -45,6 +45,8 @@
 			this.llm_assistant_started = false;
 			this.previous_info_to_show = '';
 
+			this.previous_injection_level = null;
+
 			this.slow_device = false; // Pi 3 or Pi 4 is considered slow
 			this.controller_speed = 3;
 			this.device_total_memory = 500; // How much memory the device has
@@ -1645,6 +1647,64 @@
 							content_container_el.classList.remove('extension-voco-assistant-running');
 						}
 					}
+					
+					
+					if(typeof body['injection_level'] == 'number' && body['injection_level'] != this.previous_injection_level){
+						
+						
+						const injection_progress_el = this.view.querySelector('#extension-voco-injection-learning-progress');
+						if(injection_progress_el){
+							
+							if( body['injection_level'] == 3 && injection_progress_el.innerHTML == ''){
+								// do nothing
+								injection_progress_el.classList.add('extension-voco-hidden');
+							}
+							else{
+								injection_progress_el.classList.remove('extension-voco-hidden');
+								if(body['injection_level'] == 3){
+									injection_progress_el.innerHTML = '<h3>Learning complete</h3>';
+								}
+								else{
+									injection_progress_el.innerHTML = '<h3>Learning..  ' + (body['injection_level']+1) + '/3</h3>';
+								}
+								
+								const learning_levels = ['Names of things','Names of properties','Selectable values'];
+								for(let ll = 0; ll < learning_levels.length; ll++){
+									const learning_level_wrapper_el = document.createElement('div');
+									
+									if(body['injection_level'] == ll){
+										learning_level_wrapper_el.classList.add('extension-voco-busy-updating');
+									}
+									
+									let level_html = '';
+									if (ll < body['injection_level']){
+										level_html = '<span class="extension-voco-injection-learning-checkbox extension-voco-injection-learning-checkbox-checked">☑</span>';
+									}
+									else{
+										level_html = '<span class="extension-voco-injection-learning-checkbox">☐</span>';
+									}
+									level_html = '<span class="extension-voco-injection-learning-level-text">' + learning_levels[ll] + '</span>' + level_html;
+									learning_level_wrapper_el.innerHTML = level_html;
+									
+									injection_progress_el.appendChild(learning_level_wrapper_el);
+								}
+								if(body['injection_level'] == 3){
+									setTimeout(() => {
+										injection_progress_el.innerHTML = '';
+										injection_progress_el.classList.add('extension-voco-hidden');
+									},5000);
+								}
+							}
+							
+						}
+						
+						this.previous_injection_level = body['injection_level'];
+					}
+						
+					
+					
+					
+					
 				}
 			}
 			
@@ -2335,7 +2395,7 @@
 							}
 							if (required_memory > this.device_total_memory){
 								if(this.debug){
-									console.log("voco debug: not enough system memory to ever run this model");
+									console.log("voco debug: not enough system memory to ever run this model: ", model_name);
 								}
 								llm_item_el.classList.add('extension-voco-llm-not-possible');
 							}
@@ -2374,31 +2434,34 @@
 
 							if(typeof llm_details.minimal_pi != 'undefined'){
 								if(llm_details.minimal_pi > this.llm_controller_speed){
+									if(this.debug){
+										console.log("voco debug: controller not fast enough run this model: ", model_name);
+									}
 									llm_item_el.classList.add('extension-voco-llm-not-possible');
 								}
 							}
+							/*
 							if(typeof llm_details.minimal_pi != 'undefined'){
 								if(llm_details.minimal_pi > this.llm_controller_speed){
 									llm_item_el.classList.add('extension-voco-llm-not-possible');
 								}
 							}
-
+							*/
 
 
 							radio_el.addEventListener('change', () => {
-								//console.log("checkbox changed to: ", model_name);
+								console.log("checkbox changed to: ", model_name);
 
 								let action_dict = {'action':'set_llm'};
 								action_dict['llm_' + llm_type + '_model'] = model_name.replace('.tflite','');
-								//console.log("voco: action_dict: ", action_dict);
+								console.log("voco: action_dict: ", action_dict);
+								
 						        window.API.postJson(
 						          `/extensions/${this.id}/api/ajax`,action_dict
-
 						        ).then((body) => {
 									if(this.debug){
 					                    console.log('voco debug: set_llm response: ', body);
 					                }
-
 						        }).catch((err) => {
 						  			console.error('voco: caught error during set_llm api call: ', err);
 									alert("Could not connect with Voco, your preference may not have been saved");
@@ -2538,9 +2601,10 @@
 			if(this.debug){
 				console.log("voco debug: in send_input_text");
 			}
-			const text_chat_container = document.getElementById('extension-voco-text-chat-container');
-			const text_input_field = document.getElementById('extension-voco-text-input-field');
-			const text_chat_waiting_for_response_el = document.getElementById('extension-voco-text-chat-waiting-for-response');
+			const text_chat_container = this.view.querySelector('#extension-voco-text-chat-container');
+			const text_chat_origin_type_el = this.view.querySelector('#extension-voco-text-input-origin-type-select');
+			const text_input_field = this.view.querySelector('#extension-voco-text-input-field');
+			const text_chat_waiting_for_response_el = this.view.querySelector('#extension-voco-text-chat-waiting-for-response');
 			
 			if(text_input_field){
 				var text = text_input_field.value;
@@ -2562,7 +2626,7 @@
 				}
 
 				this.busy_doing_text_chat_command = true;
-				document.getElementById('extension-voco-text-input-send-button').setAttribute("disabled", "disabled");
+				this.view.querySelector('#extension-voco-text-input-send-button').setAttribute("disabled", "disabled");
 				this.last_text_chat_start_time = Date.now(); // Math.floor((new Date()).getTime() / 1000)
 				
 				//this.previous_text_chat_response = [];
@@ -2570,7 +2634,7 @@
 		  		// Send text query
 		        window.API.postJson(
 		          `/extensions/voco/api/parse`,
-					{'text':text}
+					{'text':text,'origin_type':text_chat_origin_type_el.value}
 
 		        ).then((body) => {
 					if(this.debug){
