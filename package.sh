@@ -170,13 +170,15 @@ echo ""
 
 pip install -U pip setuptools wheel
 
-echo "install requirements"
+#echo "install requirements"
 #/usr/bin/python"${PYTHON_VERSION}" -m pip install -r requirements.txt -t lib --no-cache-dir --prefix "" --default-timeout=180 --upgrade
-python3 -m pip install -r requirements.txt -t lib --no-cache-dir --prefix "" --default-timeout=180 --upgrade
+#python3 -m pip install -r requirements.txt -t lib --no-cache-dir --prefix "" --default-timeout=180 --upgrade
 
 if dpkg --print-architecture | grep -q 'armhf'; then
   echo "on 32 bit architecture, so skipping some AI python modules"
 
+  python3 -m pip install -r requirements32.txt -t lib --no-cache-dir --prefix ""
+  
 else
 
   #echo ""
