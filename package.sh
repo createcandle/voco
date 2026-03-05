@@ -53,7 +53,7 @@ echo "-----"
 
 # TEST - DISABLING
 # Install missing dependencies
-echo
+echo ""
 echo "package.sh: installing build dependencies via apt"
 echo "whoami:"
 whoami
@@ -177,10 +177,11 @@ if dpkg --print-architecture | grep -q 'armhf'; then
 
 else
 
+  echo ""
   echo "Adding some Python AI modules (for OpenWakeWord)"
   python3 -m pip install onnxruntime openwakeword -t lib --no-cache-dir --prefix "" --default-timeout=180 --upgrade
 
-
+  echo "Installing spacy & co"
   python3 -m pip install transformers -t lib --no-cache-dir --prefix ""
   python3 -m pip install blis -t lib --no-cache-dir --prefix ""
   python3 -m pip install thinc -t lib --no-cache-dir --prefix ""
@@ -188,12 +189,18 @@ else
   python3 -m pip install spacy -t lib --no-cache-dir --prefix ""
   python3 -m pip install spacy-curated-transformers -t lib --no-cache-dir --prefix ""
 
+  echo ""
+  echo ""
   echo "Installing Kitten_requirements"
   python3 -m pip install -r kitten_requirements.txt -t lib --no-cache-dir --prefix ""
-
+  
+  echo ""
+  echo ""
   echo "Installing misaki"
   python3 -m pip install misaki@git+https://github.com/createcandle/misaki -t lib --no-cache-dir --prefix ""
-  
+
+  echo ""
+  echo ""
   echo "Installing KittenTTS"
   python3 -m pip install KittenTTS@git+https://github.com/createcandle/KittenTTS -t lib --no-cache-dir --prefix ""
     
