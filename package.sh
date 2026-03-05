@@ -177,7 +177,7 @@ pip install -U pip setuptools wheel
 if dpkg --print-architecture | grep -q 'armhf'; then
   echo "on 32 bit architecture, so skipping some AI python modules"
 
-  python3 -m pip install -r requirements32.txt -t lib --no-cache-dir --prefix ""
+  python3 -m pip install -r requirements32.txt -t lib --no-cache-dir --prefix ""  --break-system-packages
   
 else
 
