@@ -158,7 +158,11 @@ mkdir -p lib package
 
 LIB_PATH="$(pwd)/lib"
 echo $LIB_PATH
-export PYTHONPATH="${PYTHONPATH}:$LIB_PATH"
+if [ -n "$PYTHONPATH" ]; then
+    export PYTHONPATH="${PYTHONPATH}:$LIB_PATH"
+else
+    export PYTHONPATH="$LIB_PATH"
+fi
 
 echo "PYTHONPATH: $PYTHONPATH"
 echo ""
