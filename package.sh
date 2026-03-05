@@ -164,7 +164,7 @@ else
     export PYTHONPATH="$LIB_PATH"
 fi
 
-echo "PYTHONPATH: $PYTHONPATH"
+echo "PYTHONPATH=$PYTHONPATH"
 echo ""
 
 
