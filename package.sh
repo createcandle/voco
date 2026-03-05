@@ -161,13 +161,18 @@ python3 -m pip install -r requirements.txt -t lib --no-cache-dir --prefix "" --d
 
 if dpkg --print-architecture | grep -q 'armhf'; then
   echo "on 32 bit architecture, so skipping some AI python modules"
+
 else
   echo "Adding some Python AI modules (for OpenWakeWord)"
   python3 -m pip install onnxruntime openwakeword -t lib --no-cache-dir --prefix "" --default-timeout=180 --upgrade
 
+  echo "Installing Kitten_requirements"
+  python3 -m pip install -r kitten_requirements.txt -t lib --no-cache-dir --prefix ""
+
+
   echo "Installing KittenTTS"
   python3 -m pip install KittenTTS@git+https://github.com/createcandle/KittenTTS -t lib --no-cache-dir --prefix ""
-  
+    
 fi
 
 
