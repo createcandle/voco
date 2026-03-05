@@ -11,4 +11,6 @@ python-olm
 matrix-nio[e2e]
 Pillow
 pyaudio
+sounddevice
+soundfile
 numpy
