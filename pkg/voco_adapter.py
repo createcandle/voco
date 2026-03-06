@@ -498,7 +498,7 @@ class VocoAdapter(Adapter):
         if not os.path.isdir(self.data_dir_path):
             os.mkdir(self.data_dir_path)
         
-        self.stderr_output_file = os.path.join(data_dir_path,'stderr.txt')
+        self.stderr_output_file = os.path.join(self.data_dir_path,'stderr.txt')
         
         self.bluetooth_persistence_file_path = os.path.join(self.user_profile['dataDir'], 'bluetoothpairing', 'persistence.json')
         
@@ -726,7 +726,7 @@ class VocoAdapter(Adapter):
             self.llm_wakeword_enabled = True
         
         
-        if not 'llm_wakeword_model' in llm_stt_model:
+        if not 'llm_stt_model' in self.persistent_data:
             self.persistent_data['llm_stt_model'] = 'voco'
             self.save_to_persistent_data = True
         
@@ -734,7 +734,7 @@ class VocoAdapter(Adapter):
             self.llm_stt_enabled = True
             
             
-        if not 'llm_tts_model' in llm_stt_model:
+        if not 'llm_tts_mode' in self.persistent_data:
             self.persistent_data['llm_tts_model'] = 'voco'
             self.save_to_persistent_data = True
             
@@ -742,7 +742,7 @@ class VocoAdapter(Adapter):
             self.llm_tts_enabled = True
 
 
-        if not 'llm_assistant_model' in llm_stt_model:
+        if not 'llm_assistant_model' in self.persistent_data:
             self.persistent_data['llm_assistant_model'] = 'voco'
             self.save_to_persistent_data = True
             
