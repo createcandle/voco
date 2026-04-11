@@ -168,7 +168,7 @@ echo "PYTHONPATH=$PYTHONPATH"
 echo ""
 
 
-pip install -U pip setuptools wheel
+pip install -U pip setuptools wheel --break-system-packages
 
 #echo "install requirements"
 #/usr/bin/python"${PYTHON_VERSION}" -m pip install -r requirements.txt -t lib --no-cache-dir --prefix "" --default-timeout=180 --upgrade
@@ -177,7 +177,7 @@ pip install -U pip setuptools wheel
 if dpkg --print-architecture | grep -q 'armhf'; then
   echo "on 32 bit architecture, so skipping some AI python modules"
 
-  python3 -m pip install -r requirements32.txt -t lib --no-cache-dir --prefix ""  --break-system-packages
+  python3 -m pip install -r requirements32.txt -t lib --no-cache-dir --prefix "" --break-system-packages
   
 else
 
