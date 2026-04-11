@@ -210,8 +210,11 @@ else
     
 fi
 
-
-
+echo "size of base folder:"
+du . -h --max-depth=1
+echo ""
+echo "size of lib folder:"
+du ./lib -h --max-depth=1
 
 mkdir -p ./lib/openwakeword/resources/models
 cp ./llm/wakeword/open_wake_word/* ./lib/openwakeword/resources/models/
