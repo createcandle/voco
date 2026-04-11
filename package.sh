@@ -241,7 +241,7 @@ cd -
 # Make the tarball
 echo "creating archive"
 TARFILE="voco-${version}${TARFILE_SUFFIX}.tgz"
-tar czf ${TARFILE} package
+tar cvzf ${TARFILE} package
 
 echo "creating shasums"
 shasum --algorithm 256 ${TARFILE} > ${TARFILE}.sha256sum
