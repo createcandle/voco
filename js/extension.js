@@ -160,6 +160,15 @@
 			catch(e){
 				//console.log("no interval to clear? " + e);
 			}
+			
+			try{
+                if(document.getElementById('extension-voco-menu-item').classList.contains('selected') == false){
+                    this.view.innerHTML = "";
+                }
+			}
+            catch(err){
+                console.error("Voco: caught error in hide: ", err);
+            }
 		}
 
 
@@ -1649,8 +1658,7 @@
 					}
 					
 					
-					if(typeof body['injection_level'] == 'number' && body['injection_level'] != this.previous_injection_level){
-						
+					if(typeof body['injection_level'] == 'number' && body['injection_level'] != this.previous_injection_level && body['is_satellite'] === false){
 						
 						const injection_progress_el = this.view.querySelector('#extension-voco-injection-learning-progress');
 						if(injection_progress_el){
@@ -2616,6 +2624,14 @@
 			
 			if(text_input_field){
 				var text = text_input_field.value;
+				let prefered_response_type = 'text';
+				if(text_chat_origin_type_el){
+					prefered_response_type = text_chat_origin_type_el.value;
+				}
+				if(this.debug){
+					console.log("voco debug: send_input_text:  prefered_response_type: ", prefered_response_type);
+				}
+				
 				//console.log(text);
 				let was_empty = false;
 				if(text == ""){
@@ -2632,9 +2648,11 @@
 					text_input_field.placeholder = this.text_chat_hints[random_hint_number];
 					return
 				}
-
-				this.busy_doing_text_chat_command = true;
-				this.view.querySelector('#extension-voco-text-input-send-button').setAttribute("disabled", "disabled");
+				
+				if(prefered_response_type == 'text'){
+					this.busy_doing_text_chat_command = true;
+					this.view.querySelector('#extension-voco-text-input-send-button').setAttribute("disabled", "disabled");
+				}
 				this.last_text_chat_start_time = Date.now(); // Math.floor((new Date()).getTime() / 1000)
 				
 				//this.previous_text_chat_response = [];
@@ -2642,7 +2660,7 @@
 		  		// Send text query
 		        window.API.postJson(
 		          `/extensions/voco/api/parse`,
-					{'text':text,'origin_type':text_chat_origin_type_el.value}
+					{'text':text,'origin_type':prefered_response_type}
 
 		        ).then((body) => {
 					if(this.debug){
@@ -2661,13 +2679,12 @@
 					this.should_reset_previous_chat_response = true;
 					
 					// Show waiting for chat response indicator
-					
-					if(text_chat_waiting_for_response_el){
+					if(prefered_response_type == 'text' && text_chat_waiting_for_response_el){
 						text_chat_waiting_for_response_el.style.display = 'block';
 					}
 
 		        }).catch((err) => {
-		  			console.error("voco: error sending text to be parsed: " , err);
+		  			console.error("voco: caught error sending text to be parsed: " , err);
 					this.reset_to_allow_sending_text_chat();
 					//document.getElementById('extension-voco-response-data').innerText = "Error sending text command: " , e;
 		        });

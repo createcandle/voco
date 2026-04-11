@@ -2884,12 +2884,10 @@ class VocoAdapter(Adapter):
                 self.current_device_id = 0
                 self.current_control_name = ""
             
-            
-            
             self.persistent_data['audio_output'] = str(selection)
             self.save_to_persistent_data = True #self.save_persistent_data()
-            
-            self.devices['voco'].properties['audio_output'].update( str(selection) )
+            if self.devices['voco'] != None:
+                self.devices['voco'].properties['audio_output'].update( str(selection) )
             
         else:
             # Get the latest audio controls
@@ -2899,9 +2897,14 @@ class VocoAdapter(Adapter):
         
             try:
                 found_it = False
+                headphone_option = ''
                 for option in self.audio_controls:
                     if self.DEBUG:
                         print("comparing: " + str(selection) + " =?= " + str(option['human_device_name']))
+                    
+                    if 'eadphone' in str(option['human_device_name']):
+                        headphone_option = str(option['human_device_name'])
+                        
                     if str(option['human_device_name']) == str(selection):
                     
                         self.current_simple_card_name = option['simple_card_name']
@@ -2929,6 +2932,16 @@ class VocoAdapter(Adapter):
                     if self.DEBUG:
                         print("Error, could not find selected audio device again in audio options: " + str(selection))
                         print("Audio options: " + str(self.audio_controls))
+                        
+                    if 'eadphone' in str(selection) and headphone_option != '':
+                        if self.devices['voco'] != None:
+                            if self.DEBUG:
+                                print("user seems to prefer headphone jack, and that option is available. Using that instead.")
+                                
+                            self.set_audio_output(str(headphone_option))
+                            #self.devices['voco'].properties['audio_output'].update( str(headphone_option) )
+                            #self.persistent_data['audio_output'] = str(headphone_option)
+                            #self.save_to_persistent_data = True #self.save_persistent_data()
                         
             except Exception as ex:
                 if self.DEBUG:
@@ -3012,9 +3025,11 @@ class VocoAdapter(Adapter):
         
         try:
             if file_to_play == None:
+                if self.DEBUG:
+                    print("play_wav: no file provided, setting it to self.response_wav path: " + str(self.response_wav))
                 file_to_play = self.response_wav
             if self.DEBUG:
-                print("play_wav: " + str(file_to_play))
+                print("play_wav:  file_to_play: " + str(file_to_play))
             # Play sound at the top of a second, so synchronise audio playing with satellites
             #print(str(time.time()))
             #initial_time = int(time.time())
@@ -5787,7 +5802,8 @@ class VocoAdapter(Adapter):
         self.threads_must_stop.set()
         
         self.kill_llm()
-        print("unload: beyond kill_llm")
+        if self.DEBUG:
+            print("unload: beyond kill_llm")
         
         if self.matrix_started:
             self.matrix_started = False
@@ -5796,21 +5812,19 @@ class VocoAdapter(Adapter):
             time.sleep(.5)
             
         self.save_persistent_data()
-        
+        os.system('$(sleep 1; pkill -f snips) &')
         self.stop_snips()
-        print("unload: beyond stop_snips")
+        if self.DEBUG:
+            print("unload: beyond stop_snips")
         
         if self.mqtt_client != None:
             self.mqtt_client.disconnect() # disconnect
             self.mqtt_client.loop_stop()
         
-        
-        
-            
-        time.sleep(.1)
+        #time.sleep(.1)
         
         if self.DEBUG:
-            print("shutdown complete. Talk to you later!")
+            print("VOCO shutdown complete. Talk to you later!")
             print("")
         
         # kill -9 `ps -ef | voco/main.py | grep -v grep | awk '{print $2}'`
