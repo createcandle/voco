@@ -210,6 +210,9 @@ else
     
 fi
 
+rm -rf ./lib/nvidia
+
+
 echo "size of base folder:"
 du . -h --max-depth=1
 echo ""
