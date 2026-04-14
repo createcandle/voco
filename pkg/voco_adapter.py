@@ -256,6 +256,7 @@ class VocoAdapter(Adapter):
         
         self.threads_must_stop = threading.Event()
         
+        self.i_will_say_this_only_once = [] # Used to avoid spamming repeat warnings.
         
         # Open Wakeword
         self.use_open_wakeword = False
@@ -864,6 +865,7 @@ class VocoAdapter(Adapter):
         self.sample_rate = 16000 # 48000
         self.prefer_aplay = True
         self.currently_muted = True
+        self.system_volume_percentage = 80
         
         self.last_times_sound_played = {} # avoid playing the same sound too many times in a row
         
@@ -3347,8 +3349,17 @@ class VocoAdapter(Adapter):
                             if 'intent' in next_message:
                                 intent = next_message['intent']
                             
+                            # Sometimes LLM's output ends with the word that indicates it's the user's turn to speak
+                            message_to_be_spoken = str(next_message['voice_message'])
+                            if len(message_to_be_spoken) > 16:
+                                message_researcher_index = message_to_be_spoken.lower().rfind('researcher')
+                                if message_researcher_index > len(message_to_be_spoken) - 15:
+                                    if self.DEBUG:
+                                        print("warning, removing 'researcher' from end of string that is about to be spoken: ", message_to_be_spoken)
+                                    message_to_be_spoken = message_to_be_spoken[:message_researcher_index]  
+                                    
                             before_speak_time = time.time()
-                            self.really_speak(str(next_message['voice_message']),intent)
+                            self.really_speak(message_to_be_spoken,intent)
                             if self.DEBUG:
                                 print("speak_thread: speaking took this long: " + str(time.time() - before_speak_time))
                             
@@ -4872,719 +4883,708 @@ class VocoAdapter(Adapter):
             voice_message = ""
             
             sleep(.1)
-            
+            #print("time.time(): ", time.time())
             
             if time.time() > self.current_utc_time + 1:
-                #if self.DEBUG:
-                #    print("\n😀\nCLOCK TICK " + str(int(time.time()) % 60) + "\n")
+                if self.DEBUG:
+                    print("\n😀\nCLOCK TICK " + str(int(time.time()) % 60) + "\n")
                 self.current_utc_time = int(time.time())
                 
                 
-                for snips_stderr in self.snips_stderr_messages:
+                try:
+                    for snips_stderr in self.snips_stderr_messages:
                     
-                    if len(str(snips_stderr)) > 10:
-                        if self.DEBUG:
-                            print("clock: snips_stderr message: ", snips_stderr)
-                
-                        if ('ERROR:snips_injection_hermes' in str(snips_stderr) and 't load asr injection resources for injection' in str(snips_stderr)) or (
-                            'ERROR:snips' in str(snips_stderr) and 'Missing following file(s)' in str(snips_stderr)) or (
-                            'ERROR:snips_nlu' in str(snips_stderr) and 'No such file or directory' in str(snips_stderr)):
+                        if len(str(snips_stderr)) > 10:
                             if self.DEBUG:
-                                print("\n\nSNIPS FAILED TO START! INJECTION ISSUE\n\n")
-                            if self.clear_snips_injections():
+                                print("clock: snips_stderr message: ", snips_stderr)
+                
+                            if ('ERROR:snips_injection_hermes' in str(snips_stderr) and 't load asr injection resources for injection' in str(snips_stderr)) or (
+                                'ERROR:snips' in str(snips_stderr) and 'Missing following file(s)' in str(snips_stderr)) or (
+                                'ERROR:snips_nlu' in str(snips_stderr) and 'No such file or directory' in str(snips_stderr)):
                                 if self.DEBUG:
-                                    print("clock: clearing snips injections directory was successful")
-                                self.should_restart_snips = True
-                        
-                self.snips_stderr_messages = []
-                
-                
-                if self.llm_assistant_process != None and self.llm_assistant_process.poll() == None and self.llm_assistant_process.stdout != None:
-                    try:
-                    
-                        #if self.DEBUG:
-                        #    print("stdout was not None")
-                        assistant_stdout = str(os.read(self.llm_assistant_process.stdout.fileno(), 10240))
-                        if self.DEBUG:
-                            print("clock: assistant_stdout: " + str(assistant_stdout))
-                        self.llm_assistant_process.stdout.flush()
-                        
-                        assistant_stderr = str(os.read(self.llm_assistant_process.stderr.fileno(), 10240))
-                        if self.DEBUG:
-                            if len(str(assistant_stderr)) > 1:
-                                pass
-                            print("\n\nclock: assistant_stdERROR: " + str(assistant_stderr))
-                            print("")
-                            
-                    except OSError:
-                        # the os throws an exception if there is no data
-                        #print('[No more data]')
-                        #break
-                        #continue
-                        pass
-                        
-                    except Exception as ex:
-                        print("other type of exception: " + str(ex))
-                
-                #else:
-                #    if self.DEBUG:
-                #        print("clock: assistant subprocess was not ok")
-                #self.lock.acquire()
-                #print("UTC: " + str(self.current_utc_time))
-                #self.lock.release()
-                
-                # once per hour update the timezone offset. Hopefully this will fix summertime/wintertime issue.
-                if self.current_utc_time % 3600 == 1:
-                    if self.DEBUG:
-                        print("clock: updating timezone offset")
-                    self.update_timezone_offset()
-                
-                
-                # Once a second save the persistent data, if need be
-                if self.save_to_persistent_data:
-                    if self.DEBUG:
-                        print("clock: save_to_persistent_data was True")
-                    self.save_to_persistent_data = False
-                    self.save_persistent_data()
-                    
-                
-                
-                
-                # SLOW LOOP - EVERY 15 SECONDS
-                
-                # Inject new thing names into snips if necessary
-                if time.time() - self.slow_loop_interval > self.last_slow_loop_time: # + self.minimum_injection_interval > datetime.utcnow().timestamp():
-                    self.last_slow_loop_time = time.time()
-                    
-                    running_snips_processes_count = self.is_snips_running_count()
-                    if self.DEBUG:
-                        print("___\n\n   Clock: 15 seconds have passed. Time: " + str(int(time.time()) % 60))
-                        print("   self.periodic_voco_attempts: " + str(self.periodic_voco_attempts))
-                        print("   self.intended_snips_proces_count: ", self.intended_snips_proces_count)
-                        print("   running_snips_processes_count: ", running_snips_processes_count)
-                        print("   self.recent_first_mqtt_error_count: ", self.recent_first_mqtt_error_count)
-                        print("   self.recent_second_mqtt_error_count: ", self.recent_second_mqtt_error_count)
-                        pass
-                    
-                    if self.recent_first_mqtt_error_count > 2:
-                        if self.DEBUG:
-                            print("Many MQTT errors on the FIRST client in the last 15 seconds: ", self.recent_first_mqtt_error_count)
-                    if self.recent_second_mqtt_error_count > 2:
-                        if self.DEBUG:
-                            print("Many MQTT errors on the SECOND client in the last 15 seconds: ", self.recent_second_mqtt_error_count)
-                    
-                    self.recent_first_mqtt_error_count = 0
-                    self.recent_second_mqtt_error_count = 0
-                    
-                    
-                    if time.time() > self.llm_last_assistant_reponse_time + 120:
-                        self.llm_chat_history = []
-                    
-                    if self.persistent_data['is_satellite'] and self.persistent_data['main_site_id'] == self.persistent_data['site_id']:
-                        if self.DEBUG:
-                            print("clock: this satellite doesn't have a different main_site_id (yet)")
-                        self.periodic_voco_attempts += 1
-                    
-                    try:
-                        #print("self.mqtt_client: " + str(self.mqtt_client))
-                        if self.mqtt_client != None:
-                            if self.DEBUG:
-                                #print("MQTT client object exists. mqtt_connected_succesfully_at_least_once: " + str(self.mqtt_connected_succesfully_at_least_once))
-                                pass
-                            
-                            # The main broadcast ping that informs other controllers of this controller's existence and information
-                            self.send_mqtt_ping(broadcast=True) # broadcast ping
-                                
-                        else:
-                            if self.DEBUG:
-                                print("clock: MQTT client object doesn't exist yet.")
-                        
-                        
-                        if self.should_restart_mqtt:
-                            ###self.should_restart_mqtt = False
-                            if self.DEBUG:
-                                print("clock: Periodic check: self.should_restart_mqtt was true - will try to run_mqtt")
-                            self.run_mqtt() # try connecting again. If Mosquitto is up, then it will create the MQTT client and try to connect.
-                                
-                            
-                        elif self.mqtt_client != None:
-                            # The MQTT client exists, so Mosquitto was available at least once.
-                                
-                            if time.time() - self.addon_start_time > 120:
-                                self.still_busy_booting = False
-                                if self.initial_injection_completed == False: # and self.persistent_data['is_satellite'] == False:
-                                    self.possible_injection_failure = True
-                                
-                            # TODO: this doesn't work on satellites. Maybe it now should?
-                            # 36000 = 1 hour
-                            if time.time() - self.addon_start_time > 36000 and self.initial_injection_completed == False and self.persistent_data['is_satellite'] == False:
-                                print("\n\nclock: ERROR. Voco failed to load properly (initial_injection_completed was false). Attempting reboot of addon by closing proxy.\n\n")
-                                self.close_proxy()
-                                #sys.exit()
-                                
-                            if self.still_busy_booting == False:
-                                
-                                #if time.time() - self.last_time_snips_started < 15:
-                                #    if self.DEBUG:
-                                #        print("clock: snips was (re)started less than 15 seconds ago, so leave it alone for now.")
-                                
-                                
-                                # There may have been a reason to restart snips, such as plugging in a new microphone
-                                #if self.should_restart_snips:
-                                #    if self.DEBUG:
-                                #        print("clock: should_restart_snips was true, so will try to restart snips")
-                                #    self.set_status_on_thing("restarting")
-                                #    self.should_restart_snips = False
-                                #    self.run_snips()
-                                
-                                #else:
-                                if self.should_restart_snips == True:
+                                    print("\n\nSNIPS FAILED TO START! INJECTION ISSUE\n\n")
+                                if self.clear_snips_injections():
                                     if self.DEBUG:
-                                        print("clock: should_restart_snips is True")
-                                    
-                                else:
-                                    
-                                    if self.last_injection_request_time != 0 and time.time() - self.last_injection_request_time > 60 and self.injection_requested == True and self.injection_in_progress == False:
-                                        if self.DEBUG:
-                                            print("clock: 60 seconds after requesting an injection there is NO indication that the injection is in progress")
-                                    
-                                        #if self.initial_injection_completed == False and self.persistent_data['is_satellite'] == False:
-                                        #    if self.DEBUG:
-                                        #        print("Clock: attempting a forced injection since no injection complete message was received yet")
-                                        #    self.inject_updated_things_into_snips(True) # Force a new injection until it sticks
-                                    
-                                    if self.last_injection_request_time != 0 and time.time() - self.last_injection_request_time > 900 and self.injection_requested == True:
-                                        #self.injection_requested = False
-                                        #self.injection_in_progress = False
-                                        #self.possible_injection_failure = True
-                                        #self.initial_injection_completed = False
-                                        if self.DEBUG:
-                                            print("Clock: increasing injection timeout count")
-                                            
-                                        self.injection_timeout_count += 1
-                                        self.injection_requested = False
-                                        self.injection_in_progress = False
+                                        print("clock: clearing snips injections directory was successful")
+                                    self.should_restart_snips = True
+                        
+                    self.snips_stderr_messages = []
+                
+                
+                    if self.llm_assistant_process != None and self.llm_assistant_process.poll() == None and self.llm_assistant_process.stdout != None:
+                        try:
+                    
+                            #if self.DEBUG:
+                            #    print("stdout was not None")
+                            assistant_stdout = str(os.read(self.llm_assistant_process.stdout.fileno(), 10240))
+                            if self.DEBUG:
+                                print("clock: assistant_stdout: " + str(assistant_stdout))
+                            self.llm_assistant_process.stdout.flush()
+                        
+                            assistant_stderr = str(os.read(self.llm_assistant_process.stderr.fileno(), 10240))
+                            if self.DEBUG:
+                                if len(str(assistant_stderr)) > 1:
+                                    pass
+                                print("\n\nclock: assistant_stdERROR: " + str(assistant_stderr))
+                                print("")
+                            
+                        except OSError:
+                            # the os throws an exception if there is no data
+                            #print('[No more data]')
+                            #break
+                            #continue
+                            pass
+                        
+                        except Exception as ex:
+                            print("caught other type of exception parsing subprocesses stdout: " + str(ex))
+                
+                    #else:
+                    #    if self.DEBUG:
+                    #        print("clock: assistant subprocess was not ok")
+                    #self.lock.acquire()
+                    #print("UTC: " + str(self.current_utc_time))
+                    #self.lock.release()
+                
+                    # once per hour update the timezone offset. Hopefully this will fix summertime/wintertime issue.
+                    if self.current_utc_time % 3600 == 1:
+                        if self.DEBUG:
+                            print("clock: updating timezone offset")
+                        self.update_timezone_offset()
+                
+                
+                    # Once a second save the persistent data, if need be
+                    if self.save_to_persistent_data:
+                        if self.DEBUG:
+                            print("clock: save_to_persistent_data was True")
+                        self.save_to_persistent_data = False
+                        self.save_persistent_data()
+                    
+                
+                
+                
+                    # SLOW LOOP - EVERY 15 SECONDS
+                
+                    # Inject new thing names into snips if necessary
+                    if time.time() - self.slow_loop_interval > self.last_slow_loop_time: # + self.minimum_injection_interval > datetime.utcnow().timestamp():
+                        if self.DEBUG:
+                            print("\nS L O W L O O P\n")
+                        self.last_slow_loop_time = time.time()
+                        
+                        running_snips_processes_count = self.is_snips_running_count()
+                        if self.DEBUG:
+                            print("___\n\n   Clock: 15 seconds have passed. Time: " + str(int(time.time()) % 60))
+                            print("   self.periodic_voco_attempts: " + str(self.periodic_voco_attempts))
+                            print("   self.intended_snips_proces_count: ", self.intended_snips_proces_count)
+                            print("   running_snips_processes_count: ", running_snips_processes_count)
+                            print("   self.recent_first_mqtt_error_count: ", self.recent_first_mqtt_error_count)
+                            print("   self.recent_second_mqtt_error_count: ", self.recent_second_mqtt_error_count)
+                            print("   self.injection_level: ", self.injection_level)
+                            pass
+                    
+                        if self.recent_first_mqtt_error_count > 2:
+                            if self.DEBUG:
+                                print("Many MQTT errors on the FIRST client in the last 15 seconds: ", self.recent_first_mqtt_error_count)
+                        if self.recent_second_mqtt_error_count > 2:
+                            if self.DEBUG:
+                                print("Many MQTT errors on the SECOND client in the last 15 seconds: ", self.recent_second_mqtt_error_count)
+                    
+                        self.recent_first_mqtt_error_count = 0
+                        self.recent_second_mqtt_error_count = 0
+                    
+                    
+                        if time.time() > self.llm_last_assistant_reponse_time + 120:
+                            self.llm_chat_history = []
+                    
+                        if self.persistent_data['is_satellite'] and self.persistent_data['main_site_id'] == self.persistent_data['site_id']:
+                            if self.DEBUG:
+                                print("clock: this satellite doesn't have a different main_site_id (yet)")
+                            self.periodic_voco_attempts += 1
+                    
+                        try:
+                            #print("self.mqtt_client: " + str(self.mqtt_client))
+                            if self.mqtt_client != None:
+                                if self.DEBUG:
+                                    #print("MQTT client object exists. mqtt_connected_succesfully_at_least_once: " + str(self.mqtt_connected_succesfully_at_least_once))
+                                    pass
+                            
+                                # The main broadcast ping that informs other controllers of this controller's existence and information
+                                self.send_mqtt_ping(broadcast=True) # broadcast ping
+                                
+                            else:
+                                if self.DEBUG:
+                                    print("clock: MQTT client object doesn't exist yet.")
+                        
+                        
+                            if self.should_restart_mqtt:
+                                ###self.should_restart_mqtt = False
+                                if self.DEBUG:
+                                    print("clock: Periodic check: self.should_restart_mqtt was true - will try to run_mqtt")
+                                self.run_mqtt() # try connecting again. If Mosquitto is up, then it will create the MQTT client and try to connect.
+                                
+                            
+                            elif self.mqtt_client != None:
+                                # The MQTT client exists, so Mosquitto was available at least once.
+                                
+                                if time.time() - self.addon_start_time > 120:
+                                    self.still_busy_booting = False
+                                    if self.initial_injection_completed == False: # and self.persistent_data['is_satellite'] == False:
                                         self.possible_injection_failure = True
-                                    
-                                    
-                                    
-                                    
-                                    #print("snips did not need to be restarted")
-                                    # Check if hostname has changed. This is extremely rare, but it could happen.
-                                    self.update_network_info()
-                                    #if self.hostname != self.previous_hostname: # If the hostname was changed by the user
-                                        #self.previous_hostname = self.hostname
-                                        #if self.DEBUG:
-                                        #    print("clock: hostname was changed.")
-                                        #if not self.persistent_data['is_satellite']:
-                                        #self.send_mqtt_ping(broadcast=True) #broadcast ping
                                 
-                                    
-                                        #try:
-                                        #    self.mqtt_client.unsubscribe("hermes/voco/" + str(self.previous_hostname) + "/#")
-                                        #    self.mqtt_client.subscribe("hermes/voco/" + str(self.hostname) + "/#")
-                                        #except Exception as ex:
-                                        #    print("Error re-subscribing to new MQTT topic after hostname change: " + str(ex))
-                                        #self.previous_hostname = self.hostname
-                                        #self.stop_snips()
-                                        #self.run_snips()
-                                    """
-                                    if self.persistent_data['is_satellite']:
-                            
-                                        if self.voco_connected == False:
-                                            if self.DEBUG:
-                                                print("clock: MQTT seems to be up, but main voco server is not responding")
-                                        
-                                        
-                                        if self.persistent_data['main_site_id'] != self.persistent_data['site_id']: # Once the main controller has been connected to (received pong), these values are no longer the same
-                                            if self.DEBUG2:
-                                                print('clock: satellite, so sending ping to stay in touch.')
-                                            self.send_mqtt_ping()
-                                        else:
-                                            if self.DEBUG:
-                                                print('clock: satellite, but main_site_id was site_id. Sending broadcast ping to discover site_id of main controller.')
-                                            self.send_mqtt_ping(broadcast=True) # broadcast ping
-                                    """
-                                        
-                                    self.periodic_mqtt_attempts += 1
-                                    if self.persistent_data['is_satellite'] and self.this_is_main_controller == False:
-                                        self.periodic_voco_attempts += 1
+                                # TODO: this doesn't work on satellites. Maybe it now should?
+                                # 36000 = 1 hour
+                                if time.time() - self.addon_start_time > 36000 and self.initial_injection_completed == False and self.persistent_data['is_satellite'] == False:
+                                    print("\n\nclock: ERROR. Voco failed to load properly (initial_injection_completed was false). Attempting reboot of addon by closing proxy.\n\n")
+                                    self.close_proxy()
+                                    #sys.exit()
                                 
-                                    
-                                    
-                                    #if time.time() > self.fastest_controller_last_ping_time + 60 and self.fastest_controller_id != self.persistent_data['site_id']:
+                                if self.still_busy_booting == False:
+                                
+                                    #if time.time() - self.last_time_snips_started < 15:
                                     #    if self.DEBUG:
-                                    #        print("clock: resetting fastest controller information")
-                                    #    self.fastest_controller_last_ping_time = time.time()
-                                    #    self.fastest_controller_score = 0
-                                    #    self.fastest_controller_id = None
-                                    
-                                    
-                                    
+                                    #        print("clock: snips was (re)started less than 15 seconds ago, so leave it alone for now.")
                                 
-                                    if self.DEBUG:
-                                        #print("self.periodic_mqtt_attempts = " + str(self.periodic_mqtt_attempts))
-                                        pass
+                                
+                                    # There may have been a reason to restart snips, such as plugging in a new microphone
+                                    #if self.should_restart_snips:
+                                    #    if self.DEBUG:
+                                    #        print("clock: should_restart_snips was true, so will try to restart snips")
+                                    #    self.set_status_on_thing("restarting")
+                                    #    self.should_restart_snips = False
+                                    #    self.run_snips()
+                                
+                                    #else:
+                                    if self.should_restart_snips == True:
+                                        if self.DEBUG:
+                                            print("clock: should_restart_snips is True")
+                                    
+                                    else:
+                                    
+                                        if self.last_injection_request_time != 0 and time.time() - self.last_injection_request_time > 60 and self.injection_requested == True and self.injection_in_progress == False:
+                                            if self.DEBUG:
+                                                print("clock: 60 seconds after requesting an injection there is NO indication that the injection is in progress")
+                                    
+                                        if self.last_injection_request_time != 0 and (time.time() - self.last_injection_request_time) > 900 and self.injection_requested == True:
+                                            #self.injection_requested = False
+                                            #self.injection_in_progress = False
+                                            #self.possible_injection_failure = True
+                                            #self.initial_injection_completed = False
+                                            if self.DEBUG:
+                                                print("\nERROR: clock: injection timed out. increasing injection timeout count and allowing for another attempt.")
+                                            
+                                            self.injection_timeout_count += 1
+                                            self.injection_requested = False
+                                            self.injection_in_progress = False
+                                            self.possible_injection_failure = True
+                                    
+                                    
+                                    
+                                    
+                                        #print("snips did not need to be restarted")
+                                        # Check if hostname has changed. This is extremely rare, but it could happen.
+                                        self.update_network_info()
+                                        #if self.hostname != self.previous_hostname: # If the hostname was changed by the user
+                                            #self.previous_hostname = self.hostname
+                                            #if self.DEBUG:
+                                            #    print("clock: hostname was changed.")
+                                            #if not self.persistent_data['is_satellite']:
+                                            #self.send_mqtt_ping(broadcast=True) #broadcast ping
+                                
+                                    
+                                            #try:
+                                            #    self.mqtt_client.unsubscribe("hermes/voco/" + str(self.previous_hostname) + "/#")
+                                            #    self.mqtt_client.subscribe("hermes/voco/" + str(self.hostname) + "/#")
+                                            #except Exception as ex:
+                                            #    print("Error re-subscribing to new MQTT topic after hostname change: " + str(ex))
+                                            #self.previous_hostname = self.hostname
+                                            #self.stop_snips()
+                                            #self.run_snips()
+
                                         
-                                    if self.periodic_mqtt_attempts > 5:
-                                        if self.DEBUG:
-                                            print("clock: MQTT broker has not responded. It may be down permanently.")
-                                        self.mqtt_connected = False
-                                        self.set_status_on_thing("Main controller is unavailable")
+                                        self.periodic_mqtt_attempts += 1
+                                        if self.persistent_data['is_satellite'] and self.this_is_main_controller == False:
+                                            self.periodic_voco_attempts += 1
                                 
-                                    if self.mqtt_connected == False and self.periodic_mqtt_attempts%5 == 4:
+                                    
+                                    
+                                        #if time.time() > self.fastest_controller_last_ping_time + 60 and self.fastest_controller_id != self.persistent_data['site_id']:
+                                        #    if self.DEBUG:
+                                        #        print("clock: resetting fastest controller information")
+                                        #    self.fastest_controller_last_ping_time = time.time()
+                                        #    self.fastest_controller_score = 0
+                                        #    self.fastest_controller_id = None
+                                    
+                                    
+                                    
+                                
                                         if self.DEBUG:
-                                            print("clock: Should attempt to find correct MQTT server IP address")
-                                        self.look_for_mqtt_server()
-                                        time.sleep(1)
+                                            #print("self.periodic_mqtt_attempts = " + str(self.periodic_mqtt_attempts))
+                                            pass
+                                        
+                                        if self.periodic_mqtt_attempts > 5:
+                                            if self.DEBUG:
+                                                print("clock: MQTT broker has not responded. It may be down permanently.")
+                                            self.mqtt_connected = False
+                                            self.set_status_on_thing("Main controller is unavailable")
+                                
+                                        if self.mqtt_connected == False and self.periodic_mqtt_attempts%5 == 4:
+                                            if self.DEBUG:
+                                                print("clock: Should attempt to find correct MQTT server IP address")
+                                            self.look_for_mqtt_server()
+                                            time.sleep(1)
                     
                             
-                                    if self.DEBUG:
-                                        if self.periodic_voco_attempts > 2:
-                                            print("clock: self.periodic_voco_attempts = " + str(self.periodic_voco_attempts))
-                                        #pass
-                                    if self.periodic_voco_attempts > 5:
                                         if self.DEBUG:
-                                            print("clock: main Voco controller has not responded. It may be down permanently.")
-                                        self.voco_connected = False
-                                        self.set_status_on_thing("Main controller is not responding")
-                                
-                                    if self.periodic_voco_attempts%5 == 4:
-                                        if self.DEBUG:
-                                            print("clock: Should attempt to reconnect to main voco controller")
-                                        #self.look_for_mqtt_server()
-                            
-                            
-                                    if self.mqtt_connected:
-                                        if self.persistent_data['is_satellite'] == False:
+                                            if self.periodic_voco_attempts > 2:
+                                                print("clock: self.periodic_voco_attempts = " + str(self.periodic_voco_attempts))
+                                            #pass
+                                        if self.periodic_voco_attempts > 5:
                                             if self.DEBUG:
-                                                #print("Clock: Not a satellite, so calling normal inject_updated_things_into_snips")
-                                                pass
-                                            self.inject_updated_things_into_snips() # this will figure out if there are any changes necessitating an actual injection
+                                                print("clock: main Voco controller has not responded. It may be down permanently.")
+                                            self.voco_connected = False
+                                            self.set_status_on_thing("Main controller is not responding")
+                                
+                                        if self.periodic_voco_attempts%5 == 4:
+                                            if self.DEBUG:
+                                                print("clock: Should attempt to reconnect to main voco controller")
+                                            #self.look_for_mqtt_server()
+                            
+                            
+                                        if self.mqtt_connected:
+                                            if self.persistent_data['is_satellite'] == False:
+                                                if self.DEBUG:
+                                                    print("Clock: Not a satellite, so calling normal, regular inject_updated_things_into_snips")
+                                                    #pass
+                                                self.inject_updated_things_into_snips() # this will figure out if there are any changes necessitating an actual injection
                                         
-                                        elif self.satellite_should_act_on_intent:
-                                            if self.DEBUG2:
-                                                print("Clock: satellite, but should_act_on_intent, so calling inject_updated_things_into_snips")
-                                            self.inject_updated_things_into_snips()
+                                            elif self.satellite_should_act_on_intent:
+                                                if self.DEBUG2:
+                                                    print("Clock: satellite, but should_act_on_intent, so calling inject_updated_things_into_snips")
+                                                self.inject_updated_things_into_snips()
                             
                             
                              
-                            else:
-                                if self.DEBUG:
-                                    print("clock: still busy booting?? self.mqtt_connected_succesfully_at_least_once?: " + str(self.mqtt_connected_succesfully_at_least_once))
-                                
-                                if self.injection_in_progress == False and self.mqtt_connected == True:
-                                    if self.persistent_data['is_satellite'] == False:
-                                        if self.DEBUG:
-                                            print("Clock: attempting a forced injection since no injection complete message was received yet")
-                                        self.inject_updated_things_into_snips(True) # Force a new injection until it sticks
-                                    elif self.satellite_should_act_on_intent:
-                                        if self.DEBUG:
-                                            print("Clock: attempting a forced injection on a satellite with intention recognition since no injection complete message was received yet")
-                                        self.inject_updated_things_into_snips(True) # Force a new injection until it sticks
-                                    else:
-                                        if self.DEBUG:
-                                            print("clock: basic satellite. Setting still_busy_booting to False")
-                                        self.still_busy_booting = False
-                                        self.initial_injection_completed = True
-                                        self.speak_welcome_message()
-                                        
-                        else:
-                            if self.DEBUG:
-                                print("clock: WARNING: clock: still no mqtt client?")
-                    except Exception as ex:
-                        if self.DEBUG:
-                            print("clock: error in periodic ping to main Voco controller" + str(ex))            
-                    
-                    #if self.mqtt_connected:
-
-                    
-                if time.time() > self.current_utc_time + 1:
-                    if self.DEBUG:
-                        print("clock: WARNING, THE CLOCK TICK TOOK LONGER THAN A SECOND ALREADY (check 1): " + str(time.time() - self.current_utc_time))
-                    #self.current_utc_time = int(time.time())
-
-                #timer_removed = False
-                try:
-
-                    # Loop over all action times
-                    for index, item in enumerate(self.persistent_data['action_times']):
-                        #print("timer item = " + str(item))
-
-                        #cosmetic = False
-                        #if 'cosmetic' in item:
-                        #    if item['cosmetic'] == True:
-                        #        cosmetic = True
-                                
-                        if (self.current_utc_time >= int(item['moment']) and self.current_utc_time < int(item['moment']) + 60) or item['type'] == 'countdown':
-                            if self.DEBUG:
-                                if item['type'] != 'countdown':
-                                    print("\nclock: time has come for an action item (that's not a countdown)")
-                                    print("non-countdown timer item:\n" + str(json.dumps(item,indent=4)))
-                                
-                                
-                            try:
-                            
-                                if 'intent_message' in item:
-                                    #intent_message = item['intent_message']
-                                    if 'siteId' in item['intent_message']:
-                                        
-                                        if str(item['intent_message']['siteId']) == self.persistent_data['site_id']:
-                                            #if self.DEBUG:
-                                            #    print("clock: timer item is owned by this controller")
-                                            pass
-                                        else:
-                                            if self.DEBUG:
-                                                print("clock: timer item is owned by another controller (a.k.a. cosmetic; only in the list for show)")
-                                            
-                                            if self.controller_recently_spotted(str(item['intent_message']['siteId'])):
-                                                if self.DEBUG:
-                                                    print("clock: OK, the controller that owns the timer was recently spotted, it should handle it")
-                                                continue
-                                            else:
-                                                if self.DEBUG:
-                                                    print("clock: taking ownership of timer item because the controller that owns it doesn't seem to be up")
-                                                    
-                                                # TODO: only take ownership of timers? 
-                                                #if item['type'] in ['countdown','timer','wake','alarm','reminder']:
-                                                item['intent_message']['siteId'] = self.persistent_data['site_id']
-                                                
-                                    else:
-                                        if self.DEBUG:
-                                            print("clock: WARNING\nvery strange: an item with intent data, but not a siteId. Taking ownership of it.")
-                                        item['intent_message']['siteId'] = self.persistent_data['site_id']
-                                            
-                                    
-                                    # Some action items (timers) should be spoken out loud too, no matter the origin (e.g. if the origin is Matrix)
-                                    if 'type' in item and 'origin' in item['intent_message']:
-                                        #if self.DEBUG:
-                                        #    print("origin check. item['type']: " + str(item['type']))
-                                        if item['type'] == 'timer' or item['type'] == 'wake' or item['type'] == 'alarm' or item['type'] == 'reminder':
-                                            if item['intent_message']['origin'] == 'text' or item['intent_message']['origin'] == 'matrix':
-                                                #intent_message['origin'] = 'both'
-                                                item['intent_message']['origin'] = 'both'
-                                                if self.DEBUG:
-                                                    print("clock: changed item origin to both")
-                                                    
-                                                    
-                                                    
-                                        # Doing countdown timers in the chat would create wayyy to many messages
-                                        if item['type'] == 'countdown' and item['intent_message']['origin'] != 'voice':
-                                            if self.DEBUG:
-                                                print("Forcing countdown to voice only. Was: " + str(item['intent_message']['origin']) )
-                                            #intent_message['origin'] = 'voice'
-                                            item['intent_message']['origin'] = 'voice'
-                                                    
-                                    #    if intent_message['origin'] == 'text':
-                                    #        if 'matrix_server' in self.persistent_data:
-                                    #            intent_message['origin'] = 'matrix'
-                                    #        else:
-                                    #            intent_message['origin'] = 'voice'
-                                    #intent_message['origin'] = 'voice'
-                            
-                                    
-                                    
-                                    
                                 else:
                                     if self.DEBUG:
-                                        print("clock: WARNING\nvery strange: a cosmetic item (originating from another controller on the network) without intent data spotted")
-                                    
-                                        
-                                    #intent_message = {'siteId':self.persistent_data['site_id']}
-                                    #item['intent_message'] = {'siteId':self.persistent_data['site_id']}
+                                        print("\nERROR, clock: still busy booting!?!? self.mqtt_connected_succesfully_at_least_once?: " + str(self.mqtt_connected_succesfully_at_least_once))
                                 
-                                
-                                
-                            except Exception as ex:
-                                if self.DEBUG:
-                                    print("clock: intent message error: " + str(ex))
-                                #intent_message = {'siteId':self.persistent_data['site_id']}
-                            
-
-                            try:
-                                # Wake up alarm
-                                if item['type'] == 'wake' and self.current_utc_time >= int(item['moment']) and self.current_utc_time < int(item['moment']) + 60:
-                                    if self.DEBUG:
-                                        print("clock: (...) WAKE UP")
-                                    #timer_removed = True
-                                    self.play_sound(self.alarm_sound,intent=item['intent_message'])
-                                    self.speak("Good morning, it's time to wake up.",intent=item['intent_message'])
-
-                                # Normal alarm
-                                elif item['type'] == 'alarm' and self.current_utc_time >= int(item['moment']) and self.current_utc_time < int(item['moment']) + 60:
-                                    if self.DEBUG:
-                                        print("clock: (...) ALARM")
-                                    self.play_sound(self.alarm_sound,intent=item['intent_message'])
-                                    self.speak("This is your alarm notification",intent=item['intent_message'])
-
-                                # Reminder
-                                elif item['type'] == 'reminder' and self.current_utc_time >= int(item['moment']) and self.current_utc_time < int(item['moment']) + 60:
-                                    if self.DEBUG:
-                                        print("clock: (...) REMINDER")
-                                    self.play_sound(self.end_of_input_sound,intent=item['intent_message'])
-                                    voice_message = "This is a reminder to " + str(item['reminder_text'])
-                                    self.speak(voice_message,intent=item['intent_message'])
-
-                                # Delayed setting of a boolean state
-                                elif item['type'] == 'boolean_related' and self.current_utc_time >= int(item['moment']) and self.current_utc_time < int(item['moment']) + 60:
-                                    if self.DEBUG:
-                                        print("origval:" + str(item['original_value']))
-                                        print("clock: (...) TIMED boolean_related SWITCHING")
-                                    #delayed_action = True
-                                    #slots = self.extract_slots(intent_message)
-                                
-                                    self.delayed_intent_player(item)
-                                    #found_properties = self.check_things('set_state',item['slots'], item['intent_message'], item['original_value'])
-                                    #intent_set_state(self, item['slots'],item['intent_message'],found_properties, item['original_value'])
-
-                                # Delayed setting of a value
-                                elif item['type'] == 'value' and self.current_utc_time >= int(item['moment']) and self.current_utc_time < int(item['moment']) + 60:
-                                    if self.DEBUG:
-                                        print("origval:" + str(item['original_value']))
-                                        print("clock: (...) TIMED SETTING OF A VALUE")
-                                    #slots = self.extract_slots(intent_message)
-                                    self.delayed_intent_player(item)
-                                    #found_properties = self.check_things('set_value',item['slots'])
-                                    #intent_set_value(self, item['slots'],item['intent_message'],found_properties, item['original_value'])
-
-                                # Countdown
-                                elif item['type'] == 'countdown':
-                                    #print("in countdown type")
-                                    try:
-                                        if int(item['moment']) >= int(self.current_utc_time): # This one is reversed - it's only trigger as long as it hasn't reached the target time.
-                                        
-                                            #countdown_delta = self.countdown - self.current_utc_time
-                                            countdown_delta = int(item['moment']) - self.current_utc_time
-                                        
-                                            # Update the countdown on the voco thing
-                                            if countdown_delta > 0:
-                                                self.devices['voco'].properties[ 'countdown' ].set_cached_value_and_notify( int(countdown_delta) )
-                                            else:    
-                                                self.devices['voco'].properties[ 'countdown' ].set_cached_value_and_notify( 0 )
-                                        
-                                            # Create speakable countdown message
-                                            if countdown_delta > 86400:
-                                                if countdown_delta % 86400 == 0:
-
-                                                    days_to_go = countdown_delta//86400
-                                                    if days_to_go > 1:
-                                                        voice_message = "countdown has " + str(days_to_go) + " days to go"
-                                                    else:
-                                                        voice_message = "countdown has " + str(days_to_go) + " day to go"
-
-                                            elif countdown_delta > 3599:
-                                                if countdown_delta % 3600 == 0:
-
-                                                    hours_to_go = countdown_delta//3600
-                                                    if hours_to_go > 1:
-                                                        voice_message = "countdown has " + str(hours_to_go) + " hours to go"
-                                                    else:
-                                                        voice_message = "countdown has " + str(hours_to_go) + " hour to go"
-
-                                            elif countdown_delta > 59:
-                                                if countdown_delta % 60 == 0:
-
-                                                    minutes_to_go = countdown_delta//60
-                                                    if minutes_to_go > 1:
-                                                        if minutes_to_go < 11 or minutes_to_go % 5 == 0: # speak every 5 minutes. Once below 10 minutes, speak every minute.
-                                                            voice_message = "countdown has " + str(minutes_to_go) + " minutes to go"
-                                                        
-                                                    else:
-                                                        voice_message = "countdown has " + str(minutes_to_go) + " minute to go"
-
-                                            elif countdown_delta == 30:
-                                                voice_message = "Counting down 30 seconds"
-
-                                            elif countdown_delta > 0 and countdown_delta < 11:
-                                                voice_message = str(int(countdown_delta))
-
-                                            elif countdown_delta < 0:
-                                                if self.DEBUG:
-                                                    print("clock: countdown delta was negative, strange.")
-                                                del self.persistent_data['action_times'][index]
-                                                self.save_to_persistent_data = True #self.save_persistent_data()
-                                        
-                                            if voice_message != "":
-                                                #if self.DEBUG:
-                                                #    print("(...) " + str(voice_message))
-                                                self.speak(voice_message,intent=item['intent_message'])
+                                    if self.injection_in_progress == False and self.mqtt_connected == True:
+                                        if self.persistent_data['is_satellite'] == False:
+                                            if self.DEBUG:
+                                                print("Clock: attempting a forced injection since no injection complete message was received yet")
+                                            self.inject_updated_things_into_snips(True) # Force a new injection until it sticks
+                                        elif self.satellite_should_act_on_intent:
+                                            if self.DEBUG:
+                                                print("Clock: attempting a forced injection on a satellite with intention recognition since no injection complete message was received yet")
+                                            self.inject_updated_things_into_snips(True) # Force a new injection until it sticks
                                         else:
                                             if self.DEBUG:
-                                                print("clock: removing countdown item")
-                                            del self.persistent_data['action_times'][index]
-                                    except Exception as ex:
-                                        if self.DEBUG:
-                                            print("clock: Error updating countdown: " + str(ex))
-
-                                # Anything without a type will be treated as a normal timer.
-                                elif self.current_utc_time != 0 and self.current_utc_time >= int(item['moment']) and self.current_utc_time < int(item['moment']) + 60:
-                                    self.play_sound(self.end_of_input_sound,intent=item['intent_message'])
-                                    if self.DEBUG:
-                                        print("clock: (...) Your timer is finished")
-                                    self.speak("Your timer is finished",intent=item['intent_message'])
-
-                            except Exception as ex:
+                                                print("clock: basic satellite. Setting still_busy_booting to False")
+                                            self.still_busy_booting = False
+                                            self.initial_injection_completed = True
+                                        
+                                    
+                                        
+                            else:
                                 if self.DEBUG:
-                                    print("Clock: error recreating event from timer: " + str(ex))
-                                # TODO: currently if this fails it seems the timer item will stay in the list indefinately. If it fails, it should still be removed.
-                            
-                        #else:
-                        #    if self.DEBUG:
-                        #        print("nope " + str(self.current_utc_time))
-                        
-                        
-                    # Remove timers whose time has come 
-                    try:
-                        timer_removed = 0
-                        index2 = 0
-                        for index, item in enumerate(self.persistent_data['action_times']):
-                            #print(str(self.current_utc_time) + " ==?== " + str(int(item['moment'])))
-                            if int(item['moment']) <= self.current_utc_time:
-                                timer_removed += 1
-                                if self.DEBUG:
-                                    print("clock: removing timer from list")
-                                del self.persistent_data['action_times'][index2]
-                                index2 -= 1
-                                
-                            index2 += 1
-                                
-                        if timer_removed > 0:
+                                    print("clock: WARNING: clock: still no mqtt client?")
+                        except Exception as ex:
                             if self.DEBUG:
-                                print("clock: Amount of timers removed: " + str(timer_removed))
-                                #self.save_persistent_data()
+                                print("clock: error in periodic ping to main Voco controller" + str(ex))            
+                    
+                        #if self.mqtt_connected:
+
+                    
+                    if time.time() > self.current_utc_time + 1:
+                        if self.DEBUG:
+                            print("clock: WARNING, THE CLOCK TICK TOOK LONGER THAN A SECOND ALREADY (check 1): " + str(time.time() - self.current_utc_time))
+                        #self.current_utc_time = int(time.time())
+
+                    #timer_removed = False
+                    try:
+
+                        # Loop over all action times
+                        for index, item in enumerate(self.persistent_data['action_times']):
+                            #print("timer item = " + str(item))
+
+                            #cosmetic = False
+                            #if 'cosmetic' in item:
+                            #    if item['cosmetic'] == True:
+                            #        cosmetic = True
+                                
+                            if (self.current_utc_time >= int(item['moment']) and self.current_utc_time < int(item['moment']) + 60) or item['type'] == 'countdown':
+                                if self.DEBUG:
+                                    if item['type'] != 'countdown':
+                                        print("\nclock: time has come for an action item (that's not a countdown)")
+                                        print("non-countdown timer item:\n" + str(json.dumps(item,indent=4)))
+                                
+                                
+                                try:
+                            
+                                    if 'intent_message' in item:
+                                        #intent_message = item['intent_message']
+                                        if 'siteId' in item['intent_message']:
+                                        
+                                            if str(item['intent_message']['siteId']) == self.persistent_data['site_id']:
+                                                #if self.DEBUG:
+                                                #    print("clock: timer item is owned by this controller")
+                                                pass
+                                            else:
+                                                if self.DEBUG:
+                                                    print("clock: timer item is owned by another controller (a.k.a. cosmetic; only in the list for show)")
+                                            
+                                                if self.controller_recently_spotted(str(item['intent_message']['siteId'])):
+                                                    if self.DEBUG:
+                                                        print("clock: OK, the controller that owns the timer was recently spotted, it should handle it")
+                                                    continue
+                                                else:
+                                                    if self.DEBUG:
+                                                        print("clock: taking ownership of timer item because the controller that owns it doesn't seem to be up")
+                                                    
+                                                    # TODO: only take ownership of timers? 
+                                                    #if item['type'] in ['countdown','timer','wake','alarm','reminder']:
+                                                    item['intent_message']['siteId'] = self.persistent_data['site_id']
+                                                
+                                        else:
+                                            if self.DEBUG:
+                                                print("clock: WARNING\nvery strange: an item with intent data, but not a siteId. Taking ownership of it.")
+                                            item['intent_message']['siteId'] = self.persistent_data['site_id']
+                                            
+                                    
+                                        # Some action items (timers) should be spoken out loud too, no matter the origin (e.g. if the origin is Matrix)
+                                        if 'type' in item and 'origin' in item['intent_message']:
+                                            #if self.DEBUG:
+                                            #    print("origin check. item['type']: " + str(item['type']))
+                                            if item['type'] == 'timer' or item['type'] == 'wake' or item['type'] == 'alarm' or item['type'] == 'reminder':
+                                                if item['intent_message']['origin'] == 'text' or item['intent_message']['origin'] == 'matrix':
+                                                    #intent_message['origin'] = 'both'
+                                                    item['intent_message']['origin'] = 'both'
+                                                    if self.DEBUG:
+                                                        print("clock: changed item origin to both")
+                                                    
+                                                    
+                                                    
+                                            # Doing countdown timers in the chat would create wayyy to many messages
+                                            if item['type'] == 'countdown' and item['intent_message']['origin'] != 'voice':
+                                                if self.DEBUG:
+                                                    print("Forcing countdown to voice only. Was: " + str(item['intent_message']['origin']) )
+                                                #intent_message['origin'] = 'voice'
+                                                item['intent_message']['origin'] = 'voice'
+                                                    
+                                        #    if intent_message['origin'] == 'text':
+                                        #        if 'matrix_server' in self.persistent_data:
+                                        #            intent_message['origin'] = 'matrix'
+                                        #        else:
+                                        #            intent_message['origin'] = 'voice'
+                                        #intent_message['origin'] = 'voice'
+                            
+                                    
+                                    
+                                    
+                                    else:
+                                        if self.DEBUG:
+                                            print("clock: WARNING\nvery strange: a cosmetic item (originating from another controller on the network) without intent data spotted")
+                                    
+                                        
+                                        #intent_message = {'siteId':self.persistent_data['site_id']}
+                                        #item['intent_message'] = {'siteId':self.persistent_data['site_id']}
+                                
+                                
+                                
+                                except Exception as ex:
+                                    if self.DEBUG:
+                                        print("clock: intent message error: " + str(ex))
+                                    #intent_message = {'siteId':self.persistent_data['site_id']}
+                            
+
+                                try:
+                                    # Wake up alarm
+                                    if item['type'] == 'wake' and self.current_utc_time >= int(item['moment']) and self.current_utc_time < int(item['moment']) + 60:
+                                        if self.DEBUG:
+                                            print("clock: (...) WAKE UP")
+                                        #timer_removed = True
+                                        self.play_sound(self.alarm_sound,intent=item['intent_message'])
+                                        self.speak("Good morning, it's time to wake up.",intent=item['intent_message'])
+
+                                    # Normal alarm
+                                    elif item['type'] == 'alarm' and self.current_utc_time >= int(item['moment']) and self.current_utc_time < int(item['moment']) + 60:
+                                        if self.DEBUG:
+                                            print("clock: (...) ALARM")
+                                        self.play_sound(self.alarm_sound,intent=item['intent_message'])
+                                        self.speak("This is your alarm notification",intent=item['intent_message'])
+
+                                    # Reminder
+                                    elif item['type'] == 'reminder' and self.current_utc_time >= int(item['moment']) and self.current_utc_time < int(item['moment']) + 60:
+                                        if self.DEBUG:
+                                            print("clock: (...) REMINDER")
+                                        self.play_sound(self.end_of_input_sound,intent=item['intent_message'])
+                                        voice_message = "This is a reminder to " + str(item['reminder_text'])
+                                        self.speak(voice_message,intent=item['intent_message'])
+
+                                    # Delayed setting of a boolean state
+                                    elif item['type'] == 'boolean_related' and self.current_utc_time >= int(item['moment']) and self.current_utc_time < int(item['moment']) + 60:
+                                        if self.DEBUG:
+                                            print("origval:" + str(item['original_value']))
+                                            print("clock: (...) TIMED boolean_related SWITCHING")
+                                        #delayed_action = True
+                                        #slots = self.extract_slots(intent_message)
+                                
+                                        self.delayed_intent_player(item)
+                                        #found_properties = self.check_things('set_state',item['slots'], item['intent_message'], item['original_value'])
+                                        #intent_set_state(self, item['slots'],item['intent_message'],found_properties, item['original_value'])
+
+                                    # Delayed setting of a value
+                                    elif item['type'] == 'value' and self.current_utc_time >= int(item['moment']) and self.current_utc_time < int(item['moment']) + 60:
+                                        if self.DEBUG:
+                                            print("origval:" + str(item['original_value']))
+                                            print("clock: (...) TIMED SETTING OF A VALUE")
+                                        #slots = self.extract_slots(intent_message)
+                                        self.delayed_intent_player(item)
+                                        #found_properties = self.check_things('set_value',item['slots'])
+                                        #intent_set_value(self, item['slots'],item['intent_message'],found_properties, item['original_value'])
+
+                                    # Countdown
+                                    elif item['type'] == 'countdown':
+                                        #print("in countdown type")
+                                        try:
+                                            if int(item['moment']) >= int(self.current_utc_time): # This one is reversed - it's only trigger as long as it hasn't reached the target time.
+                                        
+                                                #countdown_delta = self.countdown - self.current_utc_time
+                                                countdown_delta = int(item['moment']) - self.current_utc_time
+                                        
+                                                # Update the countdown on the voco thing
+                                                if countdown_delta > 0:
+                                                    self.devices['voco'].properties[ 'countdown' ].set_cached_value_and_notify( int(countdown_delta) )
+                                                else:    
+                                                    self.devices['voco'].properties[ 'countdown' ].set_cached_value_and_notify( 0 )
+                                        
+                                                # Create speakable countdown message
+                                                if countdown_delta > 86400:
+                                                    if countdown_delta % 86400 == 0:
+
+                                                        days_to_go = countdown_delta//86400
+                                                        if days_to_go > 1:
+                                                            voice_message = "countdown has " + str(days_to_go) + " days to go"
+                                                        else:
+                                                            voice_message = "countdown has " + str(days_to_go) + " day to go"
+
+                                                elif countdown_delta > 3599:
+                                                    if countdown_delta % 3600 == 0:
+
+                                                        hours_to_go = countdown_delta//3600
+                                                        if hours_to_go > 1:
+                                                            voice_message = "countdown has " + str(hours_to_go) + " hours to go"
+                                                        else:
+                                                            voice_message = "countdown has " + str(hours_to_go) + " hour to go"
+
+                                                elif countdown_delta > 59:
+                                                    if countdown_delta % 60 == 0:
+
+                                                        minutes_to_go = countdown_delta//60
+                                                        if minutes_to_go > 1:
+                                                            if minutes_to_go < 11 or minutes_to_go % 5 == 0: # speak every 5 minutes. Once below 10 minutes, speak every minute.
+                                                                voice_message = "countdown has " + str(minutes_to_go) + " minutes to go"
+                                                        
+                                                        else:
+                                                            voice_message = "countdown has " + str(minutes_to_go) + " minute to go"
+
+                                                elif countdown_delta == 30:
+                                                    voice_message = "Counting down 30 seconds"
+
+                                                elif countdown_delta > 0 and countdown_delta < 11:
+                                                    voice_message = str(int(countdown_delta))
+
+                                                elif countdown_delta < 0:
+                                                    if self.DEBUG:
+                                                        print("clock: countdown delta was negative, strange.")
+                                                    del self.persistent_data['action_times'][index]
+                                                    self.save_to_persistent_data = True #self.save_persistent_data()
+                                        
+                                                if voice_message != "":
+                                                    #if self.DEBUG:
+                                                    #    print("(...) " + str(voice_message))
+                                                    self.speak(voice_message,intent=item['intent_message'])
+                                            else:
+                                                if self.DEBUG:
+                                                    print("clock: removing countdown item")
+                                                del self.persistent_data['action_times'][index]
+                                        except Exception as ex:
+                                            if self.DEBUG:
+                                                print("clock: Error updating countdown: " + str(ex))
+
+                                    # Anything without a type will be treated as a normal timer.
+                                    elif self.current_utc_time != 0 and self.current_utc_time >= int(item['moment']) and self.current_utc_time < int(item['moment']) + 60:
+                                        self.play_sound(self.end_of_input_sound,intent=item['intent_message'])
+                                        if self.DEBUG:
+                                            print("clock: (...) Your timer is finished")
+                                        self.speak("Your timer is finished",intent=item['intent_message'])
+
+                                except Exception as ex:
+                                    if self.DEBUG:
+                                        print("Clock: error recreating event from timer: " + str(ex))
+                                    # TODO: currently if this fails it seems the timer item will stay in the list indefinately. If it fails, it should still be removed.
+                            
+                            #else:
+                            #    if self.DEBUG:
+                            #        print("nope " + str(self.current_utc_time))
+                        
+                        
+                        # Remove timers whose time has come 
+                        try:
+                            timer_removed = 0
+                            index2 = 0
+                            for index, item in enumerate(self.persistent_data['action_times']):
+                                #print(str(self.current_utc_time) + " ==?== " + str(int(item['moment'])))
+                                if int(item['moment']) <= self.current_utc_time:
+                                    timer_removed += 1
+                                    if self.DEBUG:
+                                        print("clock: removing timer from list")
+                                    del self.persistent_data['action_times'][index2]
+                                    index2 -= 1
+                                
+                                index2 += 1
+                                
+                            if timer_removed > 0:
+                                if self.DEBUG:
+                                    print("clock: Amount of timers removed: " + str(timer_removed))
+                                    #self.save_persistent_data()
+                        except Exception as ex:
+                            if self.DEBUG:
+                                print("clock: Error while removing old timers: " + str(ex))
+
                     except Exception as ex:
                         if self.DEBUG:
-                            print("clock: Error while removing old timers: " + str(ex))
-
-                except Exception as ex:
-                    if self.DEBUG:
-                        print("Clock error: " + str(ex))
+                            print("Clock error: " + str(ex))
 
                 
-                if time.time() > self.current_utc_time + 1:
-                    if self.DEBUG:
-                        print("clock: WARNING, THE CLOCK TICK TOOK LONGER THAN A SECOND ALREADY (check 2): " + str(time.time() - self.current_utc_time))
-                    #self.current_utc_time = int(time.time())
-                
-
-                # Update the persistence data if the number of timers has changed
-                try:
-                    if len(self.persistent_data['action_times']) != previous_action_times_count:
+                    if time.time() > self.current_utc_time + 1:
                         if self.DEBUG:
-                            print("clock: New total amount of reminders+alarms+timers+countdown: " + str(len(self.persistent_data['action_times'])))
-                        previous_action_times_count = len(self.persistent_data['action_times'])
-                        self.update_timer_counts()
-                        #self.persistent_data['action_times'] = self.persistent_data['action_times']
-                        self.save_to_persistent_data = True #self.save_persistent_data()
-                except Exception as ex:
-                    if self.DEBUG:
-                        print("clock: Error updating timer counts from clock: " + str(ex))
+                            print("clock: WARNING, THE CLOCK TICK TOOK LONGER THAN A SECOND ALREADY (check 2): " + str(time.time() - self.current_utc_time))
+                        #self.current_utc_time = int(time.time())
+                
+
+                    # Update the persistence data if the number of timers has changed
+                    try:
+                        if len(self.persistent_data['action_times']) != previous_action_times_count:
+                            if self.DEBUG:
+                                print("clock: New total amount of reminders+alarms+timers+countdown: " + str(len(self.persistent_data['action_times'])))
+                            previous_action_times_count = len(self.persistent_data['action_times'])
+                            self.update_timer_counts()
+                            #self.persistent_data['action_times'] = self.persistent_data['action_times']
+                            self.save_to_persistent_data = True #self.save_persistent_data()
+                    except Exception as ex:
+                        if self.DEBUG:
+                            print("clock: Error updating timer counts from clock: " + str(ex))
 
                 
-                if time.time() > self.current_utc_time + 1:
-                    if self.DEBUG:
-                        print("clock: WARNING, THE CLOCK TICK TOOK LONGER THAN A SECOND ALREADY (check 3): " + str(time.time() - self.current_utc_time))
-                    #self.current_utc_time = int(time.time())
+                    if time.time() > self.current_utc_time + 1:
+                        if self.DEBUG:
+                            print("clock: WARNING, THE CLOCK TICK TOOK LONGER THAN A SECOND ALREADY (check 3): " + str(time.time() - self.current_utc_time))
+                        #self.current_utc_time = int(time.time())
                 
-                # Check if the microphone has been plugged in or unplugged.
+                    # Check if the microphone has been plugged in or unplugged.
                 
-                try:
-                    self.capture_devices = self.scan_alsa('capture')
+                    try:
+                        self.capture_devices = self.scan_alsa('capture')
                     
-                    #if self.DEBUG:
-                    #    print("self.capture_devices: " + str(self.capture_devices))
+                        #if self.DEBUG:
+                        #    print("self.capture_devices: " + str(self.capture_devices))
                     
-                    if len(self.capture_devices) == 0:
-                        #if self.DEBUG:
-                        #    print("microphone list was empty")
-                        if self.missing_microphone == False:
-                            if self.DEBUG:
-                                print("clock: microphone was disconnected. List of available microphones is now empty.")
-                            self.missing_microphone = True
-                            if self.still_busy_booting == False:
-                                self.speak("The microphone has been disconnected.")
-                            if self.stop_snips_on_microphone_unplug: # Deprecated, as Voco should still be able to handle text messages
-                                if self.DEBUG:
-                                    print("clock: microphone was disconnected. Stopping Snips.")
-                                self.stop_snips()
-                    else:
-                        #if self.DEBUG:
-                        #    print("microphone list was not empty")
-                        if self.microphone == 'Auto':
-                            # this only occurs is voco is started without a microphone plugged in, and it has just been plugged in for the first time.
-                            self.microphone = self.capture_devices[ len(self.capture_devices) - 1 ] # select the last microphone from the list, which will match the initial record card ID and record device ID that scan_alsa has extracted earlier.
-                            if self.stop_snips_on_microphone_unplug:
-                                #self.should_restart_snips = True
-                                self.set_status_on_thing("restarting")
-                                self.run_snips()
-                            if self.DEBUG:
-                                print("clock: Microphone was auto-detected. Set to: " + str(self.microphone))
-                            #if self.still_busy_booting == False:
-                            #    self.speak("A microphone has been connected.")
-                                
-                        elif self.microphone in self.capture_devices: # A mic is currenty plugged in
-                            if self.missing_microphone:
-                                if self.DEBUG:
-                                    print("clock: The microphone has been reconnected: " + str(self.microphone))
-                                self.missing_microphone = False
-                                if self.persistent_data['llm_wakeword_model'] != 'voco' and self.llm_wakeword_started == False:
-                                    if self.DEBUG:
-                                        print("mic reconnected, and wakeword thread hasn't started yet, so (re)starting wakeword thread")
-                                    self.start_wakeword_thread()
-                                
-                                if self.mqtt_second_connected == True:
-                                    if self.still_busy_booting == False:
-                                        self.speak("The microphone has been connected.")
-                                    #print("self.mqtt_client = " + str(self.mqtt_client))
-                                    #self.stop_snips()
-                                    #self.run_snips()
-                                    if self.stop_snips_on_microphone_unplug:
-                                        #self.should_restart_snips = True
-                                        self.set_status_on_thing("restarting")
-                                        self.run_snips()
-                                    #if self.was_listening_when_microphone_disconnected:
-                                    #    self.set_snips_state(True)
-                            
-                        else: # Previously selected mic is not in list of microphones
+                        if len(self.capture_devices) == 0:
+                            #if self.DEBUG:
+                            #    print("microphone list was empty")
                             if self.missing_microphone == False:
                                 if self.DEBUG:
-                                    print("clock: The microphone has been disconnected: " + str(self.microphone))
+                                    print("clock: microphone was disconnected. List of available microphones is now empty.")
                                 self.missing_microphone = True
                                 if self.still_busy_booting == False:
-                                    self.speak("The microphone has been disconnected")
-                                if self.stop_snips_on_microphone_unplug:
+                                    self.speak("The microphone has been disconnected.")
+                                if self.stop_snips_on_microphone_unplug: # Deprecated, as Voco should still be able to handle text messages
+                                    if self.DEBUG:
+                                        print("clock: microphone was disconnected. Stopping Snips.")
                                     self.stop_snips()
-                                #self.was_listening_when_microphone_disconnected = self.persistent_data['listening']
-                                #self.set_snips_state(False)
+                        else:
+                            #if self.DEBUG:
+                            #    print("microphone list was not empty")
+                            if self.microphone == 'Auto':
+                                # this only occurs is voco is started without a microphone plugged in, and it has just been plugged in for the first time.
+                                self.microphone = self.capture_devices[ len(self.capture_devices) - 1 ] # select the last microphone from the list, which will match the initial record card ID and record device ID that scan_alsa has extracted earlier.
+                                if self.stop_snips_on_microphone_unplug:
+                                    #self.should_restart_snips = True
+                                    self.set_status_on_thing("restarting")
+                                    self.run_snips()
+                                if self.DEBUG:
+                                    print("clock: Microphone was auto-detected. Set to: " + str(self.microphone))
+                                #if self.still_busy_booting == False:
+                                #    self.speak("A microphone has been connected.")
                                 
-                except Exception as ex:
-                    if self.DEBUG:
-                        print("clock: Error checking if microphone has been re- or disconnected: " + str(ex))
+                            elif self.microphone in self.capture_devices: # A mic is currenty plugged in
+                                if self.missing_microphone:
+                                    if self.DEBUG:
+                                        print("clock: The microphone has been reconnected: " + str(self.microphone))
+                                    self.missing_microphone = False
+                                    if self.persistent_data['llm_wakeword_model'] != 'voco' and self.llm_wakeword_started == False:
+                                        if self.DEBUG:
+                                            print("mic reconnected, and wakeword thread hasn't started yet, so (re)starting wakeword thread")
+                                        self.start_wakeword_thread()
+                                
+                                    if self.mqtt_second_connected == True:
+                                        if self.still_busy_booting == False:
+                                            self.speak("The microphone has been connected.")
+                                        #print("self.mqtt_client = " + str(self.mqtt_client))
+                                        #self.stop_snips()
+                                        #self.run_snips()
+                                        if self.stop_snips_on_microphone_unplug:
+                                            #self.should_restart_snips = True
+                                            self.set_status_on_thing("restarting")
+                                            self.run_snips()
+                                        #if self.was_listening_when_microphone_disconnected:
+                                        #    self.set_snips_state(True)
+                            
+                            else: # Previously selected mic is not in list of microphones
+                                if self.missing_microphone == False:
+                                    if self.DEBUG:
+                                        print("clock: The microphone has been disconnected: " + str(self.microphone))
+                                    self.missing_microphone = True
+                                    if self.still_busy_booting == False:
+                                        self.speak("The microphone has been disconnected")
+                                    if self.stop_snips_on_microphone_unplug:
+                                        self.stop_snips()
+                                    #self.was_listening_when_microphone_disconnected = self.persistent_data['listening']
+                                    #self.set_snips_state(False)
+                                
+                    except Exception as ex:
+                        if self.DEBUG:
+                            print("clock: Error checking if microphone has been re- or disconnected: " + str(ex))
                 
                 
-                # Switch 'sound detected' back to off after a while (if the feature is enabled)
-                #print(str(self.current_utc_time - self.last_sound_activity))
-                if self.sound_detection:
-                    if int(self.last_sound_activity) == self.current_utc_time - 10:
-                        self.set_sound_detected(False)
+                    # Switch 'sound detected' back to off after a while (if the feature is enabled)
+                    #print(str(self.current_utc_time - self.last_sound_activity))
+                    if self.sound_detection:
+                        if int(self.last_sound_activity) == self.current_utc_time - 10:
+                            self.set_sound_detected(False)
 
-                if time.time() > self.current_utc_time + 1:
-                    if self.DEBUG:
-                        print("clock: WARNING, THE CLOCK TICK TOOK LONGER THAN A SECOND ALREADY (check 4): " + str(time.time() - self.current_utc_time))
-                    #self.current_utc_time = int(time.time())
+                    if time.time() > self.current_utc_time + 1:
+                        if self.DEBUG:
+                            print("clock: WARNING, THE CLOCK TICK TOOK LONGER THAN A SECOND ALREADY (check 4): " + str(time.time() - self.current_utc_time))
+                        #self.current_utc_time = int(time.time())
 
-                if self.should_restart_snips == True:
-                    if self.DEBUG:
-                        print("clock: self.should_restart_snips is True! Calling run_snips.")
-                    self.run_snips()
+                    if self.should_restart_snips == True:
+                        if self.DEBUG:
+                            print("clock: self.should_restart_snips is True! Calling run_snips.")
+                        self.run_snips()
                     
                   
-                if time.time() > self.current_utc_time + 1:
-                    if self.DEBUG:
-                        print("clock: WARNING, THE CLOCK TICK TOOK LONGER THAN A SECOND (final check): " + str(time.time() - self.current_utc_time))
-                    #self.current_utc_time = int(time.time())
-
-
+                    if time.time() > self.current_utc_time + 1:
+                        if self.DEBUG:
+                            print("clock: WARNING, THE CLOCK TICK TOOK LONGER THAN A SECOND (final check): " + str(time.time() - self.current_utc_time))
+                        #self.current_utc_time = int(time.time())
+                    
+                except Exception as ex:
+                    print("caught general error in clock: ", ex)
+                
+                
+        if self.DEBUG:
+            print("CLOCK: beyond while loop")
 #
 #  THINGS PROPERTIES
 #
@@ -6824,6 +6824,7 @@ class VocoAdapter(Adapter):
             self.last_injection_perform_time = 0
             
             if self.initial_injection_completed == False:
+                # TODOL speak_welcome_message is also called from the clock thread
                 self.speak_welcome_message()
             self.still_busy_booting = False
             self.preparing_an_injection = False
@@ -9788,7 +9789,7 @@ class VocoAdapter(Adapter):
                 self.force_injection = True
             
             if self.DEBUG:
-                print("inject_updated_things_into_snips: starting an attempt")
+                print("inject_updated_things_into_snips: starting an attempt. self.preparing_an_injection: ", self.preparing_an_injection)
                 pass
             
             if self.preparing_an_injection:
@@ -10129,6 +10130,8 @@ class VocoAdapter(Adapter):
                     
                 # Check if Snips should be updated with fresh data
                 if len(operations) > 0 or self.force_injection: # len(operations) has a maximum value of 3 (when things, properties and string all have at least one different value)
+                    if self.DEBUG:
+                        print("creating injection update_request with operations: ", operations)
                     self.force_injection = False
                     update_request = {"operations":operations}
             
@@ -10177,10 +10180,9 @@ class VocoAdapter(Adapter):
                     if self.DEBUG:
                         print("No need for injection")
                 
-                
-            
-            
-            
+            else:
+                if self.DEBUG:
+                    print("inject_updated_things_into_snips: self.try_updating_things returned nully, effectively skipping injection")
             #self.attempting_injection = False
 
         except Exception as ex:
@@ -10189,7 +10191,8 @@ class VocoAdapter(Adapter):
 
 
         self.preparing_an_injection = False
-
+        if self.DEBUG:
+            print("reached end of inject_updated_things_into_snips")
 
 
 
@@ -12098,8 +12101,8 @@ class VocoAdapter(Adapter):
     
     
     def is_snips_running_count(self):
-        #if self.DEBUG:
-        #    print("In is_snips_running_count")
+        if self.DEBUG:
+            print("In is_snips_running_count")
         
         
         if self.busy_starting_snips:
@@ -12112,48 +12115,72 @@ class VocoAdapter(Adapter):
         #    print("len(self.external_processes) before: ", len(self.external_processes))
             
         def subprocess_has_died(existing_process, debugging=False):
-            #if self.DEBUG:
-            #    print("existing_process: ", existing_process)
+            if self.DEBUG:
+                print("subprocess_has_died: checking existing_process: ", existing_process)
             
             
             try:
-                if existing_process.stderr:
-                    stderr_output = existing_process.stderr.read()
-                    if debugging:
-                        print(f"Std ERR: {stderr_output}")
+                #if existing_process.stderr:
+                #stderr_output = existing_process.stderr.read()
+                #if debugging:
+                #    print(f"subprocess_has_died: Std ERR: {stderr_output}")
                 
-                if existing_process.stdout:
-                    stdout_output = existing_process.stdout.read()
+                #if existing_process.stdout:
+                #stdout_output = existing_process.stdout.read()
+                #if debugging:
+                #    print(f"subprocess_has_died: Std OUT: {stdout_output}")
+                    
+                print("calling existing_process.poll()")
+                dead_check = existing_process.poll()
+                if dead_check is None:
+                    print("subprocess_has_died: subprocess is alive")
+                    return False
+                else:
                     if debugging:
-                        print(f"Std OUT: {stdout_output}")
+                        print("subprocess_has_died: SUBPROCESS SEEMS DEAD")
+            
             except Exception as ex:
                 if debugging:
                     print("caught error getting stderr/stdout from subprocess: ", ex)
             
             
-            dead_check = existing_process.poll()
-            if dead_check is None:
-                #print("subprocess is alive")
-                return False
-            else:
-                if debugging:
-                    print("SUBPROCESS SEEMS DEAD")
             
-            
-                
-                
-                #print(dir(existing_process))
             return True
-            
         
-        self.external_processes = [x for x in self.external_processes if not subprocess_has_died(x,self.DEBUG)]
+        
+        try:
+            external_processes_count_before = len(self.external_processes)
+            if self.DEBUG:
+                print("external_processes_count_before: ", external_processes_count_before)
+            
+            i = 0
+            while i < len(self.external_processes):
+                if self.DEBUG:
+                    print(i, ". external process returncode: ", self.external_processes[i].returncode)
+                if self.external_processes[i].poll() != None:
+                    if self.DEBUG:
+                        print("\na subprocess has stopped/died\n")
+                    del self.external_processes[i]  
+                else:
+                    i += 1
+                    
+            external_processes_count_after = len(self.external_processes)
+            if self.DEBUG:
+                print("external_processes_count_after: ", external_processes_count_after)
+            if external_processes_count_after < external_processes_count_before:
+                if self.DEBUG:
+                    print("\nWARNING, self.external_processes was pruned - a subprocess has stopped/died. Subprocesses count before and after: ", external_processes_count_before, external_processes_count_after)
+        except Exception as ex:
+            if self.DEBUG:
+                print("caught an error checking alive processes: ", ex)
+        
         
         #if self.DEBUG:
         #    print("len(self.external_processes) after: ", len(self.external_processes))
         
         snips_actual_processes_count = 0
         snips_defunct_count = 0
-        ps_aux_output = run_command('ps aux | grep snips')
+        ps_aux_output = str(run_command('ps aux | grep snips', 2))
         if isinstance(ps_aux_output,str):
             for line in ps_aux_output.splitlines():
                 if 'defunct' in line:
@@ -12165,20 +12192,7 @@ class VocoAdapter(Adapter):
                     snips_actual_processes_count += 1
                     
             
-        """
-        p1 = subprocess.Popen(["ps", "-A"], stdout=subprocess.PIPE)
-        p2 = subprocess.Popen(['grep', 'snips'], stdin=p1.stdout, stdout=subprocess.PIPE)
-
-        snips_actual_processes_count = 0
-        for s in (str(p2.communicate())[2:-10]).split('\\n'):
-            #if self.DEBUG:
-            #    print(" -- " + str(s))
-            if s != "" and 'defunct' not in s and 'snips-watch' not in s:
-                if self.DEBUG:
-                    print(" -- real snips process: " + str(s))
-                snips_actual_processes_count += 1
-        """
-                    
+           
         try:
             #if self.DEBUG:
             #    print(" -- is_snips_running_count: snips_defunct_count: " + str(snips_defunct_count))
@@ -12220,6 +12234,8 @@ class VocoAdapter(Adapter):
             if self.DEBUG:
                 print("caught error in is_snips_running_count: " + str(ex))
             
+        if self.DEBUG:
+            print("is_snips_running_count: returning snips_actual_processes_count: ", snips_actual_processes_count)
         #return bool(len(self.external_processes))
         return snips_actual_processes_count
     
@@ -12598,7 +12614,7 @@ class VocoAdapter(Adapter):
 
                     if self.llm_models[key]['list'][model_name]['model'] == 'voco':
                         self.llm_models[key]['list'][model_name]['downloaded'] = True
-                    elif self.llm_models[key]['list'][model_name]['model'].startsWith('KittenTTS'):
+                    elif self.llm_models[key]['list'][model_name]['model'].startswith('KittenTTS'):
                         if os.path.exists( os.path.join(self.kitten_tts_download_folder,'models--KittenML--kitten-tts-mini-0.8') ):
                             self.llm_models[key]['list'][model_name]['downloaded'] = True
                         else:
@@ -13342,7 +13358,13 @@ class VocoAdapter(Adapter):
                 else:
                     if self.DEBUG:
                         print("\n\n\nLLM STT process immediately crashed! return code: " + str(self.llm_stt_process.returncode) + "\n\n\n")
-
+                    
+                    #self.persistent_data['llm_stt_model']= 'voco'
+                    #self.llm_stt_enabled = False
+                    if not 'tts_crashed' in self.i_will_say_this_only_once:
+                        self.i_will_say_this_only_once.append('tts_crashed')
+                        self.send_pairing_prompt("The Text-To-Speech AI crashed")
+                    
                     if self.llm_stt_process.stdout:
                         print("STT process: starting error. stdout: " + str(self.llm_stt_process.stdout))
                     if self.llm_stt_process.stderr:
