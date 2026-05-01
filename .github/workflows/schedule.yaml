@@ -44,15 +44,15 @@ jobs:
         echo ""
         echo "increment_manifest_version.py output: $result"
         echo ""
-        echo "NEW_VERSION=$result" >> $GITHUB_ENV
-        #echo "$result" >> "$env:GITHUB_NEW_VERSION"
-        #echo "NEW_VERSION=$(<link.txt)" >> $GITHUB_ENV
-        #echo "env.GITHUB_NEW_VERSION"
+        echo "RELEASE_VERSION=$result" >> $GITHUB_ENV
+        #echo "$result" >> "$env:GITHUB_RELEASE_VERSION"
+        #echo "RELEASE_VERSION=$(<link.txt)" >> $GITHUB_ENV
+        #echo "env.GITHUB_RELEASE_VERSION"
         
       #run: echo "VARIABLE_NAME=example_value" >> $GITHUB_ENV
 
     - name: Check if new_version is valid
-      if: ${{ env.NEW_VERSION == 'error' }}
+      if: ${{ env.RELEASE_VERSION == 'error' }}
       run: |
         echo "incremented new_version is 'error'! Aborting workflow"
         exit 1
@@ -98,7 +98,7 @@ jobs:
     - name: Create release
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        tag: ${{ env.NEW_VERSION }}
+        tag: ${{ env.RELEASE_VERSION }}
       run: |
         echo "calling gh release create with new_version as tag: $tag"
         gh release create "$tag" \
@@ -113,8 +113,8 @@ jobs:
    
   call-release:
     needs: make-file-changes
-    #uses: ./.github/workflows/release.yml
-    uses: createcandle/voco/.github/workflows/release.yml@{{needs.make-file-changes.outputs.release_version}}
+    uses: ./.github/workflows/release.yml
+    #uses: createcandle/voco/.github/workflows/release.yml@{{needs.make-file-changes.outputs.release_version}}
     secrets: inherit
     with:
       release_version: ${{ needs.make-file-changes.outputs.release_version }}
