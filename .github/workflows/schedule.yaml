@@ -1,0 +1,105 @@
+# .github/workflows/release.yml
+name: Monthly release
+
+permissions:
+  contents: write
+  
+on:
+  # Allows you to run this workflow manually from the Actions tab
+  # (to test the worflow straight away)
+  workflow_dispatch:
+  
+  schedule:
+    # Runs at 05:30 UTC every day
+    # Note: Use UTC time for schedules
+    - cron: '0 0 1 * *'
+
+jobs:
+  make-file-changes:
+    runs-on: ubuntu-latest
+    steps:
+    # Checkout code
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: backup manifest.json
+      run: |
+        if [ -s "manifest.json" ]; then 
+          echo "OK, manifest.json exists and is not empty"
+          cp manifest.json bak_manifest.json
+        else
+          echo "ERROR, manifest.json does not exist or is empty"
+          exit 1
+        fi
+    
+    # Add actions that modify files here
+    - name: Modify files
+      id: new_version
+      run: |
+        $result = python3 increment_manifest_version.py
+        echo ""
+        echo "increment_manifest_version.py output: $result"
+        echo ""
+        echo "NEW_VERSION=$result" >> $GITHUB_ENV
+        #echo "$result" >> "$env:GITHUB_NEW_VERSION"
+        #echo "NEW_VERSION=$(<link.txt)" >> $GITHUB_ENV
+        #echo "env.GITHUB_NEW_VERSION"
+        
+      #run: echo "VARIABLE_NAME=example_value" >> $GITHUB_ENV
+
+    - name: Check if new_version is valid
+      if: ${{ env.NEW_VERSION == 'error' }}
+      run: |
+        echo "incremented new_version is 'error'! Aborting workflow"
+        exit 1
+
+
+    - name: Check for Changes
+      id: check_changes
+      run: |
+        if [[ -n "$(git diff --exit-code)" ]]; then
+          echo "Changes detected."
+          echo "::set-output name=has_changes::true"
+        else
+          echo "No changes detected."
+          echo "::set-output name=has_changes::false"
+        fi
+
+    - name: Commit and Push Changes
+      if: steps.check_changes.outputs.has_changes == 'true'
+      run: |
+        # configure user
+        git config --global user.name "${{ github.actor }}"
+        git config --global user.email "${{ github.actor }}@users.noreply.github.com"
+
+        # stage any file changes to be committed
+        git add .
+
+        # make commit with staged changes
+        git commit -m 'files changed'
+
+        # push the commit back up to source GitHub repository
+        git push
+#  call-release:
+#    uses: ./.github/workflows/release.yml
+#    secrets: inherit
+
+
+
+
+#  release:
+#    name: Release pushed tag
+#    runs-on: ubuntu-latest
+#    steps:
+    - name: Create release
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        tag: ${{ env.NEW_VERSION }}
+      run: |
+        echo "calling gh release create with new_version as tag: $tag"
+        gh release create "$tag" \
+            --repo="$GITHUB_REPOSITORY" \
+            --title="${tag}" \
+            --notes "Monthly auto-generated release to keep signal-cli updated"
+            #--generate-notes
