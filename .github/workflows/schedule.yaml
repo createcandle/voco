@@ -101,14 +101,15 @@ jobs:
         tag: ${{ env.RELEASE_VERSION }}
       run: |
         echo "calling gh release create with new_version as tag: $tag"
+        echo "- GITHUB_REPOSITORY: $GITHUB_REPOSITORY"
         gh release create "$tag" \
             --repo="$GITHUB_REPOSITORY" \
             --title="${tag}" \
             --notes "Monthly auto-generated release to keep signal-cli updated"
             #--generate-notes
-            
-        echo "calling workflow run Release"
-        gh workflow run Release --ref "${tag}"
+        #sleep 5
+        #echo "calling workflow run Release"
+        #gh workflow run Release --ref "${tag}"
 
    
 #  call-release:
