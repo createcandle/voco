@@ -27,6 +27,13 @@ jobs:
   get-release:
     runs-on: ubuntu-24.04-arm
     steps:
+    - name: Verify environment variables
+      run: |
+        echo "GITHUB_REF: {{ GITHUB_REF }}"
+        echo "GITHUB_REF:10: ${GITHUB_REF:10}"
+        echo ""
+        echo "GITHUB_ENV: $GITHUB_ENV"
+        echo ""
     #- name: Check and set environment variable
     #  if: env.MY_VAR != ''
     #  run: echo "MY_ENV_VAR=${{ env.MY_VAR }}" >> $GITHUB_ENV
