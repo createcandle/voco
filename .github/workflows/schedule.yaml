@@ -37,7 +37,7 @@ jobs:
     - name: Modify files
       id: new_version
       run: |
-        $result = python3 increment_manifest_version.py
+        result=$(python3 increment_manifest_version.py)
         echo ""
         echo "increment_manifest_version.py output: $result"
         echo ""
