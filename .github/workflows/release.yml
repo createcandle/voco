@@ -31,8 +31,7 @@ jobs:
     steps:
     - name: Verify environment variables
       run: |
-        echo "GITHUB_REF: {{ GITHUB_REF }}"
-        echo "GITHUB_REF:10: ${GITHUB_REF:10}"
+        echo "GITHUB_REF: ${GITHUB_REF}"
         echo ""
         echo "GITHUB_ENV: $GITHUB_ENV"
         echo ""
