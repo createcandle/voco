@@ -12,6 +12,7 @@ on:
   schedule:
     # Runs at 05:30 UTC every day
     # Note: Use UTC time for schedules
+    #branches: [ release/main ]
     - cron: '0 0 1 * *'
 
 jobs:
@@ -109,10 +110,11 @@ jobs:
         #echo "calling workflow run Release"
         #gh workflow run Release
 
-        
+   
   call-release:
     needs: make-file-changes
-    uses: ./.github/workflows/release.yml
+    #uses: ./.github/workflows/release.yml
+    uses: createcandle/voco/.github/workflows/release.yml@{{needs.make-file-changes.outputs.release_version}}
     secrets: inherit
     with:
       release_version: ${{ needs.make-file-changes.outputs.release_version }}
