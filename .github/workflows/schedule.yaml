@@ -113,8 +113,8 @@ jobs:
    
   call-release:
     needs: make-file-changes
-    uses: ./.github/workflows/release.yml
-    #uses: createcandle/voco/.github/workflows/release.yml@{{needs.make-file-changes.outputs.release_version}}
+    #uses: ./.github/workflows/release.yml
+    uses: createcandle/voco/.github/workflows/release.yml@master
     secrets: inherit
     with:
       release_version: ${{ needs.make-file-changes.outputs.release_version }}
