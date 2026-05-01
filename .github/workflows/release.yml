@@ -7,9 +7,9 @@ on:
     
 
   workflow_call:
-    secrets:
-      token:
-        required: true
+  #  secrets:
+  #    token:
+  #      required: true
 
   workflow_dispatch:
   
