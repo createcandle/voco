@@ -6,6 +6,14 @@ on:
     types: [published]
     
 
+  workflow_call:
+    secrets:
+      token:
+        required: true
+
+  workflow_dispatch:
+  
+
 jobs:
   get-release:
     runs-on: ubuntu-24.04-arm
