@@ -103,5 +103,6 @@ jobs:
             --title="${tag}" \
             --notes "Monthly auto-generated release to keep signal-cli updated"
             #--generate-notes
-
+            
+        echo "calling workflow run Release"
         gh workflow run Release
