@@ -46,5 +46,5 @@ except Exception as ex:
     #print("increment_manifest_version: caught error: ", ex)
 
 #print("increment_manifest_version.py FAILED")
-print("error")
+print("error", end="")
 sys.exit(1)
