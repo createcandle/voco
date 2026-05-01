@@ -48,6 +48,8 @@ jobs:
       uses: bruceadams/get-release@v1.3.2
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ inputs.release_version }}
     - name: Dump upload url to file
       run: echo '${{ steps.get_release.outputs.upload_url }}' > upload_url
     - name: Upload upload_url
