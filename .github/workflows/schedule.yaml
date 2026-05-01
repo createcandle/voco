@@ -17,6 +17,8 @@ on:
 jobs:
   make-file-changes:
     runs-on: ubuntu-latest
+    outputs:
+      release_version: ${{ steps.new_version.outputs.release_version }} 
     steps:
     # Checkout code
     - uses: actions/checkout@v4
@@ -112,3 +114,6 @@ jobs:
     needs: make-file-changes
     uses: ./.github/workflows/release.yml
     secrets: inherit
+    with:
+      release_version: ${{ needs.make-file-changes.outputs.release_version }}
+
