@@ -8,11 +8,9 @@ on:
     #types: [created]
     types: [published]
 
-  schedule:
-    # Runs at 05:30 UTC every day
-    # Note: Use UTC time for schedules
-    #branches: [ release/main ]
-    - cron: '0 1 2 * *'
+#  schedule:
+#    #branches: [ release/main ]
+#    - cron: '0 1 2 * *'
     
   # Allow this workflow to be called by another one (schedule).
   workflow_call:
