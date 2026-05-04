@@ -12,6 +12,8 @@ pwd
 echo ""
 echo "PYTHON_VERSION from env: $PYTHON_VERSION"
 
+sudo apt install wget -y
+
 #if [ -z ${var+x} ]; then echo "var is unset"; else echo "var is set to '$var'"; fi
 
 if [ -d /usr/bin/ ]; then
