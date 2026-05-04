@@ -12,7 +12,7 @@ pwd
 echo ""
 echo "PYTHON_VERSION from env: $PYTHON_VERSION"
 
-sudo apt install wget -y
+#sudo apt install wget -y
 
 #if [ -z ${var+x} ]; then echo "var is unset"; else echo "var is set to '$var'"; fi
 
@@ -226,8 +226,8 @@ cp ./llm/wakeword/open_wake_word/* ./lib/openwakeword/resources/models/
 
 mkdir -p ./signal
 
-wget --retry-connrefused --waitretry=1 --read-timeout=20 --timeout=15 -t 3 https://media.projektzentrisch.de/temp/signal-cli/signal-cli_ubuntu2004_arm64.gz -O signal-cli_ubuntu2004_arm64.gz
-wget --retry-connrefused --waitretry=1 --read-timeout=20 --timeout=15 -t 3 https://media.projektzentrisch.de/temp/signal-cli/libsignal_jni_so0921_ubuntu2004_arm64.gz -O libsignal_jni_so0921_ubuntu2004_arm64.gz
+curl https://media.projektzentrisch.de/temp/signal-cli/signal-cli_ubuntu2004_arm64.gz -O signal-cli_ubuntu2004_arm64.gz
+curl https://media.projektzentrisch.de/temp/signal-cli/libsignal_jni_so0921_ubuntu2004_arm64.gz -O libsignal_jni_so0921_ubuntu2004_arm64.gz
 # Remove local cffi so that the globally installed version doesn't clash
 #rm -rf ./lib/cffi*
 
