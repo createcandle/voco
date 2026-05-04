@@ -177,7 +177,16 @@ class VocoDevice(Device):
                                     'readOnly': True
                                 },
                                 False)
-                                
+            if self.adapter.llm_enabled and self.adapter.llm_assistant_enabled:
+                self.properties["question"] = VocoProperty(
+                            self,
+                            "question",
+                            {
+                                'title': "Ask question",
+                                'type': 'boolean',
+                                '@type':'OnOffProperty',
+                            },
+                            False )
                                 
         except Exception as ex:
             print("error adding properties: " + str(ex))
@@ -213,31 +222,37 @@ class VocoProperty(Property):
                 print("set_value called for: " + str(self.title))
                 print("- with value: " + str(value))
                 
-            if self.title == 'volume':
+            if self.name == 'volume':
                 self.device.adapter.set_speaker_volume(int(value))
                 #self.update(value)
 
-            if self.title == 'microphone_gain':
+            if self.name == 'microphone_gain':
                 self.device.adapter.set_microphone_gain(int(value))
                 #self.update(value)
 
-            if self.title == 'feedback-sounds':
+            if self.name == 'feedback-sounds':
                 self.device.adapter.set_feedback_sounds(bool(value))
                 #self.update(value)
                 
-            if self.title == 'assistant':
+            if self.name == 'assistant':
                 self.device.adapter.set_assistant(bool(value))
 
-            if self.title == 'listening':
+            if self.name == 'listening':
                 self.device.adapter.was_listening_when_microphone_disconnected = bool(value) # if the user consciously changes this, then override the setting.
                 self.device.adapter.set_snips_state(bool(value))
                 #self.update(value)
                 
-            if self.title == 'chatting':
+            if self.name == 'chatting':
                 self.device.adapter.persistent_data['chatting'] = bool(value)
                 self.device.adapter.save_persistent_data()
                 #self.update(value)
 
+            if self.name == 'question':
+                self.update(True)
+                self.device.adapter.ask_a_question()
+                time.sleep(1)
+                value = False
+            
             if self.title == 'audio_output':
                 self.device.adapter.set_audio_output(str(value))
             

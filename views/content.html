@@ -217,15 +217,8 @@
                         <div class="extension-voco-vlak">
                             <img src="/extensions/voco/images/candle_voco_chat.png"/>
                             <h2>Chat with your home</h2>
-                            <p>You can chat with Voco a privacy friendly and encrypted messaging network called Matrix. This is very similar to Whatsapp or Signal. There are many ways to use it, such as installing a Matrix app on your phone or tablet, or logging in through a web application.</p>
-                            <button id="extension-voco-matrix-learn-more-button" type="button" class="text-button">Learn more</button>
-                            <div id="extension-voco-matrix-learn-more" class="extension-voco-hidden">
-                                <p>Matrix is like a cross between email and Whatsapp/Signal. Where Apps like Whatsapp have a central server that controls the entire chat network, with Matrix it's more like email, where lots of different servers exchange the messages. Just as with email you can choose what provider you trust your messages with.</p>
-                                <p>This design means no single organisation owns the chat network. Anyone can create a server, and then these servers route the messages between them so they get to the intented destination. You could even run your own server if you wanted, which would give you very high levels of control over your data.</p>
-                                <p>This is made possible by the Matrix software that all these servers run. Matrix is open source, managed by the Matrix.org foundation, and supported by a worldwide community of people and organisations. The open source nature means the programming code can be viewed by anyone, including you. You can even help improve it. For many people this level of transparency allows for greater levels of trust.</p>
-                                <p>The Matrix software can encrypt the messages, and Voco enables this for all the messages it sends.</p>
-                                <p>You can learn much more at matrix.org.</p>
-                            </div>
+                            <p>You can chat with Voco through Signal or Matrix. Both are privacy friendly and encrypted messaging networks.</p>
+							
                             
                             <!--<button id="extension-voco-matrix-show-new-account-simple" class="text-button">Simple account creation</button>-->
                             
@@ -234,6 +227,34 @@
                             <button id="extension-voco-matrix-show-new-account-exists" class="text-button">I already have a Matrix account</button>
                             -->
                         </div>
+
+						<div id="extension-voco-signal-intro" class="extension-voco-vlak">
+							<h3>Signal</h3>
+							<p>If you already have a Signal account, then the easiest way chat with Voco is to pair the Candle controller with your current Signal account.</p>
+							<p>Follow these steps:</p>
+							<ol>
+								<li>Enter your phone number: <div><input type="tel" id="extension-voco-signal-phone-number-input" name="extension-voco-signal-phone-number-input" placeholder="+.. ........"><button id="extension-voco-signal-phone-number-next-button" class="text-button">Next</button></div></li>
+								<li>On your phone, open the Signal app. Click on <span id="extension-voco-signal-three-dots-icon">⋮</span> in the top-right corner to open Settings, and then Linked Devices.</li>
+								<li>Click on the "Link a Device" button, and then scan the QR code below.<br><pre id="extension-voco-signal-qr-container">QR code will <br>appear here after <br>you click 'Next'</pre></li>
+								<li>Done!</li>
+							</ol>
+						</div>
+
+
+						<div id="extension-voco-matrix-intro" class="extension-voco-vlak">
+							<h3>Matrix</h3>
+							<p>You can use Matrix by installing an app on your phone or tablet, or by logging in through a web application.</p>
+                            <button id="extension-voco-matrix-learn-more-button" type="button" class="text-button">Learn more</button>
+                            <div id="extension-voco-matrix-learn-more" class="extension-voco-hidden">
+                                <p>Matrix is like a cross between email and Whatsapp/Signal. Where Apps like Whatsapp have a central server that controls the entire chat network, with Matrix it's more like email, where lots of different servers exchange the messages. Just as with email you can choose what provider you trust your messages with.</p>
+                                <p>This design means no single organisation owns the chat network. Anyone can create a server, and then these servers route the messages between them so they get to the intented destination. You could even run your own server if you wanted, which would give you very high levels of control over your data.</p>
+                                <p>This is made possible by the Matrix software that all these servers run. Matrix is open source, managed by the Matrix.org foundation, and supported by a worldwide community of people and organisations. The open source nature means the programming code can be viewed by anyone, including you. You can even help improve it. For many people this level of transparency allows for greater levels of trust.</p>
+                                <p>The Matrix software can encrypt the messages, and Voco enables this for all the messages it sends.</p>
+                                <p>You can learn much more at matrix.org.</p>
+                            </div>
+						</div>
+
+
                         <div id="extension-voco-matrix-create-new-account-tabs">
                             <div id="extension-voco-matrix-create-new-account" class="extension-voco-hidden extension-voco-vlak">
                                 <h3>Creating a Matrix account</h3>

@@ -582,7 +582,6 @@ body #extension-voco-view .extension-voco-tab-selected {
 }
 
 
-.extension-voco-time {}
 
 .extension-voco-icon {
     width: 4rem;
@@ -669,8 +668,6 @@ body #extension-voco-view .extension-voco-tab-selected {
     font-style: italic;
     margin-left: 4rem;
 }
-
-.extension-voco-to-go {}
 
 
 
@@ -969,7 +966,7 @@ body #extension-voco-view .extension-voco-tab-selected {
 
 .extension-voco-orange-bg {
     background-color: #9a1074;
-    border: 2px solid:#9a1074;
+    border: 2px solid #9a1074;
     box-sizing: border-box;
 }
 
@@ -1001,6 +998,48 @@ body #extension-voco-view .extension-voco-tab-selected {
 .extension-voco-injection-learning-checkbox{
 	font-size:2rem;
 }
+
+
+/*  SIGNAL CHAT  */
+#extension-voco-signal-intro ol > li{
+    margin-bottom:2rem;
+    line-height: 158%;
+}
+#extension-voco-signal-intro ol > li > div{
+    margin:1rem 0;
+}
+
+#extension-voco-signal-three-dots-icon{
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2rem;
+    height: 2rem;
+    background-color:#777;
+    border-radius:50%;
+    margin:0 .5rem;
+}
+
+#extension-voco-signal-phone-number-input{
+    font-size:2rem;
+    padding:.5rem 1rem;
+    margin-right:.5rem;
+}
+
+#extension-voco-tab-chat button#extension-voco-signal-phone-number-next-button{
+    display:inline;
+}
+
+#extension-voco-signal-qr-container{
+    padding:2rem;
+    min-height:100px;
+    margin:2rem 0;
+    background-color:white;
+    color:black;
+}
+
+
+
 
 
 
@@ -1658,7 +1697,7 @@ f #extension-voco-matrix-invite-management-output {
 
 
 @media screen and (max-width: 640px) {
-    #extension-voco-matrix-advanced-tip>p span {
+    #extension-voco-matrix-advanced-tip > p span {
         display: block;
         text-align: center;
         padding: 2rem;
@@ -1679,6 +1718,35 @@ f #extension-voco-matrix-invite-management-output {
 
     .extension-voco-item-setter {
         border-right: none;
+    }
+
+    #extension-voco-text-input-container{
+        flex-direction: column;
+    }
+
+    #extension-voco-text-input-buttons-container{
+        padding-top:1rem;
+    }
+
+    #extension-voco-view  #extension-voco-text-input-buttons-container select{
+        margin-left:0;
+        margin-top:0;
+    }
+    #extension-voco-text-input-send-button{
+        float:right;
+        padding: 1rem 2rem;
+    }
+
+    #extension-voco-text-input-field{
+        border-top-right-radius: .5rem;
+        min-height: 5rem;
+    }
+
+    #extension-voco-signal-phone-number-next-button,
+    #extension-voco-signal-phone-number-input{
+        margin:1rem 0;
+        box-sizing:border-box;
+        width:100%;
     }
 }
 
@@ -1720,8 +1788,6 @@ f #extension-voco-matrix-invite-management-output {
         border-top: none;
         border-left: 1px solid rgba(255, 255, 255, .3);
     }
-
-    #extension-voco-server-list-toggle {}
 		
 	.extension-voco-tab-buttons{
 		width:80%;

@@ -215,6 +215,44 @@
 			}
 
 
+			const title_el = this.view.querySelector('#extension-voco-title');
+			if(!title_el){
+				return
+			}
+			title_el.addEventListener('click', () => {
+
+				const quotes = [
+						"Hello world",
+						"Thomas Edison once explained: I have not failed. I’ve just found 10,000 ways that won’t work.",
+						"Salvador Dali once quiped: I don’t suffer from insanity; I enjoy every minute of it.",
+						"Steve Martin once said: A day without sunshine is like, you know, night.",
+						"Why don’t the circus lions eat the clowns?... Because they taste funny!",
+						"How does the ocean say hi?... It waves!",
+						"What do you call cheese that belongs to someone else?... Nacho cheese!",
+						"Why are pizza jokes the worst? They’re too cheesy."
+						]
+				const random_quote = quotes[Math.floor(Math.random() * quotes.length)];
+
+				window.API.postJson(
+				          `/extensions/${this.id}/api/ajax`,
+							    {'action':'speak',
+                                'message': random_quote
+                                }
+
+				        ).then((body) => {
+							if(this.debug){
+                                console.log("voco debug: title easter egg speak response: ", body);
+                            }
+						})
+						.catch((err) => {
+							if(this.debug){
+								console.error("voco debug: title easter egg: caught error calling speak action: ", err);
+							}
+						})
+			});
+
+
+
 
             // TABS
 

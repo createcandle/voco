@@ -29,16 +29,16 @@ from .util import *
 
 #print("echo $XDG_RUNTIME_DIR: ", run_command('echo $XDG_RUNTIME_DIR'))
 
-if os.path.isdir('/home/pi/.dbus/session-bus'):
-    dbus_session_lines = run_command('cat /home/pi/.dbus/session-bus/* | grep -v ^# ')
-    if isinstance(dbus_session_lines,str):
-        #print("dbus_session_lines: \n" + str(dbus_session_lines) + "\n")
-        for line in dbus_session_lines.splitlines():
-            if '=' in line and line.startswith('DBUS_SESSION_BUS'):
-                dbus_atribute_key = line.split('=', 1)[0]
-                dbus_atribute_value = line.split('=', 1)[1]
-                if isinstance(dbus_atribute_value,str) and len(str(dbus_atribute_value).strip()):
-                    os.environ[ str(dbus_atribute_key).strip() ] = re.escape(str(dbus_atribute_value))
+#if os.path.isdir('/home/pi/.dbus/session-bus'):
+#    dbus_session_lines = run_command('cat /home/pi/.dbus/session-bus/* | grep -v ^# ')
+#    if isinstance(dbus_session_lines,str):
+#        #print("dbus_session_lines: \n" + str(dbus_session_lines) + "\n")
+#        for line in dbus_session_lines.splitlines():
+#            if '=' in line and line.startswith('DBUS_SESSION_BUS'):
+#                dbus_atribute_key = line.split('=', 1)[0]
+#                dbus_atribute_value = line.split('=', 1)[1]
+#                if isinstance(dbus_atribute_value,str) and len(str(dbus_atribute_value).strip()):
+#                    os.environ[ str(dbus_atribute_key).strip() ] = re.escape(str(dbus_atribute_value))
 
 
 #print("")
@@ -47,7 +47,7 @@ try:
     if '/usr/lib/python3/dist-packages' in sys.path:
         sys.path.remove('/usr/lib/python3/dist-packages')
 except Exception as ex:
-    print("could not remove path from sys.path: " + str(ex))
+    print("could not remove /usr/lib/python3/dist-packages path from sys.path: " + str(ex))
 #print("")
 #print("AFTER sys.path: " + str(sys.path))
 #print("")
@@ -145,13 +145,7 @@ import struct
 import wave
 
 
-# Wakeword
-try:
-    import pyaudio
-    import numpy as np
-    from openwakeword.model import Model
-except Exception as ex:
-    print("Unable to load openwakeword modules: " + str(ex))
+
 
 
 
@@ -4191,6 +4185,8 @@ class VocoAdapter(Adapter):
                 if unique_command == 'snips-hotword' or unique_command == 'snips-satellite':
                     #if self.hey_candle:
                     command = command + ["-t",str(self.wakeword_sensitivity)] #,"--model",self.hey_candle_path + "=.5" ]
+                    
+                    # what is the effect of setting a custom hotword ID?
                     command = command + ["--hotword-id",str(self.persistent_data['site_id'])]
                     #command = command + ["--mqtt",mqtt_ip]
                     #command = command + ["--mqtt",mqtt_ip]
@@ -4494,7 +4490,14 @@ class VocoAdapter(Adapter):
     def start_wakeword_thread(self):
         if self.DEBUG:
             print("in start_wakeword_thread")
-            
+        
+        try:
+            import pyaudio
+            import numpy as np
+            from openwakeword.model import Model
+        except Exception as ex:
+            print("start_wakeword_thread: caught error trying to load openwakeword modules: " + str(ex))
+
         self.intended_snips_proces_count = 6
         
         if self.llm_wakeword_started:
@@ -4506,7 +4509,6 @@ class VocoAdapter(Adapter):
         if self.llm_wakeword_started:
            if self.DEBUG:
                print("\nERROR, wakeword was still running after having been given time to stop")
-        
         
         self.wakeword_thread = None
         self.wakeword_thread = threading.Thread(target=self.run_wakeword) #, args=(self.voice_messages_queue,))
@@ -13394,6 +13396,12 @@ class VocoAdapter(Adapter):
     #
     # LLM ASSISTANT
     #
+
+    def ask_a_question(self):
+        if self.DEBUG:
+            print("in ask_a_question")
+        self.play_sound()
+        
 
 
     def stop_ai_assistant(self):

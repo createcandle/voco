@@ -511,6 +511,20 @@ class VocoAPIHandler(APIHandler):
                                 )
                                 
                                 
+
+
+                            elif action == 'speak':
+                                state = False
+                                if 'sentence' in request.body and str(request.body['sentence']) != "":
+                                    self.adapter.speak(str(request.body['sentence']))
+                                    state = True
+                                
+                                return APIResponse(
+                                  status=200,
+                                  content_type='application/json',
+                                  content=json.dumps({'state' : state}),
+                                )
+
                             # 404
                             else:
                                 return APIResponse(status=404)    
