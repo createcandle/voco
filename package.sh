@@ -70,10 +70,10 @@ echo
 
 if [ "$EUID" -ne 0 ]; then
   sudo apt update -qq
-  sudo apt install -y cmake libasound2-dev libffi-dev portaudio19-dev
+  sudo apt install -y cmake libasound2-dev libffi-dev portaudio19-dev curl
 else
   apt update -qq
-  apt install -y cmake libasound2-dev libffi-dev portaudio19-dev
+  apt install -y cmake libasound2-dev libffi-dev portaudio19-dev curl
 fi
 
 
