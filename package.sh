@@ -70,10 +70,10 @@ echo
 
 if [ "$EUID" -ne 0 ]; then
   sudo apt update -qq
-  sudo apt install -y cmake libasound2-dev libffi-dev portaudio19-dev curl
+  sudo apt install -y cmake libasound2-dev libffi-dev portaudio19-dev wget
 else
   apt update -qq
-  apt install -y cmake libasound2-dev libffi-dev portaudio19-dev curl
+  apt install -y cmake libasound2-dev libffi-dev portaudio19-dev wget
 fi
 
 
@@ -226,8 +226,8 @@ cp ./llm/wakeword/open_wake_word/* ./lib/openwakeword/resources/models/
 
 mkdir -p ./signal
 
-curl https://media.projektzentrisch.de/temp/signal-cli/signal-cli_ubuntu2004_arm64.gz -O signal-cli_ubuntu2004_arm64.gz
-curl https://media.projektzentrisch.de/temp/signal-cli/libsignal_jni_so0921_ubuntu2004_arm64.gz -O libsignal_jni_so0921_ubuntu2004_arm64.gz
+wget --retry-connrefused --waitretry=1 --read-timeout=20 --timeout=15 -t 3 https://media.projektzentrisch.de/temp/signal-cli/signal-cli_ubuntu2004_arm64.gz -O signal-cli_ubuntu2004_arm64.gz
+wget --retry-connrefused --waitretry=1 --read-timeout=20 --timeout=15 -t 3 https://media.projektzentrisch.de/temp/signal-cli/libsignal_jni_so0921_ubuntu2004_arm64.gz -O libsignal_jni_so0921_ubuntu2004_arm64.gz
 # Remove local cffi so that the globally installed version doesn't clash
 #rm -rf ./lib/cffi*
 
