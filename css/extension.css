@@ -1026,7 +1026,8 @@ body #extension-voco-view .extension-voco-tab-selected {
     margin-right:.5rem;
 }
 
-#extension-voco-tab-chat button#extension-voco-signal-phone-number-next-button{
+#extension-voco-tab-chat button#extension-voco-signal-phone-number-next-button,
+#extension-voco-tab-chat button#extension-voco-signal-verify-button{
     display:inline;
 }
 
@@ -1034,14 +1035,39 @@ body #extension-voco-view .extension-voco-tab-selected {
     padding:2rem;
     min-height:100px;
     margin:2rem 0;
-    background-color:white;
+    background-color:#999;
     color:black;
 }
 
 
 
+#extension-voco-signal-accounts-container:not(:empty){
+    margin:4rem 0;
+    background-color:rgba(0,0,0,.2);
+    padding:1rem;
+    border-radius:.5rem;
+}
 
+#extension-voco-signal-accounts-container:not(:empty)::before{
+    content:'Linked Signal accounts:';
+    font-style: italic;
+    margin-bottom:1rem;
+}
 
+#extension-voco-signal-accounts-container > div{
+    padding:1rem;
+    margin:1rem 0;
+    background-color:rgba(0,0,0,.2);
+    font-weight: bold;
+}
+
+#extension-voco-signal-accounts-container:not(:empty) + #extension-voco-signal-linking-steps{
+    opacity:.5
+}
+
+#extension-voco-signal-verify-button{
+    margin-top:2rem;
+}
 
 
 /*  MATRIX CHAT  */

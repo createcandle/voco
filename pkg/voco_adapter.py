@@ -25,6 +25,11 @@ sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'lib'))
 if os.path.exists('/usr/lib/aarch64-linux-gnu'):
     sys.path.append('/usr/lib/aarch64-linux-gnu')
 
+# Allows Pipewire audio to work
+os.environ["XDG_RUNTIME_DIR"] = "/run/user/1000"
+os.environ["DBUS_SESSION_BUS_ADDRESS"] = "unix:path=/run/user/1000/bus"
+
+
 from .util import *
 
 #print("echo $XDG_RUNTIME_DIR: ", run_command('echo $XDG_RUNTIME_DIR'))
@@ -169,14 +174,20 @@ if 'WEBTHINGS_HOME' in os.environ:
 
 
 class VocoAdapter(Adapter):
-    """Adapter for Snips"""
+    """Adapter for Voice Control"""
+
+
+    try:
+        from .signal import signal_init,link_signal,start_signal_link,after_link_signal,signal_ensure_group,get_signal_messages,parse_signal_message,send_signal_message
+    except Exception as ex:
+        print("ERROR importing signal.py: " + str(ex))
 
 
     try:
         from .matrix import start_matrix,start_matrix_client_async,matrix_create_room,matrix_load_room,matrix_main,matrix_audio_file_callback,matrix_message_callback,matrix_sync_callback,matrix_account_callback,matrix_room_account_callback,matrix_ephemeral_callback,matrix_to_device_callback,room_key_request_callback,send_message_to_matrix,send_message_to_matrix_async,create_matrix_account,register_loop,sync_loop,login_test,login_loop,get_or_create_eventloop
         #print("succesfully imported matrix.py file")
     except Exception as ex:
-        print("ERROR loading matrix.py: " + str(ex))
+        print("ERROR importing matrix.py: " + str(ex))
         
         
 
@@ -438,9 +449,15 @@ class VocoAdapter(Adapter):
         
         
         
+        # SIGNAL CHAT
         
+        self.signal_qr_code = ''
+        self.signal_messages = {}
+        self.signal_accounts = []
+        self.signal_link_start_timestamp = 0
+        self.signal_link_messages = []
         
-                
+
         
         # MATRIX CHAT
         self.async_client = None
@@ -702,8 +719,23 @@ class VocoAdapter(Adapter):
                 self.persistent_data['microphone_gain'] = 80
                 self.save_to_persistent_data = True
             
+            if 'signal_type' not in self.persistent_data: # the previously known thing titles in the entire local network (including satellites)
+                #print("microphone_gain was not in persistent data, adding it now.")
+                self.persistent_data['signal_type'] = 'link' # other option would be 'account', if the user provides a phone number for new signal account
+                self.save_to_persistent_data = True
+
+            if 'signal_linked' not in self.persistent_data: # the previously known thing titles in the entire local network (including satellites)
+                #print("microphone_gain was not in persistent data, adding it now.")
+                self.persistent_data['signal_linked'] = False # other option would be 'account', if the user provides a phone number for new signal account
+                self.save_to_persistent_data = True
+
+            if 'signal_phone_number' not in self.persistent_data: # the previously known thing titles in the entire local network (including satellites)
+                #print("microphone_gain was not in persistent data, adding it now.")
+                self.persistent_data['signal_phone_number'] = None
+                self.save_to_persistent_data = True
+
             
-            # TODO TEMPORARY!    
+            # TODO TEMPORARY!
             #self.persistent_data['main_controller_ip'] = '192.168.2.198'
             #self.save_persistent_data()
             
@@ -1157,6 +1189,12 @@ class VocoAdapter(Adapter):
         self.hey_snips_path = os.path.join(self.models_path,"assistant","custom_hotword")
         self.hey_candle_path = os.path.join(self.models_path,"hey_candle")
         
+
+        # Signal paths
+        self.signal_cli_path = os.path.join(self.addon_dir_path,"signal","signal-cli64")
+
+
+
         # Matrix paths
         self.matrix_keys_store_path = os.path.join(self.matrix_data_store_path, "keys.txt")
         self.matrix_temp_ogg_file = os.path.join(os.sep, "tmp","matrix_audio_file.ogg")
@@ -1174,6 +1212,8 @@ class VocoAdapter(Adapter):
         os.system("chmod +x " + str(self.snips_path) + "/snips*")
         
         
+        
+
         # AI LLM, continued
         
         self.kill_llm()
@@ -1302,8 +1342,9 @@ class VocoAdapter(Adapter):
             #if self.controller_pi_version > 4:
             #    self.persistent_data['llm_wakeword_model'] = 'hey_candle'
 
-        
-        
+        if 'signal_group_id' not in self.persistent_data:
+            self.persistent_data['signal_group_id'] = ''
+            self.save_to_persistent_data = True
         
         # load config
         try:
@@ -1320,7 +1361,7 @@ class VocoAdapter(Adapter):
             
         # If debudding is disabled, then give the other addons time to load first before Voco scoops up all memory
         if self.DEBUG == False:
-            sleep(5)
+            time.sleep(5)
         
         
         
@@ -2081,7 +2122,7 @@ class VocoAdapter(Adapter):
         #if self.persistent_data['listening'] == True:
 
         self.matrix_display_name = "Candle"
-        if self.hostname.lower() != "candle":
+        if not "candle" in self.hostname.lower():
             self.matrix_display_name += " " + str(self.hostname)
             
         # START MATRIX
@@ -2159,11 +2200,12 @@ class VocoAdapter(Adapter):
         
         #self.save_persistent_data()
         if self.DEBUG:
-            print("\nAT END OF INIT, calling start_matrix")
+            print("\nAT END OF INIT, calling signal_init and start_matrix")
         try:
+            self.signal_init()
             self.start_matrix()
         except Exception as ex:
-            print("Voco adapter init: caught error starting Matrix: " + str(ex))
+            print("Voco adapter init: caught error starting Signal / Matrix: " + str(ex))
         
         
         
@@ -2261,31 +2303,32 @@ class VocoAdapter(Adapter):
             print("in update_speaker_variables")
         found_audio_control = False
         
-        if self.pipewire_enabled:
-            pass
-        else:
-            # Get the initial speaker settings
-            for option in self.audio_controls:
-                try:
+        #if self.pipewire_enabled:
+        #    pass
+        #else:
+
+        # Get the initial speaker settings
+        for option in self.audio_controls:
+            try:
+            
+                #if self.DEBUG:
+                #    print("matching audio controll?" + str(option['human_device_name']) + " =???= " + str(self.persistent_data['audio_output']))
+            
+                if str(option['human_device_name']) == str(self.persistent_data['audio_output']) or str(option['full_device_name']) == str(self.persistent_data['audio_output']):
+                    if self.DEBUG:
+                        print("update_speaker_variables: found matching audio control. option: " + str(option))
+                    found_audio_control = True
+                    self.current_simple_card_name = option['simple_card_name']
+                    self.current_card_id = option['card_id']
+                    self.current_device_id = option['device_id']
+                    self.current_control_name = option['control_name']
                 
-                    #if self.DEBUG:
-                    #    print("matching audio controll?" + str(option['human_device_name']) + " =???= " + str(self.persistent_data['audio_output']))
-                
-                    if str(option['human_device_name']) == str(self.persistent_data['audio_output']):
-                        if self.DEBUG:
-                            print("update_speaker_variables: found matching audio control. option: " + str(option))
-                        found_audio_control = True
-                        self.current_simple_card_name = option['simple_card_name']
-                        self.current_card_id = option['card_id']
-                        self.current_device_id = option['device_id']
-                        self.current_control_name = option['control_name']
-                    
-                except Exception as ex:
-                    print("update_speaker_variables: error getting initial Alsa audio settings: " + str(ex))
-                    self.current_simple_card_name = "ALSA"
-                    self.current_card_id = 0
-                    self.current_device_id = 0
-                    self.current_control_name = ""
+            except Exception as ex:
+                print("update_speaker_variables: error getting initial Alsa audio settings: " + str(ex))
+                self.current_simple_card_name = "ALSA"
+                self.current_card_id = 0
+                self.current_device_id = 0
+                self.current_control_name = ""
         
         if self.DEBUG:
             if found_audio_control == False:
@@ -3177,7 +3220,7 @@ class VocoAdapter(Adapter):
                 print("aborting llm_speak and falling back to normal speak, self.llm_models['tts']['active'] was None or the model file did not exist.")
                 print(" - self.llm_models['tts']['active']: " + str(self.llm_models['tts']['active']))
                 print(" - intent: " + str(intent))
-            sleep(.1)
+            time.sleep(.1)
             # Could this cause a loop? Disabling for now.
             #really_speak(voice_message,intent)
             self.send_pairing_prompt("AI could not speak: " + str(voice_message))
@@ -3265,7 +3308,7 @@ class VocoAdapter(Adapter):
                         print("piping json into Piper: " + str(json_voice_message))
                     self.llm_tts_process.stdin.write(json_voice_message)
                     self.llm_tts_process.stdin.flush()
-                    #sleep(1)
+                    #time.sleep(1)
                     if self.DEBUG:
                         print("Piped into piper\n")
                     #self.start_llm_tts()
@@ -3326,7 +3369,7 @@ class VocoAdapter(Adapter):
 
             voice_message = ""
             
-            sleep(.1)
+            time.sleep(.1)
             
             # Check if anything from the notifier should be spoken
             try:
@@ -3586,12 +3629,15 @@ class VocoAdapter(Adapter):
                 
                 
             if site_id != None:
-                if site_id.startswith("text-") or site_id.startswith("matrix-") or site_id.startswith("voice-") or site_id.startswith('llm_stt-'):
+                if site_id.startswith("text-") or site_id.startswith("signal-") or site_id.startswith("matrix-") or site_id.startswith("voice-") or site_id.startswith('llm_stt-'):
                     if self.DEBUG:
                         print("speak: extracting origin from site_id. Ideally this shouldn't happen...")
                     if site_id.startswith('text-'):
                         intent['origin'] = 'text'
                         site_id = site_id.replace('text-','')
+                    elif site_id.startswith('signal-'):
+                        intent['origin'] = 'signal'
+                        site_id = site_id.replace('signl-','')
                     elif site_id.startswith('matrix-'):
                         intent['origin'] = 'matrix'
                         site_id = site_id.replace('matrix-','')
@@ -3637,6 +3683,9 @@ class VocoAdapter(Adapter):
             if intent['origin'] == 'text':
                 if self.DEBUG:
                     print("(...) response should be shown as text chat: '" + voice_message + "' at: " + str(site_id))
+            elif intent['origin'] == 'signal' or intent['origin'] == 'both':
+                if self.DEBUG:
+                    print("(...) response should be sent back to Signal: '" + voice_message + "' at: " + str(site_id))
             elif intent['origin'] == 'matrix' or intent['origin'] == 'both':
                 if self.DEBUG:
                     print("(...) response should be sent back to the matrix network: '" + voice_message + "' at: " + str(site_id))
@@ -3655,7 +3704,16 @@ class VocoAdapter(Adapter):
                         print("appending to self.last_text_response: " + str(voice_message))
                     self.last_text_response.append(clean_up_string_for_chatting(voice_message)) # this will cause the message to be sent back to the UI.
                     return
+                
+                elif intent['origin'] == 'signal':
+                    if self.DEBUG:
+                        print("Origin was Signal. Sending: " + str(voice_message))
+                    #self.last_text_response.append(voice_message) # this will cause the message to be sent back to the UI.
                     
+                    voice_message = clean_up_string_for_chatting(voice_message)
+                    self.send_signal_message(voice_message)
+                    return
+
                 elif intent['origin'] == 'matrix':
                     if self.DEBUG:
                         print("Origin was Matrix. Sending: " + str(voice_message))
@@ -3669,6 +3727,7 @@ class VocoAdapter(Adapter):
                     if self.DEBUG:
                         print("Origin was Both. Speaking and sending to matrix: " + str(voice_message))
                     voice_message = clean_up_string_for_chatting(voice_message)
+                    self.send_signal_message(voice_message)
                     self.matrix_messages_queue.put({'title':'','message': voice_message ,'level':'Normal'})
                 
                 
@@ -4877,6 +4936,8 @@ class VocoAdapter(Adapter):
         self.run_second_mqtt()
         
         self.current_utc_time = int(time.time())
+
+        self.signal_counter = 0
         
         previous_action_times_count = 0
         #previouxs_injection_time = time.time()
@@ -4884,14 +4945,20 @@ class VocoAdapter(Adapter):
 
             voice_message = ""
             
-            sleep(.1)
+            time.sleep(.1)
             #print("time.time(): ", time.time())
             
             if time.time() > self.current_utc_time + 1:
                 if self.DEBUG:
-                    print("\n😀\nCLOCK TICK " + str(int(time.time()) % 60) + "\n")
+                    print("😀 CLOCK TICK " + str(int(time.time()) % 60))
                 self.current_utc_time = int(time.time())
                 
+                print("signal_linked,signal_counter: ", self.persistent_data['signal_linked'], self.signal_counter)
+                if self.persistent_data['signal_linked']:
+                    self.signal_counter += 1
+                    if self.signal_counter > 5:
+                        self.signal_counter = 0
+                        self.get_signal_messages()
                 
                 try:
                     for snips_stderr in self.snips_stderr_messages:
@@ -5132,7 +5199,7 @@ class VocoAdapter(Adapter):
                                             if self.DEBUG:
                                                 print("clock: Should attempt to find correct MQTT server IP address")
                                             self.look_for_mqtt_server()
-                                            time.sleep(1)
+                                            #time.sleep(1)
                     
                             
                                         if self.DEBUG:
@@ -5252,12 +5319,12 @@ class VocoAdapter(Adapter):
                                             item['intent_message']['siteId'] = self.persistent_data['site_id']
                                             
                                     
-                                        # Some action items (timers) should be spoken out loud too, no matter the origin (e.g. if the origin is Matrix)
+                                        # Some action items (timers) should be spoken out loud too, no matter the origin (e.g. if the origin is Signal or Matrix)
                                         if 'type' in item and 'origin' in item['intent_message']:
                                             #if self.DEBUG:
                                             #    print("origin check. item['type']: " + str(item['type']))
                                             if item['type'] == 'timer' or item['type'] == 'wake' or item['type'] == 'alarm' or item['type'] == 'reminder':
-                                                if item['intent_message']['origin'] == 'text' or item['intent_message']['origin'] == 'matrix':
+                                                if item['intent_message']['origin'] == 'text' or item['intent_message']['origin'] == 'signal' or item['intent_message']['origin'] == 'matrix':
                                                     #intent_message['origin'] = 'both'
                                                     item['intent_message']['origin'] = 'both'
                                                     if self.DEBUG:
@@ -6195,16 +6262,16 @@ class VocoAdapter(Adapter):
 
     def save_persistent_data(self):
         if self.DEBUG:
-            print("Saving to persistence data store at path: " + str(self.persistence_file_path))
+            print("save_persistent_data: Saving to persistence data store at path: " + str(self.persistence_file_path))
             
         try:
             if not os.path.isfile(self.persistence_file_path):
                 open(self.persistence_file_path, 'a').close()
                 if self.DEBUG:
-                    print("Created an empty persistence file")
+                    print("save_persistent_data: created an empty persistence file")
             else:
                 if self.DEBUG:
-                    print("Persistence file existed. Will try to save to it.")
+                    print("save_persistent_data: Persistence file existed. Will try to save to it.")
                     print("self.persistent_data: " + str(self.persistent_data))
             
             test = json.dumps(self.persistent_data) # if this fails, then bad data won't be written to the persistent data file
@@ -6214,11 +6281,11 @@ class VocoAdapter(Adapter):
                 #    print("saving persistent data: " + str(self.persistent_data))
                 json.dump( self.persistent_data, open( self.persistence_file_path, 'w' ), indent=4 )
                 if self.DEBUG:
-                    print("Data stored")
+                    print("save_persistent_data: Data stored")
                 return True
 
         except Exception as ex:
-            print("Error: could not store data in persistent store: " + str(ex) )
+            print("\nError: save_persistent_data: could not store data in persistent store: " + str(ex) )
             if self.DEBUG:
                 print("- Not written: " + str(self.persistent_data))
             return False
@@ -6696,6 +6763,12 @@ class VocoAdapter(Adapter):
                             intent_message['siteId'] = intent_message['siteId'][5:]
                             intent_message['origin'] = 'text'
                         
+                        elif intent_message['siteId'].startswith('signal-'):
+                            if self.DEBUG:
+                                print("stripping 'signal-' from siteId")
+                            intent_message['siteId'] = intent_message['siteId'][7:]
+                            intent_message['origin'] = 'signal'
+
                         elif intent_message['siteId'].startswith('matrix-'):
                             if self.DEBUG:
                                 print("stripping 'matrix-' from siteId")
@@ -6754,7 +6827,7 @@ class VocoAdapter(Adapter):
                 # Deal with the user's command
             
                 # This is an imperfect way of handling the situation when the main controller and a satellite both hear a voice command. Oddly, in theory this "echo" problem should already be handled by Snips.
-                if time.time() - self.previous_intent_callback_time < 3 and intent_message['origin'] == 'voice' and not intent_message['siteId'].endswith(self.persistent_data['site_id']) and not intent_message['siteId'].startswith('llm_tts-') and not intent_message['siteId'].startswith('text-') and not intent_message['siteId'].startswith('matrix-'):
+                if time.time() - self.previous_intent_callback_time < 3 and intent_message['origin'] == 'voice' and not intent_message['siteId'].endswith(self.persistent_data['site_id']) and not intent_message['siteId'].startswith('llm_tts-') and not intent_message['siteId'].startswith('text-') and not intent_message['siteId'].startswith('signal-') and not intent_message['siteId'].startswith('matrix-'):
                     if self.DEBUG:
                         print("master_intent_callback ran less than 4 seconds ago, ignoring this one, likely an echo.. time delta: " + str(time.time() - self.previous_intent_callback_time))
                         self.speak('echo')
@@ -6987,6 +7060,11 @@ class VocoAdapter(Adapter):
                                 payload['siteId'] = payload['siteId'].replace('text-','')
                                 returned_text = True
                             
+                            elif payload['siteId'].startswith('signal-'):
+                                payload['siteId'] = payload['siteId'].replace('signal-','')
+                                returned_text = True
+                                self.speak("?",intent={'siteId': payload['siteId'],'origin':'signal' })
+
                             elif payload['siteId'].startswith('matrix-'):
                                 payload['siteId'] = payload['siteId'].replace('matrix-','')
                                 returned_text = True
@@ -7542,7 +7620,7 @@ class VocoAdapter(Adapter):
                     if payload['siteId'].startswith("llm_stt-"):
                         print("\nLLM STT siteId detected")
                     
-                    if self.last_text_command != '' and payload['siteId'].startswith("text-") or payload['siteId'].startswith("matrix-") or payload['siteId'].startswith("llm_stt-") or (self.persistent_data['is_satellite'] and self.mqtt_connected and self.periodic_voco_attempts < 3): 
+                    if self.last_text_command != '' and payload['siteId'].startswith("text-") or payload['siteId'].startswith("signal-")  or payload['siteId'].startswith("matrix-") or payload['siteId'].startswith("llm_stt-") or (self.persistent_data['is_satellite'] and self.mqtt_connected and self.periodic_voco_attempts < 3): 
                         if self.DEBUG:
                             print("Creating faux textcaptured. self.last_text_command:\n\n (FAUX)-> " + str(self.last_text_command))
                             print("\n")
@@ -7621,7 +7699,13 @@ class VocoAdapter(Adapter):
                                 print("stripping 'text-' from siteId")
                             intent_message['siteId'] = intent_message['siteId'][5:]
                             intent_message['origin'] = 'text'
-                            
+                        
+                        elif intent_message['siteId'].startswith('signal-'):
+                            if self.DEBUG:
+                                print("stripping 'signal-' from siteId")
+                            intent_message['siteId'] = intent_message['siteId'][7:]
+                            intent_message['origin'] = 'signal'
+
                         elif intent_message['siteId'].startswith('matrix-'):
                             if self.DEBUG:
                                 print("stripping 'matrix-' from siteId")
@@ -7683,7 +7767,7 @@ class VocoAdapter(Adapter):
                 
                 # ECHO
                 # This is an imperfect way of handling the situation when the main controller and a satellite both hear the same voice command.
-                if time.time() - self.previous_intent_callback_time < 3 and intent_message['origin'] == 'voice' and not intent_message['siteId'].endswith(self.persistent_data['site_id']) and not intent_message['siteId'].startswith('llm_tts-') and not intent_message['siteId'].startswith('text-') and not intent_message['siteId'].startswith('matrix-'):
+                if time.time() - self.previous_intent_callback_time < 3 and intent_message['origin'] == 'voice' and not intent_message['siteId'].endswith(self.persistent_data['site_id']) and not intent_message['siteId'].startswith('llm_tts-') and not intent_message['siteId'].startswith('text-') and not intent_message['siteId'].startswith('signal-') and not intent_message['siteId'].startswith('matrix-'):
                     if self.DEBUG:
                         print("master_intent_callback ran less than 4 seconds ago, ignoring this one, likely an echo.. time delta: " + str(time.time() - self.previous_intent_callback_time))
                         self.speak('echo')
@@ -9268,7 +9352,7 @@ class VocoAdapter(Adapter):
                                         mqtt_path = "hermes/voco/" + str(satellite_id) + "/parse"
                                         if self.DEBUG:
                                             print("telling other Voco controller about this command:\n - mqtt_path: " + str(mqtt_path) + "\n - origin: " + str(origin) + "\n - sentence: " + str(sentence))
-                                        self.mqtt_client.publish(mqtt_path,json.dumps({ "siteId":str(self.persistent_data['site_id']),"text": sentence, 'origin':origin, 'sessionId': session_id}))
+                                        self.mqtt_client.publish(mqtt_path,json.dumps({ "siteId":str(self.persistent_data['site_id']), "text":sentence, 'origin':origin, 'sessionId': session_id}))
                                 else:
                                     if self.DEBUG:
                                         print("not passing to other controllers (likely already just passed)")
@@ -9746,6 +9830,7 @@ class VocoAdapter(Adapter):
         """ Teaches Snips what the user's devices and properties are called """
         if self.DEBUG:
             print("Checking if new things/properties/strings should be injected into Snips.  self.injection_level:", self.injection_level, ", self.preparing_an_injection: ", self.preparing_an_injection)
+        injection_stopwatch_start = time.time()
         try:
             
             if self.mqtt_connected == False:
@@ -9767,10 +9852,14 @@ class VocoAdapter(Adapter):
                 #        print("inject_updated_things_into_snips: injection already in progress. Aborting.")
                 #    return
             
+            
+
             if force_injection == True:
                 self.force_injection = True # sic (adding to self)
             
             if self.injection_level < 2:
+                if self.DEBUG:
+                    print("forcing injection because injection_level is below 2: ", self.injection_level)
                 self.force_injection = True
             
             if not self.got_good_things_list:
@@ -9823,7 +9912,7 @@ class VocoAdapter(Adapter):
                 
                 if self.DEBUG:
                     print("inject_updated_things_into_snips: self.try_updating_things done")
-                    
+                    print("injection_stopwatch delta: ", time.time() - injection_stopwatch_start)
                     
                 local_thing_titles_list = []
                 full_thing_titles_list = []
@@ -9903,7 +9992,7 @@ class VocoAdapter(Adapter):
                                             if len(str(property_string_name)) > 3 and property_string_name.isupper():
                                                 property_string_name = property_string_name.lower()
                                                 if self.DEBUG:
-                                                    print("property_string_name should now be lower-case: ", property_title)
+                                                    print("property_string_name should now be lower-case: ", property_string_name)
                                             #print("property_string_name not too difficult to pronounce?: ", property_string_name)
                                             fresh_property_strings.add(clean_up_thing_string(property_string_name))
                                             
@@ -9934,6 +10023,7 @@ class VocoAdapter(Adapter):
 
                 if self.DEBUG:
                     print("fresh_property_titles: " + str(fresh_property_titles))
+                    print("injection_stopwatch delta: ", time.time() - injection_stopwatch_start)
 
                 #satellites_thing_titles = [] # holds a list of only the titles of things on satellites. Used later to create a full list of local + satellite things
                 
@@ -9993,7 +10083,8 @@ class VocoAdapter(Adapter):
                 
                 
                 
-            
+                if self.DEBUG:
+                    print("creating operations. injection_stopwatch delta: ", time.time() - injection_stopwatch_start)
                 operations = []
             
                 #if self.DEBUG:
@@ -10128,7 +10219,8 @@ class VocoAdapter(Adapter):
                 
                 #if self.DEBUG:
                 #    print("operations: " + str(operations))
-                
+                if self.DEBUG:
+                    print("operations created. injection_stopwatch delta: ", time.time() - injection_stopwatch_start)
                     
                 # Check if Snips should be updated with fresh data
                 if len(operations) > 0 or self.force_injection: # len(operations) has a maximum value of 3 (when things, properties and string all have at least one different value)
@@ -10195,7 +10287,7 @@ class VocoAdapter(Adapter):
         self.preparing_an_injection = False
         if self.DEBUG:
             print("reached end of inject_updated_things_into_snips")
-
+            print("injection_stopwatch delta: ", time.time() - injection_stopwatch_start)
 
 
 
@@ -11781,14 +11873,15 @@ class VocoAdapter(Adapter):
         if self.last_text_command == 'set':
             self.last_text_command = ''
             
-        # messages can be returned to the web interface (text), or to the matrix chat room (matrix)
+        # messages can be returned to the web interface (text), Signal (signal), or the Matrix chat room (matrix)
         if self.last_text_command == "":
             if self.DEBUG:
                 print("Error, ignoring parse_text run: self.last_text_command is empty")
             return
         
         self.last_text_command = self.last_text_command.strip()
-            
+        
+        #  Here 'signal-' or 'matrix-' is prepended to the siteId
         modified_site_id = str(site_id)
         if origin != None:
             if origin != 'voice':
@@ -11799,12 +11892,12 @@ class VocoAdapter(Adapter):
         #self.mqtt_client.publish("hermes/dialogueManager/startSession",json.dumps({"init":{"type":"action","canBeEnqueued": True},"siteId":modified_site_id, "customData":{'origin':origin} }))
         
         
-        # TODO: this is ugly routing. text/matrix input should be routed more cleanly. Unfortunately, snips sometimes strips 'customData', which resulted in this 'hack' of the siteId field.
+        # TODO: this is ugly routing. text/signal/matrix input should be routed more cleanly. Unfortunately, snips sometimes strips 'customData', which resulted in this 'hack' of the siteId field.
         if site_id == str(self.persistent_data['site_id']):
             if self.DEBUG:
                 print("parse_text: local command")
                 
-            if origin == 'text' or origin == 'matrix' or origin == 'llm_stt' or origin == 'voice':
+            if origin == 'text' or origin == 'signal' or origin == 'matrix' or origin == 'llm_stt' or origin == 'voice':
                 self.parse_payload_transfer = {'siteId':str(self.persistent_data['site_id']),'origin':origin}
                 self.query_intent(self.last_text_command, {'siteId':str(self.persistent_data['site_id']),'origin':origin})
             
@@ -12767,7 +12860,7 @@ class VocoAdapter(Adapter):
 
 
                 self.restart_llm_servers = False
-            sleep(1)
+            time.sleep(1)
 
             if self.running == False:
                 break

@@ -220,7 +220,9 @@
 				return
 			}
 			title_el.addEventListener('click', () => {
-
+				if(this.debug){
+					console.log("voco debug: clicked on Voco title");
+				}
 				const quotes = [
 						"Hello world",
 						"Thomas Edison once explained: I have not failed. I’ve just found 10,000 ways that won’t work.",
@@ -232,11 +234,13 @@
 						"Why are pizza jokes the worst? They’re too cheesy."
 						]
 				const random_quote = quotes[Math.floor(Math.random() * quotes.length)];
-
+				if(this.debug){
+					console.log("voco debug: random_quote: ", random_quote);
+				}
 				window.API.postJson(
 				          `/extensions/${this.id}/api/ajax`,
 							    {'action':'speak',
-                                'message': random_quote
+                                'sentence': random_quote
                                 }
 
 				        ).then((body) => {
@@ -363,6 +367,106 @@
                 this.busy_polling = false;
                 this.attempts = 0;
 			});
+
+
+			// Signal linking
+			this.view.querySelector('#extension-voco-signal-phone-number-next-button').addEventListener('click', (event) => {
+				const phone_number = this.view.querySelector('#extension-voco-signal-phone-number-input').value;
+
+				const qr_el = this.view.querySelector('#extension-voco-signal-qr-container');
+				if(qr_el){
+					qr_el.innerHTML = '<div class="extension-voco-spinner"><div></div><div></div><div></div><div></div></div>';
+
+					window.API.postJson(
+					`/extensions/${this.id}/api/ajax`,
+						{
+							'action':'link_signal',
+							'phone_number':phone_number
+						}
+					).then((body) => {
+						console.log("link_signal response body: ", body);
+
+						if(typeof body.state == 'boolean' && body.state == true){
+							
+							if(typeof body.signal_link_messages != 'undefined'){
+								
+								
+								if(body.signal_link_messages.length){
+									qr_el.innerHTML = '';
+									this.generate_qr(qr_el,body.signal_link_messages[0]);
+
+									//qr_el.textContent = JSON.stringify(body.signal_link_messages,null,4);
+									this.flash_message("Scan the Signal pairing QR Code");
+								}
+								else{
+									qr_el.textContent = 'QR code will appear here';
+								}
+								
+							}
+						}
+						else{
+							this.flash_message("Failed to start Signal linking process");
+						}
+						
+						this.parse_body(body);
+					})
+					.catch((err) => {
+						console.error("caught error calling link_signal: ", err);
+						qr_el.textContent = 'Error starting linking process';
+					})
+				}
+				/*
+				setTimeout(() => {
+					window.API.postJson(
+					`/extensions/${this.id}/api/ajax`,
+						{'action':'link_signal_poll'}
+					).then((body) => {
+						console.log("link_signal_poll response body: ", body);
+						if(typeof body.state == 'boolean' && body.state == true){
+							if(typeof body.signal_link_messages != 'undefined'){
+								const qr_el = this.view.querySelector('#extension-voco-signal-qr-container');
+								if(qr_el){
+									if(body.signal_link_messages.length){
+										qr_el.textContent = JSON.stringify(body.signal_link_messages,null,4);
+									}
+								}
+							}
+						}
+						//this.parse_body(body);
+					})
+					.catch((err) => {
+						console.error("caught error calling link_signal_poll: ", err);
+					})
+				},10000);
+				*/
+
+			});
+			
+
+			// After Signal link verification
+			this.view.querySelector('#extension-voco-signal-verify-button').addEventListener('click', (event) => {
+				
+                window.API.postJson(
+		          `/extensions/${this.id}/api/ajax`,
+                    {'action':'after_link_signal'}
+		        ).then((body) => {
+					console.log("after_link_signal response body: ", body);
+					if(typeof body.state == 'boolean' && body.state == true){
+						this.flash_message("Signal linked succesfully");
+					}
+					else{
+						this.flash_message("Signal linking failed");
+					}
+					
+					this.parse_body(body);
+				})
+				.catch((err) => {
+					console.error("caught error calling after_link_signal: ", err);
+				})
+			});
+
+
+
 
 
 			try{
@@ -1114,8 +1218,37 @@
 						}
 					}
 				}
+
+				if(typeof body.signal_accounts != 'undefined'){
+					if(this.debug){
+						console.log("voco debug:  body.signal_accounts: ", body.signal_accounts);
+                    }
+					const account_list_el = this.view.querySelector('#extension-voco-signal-accounts-container');
+					if(account_list_el){
+						account_list_el.innerHTML = '';
+					}
+					for(let ac = 0; ac < body.signal_accounts.length; ac++){
+						const account_item_el = document.createElement('div');
+						account_item_el.textContent = body.signal_accounts[ac];
+						account_list_el.appendChild(account_item_el);
+					}
+
+				}
+
+
 			}
 			
+			if(typeof body.signal_linked == 'boolean'){
+				if(this.debug){
+                    console.log("voco debug: signal_linked: ", body.signal_linked);
+                }
+				if(body.signal_linked){
+					this.view.classList.add('extension-voco-signal-linked');
+				}
+				else{
+					this.view.classList.remove('extension-voco-signal-linked');
+				}
+			}
 			
 			
 			if(typeof body['site_id'] == 'string'){
@@ -2795,6 +2928,19 @@
 	        });
 		}
 
+
+		generate_qr(target_element,text){
+			var qrcode = new QRCode(target_element, {
+    		    width : 300,
+    		    height : 300
+    	    });
+    	    qrcode.makeCode(text);
+		}
+
+		flash_message(message){
+			console.warn("flash_message:  message: ", message);
+		}
+		
 
 	}
 

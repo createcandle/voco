@@ -216,7 +216,7 @@
                     <div class="extension-voco-two-column">
                         <div class="extension-voco-vlak">
                             <img src="/extensions/voco/images/candle_voco_chat.png"/>
-                            <h2>Chat with your home</h2>
+                            <h1>Chat with your home</h1>
                             <p>You can chat with Voco through Signal or Matrix. Both are privacy friendly and encrypted messaging networks.</p>
 							
                             
@@ -229,20 +229,27 @@
                         </div>
 
 						<div id="extension-voco-signal-intro" class="extension-voco-vlak">
-							<h3>Signal</h3>
+							<h2>💬 Signal</h2>
 							<p>If you already have a Signal account, then the easiest way chat with Voco is to pair the Candle controller with your current Signal account.</p>
-							<p>Follow these steps:</p>
-							<ol>
-								<li>Enter your phone number: <div><input type="tel" id="extension-voco-signal-phone-number-input" name="extension-voco-signal-phone-number-input" placeholder="+.. ........"><button id="extension-voco-signal-phone-number-next-button" class="text-button">Next</button></div></li>
-								<li>On your phone, open the Signal app. Click on <span id="extension-voco-signal-three-dots-icon">⋮</span> in the top-right corner to open Settings, and then Linked Devices.</li>
-								<li>Click on the "Link a Device" button, and then scan the QR code below.<br><pre id="extension-voco-signal-qr-container">QR code will <br>appear here after <br>you click 'Next'</pre></li>
-								<li>Done!</li>
-							</ol>
+
+							<div id="extension-voco-signal-accounts-container"></div>
+							<div id="extension-voco-signal-linking-steps">
+								<h4>Linking a Signal account</h4>
+								<p>Follow these steps:</p>
+								<ol>
+									<li>Enter your phone number: <div><input type="tel" id="extension-voco-signal-phone-number-input" name="extension-voco-signal-phone-number-input" placeholder="+.. ........"><button id="extension-voco-signal-phone-number-next-button" class="text-button">Next</button></div></li>
+									<li>On your phone, open the Signal app. Click on <span id="extension-voco-signal-three-dots-icon">⋮</span> in the top-right corner to open Settings, and then Linked Devices.</li>
+									<li>Click on the "Link a Device" button, and then scan the QR code below.<br><pre id="extension-voco-signal-qr-container">QR code will <br>appear here after <br>you click 'Next'</pre></li>
+									<li>Check if it worked: <br><button id="extension-voco-signal-verify-button" class="text-button">Verify</button></li>
+								</ol>
+								<p>If all went well you'll see a new Signal group called 'Candle', of which you are the first member.</p>
+							</div>
+							
 						</div>
 
 
 						<div id="extension-voco-matrix-intro" class="extension-voco-vlak">
-							<h3>Matrix</h3>
+							<h2>Matrix</h2>
 							<p>You can use Matrix by installing an app on your phone or tablet, or by logging in through a web application.</p>
                             <button id="extension-voco-matrix-learn-more-button" type="button" class="text-button">Learn more</button>
                             <div id="extension-voco-matrix-learn-more" class="extension-voco-hidden">

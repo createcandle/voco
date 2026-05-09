@@ -525,6 +525,48 @@ class VocoAPIHandler(APIHandler):
                                   content=json.dumps({'state' : state}),
                                 )
 
+
+                            elif action == 'link_signal' or action == 'link_signal_poll':
+                                state = False
+                                if action == 'link_signal':
+                                    if 'phone_number' in request.body and str(request.body['phone_number']).startswith('+') and len(str(request.body['phone_number'])) > 8:
+                                        self.adapter.link_signal(str(request.body['phone_number']))
+                                        state = True
+                                else:
+                                    state = True
+
+                                link_seconds_to_go = round(self.adapter.signal_link_start_timestamp - time.time())
+
+                                if self.DEBUG:
+                                    print("link_signal/link_signal_poll:  link_seconds_to_go: ", link_seconds_to_go)
+                                
+                                return APIResponse(
+                                  status=200,
+                                  content_type='application/json',
+                                  content=json.dumps({
+                                        'state': state,
+                                        'signal_accounts': self.adapter.signal_accounts,
+                                        'signal_linked': self.adapter.persistent_data['signal_linked'],
+                                        'signal_link_seconds_to_go': link_seconds_to_go,
+                                        'signal_link_messages': self.adapter.signal_link_messages
+                                        }),
+                                )
+                            
+
+
+                            elif action == 'after_link_signal':
+                                state = self.adapter.after_link_signal()
+                                
+                                return APIResponse(
+                                  status=200,
+                                  content_type='application/json',
+                                  content=json.dumps({
+                                        'state': state, 
+                                        'signal_linked':self.adapter.persistent_data['signal_linked'],
+                                        'signal_accounts': self.adapter.signal_accounts,
+                                        }),
+                                )
+
                             # 404
                             else:
                                 return APIResponse(status=404)    
@@ -665,6 +707,8 @@ class VocoAPIHandler(APIHandler):
                                                         'controller_model': self.adapter.controller_model,
                                                         'hardware_score': self.adapter.hardware_score,
                                                         'llm_assistant_started': self.adapter.llm_assistant_started,
+                                                        'signal_linked':self.adapter.persistent_data['signal_linked'],
+                                                        'signal_accounts':self.adapter.signal_accounts,
                                                         'debug':self.adapter.DEBUG
                                                         }),
                                 )
@@ -803,7 +847,8 @@ class VocoAPIHandler(APIHandler):
                                                         'llm_stt_started': self.adapter.llm_stt_started,
                                                         'llm_wakeword_started': self.adapter.llm_wakeword_started,
                                                         'llm_assistant_started': self.adapter.llm_assistant_started,
-                                                        'injection_level':self.adapter.injection_level
+                                                        'injection_level':self.adapter.injection_level,
+                                                        'signal_qr_code':self.adapter.signal_qr_code,
                                                         })
                                 )
                                 

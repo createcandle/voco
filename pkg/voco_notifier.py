@@ -40,6 +40,9 @@ class VocoNotifier(Notifier):
         speak = VocoOutlet(self,'speak','Speak')
         self.handle_outlet_added(speak)
         
+        signal = VocoOutlet(self,'signal','Signal')
+        self.handle_outlet_added(signal)
+
         matrix = VocoOutlet(self,'matrix','Matrix')
         self.handle_outlet_added(matrix)
         
@@ -75,12 +78,18 @@ class VocoOutlet(Outlet):
         try:
             if self.id == "speak":
                 self.notifier.voice_messages_queue.put({'title':title,'message':message,'voice_message':str(title) + " " + str(message),'level':level}) # TODO do something with the title or alert level?
+            
+            elif self.id == "signal":
+                if self.notifier.adapter.persistent_data['signal_linked']:
+                    # TODO: implement urgency levels somehow
+                    self.notifier.adapter.send_signal_message(message)
+            
             elif self.id == "matrix":
                 if self.notifier.adapter.matrix_started:
                     self.notifier.matrix_messages_queue.put({'title':title,'message':message,'level':level}) 
             #print("")
             #print("added message to queue")
         except Exception as ex:
-            print("adding message to queue failed: " + str(ex))
+            print("notify: adding message to queue failed: " + str(ex))
 
 

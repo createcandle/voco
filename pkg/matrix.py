@@ -743,8 +743,6 @@ async def matrix_create_room(self):
 					print("Error creating room: " + str(dir(ex)))
 
 
-
-
 				if (isinstance(room_response, RoomCreateResponse)):
 					if self.DEBUG:
 						print("succesfully created room: " + str(room_response))
@@ -752,7 +750,6 @@ async def matrix_create_room(self):
 
 					if self.DEBUG:
 						print("room_response.room_id: " + str(room_response.room_id))
-
 
 					try:
 						self.persistent_data['matrix_room_id'] = str(room_response.room_id)
