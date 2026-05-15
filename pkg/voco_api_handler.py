@@ -849,6 +849,7 @@ class VocoAPIHandler(APIHandler):
                                                         'llm_assistant_started': self.adapter.llm_assistant_started,
                                                         'injection_level':self.adapter.injection_level,
                                                         'signal_qr_code':self.adapter.signal_qr_code,
+                                                        'signal_linked':self.adapter.persistent_data['signal_linked']
                                                         })
                                 )
                                 
@@ -1076,7 +1077,11 @@ class VocoAPIHandler(APIHandler):
                                 return APIResponse(
                                     status=200,
                                     content_type='application/json',
-                                    content=json.dumps({'state' : state, 'update':update}),
+                                    content=json.dumps({
+                                            'state' : state, 
+                                            'update':update,
+                                            'llm_assistant_started': self.adapter.llm_assistant_started
+                                            }),
                                 )
                             except Exception as ex:
                                 print("Error updating: " + str(ex))

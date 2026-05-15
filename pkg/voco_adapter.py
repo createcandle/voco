@@ -1191,9 +1191,31 @@ class VocoAdapter(Adapter):
         
 
         # Signal paths
+        self.local_share_dir_path = os.path.join(os.path.expanduser("~"),'.local','share')
+        self.signal_cli_share_path = os.path.join(self.local_share_dir_path,'signal-cli')
+        self.signal_cli_local_share_data_path = os.path.join(self.signal_cli_share_path,'data')
         self.signal_cli_path = os.path.join(self.addon_dir_path,"signal","signal-cli64")
+        self.signal_cli_accounts_file_path = os.path.join(self.data_dir_path,'data','accounts.json')
 
+        if not os.path.isdir(self.local_share_dir_path):
+            os.system('mkdir ' + str(self.local_share_dir_path))
 
+        if not os.path.isdir(self.signal_cli_share_path):
+            signal_cli_link_command = 'ln -s ' + str(self.data_dir_path) + '/ ' + str(self.signal_cli_share_path)
+            print("signal_cli_link_command: ", signal_cli_link_command)
+            os.system(signal_cli_link_command)
+
+        elif not os.path.islink(self.local_share_dir_path):
+            print("signal-cli:  self.local_share_dir_path exists, but is not a symlink: ", self.local_share_dir_path)
+            if os.path.isdir(self.signal_cli_local_share_data_path):
+                if not os.path.isfile(self.signal_cli_accounts_file_path):
+                    local_share_accounts_file_path = os.path.join(self.signal_cli_local_share_data_path,'accounts.json')
+                    if os.path.isfile(local_share_accounts_file_path):
+                        data_dir_copy_command = 'cp -r ' + str(os.path.join(self.signal_cli_local_share_data_path)) + ' ' + str(os.path.join(self.data_dir_path,'data'))
+                        print("signal-cli:  copying data dir from .local/share/signal-cli to Voco data dir: \n" + str(data_dir_copy_command))
+                        os.system(data_dir_copy_command)
+                os.system('rm -rf ' + str(self.signal_cli_share_path))
+            os.system('ln -s ' + str(self.data_dir_path) + ' ' + str(self.signal_cli_share_path))
 
         # Matrix paths
         self.matrix_keys_store_path = os.path.join(self.matrix_data_store_path, "keys.txt")

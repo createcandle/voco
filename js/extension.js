@@ -112,6 +112,7 @@
     				{'action':'token','token':jwt}
 
     	        ).then((body) => {
+					this.parse_body(body);
                     //console.log("delayed update jwt response: ", body);
     	        }).catch((e) => {
     	  			console.log("Error (delayed) saving token: ", e);
@@ -152,9 +153,12 @@
 
 		// Cannot be used currently because of small bug in gateway
 		hide() {
-			//console.log("voco hide called");
+			console.log("voco hide called");
 			try{
-				clearInterval(this.interval);
+				if(this.interval){
+					clearInterval(this.interval);
+				}
+				
 				//console.log("interval cleared");
 			}
 			catch(e){
@@ -162,9 +166,22 @@
 			}
 			
 			try{
-                if(document.getElementById('extension-voco-menu-item').classList.contains('selected') == false){
-                    this.view.innerHTML = "";
-                }
+				setTimeout(() => {
+					const voco_menu_item_el = document.getElementById('extension-voco-menu-item');
+					if(voco_menu_item_el){
+						if(voco_menu_item_el.classList.contains('selected') == false){
+							console.log("voco: hide: clearing voco HTML");
+							this.view.innerHTML = "";
+						}
+						else{
+							console.log("voco: hide: not clearing voco HTML");
+						}
+					}
+					else{
+						console.error("voco: hide: voco_menu_item_el not found");
+					}
+				},5000);
+				
 			}
             catch(err){
                 console.error("Voco: caught error in hide: ", err);
@@ -560,7 +577,7 @@
 									console.log("voco debug: no radio button selected, cannot switch on");
 								}
                                 
-                                alert("Please select which server to connect to first");
+                                this.flash_message("Please select which server to connect to first");
                                 return;
                             }
                             else{
@@ -677,7 +694,7 @@
 			}
 			this.interval = setInterval( () => {
 				try{
-					if( !document.hidden && this.view.classList.contains('selected') ){
+					if( this.llm_assistant_started && !document.hidden && this.view.classList.contains('selected') ){
                         this.do_poll();
 						this.update_text_chat();
 					}
@@ -769,17 +786,17 @@
 
 
                 if(password1 != password2){
-                    alert("The passwords did not match");
+                    this.flash_message("The passwords did not match");
                     return
                 }
 
                 if(password1.startsWith('12345')){
-                    alert("Oh come one, that's not secure!");
+                    this.flash_messaget("Oh come one, that's not secure!");
                     return
                 }
 
                 if(password1.length < 10){
-                    alert("The passwords needs to be at least 10 characters long");
+                    this.flash_message("The passwords needs to be at least 10 characters long");
                     return
                 }
 
@@ -808,20 +825,23 @@
         			if(body['state'] == true){
                         this.view.querySelector('#extension-voco-matrix-create-account-step1').classList.add('extension-voco-hidden');
                         this.view.querySelector('#extension-voco-matrix-create-account-step2').classList.remove('extension-voco-hidden');
+						this.flash_message("Matrix account created succesfully");
         			}
         			else{
         				//console.log("not ok response while getting data");
+						this.flash_message("Creating a new Matrix account failed");
         				//alert("Creating a new Matrix account for you failed, sorry. You could try again by refreshing the page, or you can create one manually if you prefer.");
                         this.view.querySelector('#extension-voco-matrix-create-account-step1').classList.remove('extension-voco-hidden');
         			}
 
-                }).catch((e) => {
+                }).catch((err) => {
+					console.error("voco: caught error calling create_matrix_account: ", err);
                     this.view.querySelector('#extension-voco-chat-busy-registering').classList.add('extension-voco-hidden');
                   	//pre.innerText = e.toString();
           			//console.log("voco: error in calling save via API handler");
           			//console.log(e.toString());
                     //console.log('error connecting while trying to create Matrix account: ', e);
-                    //alert("creating Matrix account failed - connection error");
+                    this.flash_message("creating Matrix account failed - connection error");
                     //document.getElementById('extension-voco-matrix-create-account-step1').classList.add('extension-voco-hidden');
                     //document.getElementById('extension-voco-matrix-create-account-step2').classList.remove('extension-voco-hidden');
         			//pre.innerText = "creating Matrix account failed - connection error";
@@ -871,7 +891,7 @@
             			}
             			else{
             				//console.log("not ok response while getting data");
-            				alert("There was an error while creating an account for Voco, creating the room, or inviting you, sorry.");
+            				this.flash_message("There was an error while creating an account for Voco, creating the room, or inviting you, sorry.");
 
                             this.view.querySelector('#extension-voco-matrix-create-account-step1').classList.remove('extension-voco-hidden');
             			}
@@ -885,7 +905,7 @@
                 }
                 else{
                     //console.log("Invalid username");
-                    alert("Invalid username");
+                    this.flash_message("Invalid username");
                 }
 
             });
@@ -903,11 +923,11 @@
 
 
                 if(password1.startsWith('12345')){
-                    alert("Warning, that password is not very secure...");
+                    this.flash_message("Warning, that password is not very secure...");
                 }
 
                 if(password1.length < 8){
-                    alert("Warning, the password is very short...");
+                    this.flash_message("Warning, the password is very short...");
                 }
 
                 //console.log("matrix_server: ", server);
@@ -925,7 +945,7 @@
         			//console.log("Python API provide matrix account result: ", body);
 
         			if(body['state'] == true){
-                        alert("The account data was saved succesfully");
+                        this.flash_message("The account data was saved succesfully");
 
                         if(typeof body['matrix_candle_username'] != 'undefined'){
                             this.view.querySelector('#extension-voco-matrix-candle-username').innerText = body['matrix_candle_username'];
@@ -935,7 +955,7 @@
         			}
         			else{
         				//console.log("not ok response while getting data");
-        				alert("Error creating saving Matrix account, sorry.");
+        				this.flash_message("Error creating saving Matrix account, sorry.");
         			}
 
                 }).catch((err) => {
@@ -943,7 +963,7 @@
           			//console.log("voco: error in calling save via API handler");
           			//console.log(e.toString());
                     console.error('voco: caught error connecting while trying to save provided Matrix account: ', err);
-                    alert("Saving Matrix account failed - connection error");
+                    this.flash_message("Saving Matrix account failed - connection error");
         			//pre.innerText = "creating Matrix account failed - connection error";
                 });
 
@@ -982,7 +1002,7 @@
                     });
                 }
                 else{
-                    alert("invalid Matrix username");
+                    this.flash_message("invalid Matrix username");
                 }
             });
 
@@ -1020,7 +1040,7 @@
                     });
                 }
                 else{
-                    alert("invalid Matrix username");
+                    this.flash_message("invalid Matrix username");
                 }
 
             });
@@ -1106,14 +1126,6 @@
 
 
 		}
-
-
-		/*
-		hide(){
-			clearInterval(this.interval);
-			this.view.innerHTML = "";
-		}
-		*/
 
 
 
@@ -1279,7 +1291,8 @@
 				}
 			}
 
-			if(typeof body['llm_assistant_started'] != 'undefined'){
+			if(typeof body['llm_assistant_started'] == 'boolean'){
+				this.llm_assistant_started = body['llm_assistant_started']
 				if(body['llm_assistant_started'] && this.assistant_text_chat_hints_added == false ){
 					this.assistant_text_chat_hints_added = true;
 					this.text_chat_hints = this.text_chat_hints.concat(this.assistant_text_chat_hints);
@@ -2449,7 +2462,7 @@
 	  					}
 	  				}
 
-	  				if(typeof body['llm_assistant_started'] != 'undefined'){
+	  				if(typeof body['llm_assistant_started'] == 'boolean'){
 	  					this.llm_assistant_started = body['llm_assistant_started'];
 	  					if(this.llm_assistant_started){
 	  						content_container_el.classList.add('extension-voco-assistant-running');
@@ -2645,7 +2658,7 @@
 					                }
 						        }).catch((err) => {
 						  			console.error('voco: caught error during set_llm api call: ', err);
-									alert("Could not connect with Voco, your preference may not have been saved");
+									this.flash_message("Could not connect with Voco, your preference may not have been saved");
 						        });
 
 							});
