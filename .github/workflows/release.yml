@@ -8,9 +8,9 @@ on:
     types: [created]
     #types: [published]
 
-  schedule:
+#  schedule:
 #    #branches: [ release/main ]
-    - cron: '0 1 3 * *'
+#    - cron: '0 1 3 * *'
     
   # Allow this workflow to be called by another one (schedule).
   workflow_call:
