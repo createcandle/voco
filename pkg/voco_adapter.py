@@ -4975,7 +4975,7 @@ class VocoAdapter(Adapter):
                     print("😀 CLOCK TICK " + str(int(time.time()) % 60))
                 self.current_utc_time = int(time.time())
                 
-                print("signal_linked,signal_counter: ", self.persistent_data['signal_linked'], self.signal_counter)
+                #print("signal_linked,signal_counter: ", self.persistent_data['signal_linked'], self.signal_counter)
                 if self.persistent_data['signal_linked']:
                     self.signal_counter += 1
                     if self.signal_counter > 5:
