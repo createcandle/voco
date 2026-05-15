@@ -153,7 +153,7 @@
 
 		// Cannot be used currently because of small bug in gateway
 		hide() {
-			console.log("voco hide called");
+			//console.log("voco hide called");
 			try{
 				if(this.interval){
 					clearInterval(this.interval);
@@ -170,21 +170,14 @@
 					const voco_menu_item_el = document.getElementById('extension-voco-menu-item');
 					if(voco_menu_item_el){
 						if(voco_menu_item_el.classList.contains('selected') == false){
-							console.log("voco: hide: clearing voco HTML");
 							this.view.innerHTML = "";
 						}
-						else{
-							console.log("voco: hide: not clearing voco HTML");
-						}
-					}
-					else{
-						console.error("voco: hide: voco_menu_item_el not found");
 					}
 				},5000);
 				
 			}
             catch(err){
-                console.error("Voco: caught error in hide: ", err);
+                //console.error("Voco: caught error in hide: ", err);
             }
 		}
 
