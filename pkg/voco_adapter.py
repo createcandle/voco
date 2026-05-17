@@ -363,7 +363,7 @@ class VocoAdapter(Adapter):
         self.llm_assistant_conversation_seconds_threshold = 30 # If another intent comes it with X seconds after the previous assistant interaction, take it as a strong hint that this is a dialogue to be continued.
         self.llm_assistant_reverse_prompt_was_spotted = True # sometimes assistants don't end a response with the "Researcher:" reverse prompt
         self.got_assistant_output = False # only briefly becomes true while the assistant is outputting text
-        self.llm_assistant_do_not_split_on_comma = False
+        self.llm_assistant_do_not_split_on_comma = True
         self.llm_assistant_maximum_no_new_output_duration = 3 # Sometimes an assistant doesn't render the "Researcher:" response. As a fall-back, if the assistant goes quiet for over a second, assume it's done talking.
         self.info_to_show = '' # text that will be shown in a big overlay in the UI
         self.llm_assistant_reset_delay = 90 # how many seconds after the user has stopped chatting with the assistant should it fully reset itself
@@ -3558,9 +3558,19 @@ class VocoAdapter(Adapter):
             
             if 'siteId' in intent and intent['siteId'].endswith(self.persistent_data['site_id']) and str(voice_message).lower().startswith('show '): # E.g. Show me a recipe for ...
                 if self.DEBUG:
-                    print("voice message starts with 'show '. ")
+                    print("speak: voice message starts with 'show '. ")
                 self.info_to_show = voice_message
             
+            # Sometimes LLM's output ends with the word that indicates it's the user's turn to speak
+            message_to_be_spoken = str(voice_message)
+            if len(message_to_be_spoken) > 16:
+                message_researcher_index = message_to_be_spoken.lower().rfind('researcher')
+                if message_researcher_index > len(message_to_be_spoken) - 15:
+                    if self.DEBUG:
+                        print("speak: warning, removing 'researcher' from end of string that is about to be spoken: ", message_to_be_spoken)
+                    voice_message = message_to_be_spoken[:message_researcher_index]  
+
+
             #with self.voice_messages_queue.mutex:
             self.voice_messages_queue.put({'voice_message':str(voice_message),'intent':intent})
 
@@ -3631,11 +3641,12 @@ class VocoAdapter(Adapter):
                 
             # A very brute-force way to avoid speaking the same sentence twice, which might occur if a satellite and main controller have a thing with the same name 
             dont_speak_twice = False
-            if self.last_spoken_sentence == str(voice_message) and self.last_spoken_sentence_time > (time.time() - 5):
+            if self.last_spoken_sentence == str(voice_message) and self.last_spoken_sentence_time > (time.time() - 5) and isinstance(site_id,str) and site_id.startswith("voice-") and not voice_message.lower().startswith('sorry'):
                 if self.DEBUG:
                     print("\n\nSPEAK: STOPPING A SENTENCE FROM BEING SPOKEN MULTIPLE TIMES IN A ROW:" + str(self.last_spoken_sentence) + "\n") # TODO: very crude solution...
                     print("- time delta was: " + str(time.time() - self.last_spoken_sentence_time))
                     self.speak("echo")
+                    self.last_spoken_sentence_time = 0
                 dont_speak_twice = True
             else:
                 self.last_spoken_sentence_time = time.time()
@@ -6635,7 +6646,9 @@ class VocoAdapter(Adapter):
                 #intent_message['siteId'] = self.persistent_data['site_id']
                 
                 if self.DEBUG:
+                    
                     print("\n$\n$\n$\n")
+                    print("intentParsed:")
                     print(json.dumps(intent_message, indent=4, sort_keys=True))
                     print("\n$\n$\n$\n")
                     print("sending fafafafa intent message to master_intent_callback")
@@ -6647,6 +6660,7 @@ class VocoAdapter(Adapter):
                 if str(intent_message['sessionId']) != str(self.current_snips_session_id):
                     if self.DEBUG:
                         print("publishing to endSession twice. (BLOCKED) ")
+                    # TODO: maybe update self.current_snips_session_id if it's a local query?
                     #self.mqtt_client.publish('hermes/dialogueManager/endSession', json.dumps({"text": "", "sessionId": str(self.current_snips_session_id)}))
                 self.master_intent_callback(intent_message)
             else:
@@ -6660,7 +6674,7 @@ class VocoAdapter(Adapter):
             if 'id' in payload and payload['id'].endswith('fafafafa'): # self.llm_stt_always_use and
                 self.intent_received = True
                 if self.DEBUG:
-                    print("FAFAFAFA spotted")
+                    print("intentNotRecognized: FAFAFAFA spotted")
                     
                 intent_message = json.loads(msg.payload.decode("utf-8"))
                 
@@ -7482,6 +7496,7 @@ class VocoAdapter(Adapter):
                 
                 #self.mqtt_client.subscribe("hermes/asr/textCaptured/#") # now handled by the second local mqtt client
                 self.mqtt_client.subscribe("hermes/dialogueManager/sessionStarted/#")
+                self.mqtt_client.subscribe("hermes/dialogueManager/sessionEnded/#")
             
                 #self.mqtt_client.subscribe("hermes/injection/#")
             
@@ -7562,7 +7577,7 @@ class VocoAdapter(Adapter):
             if self.DEBUG:
                 print("Error, unable to parse payload from incoming mqtt message: " + str(ex))
                 
-        if self.DEBUG2:
+        if self.DEBUG:
             print("")
             print("")
             print("MQTT message to topic: " + str(msg.topic) + ", received on: " + self.persistent_data['site_id'] + ", a.k.a. hostname: " + self.hostname)
@@ -7635,14 +7650,18 @@ class VocoAdapter(Adapter):
                 elif payload['siteId'].endswith(self.persistent_data['site_id']):
                     
                     if self.DEBUG:
-                        print("A session was succesfully started for this site_id.")
+                        print("A dialogue session was succesfully started for this site_id.")
                         print(" - payload['siteId']: " + str(payload['siteId']))
                         print(" - payload['sessionId']: " + str(payload['sessionId']))
                         
                     if payload['siteId'].startswith("llm_stt-"):
                         print("\nLLM STT siteId detected")
                     
-                    if self.last_text_command != '' and payload['siteId'].startswith("text-") or payload['siteId'].startswith("signal-")  or payload['siteId'].startswith("matrix-") or payload['siteId'].startswith("llm_stt-") or (self.persistent_data['is_satellite'] and self.mqtt_connected and self.periodic_voco_attempts < 3): 
+                    
+                    if isinstance(payload['sessionId'],str) and len(payload['sessionId']) > 10:
+                        self.current_snips_session_id = payload['sessionId']
+
+                    if self.last_text_command != '' and payload['siteId'].startswith("text-") or payload['siteId'].startswith("signal-") or payload['siteId'].startswith("matrix-") or payload['siteId'].startswith("llm_stt-") or (self.persistent_data['is_satellite'] and self.mqtt_connected and self.periodic_voco_attempts < 3): 
                         if self.DEBUG:
                             print("Creating faux textcaptured. self.last_text_command:\n\n (FAUX)-> " + str(self.last_text_command))
                             print("\n")
@@ -7676,11 +7695,22 @@ class VocoAdapter(Adapter):
                     if self.DEBUG:
                         print("voice session start detected for other controller")
                     
-
             else:
                 if self.DEBUG:
                     print("- misssing siteId and/or sessionId in payload")
 
+        elif msg.topic == 'hermes/dialogueManager/sessionEnded':
+            if payload['siteId'] == None:
+                if self.DEBUG:
+                    print("\nError, sessionEnded: siteId was None")
+                return
+            elif payload['siteId'].endswith(self.persistent_data['site_id']) and 'sessionId' in payload:
+                if self.DEBUG:
+                    print("Received dialogueManager/sessionEnded.  sessionId: ", str(payload['sessionId']))
+                if str(payload['sessionId']) == self.current_snips_session_id:
+                    if self.DEBUG:
+                        print("clearing current_snips_session_id")
+                    self.current_snips_session_id = ''
 
 
         try:
@@ -9565,7 +9595,7 @@ class VocoAdapter(Adapter):
                     #if 'siteId' in intent_message and intent_message['siteId'] != self.persistent_data['site_id'] and self.persistent_data['is_satellite'] == False:
                     #    self.speak(voice_message,intent=intent_message)
                         
-                    # if the intent's sentence has already been genered why STT, then the sentence can be piped to the assistant straight away.
+                    # if the intent's sentence has already been parsed by STT, then the sentence can be piped to the assistant straight away.
                     if self.llm_stt_always_use == True or ('siteId' in intent_message and intent_message['siteId'].startswith('llm_stt-')):
                         if self.DEBUG:
                             print("an intent that was based on LLM STT fell through, so it can be routed directly to the assistant")
@@ -11911,7 +11941,7 @@ class VocoAdapter(Adapter):
         
         if self.DEBUG:
             print("parse_text: modified_site_id: " + str(modified_site_id)) 
-        #self.mqtt_client.publish("hermes/dialogueManager/startSession",json.dumps({"init":{"type":"action","canBeEnqueued": True},"siteId":modified_site_id, "customData":{'origin':origin} }))
+        
         
         
         # TODO: this is ugly routing. text/signal/matrix input should be routed more cleanly. Unfortunately, snips sometimes strips 'customData', which resulted in this 'hack' of the siteId field.
@@ -11919,12 +11949,23 @@ class VocoAdapter(Adapter):
             if self.DEBUG:
                 print("parse_text: local command")
                 
+            if self.current_snips_session_id == '':
+                if self.DEBUG:
+                    print("experimental: parse_text: calling startSession")
+                self.mqtt_client.publish("hermes/dialogueManager/startSession",json.dumps({"init":{"type":"action","canBeEnqueued": False},"siteId":modified_site_id, "customData":{'origin':origin,"last_text_command":self.last_text_command,"should":"parse_text"} }))
+        
+
             if origin == 'text' or origin == 'signal' or origin == 'matrix' or origin == 'llm_stt' or origin == 'voice':
                 self.parse_payload_transfer = {'siteId':str(self.persistent_data['site_id']),'origin':origin}
                 self.query_intent(self.last_text_command, {'siteId':str(self.persistent_data['site_id']),'origin':origin})
             
             #self.mqtt_second_client.publish("hermes/dialogueManager/startSession",json.dumps({"init":{"type":"action","canBeEnqueued": True},"siteId":modified_site_id }))
             
+            #if origin == 'text':
+            #    self.mqtt_second_client.publish("hermes/dialogueManager/startSession",json.dumps({"init":{"type":"action","canBeEnqueued": True},"siteId":modified_site_id }))
+                
+
+
             """
             if self.persistent_data['is_satellite'] == True and self.mqtt_connected and self.periodic_voco_attempts < 3:
                 
@@ -12842,7 +12883,7 @@ class VocoAdapter(Adapter):
             if self.assistant_loop_counter == self.llm_servers_watchdog_interval or self.restart_llm_servers == True:
                 
                 self.assistant_loop_counter = 0
-                if self.DEBUG2:
+                if self.DEBUG:
                     print("at assistant periodic restart check. self.llm_assistant_response_count: " + str(self.llm_assistant_response_count))
                 
                 try:
@@ -12863,15 +12904,16 @@ class VocoAdapter(Adapter):
 
                     if self.llm_assistant_enabled:
                         if self.llm_assistant_process == None or (self.llm_assistant_process != None and self.llm_assistant_process.poll() != None):
-                            if self.DEBUG2:
+                            if self.DEBUG:
                                 print("\nLLM servers thread: assistant doesn't seem to be running. Attempting restart\n")
                             self.llm_assistant_started = False
                             self.last_assistant_output_change_time = time.time()
                             self.start_ai_assistant()
 
-                        elif self.llm_assistant_response_count > 2 and (time.time() - self.llm_assistant_reset_delay) > self.last_assistant_output_change_time:
-                            if self.DEBUG2:
-                                print("\no\noo\nooo\nLLM servers thread: attemping to restart assistant process\nooo\noo\no\n")
+                        elif self.llm_assistant_response_count > 2 and (time.time() - self.llm_assistant_reset_delay) > self.last_assistant_output_change_time: # 90 seconds
+                            if self.DEBUG:
+                                print("\no\noo\nooo\nLLM servers thread: attemping to restart/refresh assistant process\nooo\noo\no\n")
+                            self.llm_assistant_response_count = 0
                             self.llm_assistant_started = False
                             self.last_assistant_output_change_time = time.time()
                             self.start_ai_assistant()
@@ -12901,7 +12943,7 @@ class VocoAdapter(Adapter):
 
     # start long running TTS process
     def start_llm_tts(self, restart=False):
-        if self.DEBUG2:
+        if self.DEBUG:
             print("in start_llm_tts. Forced restart?: " + str(restart))
 
         if self.bits < 64:
@@ -13163,28 +13205,28 @@ class VocoAdapter(Adapter):
 
                 # WORKS: curl http://localhost:8046/inference -H "Content-Type: multipart/form-data" -F file="@/home/pi/.webthings/whis/whisper.cpp-master/samples/jfk.wav" -F temperature="0.0" -F temperature_inc="0.2" -F response_format="json"
 
-                if self.DEBUG:
-                    print("llm_stt_possible, DOING LOCAL SPEECH TO TEXT on: " + str(self.last_recording_path))
-                self.llm_stt_skipped = False
-                self.llm_stt_done = False
-                self.llm_stt_sentence = ''
-                #if self.llm_stt_always_use:
-                #    self.intent_received = True
-
-                #./command -m ./models/ggml-tiny.en.bin -ac 768 -t 3 -c 0
-
-                # Direct command input from microphone. Doesnt work because the microphone is already taken. Also, focusses more on a limited list of words/commands.
-                # https://github.com/ggerganov/whisper.cpp/blob/master/examples/command/command.cpp
-                #stt_command = str(os.path.join(self.addon_dir_path,'llm','stt', 'command')) + " -m " + str(os.path.join(self.llm_stt_dir_path, str(self.persistent_data['llm_stt_model']))) + " -ac 768 -t 3 -c 0"
-
-                #stt_command = 'curl http://127.0.0.1:' + str(self.llm_stt_port) + '/inference -H "Content-Type: multipart/form-data" -F file="@' + str(self.last_recording_path) + '" -F temperature="0.2" -F temperature_inc="0.2" -F response_format="json"'
-                stt_command = 'curl http://127.0.0.1:' + str(self.llm_stt_port) + '/inference -H "Content-Type: multipart/form-data" -F file="@' + str(self.last_recording_path) + '" -F temperature="0.2" -F temperature_inc="0.2" -F response_format="json"'  # ' + str(self.persistent_data['main_controller_ip']) + '
-                if self.DEBUG:
-                    print("\n\nVOCO LLM STT CURL COMMAND: " + str(stt_command))
-                    #print("\n⏰\nSTT START STOPWATCH: + " + str(time.time() - self.llm_stt_stopwatch) + ', ' + str(time.time() - self.llm_stt_stopwatch_start))
-                    #self.llm_stt_stopwatch = time.time()
-
                 if os.path.exists(str(self.last_recording_path)):
+                    if self.DEBUG:
+                        print("llm_stt_possible, DOING LOCAL SPEECH TO TEXT on self.last_recording_path: " + str(self.last_recording_path))
+                    self.llm_stt_skipped = False
+                    self.llm_stt_done = False
+                    self.llm_stt_sentence = ''
+                    #if self.llm_stt_always_use:
+                    #    self.intent_received = True
+
+                    #./command -m ./models/ggml-tiny.en.bin -ac 768 -t 3 -c 0
+
+                    # Direct command input from microphone. Doesnt work because the microphone is already taken. Also, focusses more on a limited list of words/commands.
+                    # https://github.com/ggerganov/whisper.cpp/blob/master/examples/command/command.cpp
+                    #stt_command = str(os.path.join(self.addon_dir_path,'llm','stt', 'command')) + " -m " + str(os.path.join(self.llm_stt_dir_path, str(self.persistent_data['llm_stt_model']))) + " -ac 768 -t 3 -c 0"
+
+                    #stt_command = 'curl http://127.0.0.1:' + str(self.llm_stt_port) + '/inference -H "Content-Type: multipart/form-data" -F file="@' + str(self.last_recording_path) + '" -F temperature="0.2" -F temperature_inc="0.2" -F response_format="json"'
+                    stt_command = 'curl http://127.0.0.1:' + str(self.llm_stt_port) + '/inference -H "Content-Type: multipart/form-data" -F file="@' + str(self.last_recording_path) + '" -F temperature="0.2" -F temperature_inc="0.2" -F response_format="json"'  # ' + str(self.persistent_data['main_controller_ip']) + '
+                    if self.DEBUG:
+                        print("\n\nVOCO LLM STT CURL COMMAND: " + str(stt_command))
+                        #print("\n⏰\nSTT START STOPWATCH: + " + str(time.time() - self.llm_stt_stopwatch) + ', ' + str(time.time() - self.llm_stt_stopwatch_start))
+                        #self.llm_stt_stopwatch = time.time()
+
                     stt_result = run_command(stt_command,30) # If this takes more than 30 seconds..
                     #self.llm_stt_stopwatch = time.time() - self.llm_stt_stopwatch
                     
@@ -13520,266 +13562,279 @@ class VocoAdapter(Adapter):
 
 
     def stop_ai_assistant(self):
-        if self.DEBUG2:
+        if self.DEBUG:
             print("in stop_ai_assistant")
-        if self.llm_assistant_process != None and self.llm_assistant_process.poll() == None:
-            if self.DEBUG:
-                print("\n\nASSISTANT ALREADY RUNNING, STOPPING IT FIRST\n\n")
-                print("self.llm_assistant_process.pid: " + str(self.llm_assistant_process.pid))
-            #os.kill(self.llm_assistant_process.pid, signal.SIGINT)
-            #os.killpg(os.getpgid(self.llm_assistant_process.pid), signal.SIGHUP)
-            #os.killpg(os.getpgid(self.llm_assistant_process.pid), signal.SIGTERM)
-            #time.sleep(1)
 
-            try:
-                outs, errs = self.llm_assistant_process.communicate(timeout=3)
-            except Exception as ex:
+        try:
+            if self.llm_assistant_process != None and self.llm_assistant_process.poll() == None:
                 if self.DEBUG:
-                    print("start_ai_assistant: attempt to nicely stop existing assistant process failed with ERROR: " + str(ex))
+                    print("stop_ai_assistant: self.llm_assistant_process.pid: " + str(self.llm_assistant_process.pid))
+                #os.kill(self.llm_assistant_process.pid, signal.SIGINT)
+                #os.killpg(os.getpgid(self.llm_assistant_process.pid), signal.SIGHUP)
+                #os.killpg(os.getpgid(self.llm_assistant_process.pid), signal.SIGTERM)
+                #time.sleep(1)
+
                 try:
-                    self.llm_assistant_process.kill()
-                    outs, errs = self.llm_assistant_process.communicate(timeout=1)
+                    outs, errs = self.llm_assistant_process.communicate(timeout=3)
                 except Exception as ex:
                     if self.DEBUG:
-                        print("Second follow-up attempt to less nicely stop existing assistant process also failed, with error: " + str(ex))
+                        print("stop_ai_assistant: attempt to nicely stop existing assistant process failed with ERROR: " + str(ex))
+                    try:
+                        self.llm_assistant_process.kill()
+                        outs, errs = self.llm_assistant_process.communicate(timeout=1)
+                    except Exception as ex:
+                        if self.DEBUG:
+                            print("stop_ai_assistant: second follow-up attempt to less nicely stop existing assistant process also failed, with error: " + str(ex))
 
-        if self.llm_assistant_process != None and self.llm_assistant_process.poll() == None:
-            if self.DEBUG:
-                print("attempting to .kill assistant subprocess")
-            self.llm_assistant_process.kill()
-            time.sleep(0.1)
-            if self.llm_assistant_process.poll() == None:
+            if self.llm_assistant_process != None and self.llm_assistant_process.poll() == None:
                 if self.DEBUG:
-                    print("resorting to .terminate to stop assistant subprocess")
-                self.llm_assistant_process.terminate()
+                    print("stop_ai_assistant: attempting to .kill assistant subprocess")
+                self.llm_assistant_process.kill()
                 time.sleep(0.1)
-            if self.llm_assistant_process.poll() == None:
+                if self.llm_assistant_process.poll() == None:
+                    if self.DEBUG:
+                        print("resorting to .terminate to stop assistant subprocess")
+                    self.llm_assistant_process.terminate()
+                    time.sleep(0.1)
+                if self.llm_assistant_process.poll() == None:
+                    if self.DEBUG:
+                        print("stop_ai_assistant: WARNING, resorting to pkill to stop existing assistant process...")
+                    os.system('pkill -f ' + str(self.llm_assistant_binary_name))
+            else:
                 if self.DEBUG:
-                    print("start_ai_assistant: WARNING, resorting to pkill to stop existing assistant process...")
-                os.system('pkill -f ' + str(self.llm_assistant_binary_name))
-        else:
-            if self.DEBUG2:
-                print("AI ASSISTANT PROCESS SEEMS TO HAVE STOPPED PROPERLY")
+                    print("stop_ai_assistant: OK, AI ASSISTANT PROCESS SEEMS TO HAVE STOPPED PROPERLY")
 
-        self.llm_assistant_process = None
-        self.llm_assistant_countdown = 0
-        self.llm_assistant_response_count = 0
+            with open(self.llm_assistant_output_file_path, "w") as myfile:
+                myfile.write("")
+
+            self.llm_assistant_process = None
+            self.llm_assistant_countdown = 0
+            self.llm_assistant_response_count = 0
+
+
+        except Exception as ex:
+            print("caught error in stop_ai_assistant: ", ex)
+        
+        
 
 
 
     def start_ai_assistant(self):
-        if self.DEBUG2:
-            print("in start_ai_assistant")
+        if self.DEBUG:
+            print("\nin start_ai_assistant.  model: ", str(self.persistent_data['llm_assistant_model']))
 
-
-        if self.llm_assistant_process != None:
-            if self.DEBUG:
-                print("start_ai_assistant: calling stop_ai_assistant first")
-            self.stop_ai_assistant()
-
-        #if self.persistent_data['is_satellite'] == True:
-        #    if self.DEBUG:
-        #        print("aborting start_ai_assistant: this device is (now) a satellite. Aborting start of assistant") # TODO: in the future, if the satellite is powerful enough, why not let it run a local assistant?
-        #    return
-
-        if str(self.persistent_data['llm_assistant_model']) == 'voco':
-            if self.DEBUG:
-                print("llm_assistant_model is set to voco, so not starting Assistant server")
-            self.llm_assistant_started = False
-            return
-
-        self.llm_assistant_not_enough_memory = False
-        self.check_available_memory()
-
-        if self.llm_enabled and self.llm_assistant_enabled:
-            if self.free_memory > self.llm_assistant_minimal_memory:
-
-                if self.llm_models['assistant']['active'] == None:
-                    if self.DEBUG:
-                        print("\nError, active assistant model was set to None, cannot start assistant\n")
-                    return
-
-
-
-                """
-                    "basic":{
-                        "user_name":"Researcher",
-                        "assistant_name":"Digital Athena",
-                        "system_prompt":"The following is a conversation between a curious researcher and their helpful AI assistant called {assistant_name}, which gives helpful and honest answers.", # Researcher:
-                        "system":"{system_prompt}\\n\\n{reverse_prompt}",
-                        "user":"{user_message}",
-                        "reverse_prompt":"{user_name}:",
-                        "in_prefix":" ",
-                        "in_suffix":"{assistant_name}:",
-                        "end":""
-                    },
-                """
-
-                #if 'protocol' in self.llm_models['assistant'] and str(self.llm_models['assistant']['protocol']) in self.llm_assistant_protocols:
-                    #self.llm_assistant_protocol = self.llm_assistant_protocols[ str(self.llm_models['assistant']['protocol']) ]
-                
-                if not self.llm_assistant_protocol in self.llm_assistant_protocols:
-                    if self.DEBUG:
-                        print("ERROR, selected chat protocol is unknown/unsupported: " + str(self.llm_assistant_protocol))
-                    return
-                    
-                prot = self.llm_assistant_protocols[str(self.llm_assistant_protocol)]
-
+        try:
+            if self.llm_assistant_process != None:
                 if self.DEBUG:
-                    print("start LLM Assistant: protocol: \n" + str(json.dumps(prot,indent=4)))
+                    print("start_ai_assistant: calling stop_ai_assistant first")
+                self.stop_ai_assistant()
 
-                #if 'system_prompt' in prot:
-                #    self.llm_assistant_prompt = self.llm_assistant_protocol['system']
-                    
-                    
-                #if self.DEBUG:
-                #    print("starting LLM assistant. System prompt before: " + str(self.llm_assistant_prompt))
+            #if self.persistent_data['is_satellite'] == True:
+            #    if self.DEBUG:
+            #        print("aborting start_ai_assistant: this device is (now) a satellite. Aborting start of assistant") # TODO: in the future, if the satellite is powerful enough, why not let it run a local assistant?
+            #    return
+
+            if str(self.persistent_data['llm_assistant_model']) == 'voco':
+                if self.DEBUG:
+                    print("llm_assistant_model is set to voco, so not starting AI assistant")
+                self.llm_assistant_started = False
+                return
+
+            self.llm_assistant_not_enough_memory = False
+            self.check_available_memory()
+
+            if self.llm_enabled and self.llm_assistant_enabled:
+                if self.free_memory > self.llm_assistant_minimal_memory:
+
+                    if self.llm_models['assistant']['active'] == None:
+                        if self.DEBUG:
+                            print("\nError, start_ai_assistant: active assistant model was set to None, cannot start assistant\n")
+                        return
 
 
-                if 'system' in prot and 'reverse_prompt' in prot:
-                    
-                    in_prefix = prot['in_prefix'].replace("{user_name}", prot['user_name'])
-                    in_suffix = prot['in_suffix'].replace("{assistant_name}", prot['assistant_name'])
-                    reverse_prompt = prot['reverse_prompt'].replace("{user_name}", prot['user_name'])
-                    
-                    system_prompt = prot['system_prompt'].replace("{user_name}", prot['user_name'])
-                    system_prompt = system_prompt.replace("{assistant_name}", prot['assistant_name'])
-                    
-                    assistant_prompt = prot['system'].replace("{system_prompt}", system_prompt)
-                    assistant_prompt = assistant_prompt.replace("{reverse_prompt}", reverse_prompt)
-                    assistant_prompt = assistant_prompt.replace("{user_name}", prot['user_name'])
-                    assistant_prompt = assistant_prompt.replace("{assistant_name}", prot['assistant_name'])
 
-                    assistant_prompt = "$'" + assistant_prompt + "'"
-                    reverse_prompt = "'" + reverse_prompt + "'"
-                    in_prefix = "'" + in_prefix + "'"
-                    in_suffix = "'" + in_suffix + "'"
+                    """
+                        "basic":{
+                            "user_name":"Researcher",
+                            "assistant_name":"Digital Athena",
+                            "system_prompt":"The following is a conversation between a curious researcher and their helpful AI assistant called {assistant_name}, which gives helpful and honest answers.", # Researcher:
+                            "system":"{system_prompt}\\n\\n{reverse_prompt}",
+                            "user":"{user_message}",
+                            "reverse_prompt":"{user_name}:",
+                            "in_prefix":" ",
+                            "in_suffix":"{assistant_name}:",
+                            "end":""
+                        },
+                    """
+
+                    #if 'protocol' in self.llm_models['assistant'] and str(self.llm_models['assistant']['protocol']) in self.llm_assistant_protocols:
+                        #self.llm_assistant_protocol = self.llm_assistant_protocols[ str(self.llm_models['assistant']['protocol']) ]
                     
-                    if self.DEBUG:
-                        print("")
-                        print("LLM Assistant: reverse_prompt: " + str(reverse_prompt))
-                        print("LLM Assistant: in_prefix     : " + str(in_prefix))
-                        print("LLM Assistant: in_suffix     : " + str(in_suffix))
-                        print("LLM Assistant: system prompt : \n--->" + str(assistant_prompt) + "<---\n")
-
-                    my_env = get_env()
-
-                    with open(self.llm_assistant_output_file_path, "w") as myfile:
-                        myfile.write("")
+                    if not self.llm_assistant_protocol in self.llm_assistant_protocols:
+                        if self.DEBUG:
+                            print("ERROR, start_ai_assistant: selected chat protocol is unknown/unsupported: " + str(self.llm_assistant_protocol))
+                        return
                         
-                    self.last_assistant_output_change_time = time.time()
-                    self.llm_assistant_reverse_prompt_was_spotted = True
+                    prot = self.llm_assistant_protocols[str(self.llm_assistant_protocol)]
 
-                    #"sh",
-                    #    "-c",
-                    #
-                    #self.llm_assistant_words_to_generate = 1024
-                    #self.llm_assistant_context_size
-
-                    assistant_command = [
-
-                        str(self.llm_assistant_binary_path),
-                        "-m",
-                        str(self.llm_models['assistant']['active']),
-                        "-p",
-                        str(assistant_prompt),
-                        "--interactive",
-                        "--interactive-first",
-                        #"--silent-prompt",
-                        #"--simple-io",
-                        "--batch_size",
-                        "256",
-                        "--ctx_size",
-                        str(self.llm_assistant_context_size),
-                        #"-ngl",
-                        #"1024",
-                        "--repeat_penalty",
-                        "1.1",
-                        "-n",
-                        str(self.llm_assistant_words_to_generate * 2),
-                        "--keep", # keep all tokens from the initial prompt
-                        "-1",
-                        #"--log-disable",
-                        "--temp",
-                        str(self.llm_assistant_temperature),
-                        "--mirostat",
-                        "2",
-                        "--in-prefix",
-                        str(in_prefix),
-                        "--in-suffix",
-                        str(in_suffix),
-                        "--reverse-prompt",
-                        str(reverse_prompt),
-                        "-t",
-                        str(self.llm_assistant_threads),
-                        #">>",
-                        #"-"
-                        ">>",
-                        str(self.llm_assistant_output_file_path)
-                        #"2>&1",
-                        #"|",
-                        #"cat"
-                    ]
-                    
-
-                    assistant_command = ' '.join(assistant_command)
                     if self.DEBUG:
-                        print("\nLLM assistant_command: " + str(assistant_command))
+                        print("start_ai_assistant: protocol: \n" + str(json.dumps(prot,indent=4)))
+
+                    #if 'system_prompt' in prot:
+                    #    self.llm_assistant_prompt = self.llm_assistant_protocol['system']
+                        
+                        
+                    #if self.DEBUG:
+                    #    print("starting LLM assistant. System prompt before: " + str(self.llm_assistant_prompt))
 
 
-                    #self.llm_assistant_process = Popen(assistant_command, env=my_env, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,bufsize=100,shell=True) # preexec_fn=os.setsid
-                    self.llm_assistant_process = Popen(assistant_command, env=my_env, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, universal_newlines=True, bufsize=1, shell=True) # preexec_fn=os.setsid
-                    os.set_blocking(self.llm_assistant_process.stdout.fileno(), False)
-                    time.sleep(.1)
-                    if self.llm_assistant_process.poll() == None:
+                    if 'system' in prot and 'reverse_prompt' in prot:
+                        
+                        in_prefix = prot['in_prefix'].replace("{user_name}", prot['user_name'])
+                        in_suffix = prot['in_suffix'].replace("{assistant_name}", prot['assistant_name'])
+                        reverse_prompt = prot['reverse_prompt'].replace("{user_name}", prot['user_name'])
+                        
+                        system_prompt = prot['system_prompt'].replace("{user_name}", prot['user_name'])
+                        system_prompt = system_prompt.replace("{assistant_name}", prot['assistant_name'])
+                        
+                        assistant_prompt = prot['system'].replace("{system_prompt}", system_prompt)
+                        assistant_prompt = assistant_prompt.replace("{reverse_prompt}", reverse_prompt)
+                        assistant_prompt = assistant_prompt.replace("{user_name}", prot['user_name'])
+                        assistant_prompt = assistant_prompt.replace("{assistant_name}", prot['assistant_name'])
+
+                        assistant_prompt = "$'" + assistant_prompt + "'"
+                        reverse_prompt = "'" + reverse_prompt + "'"
+                        in_prefix = "'" + in_prefix + "'"
+                        in_suffix = "'" + in_suffix + "'"
+                        
                         if self.DEBUG:
-                            print("\n\n\n[OK]\nLLM Assistant process started succesfully\n\n\n")
-                        self.llm_assistant_started = True
-                        self.check_if_this_is_the_fastest_controller()
-                    else:
+                            print("")
+                            print("start_ai_assistant: reverse_prompt: " + str(reverse_prompt))
+                            print("start_ai_assistant: in_prefix     : " + str(in_prefix))
+                            print("start_ai_assistant: in_suffix     : " + str(in_suffix))
+                            print("start_ai_assistant: system prompt : \n--->" + str(assistant_prompt) + "<---\n")
+
+                        my_env = get_env()
+
+                        with open(self.llm_assistant_output_file_path, "w") as myfile:
+                            myfile.write("")
+                            
+                        self.last_assistant_output_change_time = time.time()
+                        self.llm_assistant_reverse_prompt_was_spotted = True
+
+                        #"sh",
+                        #    "-c",
+                        #
+                        #self.llm_assistant_words_to_generate = 1024
+                        #self.llm_assistant_context_size
+
+                        assistant_command = [
+
+                            str(self.llm_assistant_binary_path),
+                            "-m",
+                            str(self.llm_models['assistant']['active']),
+                            "-p",
+                            str(assistant_prompt),
+                            "--interactive",
+                            "--interactive-first",
+                            #"--silent-prompt",
+                            #"--simple-io",
+                            "--batch_size",
+                            "256",
+                            "--ctx_size",
+                            str(self.llm_assistant_context_size),
+                            #"-ngl",
+                            #"1024",
+                            "--repeat_penalty",
+                            "1.1",
+                            "-n",
+                            str(self.llm_assistant_words_to_generate * 2),
+                            "--keep", # keep all tokens from the initial prompt
+                            "-1",
+                            #"--log-disable",
+                            "--temp",
+                            str(self.llm_assistant_temperature),
+                            "--mirostat",
+                            "2",
+                            "--in-prefix",
+                            str(in_prefix),
+                            "--in-suffix",
+                            str(in_suffix),
+                            "--reverse-prompt",
+                            str(reverse_prompt),
+                            "-t",
+                            str(self.llm_assistant_threads),
+                            #">>",
+                            #"-"
+                            ">>",
+                            str(self.llm_assistant_output_file_path)
+                            #"2>&1",
+                            #"|",
+                            #"cat"
+                        ]
+                        
+
+                        assistant_command = ' '.join(assistant_command)
                         if self.DEBUG:
-                            print("\n\n\nLLM Assistant process immediately crashed! return code: " + str(self.llm_assistant_process.returncode) + "\n\n\n")
-                        self.llm_assistant_started = False
-                        """
-                        if self.llm_assistant_process.returncode == 0:
-                            #print(p.stdout # + '\n' + "Command success" #.decode('utf-8')
+                            print("\nstart_ai_assistant: LLM assistant_command: " + str(assistant_command))
+
+
+                        #self.llm_assistant_process = Popen(assistant_command, env=my_env, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,bufsize=100,shell=True) # preexec_fn=os.setsid
+                        self.llm_assistant_process = Popen(assistant_command, env=my_env, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, universal_newlines=True, bufsize=1, shell=True) # preexec_fn=os.setsid
+                        os.set_blocking(self.llm_assistant_process.stdout.fileno(), False)
+                        time.sleep(.1)
+                        if self.llm_assistant_process.poll() == None:
                             if self.DEBUG:
-                                print("assistant process : starting error. stdout: " + str(self.llm_assistant_process.stdout))
+                                print("\n\n\n[OK]\nLLM Assistant process started succesfully\n\n\n")
+                            self.llm_assistant_started = True
+                            self.check_if_this_is_the_fastest_controller()
                         else:
+                            if self.DEBUG:
+                                print("\n\n\nLLM Assistant process immediately crashed! return code: " + str(self.llm_assistant_process.returncode) + "\n\n\n")
+                            self.llm_assistant_started = False
+                            """
+                            if self.llm_assistant_process.returncode == 0:
+                                #print(p.stdout # + '\n' + "Command success" #.decode('utf-8')
+                                if self.DEBUG:
+                                    print("assistant process : starting error. stdout: " + str(self.llm_assistant_process.stdout))
+                            else:
+                                if self.llm_assistant_process.stderr:
+                                    if self.DEBUG:
+                                        print("assistant process: starting error. stderr: " + str(self.llm_assistant_process.stderr)) # + '\n' + "Command failed"   #.decode('utf-8'))
+
+                            if self.llm_assistant_process.stdout:
+                                if self.DEBUG:
+                                    print("assistant process: starting error. stdout: " + str(self.llm_assistant_process.stdout))
                             if self.llm_assistant_process.stderr:
                                 if self.DEBUG:
                                     print("assistant process: starting error. stderr: " + str(self.llm_assistant_process.stderr)) # + '\n' + "Command failed"   #.decode('utf-8'))
+                            """
 
-                        if self.llm_assistant_process.stdout:
-                            if self.DEBUG:
-                                print("assistant process: starting error. stdout: " + str(self.llm_assistant_process.stdout))
-                        if self.llm_assistant_process.stderr:
-                            if self.DEBUG:
-                                print("assistant process: starting error. stderr: " + str(self.llm_assistant_process.stderr)) # + '\n' + "Command failed"   #.decode('utf-8'))
-                        """
+                    else:
+                        if self.DEBUG:
+                            print("\n\nERROR, could not find assistant model's prompts structure\n\n")
 
                 else:
                     if self.DEBUG:
-                        print("\n\nERROR, could not find assistant model's prompts structure\n\n")
+                        print("\nWARNING, not enough memory to start Assistant\n")
+                    self.llm_assistant_not_enough_memory = True
 
             else:
-                if self.DEBUG2:
-                    print("\nWARNING, not enough memory to start Assistant\n")
-                self.llm_assistant_not_enough_memory = True
-
-        else:
-            if self.DEBUG:
-                print("LLM or Assistant not enabled\n")
-        #self.llm_assistant_process = await asyncio.subprocess.create_subprocess_exec(
-        #    str(self.llm_assistant_binary_path), assistant_command, stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
-        #)
-        #self.llm_assistant_process.stdin.write(b"bob\n")
-        #self.llm_assistant_process.stdin.write("What is the capital of Germany?\n")
-        #print(await self.llm_assistant_process.stdout.read(1024))
-        #self.llm_assistant_process.stdin.write(b"alice\n")
-        #print(await proc.stdout.read(1024))
-        #proc.stdin.write(b"quit\n")
-        #await proc.wait()
+                if self.DEBUG:
+                    print("LLM or Assistant not enabled\n")
+            #self.llm_assistant_process = await asyncio.subprocess.create_subprocess_exec(
+            #    str(self.llm_assistant_binary_path), assistant_command, stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
+            #)
+            #self.llm_assistant_process.stdin.write(b"bob\n")
+            #self.llm_assistant_process.stdin.write("What is the capital of Germany?\n")
+            #print(await self.llm_assistant_process.stdout.read(1024))
+            #self.llm_assistant_process.stdin.write(b"alice\n")
+            #print(await proc.stdout.read(1024))
+            #proc.stdin.write(b"quit\n")
+            #await proc.wait()
+        except Exception as ex:
+            print("caught error in start_ai_assistant: ", ex)
+        
 
 
 
@@ -13856,7 +13911,7 @@ class VocoAdapter(Adapter):
                     self.speak("debug: ask assistant received empty voice message", intent)
                 return
 
-            if len(str(voice_message)) < 5 and str(voice_message).lower() != 'why?' and str(voice_message).lower() != 'how?':
+            if len(str(voice_message)) < 4 and str(voice_message).lower() != 'why?' and str(voice_message).lower() != 'how?':
                 if self.DEBUG:
                     print(" - ask_ai_assistant: voice message was very short. Aborting.  Voice message: " + str(voice_message))
                     self.speak("debug: ask assistant received very short voice message", intent)
@@ -13935,14 +13990,14 @@ class VocoAdapter(Adapter):
                     voice_message = voice_message[:-1]
                 voice_message = voice_message + "?"
                 if self.DEBUG:
-                    print("really_ask_ai_assistant: adding question mark to voice message: " + str(voice_message))
+                    print("really_ask_ai_assistant: added question mark to voice message: " + str(voice_message))
 
             voice_message = voice_message.strip() # superfluous?
 
             display = False
             display_test = voice_message.lower()
             display_output = ''
-            if ' show me ' in display_test or display_test.startswith('show me ') or display_test.startswith('show us ') or display_test.startswith('please show ') or display_test.startswith('can you show ') or display_test.startswith('display ') or display_test.startswith('please display ') or display_test.startswith('can you display ') or display_test.startswith('can you please display '):
+            if ' show me ' in display_test or display_test.startswith('show ') or display_test.startswith('show us ') or display_test.startswith('please show ') or display_test.startswith('can you show ') or display_test.startswith('display ') or display_test.startswith('please display ') or display_test.startswith('can you display ') or display_test.startswith('can you please display '):
                 if self.DEBUG:
                     print("\n\nDISPLAY\nTHE ASSISTANT OUTPUT SHOULD BE SHOWN ON A DISPLAY\n")
                 display = True
@@ -14028,7 +14083,7 @@ class VocoAdapter(Adapter):
                     self.llm_assistant_reverse_prompt_was_spotted = False
 
                     if self.DEBUG:
-                        print("STARTING COUNTDOWN")
+                        print("STARTING ASSISTANT RESPONSE WAIT COUNTDOWN")
                     self.last_assistant_output_change_time = os.stat(str(self.llm_assistant_output_file_path)).st_mtime
                     for self.llm_assistant_countdown in range(120, 1,-1):
                         if self.DEBUG:
@@ -14044,10 +14099,10 @@ class VocoAdapter(Adapter):
                                 #self.llm_assistant_response_count += 1
                                 break
 
-                            if self.got_assistant_output and now_stamp - self.last_assistant_output_change_time > self.llm_assistant_maximum_no_new_output_duration:
+                            if self.got_assistant_output and self.last_assistant_output_change_time + self.llm_assistant_maximum_no_new_output_duration < now_stamp:
                                 if self.DEBUG:
                                     print("The assistant was speaking, but hasn't said anything new for a while. Breaking.")
-                                assistant_needs_reset = True
+                                #assistant_needs_reset = True
                                 break
 
                             #print("x")
@@ -14094,7 +14149,7 @@ class VocoAdapter(Adapter):
 
                                     if reverse_prompt != '' and full.startswith(reverse_prompt):
                                         full = full[len(reverse_prompt):]
-                                        assistant_needs_reset = True
+                                        #assistant_needs_reset = True
                                         if self.DEBUG:
                                             print("WARNING, Stripped reverse_prompt ('" + str(reverse_prompt) + "') from beginning of full:\n" + str(full))
 
@@ -14107,16 +14162,43 @@ class VocoAdapter(Adapter):
                                                 print("WARNING, ALSO SPOTTED THE LOWERCASE QUERY IN THE ASSISTANT'S OUTPUT. Removing it.")
                                             full = full.replace(voice_message.lower(),'')
                                     
+                                    
+                                        
+                                    if len(full) > 20:
+                                        if len(reverse_prompt) > 4:
+                                            message_reverse_prompt_index = full.rfind(reverse_prompt)
+                                            if message_reverse_prompt_index > len(full) - 15:
+                                                if self.DEBUG:
+                                                    print("warning, removing reverse_prompt from end of assistant response at message_reverse_prompt_index: ", message_reverse_prompt_index, reverse_prompt, full)
+                                                full = full[:message_reverse_prompt_index]  
+
+                                        message_researcher_index = full.lower().rfind('researcher')
+                                        if message_researcher_index > len(full) - 15:
+                                            if self.DEBUG:
+                                                print("warning, removing 'researcher' from end of assistant response at message_researcher_index: ", message_researcher_index, full)
+                                            full = full[:message_researcher_index]  
+
+
+                                    
                                 
                                     full = full.lstrip()
                                     full = full.rstrip()
                                     full = full.strip()
                                     
+                                    if full.startswith(voice_message):
+                                        full = full.removeprefix(voice_message)
+
+                                    if len(voice_message) > 20:
+                                        full = full.replace(voice_message,'')
+                                    
+
+
+
                                     if full.startswith("The following is a conversation between"):
                                         if self.DEBUG:
                                             print("Error, the assistant started outputting the system prompt.")
                                         if origin != 'voice':
-                                            self.last_text_response = '[!] Sorry, AI Assistant could not answer. Restarting it.'
+                                            self.last_text_response = '[!] Sorry, AI Assistant went off script. Restarting it.'
                                         self.force_reset_assistant()
                                         return
                                     
@@ -14191,8 +14273,9 @@ class VocoAdapter(Adapter):
                                             new_info_to_show = display_output
                                             display_line_nr = 0
                                             previous_display_line_class = 'first'
+                                            display_line_counter = 0
                                             for display_line in pre_lines:
-                                            
+                                                display_line_counter += 1
                                                 if len(reverse_prompt) > 2 and (reverse_prompt in display_line or reverse_prompt[:-1] in display_line):
                                                     if display_line_nr == 0:
                                                         if self.DEBUG:
@@ -14222,6 +14305,14 @@ class VocoAdapter(Adapter):
                                                     elif display_line.isdigit():
                                                         display_line_class = 'digit'
                                             
+                                                    if len(pre_lines) > 5 and display_line_counter > len(pre_lines) - 4:
+                                                        if display_line == 'Researcher':
+                                                            continue
+                                                        elif display_line == ':':
+                                                            continue
+                                                        elif display_line == '>':
+                                                            continue
+
                                                     new_info_to_show += '<span class="extension-voco-display-text-' + str(display_line_class) + ' extension-voco-display-text-previous-' + str(previous_display_line_class) + '">' + str(display_line) + '</span>'
                                                     display_line_nr += 1
                                                     previous_display_line_class = display_line_class
@@ -14348,7 +14439,8 @@ class VocoAdapter(Adapter):
                                                         if self.DEBUG:
                                                             print("line was too short: -->" + str(line) + "<--")
                                     
-
+                                    
+                                            
 
 
                                     #if full.endswith('Researcher:') or full.endswith('Researcher: '):
@@ -14391,7 +14483,7 @@ class VocoAdapter(Adapter):
 
                                         break
 
-
+                                        #if 'Researcher:' in full[16:]:
 
                                         #full = full[16:]
                                         #if self.DEBUG:
@@ -14476,7 +14568,7 @@ class VocoAdapter(Adapter):
     def force_reset_assistant(self):
         if self.DEBUG:
             print("in force_reset_assistant")
-        if self.last_time_llm_assistant_reset > time.time() - 10:
+        if self.last_time_llm_assistant_reset > time.time() - 20:
             if self.DEBUG:
                 print(" - Assistant was already reset very recently. Aborting reset.")
             return
@@ -14549,6 +14641,7 @@ class VocoAdapter(Adapter):
         #self.speak(output,intent)
 
 
+    # TODO: A summarization function? Does anything use this? The playground function became papeg.ai I guess
     # TODO: this has to be changed, since it makes no sense to start the assistant a second time.
     def llm_generate_text(self,prompt,action='generate'):
         if self.DEBUG:
@@ -14570,16 +14663,18 @@ class VocoAdapter(Adapter):
             if self.DEBUG:
                 print(" - enough free memory (1500Mb)")
 
-            self.llm_busy_generating = True
+            
 
             try:
 
                 if action == 'stop':
                     if self.DEBUG:
-                        print("Hmm how to properly abort the process. Using pkill is a bit brute force..")
-                    self.start_ai_assistant()
+                        print("llm_generate_text: action was 'stop'.  calling self.stop_ai_assistant()")
+                    self.stop_ai_assistant()
 
                 elif len(str(prompt)) > 10:
+
+                    self.llm_busy_generating = True
 
                     with open(self.llm_generated_text_file_path, "w") as myfile:
                         myfile.write("")
@@ -14589,7 +14684,7 @@ class VocoAdapter(Adapter):
 
                     elif action == 'summarize':
                         prompt = 'Please summarize the following text: \n\n"""\n' + prompt + '\n"""\n\nSummary:\n'
-
+                    
                     if self.llm_models['assistant']['prompts']:
                         if 'user' in self.llm_models['assistant']['prompts']:
                             prompt = self.llm_models['assistant']['prompts']['user'].replace('{user_prompt}',prompt)
@@ -14618,6 +14713,9 @@ class VocoAdapter(Adapter):
                     if llm_generated_text != None:
                         self.llm_generated_text = str(llm_generated_text)
 
+                else:
+                    if self.DEBUG:
+                        print("llm_generate_text: provided prompt not long enough: ", prompt)
 
             except Exception as ex:
                 if self.DEBUG:

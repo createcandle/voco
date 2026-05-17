@@ -142,8 +142,8 @@
 							this.do_overlay_poll();
 						}
 					}
-	                catch(e){
-	                    console.log("Voco: interval this.do_overlay_poll error: ", e);
+	                catch(err){
+	                    console.error("Voco: interval this.do_overlay_poll caught error: ", err);
 	                }
 
 				}, 5000);
@@ -1308,6 +1308,9 @@
 
 		// Some responses to LLM Assistant question can be shown even when Voco is not the selected addon in the UI
 		do_overlay_poll(){
+			if(this.debug){
+				//console.log("voco debug: in do_overlay_poll.  this.overlay_poll_done: ", this.overlay_poll_done);
+			}
 			if(this.overlay_poll_done){
 				this.overlay_poll_done = false;
 		        window.API.postJson(
@@ -1317,14 +1320,16 @@
 						console.log("voco debug: got response from /overlay_poll: ", body);
 					}
 
-					if(typeof body['info_to_show'] != 'undefined'){
+					if(typeof body['info_to_show'] == 'string'){
 						this.info_to_show = body['info_to_show'];
 						this.display_info_overlay();
 					}
 					this.overlay_poll_done = true;
 					
 				}).catch((err) => {
-					console.error("voco: caught error in call to /overlay_poll: ", err);
+					if(this.debug){
+						console.error("voco: caught error in call to /overlay_poll: ", err);
+					}
 					this.overlay_poll_done = true;
 				})
 			}
@@ -1342,9 +1347,7 @@
 						console.log("voco debug: display_info_overlay has new info_to_show: ", this.info_to_show);
 					}
 					
-					if(!this.voco_overlay_el){
-						this.voco_overlay_el = document.getElementById('extension-voco-info-overlay');
-					}
+					this.voco_overlay_el = document.getElementById('extension-voco-info-overlay');
 					
 					if(!this.voco_overlay_el){
 						if(this.debug){
@@ -1359,18 +1362,18 @@
 						
 					
 						if(this.info_to_show == ''){
-							voco_overlay_el.innerHTML = '';
+							this.voco_overlay_el.innerHTML = '';
 						}
 						else{
 							//new_content = '<div id="extension-voco-info-overlay-big-close-button"></div><pre>' + this.info_to_show + '</pre>';
 						
-							let overlay_content_el = voco_overlay_el.querySelector('#extension-voco-info-overlay-content');
+							let overlay_content_el = this.voco_overlay_el.querySelector('#extension-voco-info-overlay-content');
 							
 							if(overlay_content_el){
 								overlay_content_el.innerHTML = this.info_to_show;
 							}
 							else{
-								voco_overlay_el.innerHTML = '';
+								this.voco_overlay_el.innerHTML = '';
 								// add huge close button
 								let voco_overlay_big_close_button_el = document.createElement('div');
 								voco_overlay_big_close_button_el.setAttribute('id','extension-voco-info-overlay-big-close-button');
@@ -1378,16 +1381,16 @@
 									if(this.debug){
 					                    console.log("voco debug: clicked on big overlay close button");
 					                }
-									voco_overlay_el.innerHTML = '';
+									this.voco_overlay_el.innerHTML = '';
 									this.clear_info_to_show();
 								});
-								voco_overlay_el.appendChild(voco_overlay_big_close_button_el);
+								this.voco_overlay_el.appendChild(voco_overlay_big_close_button_el);
 					
 								// add content
 								let voco_overlay_main_content_el = document.createElement('pre');
 								voco_overlay_main_content_el.setAttribute('id','extension-voco-info-overlay-content');
 								voco_overlay_main_content_el.innerHTML = this.info_to_show;
-								voco_overlay_el.appendChild(voco_overlay_main_content_el);
+								this.voco_overlay_el.appendChild(voco_overlay_main_content_el);
 							
 								// add small close button
 								let voco_overlay_close_button = document.createElement('button');
@@ -1399,10 +1402,10 @@
 									if(this.debug){
 					                    console.log("voco debug: closing Voco overlay");
 					                }
-									voco_overlay_el.innerHTML = '';
+									this.voco_overlay_el.innerHTML = '';
 									this.clear_info_to_show();
 								});
-								voco_overlay_el.appendChild(voco_overlay_close_button);
+								this.voco_overlay_el.appendChild(voco_overlay_close_button);
 							}
 					
 						}
@@ -1975,8 +1978,9 @@
 				
 			}
 			
+			console.log("this.busy_doing_text_chat_command, this.last_text_chat_start_time: ", this.busy_doing_text_chat_command, Math.round((now_stamp - this.last_text_chat_start_time) / 1000) + ' seconds ago');
 			// If there was no response to the command for 30 seconds, allow sending a new command
-			if(this.busy_doing_text_chat_command && now_stamp > this.last_text_chat_start_time + 30000){
+			if(this.busy_doing_text_chat_command && this.last_text_chat_start_time != 0 && (now_stamp - this.last_text_chat_start_time) > 30000){
 				this.reset_to_allow_sending_text_chat();
 			}
 				
@@ -2043,7 +2047,12 @@
 				if(this.debug){
 					console.log("voco debug: update_text_chat: made the response chat message nicer: ", nicer_text);
 				}
-			
+				if(nicer_text.startsWith('Researcher:')){
+					if(this.debug){
+						console.log("voco debug: skipping 'Researcher:' nicer_next: ", nicer_text);
+					}
+					continue
+				}
 				this.add_text_chat_message(nicer_text,'response');
 			}
 			
@@ -2805,6 +2814,7 @@
 				if(text_chat_origin_type_el){
 					prefered_response_type = text_chat_origin_type_el.value;
 				}
+
 				if(this.debug){
 					console.log("voco debug: send_input_text:  prefered_response_type: ", prefered_response_type);
 				}
@@ -2875,6 +2885,9 @@
 		
 
 		reset_to_allow_sending_text_chat(){
+			if(this.debug){
+				console.log("voco debug: in reset_to_allow_sending_text_chat");
+			}
 			this.last_text_chat_start_time = 0;
 			const text_chat_waiting_for_response_el = document.getElementById('extension-voco-text-chat-waiting-for-response');
 			if(text_chat_waiting_for_response_el){

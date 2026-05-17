@@ -872,6 +872,7 @@ class VocoAPIHandler(APIHandler):
                                 status=200,
                                 content_type='application/json',
                                 content=json.dumps({
+                                                    'state' : True,
                                                     'info_to_show': self.adapter.info_to_show
                                                     })
                             )
@@ -885,11 +886,12 @@ class VocoAPIHandler(APIHandler):
                                 self.adapter.last_text_response = [];
                                 self.adapter.last_text_command = str(request.body['text'])
                                 origin_type = str(request.body['origin_type'])
+                                
                                 self.adapter.parse_text(site_id=self.adapter.persistent_data['site_id'],origin=origin_type) # "text")
                                 return APIResponse(
                                     status=200,
                                     content_type='application/json',
-                                    content=json.dumps({'state' : 'ok'}),
+                                    content=json.dumps({'state' : True}),
                                 )
                             except Exception as ex:
                                 if self.DEBUG:
