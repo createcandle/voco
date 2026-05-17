@@ -12924,7 +12924,7 @@ class VocoAdapter(Adapter):
 
 
                 self.restart_llm_servers = False
-            time.sleep(1)
+            time.sleep(.5)
 
             if self.running == False:
                 break
@@ -13670,149 +13670,154 @@ class VocoAdapter(Adapter):
                     #if 'protocol' in self.llm_models['assistant'] and str(self.llm_models['assistant']['protocol']) in self.llm_assistant_protocols:
                         #self.llm_assistant_protocol = self.llm_assistant_protocols[ str(self.llm_models['assistant']['protocol']) ]
                     
-                    if not self.llm_assistant_protocol in self.llm_assistant_protocols:
+                    if self.DEBUG:
+                        print("self.llm_assistant_protocol: ", self.llm_assistant_protocol)
+
+                    if not str(self.persistent_data['llm_assistant_protocol']) in self.llm_assistant_protocols:
                         if self.DEBUG:
                             print("ERROR, start_ai_assistant: selected chat protocol is unknown/unsupported: " + str(self.llm_assistant_protocol))
                         return
                         
-                    prot = self.llm_assistant_protocols[str(self.llm_assistant_protocol)]
+                    
+                    if isinstance(self.persistent_data['llm_assistant_protocol'],str) and self.persistent_data['llm_assistant_protocol'] in self.llm_assistant_protocols:
+                        prot = self.llm_assistant_protocols[ self.persistent_data['llm_assistant_protocol'] ]
 
-                    if self.DEBUG:
-                        print("start_ai_assistant: protocol: \n" + str(json.dumps(prot,indent=4)))
-
-                    #if 'system_prompt' in prot:
-                    #    self.llm_assistant_prompt = self.llm_assistant_protocol['system']
-                        
-                        
-                    #if self.DEBUG:
-                    #    print("starting LLM assistant. System prompt before: " + str(self.llm_assistant_prompt))
-
-
-                    if 'system' in prot and 'reverse_prompt' in prot:
-                        
-                        in_prefix = prot['in_prefix'].replace("{user_name}", prot['user_name'])
-                        in_suffix = prot['in_suffix'].replace("{assistant_name}", prot['assistant_name'])
-                        reverse_prompt = prot['reverse_prompt'].replace("{user_name}", prot['user_name'])
-                        
-                        system_prompt = prot['system_prompt'].replace("{user_name}", prot['user_name'])
-                        system_prompt = system_prompt.replace("{assistant_name}", prot['assistant_name'])
-                        
-                        assistant_prompt = prot['system'].replace("{system_prompt}", system_prompt)
-                        assistant_prompt = assistant_prompt.replace("{reverse_prompt}", reverse_prompt)
-                        assistant_prompt = assistant_prompt.replace("{user_name}", prot['user_name'])
-                        assistant_prompt = assistant_prompt.replace("{assistant_name}", prot['assistant_name'])
-
-                        assistant_prompt = "$'" + assistant_prompt + "'"
-                        reverse_prompt = "'" + reverse_prompt + "'"
-                        in_prefix = "'" + in_prefix + "'"
-                        in_suffix = "'" + in_suffix + "'"
-                        
                         if self.DEBUG:
-                            print("")
-                            print("start_ai_assistant: reverse_prompt: " + str(reverse_prompt))
-                            print("start_ai_assistant: in_prefix     : " + str(in_prefix))
-                            print("start_ai_assistant: in_suffix     : " + str(in_suffix))
-                            print("start_ai_assistant: system prompt : \n--->" + str(assistant_prompt) + "<---\n")
+                            print("start_ai_assistant: prot: \n", prot)
 
-                        my_env = get_env()
-
-                        with open(self.llm_assistant_output_file_path, "w") as myfile:
-                            myfile.write("")
+                        #if 'system_prompt' in prot:
+                        #    self.llm_assistant_prompt = self.llm_assistant_protocol['system']
                             
-                        self.last_assistant_output_change_time = time.time()
-                        self.llm_assistant_reverse_prompt_was_spotted = True
-
-                        #"sh",
-                        #    "-c",
-                        #
-                        #self.llm_assistant_words_to_generate = 1024
-                        #self.llm_assistant_context_size
-
-                        assistant_command = [
-
-                            str(self.llm_assistant_binary_path),
-                            "-m",
-                            str(self.llm_models['assistant']['active']),
-                            "-p",
-                            str(assistant_prompt),
-                            "--interactive",
-                            "--interactive-first",
-                            #"--silent-prompt",
-                            #"--simple-io",
-                            "--batch_size",
-                            "256",
-                            "--ctx_size",
-                            str(self.llm_assistant_context_size),
-                            #"-ngl",
-                            #"1024",
-                            "--repeat_penalty",
-                            "1.1",
-                            "-n",
-                            str(self.llm_assistant_words_to_generate * 2),
-                            "--keep", # keep all tokens from the initial prompt
-                            "-1",
-                            #"--log-disable",
-                            "--temp",
-                            str(self.llm_assistant_temperature),
-                            "--mirostat",
-                            "2",
-                            "--in-prefix",
-                            str(in_prefix),
-                            "--in-suffix",
-                            str(in_suffix),
-                            "--reverse-prompt",
-                            str(reverse_prompt),
-                            "-t",
-                            str(self.llm_assistant_threads),
-                            #">>",
-                            #"-"
-                            ">>",
-                            str(self.llm_assistant_output_file_path)
-                            #"2>&1",
-                            #"|",
-                            #"cat"
-                        ]
-                        
-
-                        assistant_command = ' '.join(assistant_command)
-                        if self.DEBUG:
-                            print("\nstart_ai_assistant: LLM assistant_command: " + str(assistant_command))
+                            
+                        #if self.DEBUG:
+                        #    print("starting LLM assistant. System prompt before: " + str(self.llm_assistant_prompt))
 
 
-                        #self.llm_assistant_process = Popen(assistant_command, env=my_env, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,bufsize=100,shell=True) # preexec_fn=os.setsid
-                        self.llm_assistant_process = Popen(assistant_command, env=my_env, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, universal_newlines=True, bufsize=1, shell=True) # preexec_fn=os.setsid
-                        os.set_blocking(self.llm_assistant_process.stdout.fileno(), False)
-                        time.sleep(.1)
-                        if self.llm_assistant_process.poll() == None:
+                        if 'system' in prot and 'reverse_prompt' in prot and 'assistant_name' in prot and 'user_name' in prot:
+                            
+                            in_prefix = prot['in_prefix'].replace("{user_name}", prot['user_name'])
+                            in_suffix = prot['in_suffix'].replace("{assistant_name}", prot['assistant_name'])
+                            reverse_prompt = prot['reverse_prompt'].replace("{user_name}", prot['user_name'])
+                            
+                            system_prompt = prot['system_prompt'].replace("{user_name}", prot['user_name'])
+                            system_prompt = system_prompt.replace("{assistant_name}", prot['assistant_name'])
+                            
+                            assistant_prompt = prot['system'].replace("{system_prompt}", system_prompt)
+                            assistant_prompt = assistant_prompt.replace("{reverse_prompt}", reverse_prompt)
+                            assistant_prompt = assistant_prompt.replace("{user_name}", prot['user_name'])
+                            assistant_prompt = assistant_prompt.replace("{assistant_name}", prot['assistant_name'])
+
+                            assistant_prompt = "$'" + assistant_prompt + "'"
+                            reverse_prompt = "'" + reverse_prompt + "'"
+                            in_prefix = "'" + in_prefix + "'"
+                            in_suffix = "'" + in_suffix + "'"
+                            
                             if self.DEBUG:
-                                print("\n\n\n[OK]\nLLM Assistant process started succesfully\n\n\n")
-                            self.llm_assistant_started = True
-                            self.check_if_this_is_the_fastest_controller()
-                        else:
+                                print("")
+                                print("start_ai_assistant: reverse_prompt: " + str(reverse_prompt))
+                                print("start_ai_assistant: in_prefix     : " + str(in_prefix))
+                                print("start_ai_assistant: in_suffix     : " + str(in_suffix))
+                                print("start_ai_assistant: system prompt : \n--->" + str(assistant_prompt) + "<---\n")
+
+                            my_env = get_env()
+
+                            with open(self.llm_assistant_output_file_path, "w") as myfile:
+                                myfile.write("")
+                                
+                            self.last_assistant_output_change_time = time.time()
+                            self.llm_assistant_reverse_prompt_was_spotted = True
+
+                            #"sh",
+                            #    "-c",
+                            #
+                            #self.llm_assistant_words_to_generate = 1024
+                            #self.llm_assistant_context_size
+
+                            assistant_command = [
+
+                                str(self.llm_assistant_binary_path),
+                                "-m",
+                                str(self.llm_models['assistant']['active']),
+                                "-p",
+                                str(assistant_prompt),
+                                "--interactive",
+                                "--interactive-first",
+                                #"--silent-prompt",
+                                #"--simple-io",
+                                "--batch_size",
+                                "256",
+                                "--ctx_size",
+                                str(self.llm_assistant_context_size),
+                                #"-ngl",
+                                #"1024",
+                                "--repeat_penalty",
+                                "1.1",
+                                "-n",
+                                str(self.llm_assistant_words_to_generate * 2),
+                                "--keep", # keep all tokens from the initial prompt
+                                "-1",
+                                #"--log-disable",
+                                "--temp",
+                                str(self.llm_assistant_temperature),
+                                "--mirostat",
+                                "2",
+                                "--in-prefix",
+                                str(in_prefix),
+                                "--in-suffix",
+                                str(in_suffix),
+                                "--reverse-prompt",
+                                str(reverse_prompt),
+                                "-t",
+                                str(self.llm_assistant_threads),
+                                #">>",
+                                #"-"
+                                ">>",
+                                str(self.llm_assistant_output_file_path)
+                                #"2>&1",
+                                #"|",
+                                #"cat"
+                            ]
+                            
+
+                            assistant_command = ' '.join(assistant_command)
                             if self.DEBUG:
-                                print("\n\n\nLLM Assistant process immediately crashed! return code: " + str(self.llm_assistant_process.returncode) + "\n\n\n")
-                            self.llm_assistant_started = False
-                            """
-                            if self.llm_assistant_process.returncode == 0:
-                                #print(p.stdout # + '\n' + "Command success" #.decode('utf-8')
+                                print("\nstart_ai_assistant: LLM assistant_command: " + str(assistant_command))
+
+
+                            #self.llm_assistant_process = Popen(assistant_command, env=my_env, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,bufsize=100,shell=True) # preexec_fn=os.setsid
+                            self.llm_assistant_process = Popen(assistant_command, env=my_env, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, universal_newlines=True, bufsize=1, shell=True) # preexec_fn=os.setsid
+                            os.set_blocking(self.llm_assistant_process.stdout.fileno(), False)
+                            time.sleep(.1)
+                            if self.llm_assistant_process.poll() == None:
                                 if self.DEBUG:
-                                    print("assistant process : starting error. stdout: " + str(self.llm_assistant_process.stdout))
+                                    print("\n\n\n[OK]\nLLM Assistant process started succesfully\n\n\n")
+                                self.llm_assistant_started = True
+                                self.check_if_this_is_the_fastest_controller()
                             else:
+                                if self.DEBUG:
+                                    print("\n\n\nLLM Assistant process immediately crashed! return code: " + str(self.llm_assistant_process.returncode) + "\n\n\n")
+                                self.llm_assistant_started = False
+                                """
+                                if self.llm_assistant_process.returncode == 0:
+                                    #print(p.stdout # + '\n' + "Command success" #.decode('utf-8')
+                                    if self.DEBUG:
+                                        print("assistant process : starting error. stdout: " + str(self.llm_assistant_process.stdout))
+                                else:
+                                    if self.llm_assistant_process.stderr:
+                                        if self.DEBUG:
+                                            print("assistant process: starting error. stderr: " + str(self.llm_assistant_process.stderr)) # + '\n' + "Command failed"   #.decode('utf-8'))
+
+                                if self.llm_assistant_process.stdout:
+                                    if self.DEBUG:
+                                        print("assistant process: starting error. stdout: " + str(self.llm_assistant_process.stdout))
                                 if self.llm_assistant_process.stderr:
                                     if self.DEBUG:
                                         print("assistant process: starting error. stderr: " + str(self.llm_assistant_process.stderr)) # + '\n' + "Command failed"   #.decode('utf-8'))
+                                """
 
-                            if self.llm_assistant_process.stdout:
-                                if self.DEBUG:
-                                    print("assistant process: starting error. stdout: " + str(self.llm_assistant_process.stdout))
-                            if self.llm_assistant_process.stderr:
-                                if self.DEBUG:
-                                    print("assistant process: starting error. stderr: " + str(self.llm_assistant_process.stderr)) # + '\n' + "Command failed"   #.decode('utf-8'))
-                            """
-
-                    else:
-                        if self.DEBUG:
-                            print("\n\nERROR, could not find assistant model's prompts structure\n\n")
+                        else:
+                            if self.DEBUG:
+                                print("\n\nERROR, incomplete assistant model's prompts structure: ", prot , "\n\n")
 
                 else:
                     if self.DEBUG:
@@ -13928,6 +13933,11 @@ class VocoAdapter(Adapter):
 
             #if self.llm_assistant_started and self.openai_client != None and self.llm_assistant_process != None and voice_message != None and len(voice_message) > 4:
             elif self.llm_assistant_started and self.llm_assistant_process != None and voice_message != None and len(voice_message) > 4:
+                if self.llm_assistant_process.poll() != None:
+                    if self.DEBUG:
+                        print("\nERROR: ask_ai_assistant: self.llm_assistant_process has died? Setting self.restart_llm_servers to True")
+                    self.restart_llm_servers = True
+                    time.sleep(2)
                 if self.DEBUG:
                     print(" - ask_ai_assistant: passing voice command to locally running LLM Assistant: " + str(voice_message))
                 self.really_ask_ai_assistant(voice_message,intent=intent)
@@ -14014,7 +14024,10 @@ class VocoAdapter(Adapter):
                 self.persistent_data['llm_assistant_protocol'] = 'basic'
                 self.save_persistant_data()
 
-            self.llm_assistant_protocol = self.llm_assistant_protocols[ str(self.persistent_data['llm_assistant_protocol']) ]
+            if isinstance(self.persistent_data['llm_assistant_protocol'], str) and self.persistent_data['llm_assistant_protocol'] in self.llm_assistant_protocols:
+                self.llm_assistant_protocol = self.llm_assistant_protocols[ str(self.persistent_data['llm_assistant_protocol']) ]
+            else:
+                self.llm_assistant_protocol = self.llm_assistant_protocols[ 'basic' ] #'basic'
             if self.DEBUG:
                 print("really_ask_ai_assistant:  self.llm_assistant_protocol: " + str(self.llm_assistant_protocol))
 
@@ -14028,8 +14041,25 @@ class VocoAdapter(Adapter):
             if self.DEBUG:
                 print("really_ask_ai_assistant: to stdin: " + str(voice_message))
 
+            if self.llm_assistant_process == None:
+                if self.DEBUG:
+                    print("self.llm_assistant_process is still None")
+
+
             #print(self.llm_assistant_process.communicate(input=voice_message)[0])
             if self.llm_assistant_process != None: # and self.llm_assistant_process.poll() == None:
+
+                try:
+                    if self.llm_assistant_process.poll() == None:
+                        if self.DEBUG:
+                            print("OK, self.llm_assistant_process is still running")
+                    else:
+                        if self.DEBUG:
+                             print("Yikes, the llm_assistant_process exists, but has died")
+
+
+                except Exception as ex:
+                    print("caught error checking if the llm_assistant_process has died: ", ex)
 
                 if self.DEBUG:
                     print("CLEARING ASSISTANT_OUTPUT.TXT")
@@ -14526,7 +14556,7 @@ class VocoAdapter(Adapter):
 
                 else:
                     if self.DEBUG:
-                        print("YIKES, the assistant has already stopped")
+                        print("really_ask_ai_assistant: YIKES, the assistant has already stopped")
 
                 
 
