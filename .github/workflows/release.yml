@@ -203,7 +203,7 @@ jobs:
 
     steps:
       - name: Download upload_url_old
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: upload_url_old
           path: upload_url_old
