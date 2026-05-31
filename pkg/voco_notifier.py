@@ -28,7 +28,8 @@ class VocoNotifier(Notifier):
             #print("notifier: self.voice_messages_queue = " + str(self.voice_messages_queue))
             #voice_messages_queue.put(" Your rules can now also notify you through speech. ")
         except Exception as ex:
-            print("Notifier: parent failed: " + str(ex))
+            if self.adapter.DEBUG:
+                print("Notifier: parent failed: " + str(ex))
 
         #self._id = 'voco'
         #self.id = 'voco'
@@ -90,6 +91,7 @@ class VocoOutlet(Outlet):
             #print("")
             #print("added message to queue")
         except Exception as ex:
-            print("notify: adding message to queue failed: " + str(ex))
+            if self.notifier.adapter.DEBUG:
+                print("notify: adding message to queue failed: " + str(ex))
 
 
