@@ -244,7 +244,7 @@ fi
 
 
 # Put package together
-cp -r lib pkg LICENSE manifest.json *.py README.md snips snips64 signal tts tts64 llm models sounds audio css js images views package/
+cp -r lib pkg LICENSE manifest.json *.py README.md bitnet snips snips64 signal tts tts64 llm models sounds audio css js images views package/
 find package -type f -name '*.pyc' -delete
 find package -type f -name '._*' -delete
 find package -type d -empty -delete
