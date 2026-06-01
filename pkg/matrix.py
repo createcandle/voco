@@ -2,9 +2,12 @@
 import os
 import sys
 
-sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'lib'))
+lib_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'lib')
+if lib_path not in sys.path:
+	sys.path.append(lib_path)
 if os.path.exists('/usr/lib/aarch64-linux-gnu'):
-    sys.path.append('/usr/lib/aarch64-linux-gnu')
+	if not '/usr/lib/aarch64-linux-gnu' in sys.path:
+    	sys.path.append('/usr/lib/aarch64-linux-gnu')
     
 #sys.path.remove('/usr/lib/python3/dist-packages') # hide the globally installed packages
 

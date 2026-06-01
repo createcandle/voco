@@ -21,9 +21,12 @@ import os
 import re
 #from os import path
 import sys
-sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'lib'))
+lib_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'lib')
+if lib_path not in sys.path:
+	sys.path.append(lib_path)
 if os.path.exists('/usr/lib/aarch64-linux-gnu'):
-    sys.path.append('/usr/lib/aarch64-linux-gnu')
+    if not '/usr/lib/aarch64-linux-gnu' in sys.path:
+        sys.path.append('/usr/lib/aarch64-linux-gnu')
 
 # Allows Pipewire audio to work
 os.environ["XDG_RUNTIME_DIR"] = "/run/user/1000"
@@ -3608,7 +3611,8 @@ class VocoAdapter(Adapter):
             self.voice_messages_queue.put({'voice_message':str(voice_message),'intent':intent})
 
         except Exception as ex:
-            print("Error in speak: " + str(ex))
+            if self.DEBUG:
+                print("caught error in speak: " + str(ex))
     
 
     # Starts the process of finding to optimal way to speak/return a message
@@ -3648,15 +3652,15 @@ class VocoAdapter(Adapter):
             if self.DEBUG:
                 print("Speak: site_id: " + str(site_id))
                 if self.persistent_data['site_id'] == str(site_id):
-                    print("- this is my own site_id")
+                    print("- really_speak: debug: this is my own site_id")
                 else:
-                    print("- speak: debug: this is not my own site_id? " + str(site_id))
+                    print("- really_speak: debug: this is not my own site_id? " + str(site_id))
                     
                 if voice_message == '':
-                    print("[...] ERROR, voice message was empty string")
+                    print("[...] really_speak: ERROR, voice message was empty string")
                     #voice_message = 'debug: Error in speak: message was empty string'
                 else:
-                    print("[...] speak: " + str(voice_message))
+                    print("[...] really_speak:  voice_message: " + str(voice_message))
                 #print("[...] intent: " + str(json.dumps(intent, indent=4)))
             
             
@@ -3676,10 +3680,10 @@ class VocoAdapter(Adapter):
             dont_speak_twice = False
             if self.last_spoken_sentence == str(voice_message) and self.last_spoken_sentence_time > (time.time() - 5) and isinstance(site_id,str) and site_id.startswith("voice-") and not voice_message.lower().startswith('sorry'):
                 if self.DEBUG:
-                    print("\n\nSPEAK: STOPPING A SENTENCE FROM BEING SPOKEN MULTIPLE TIMES IN A ROW:" + str(self.last_spoken_sentence) + "\n") # TODO: very crude solution...
+                    print("\n\nREALLY_SPEAK: STOPPING A SENTENCE FROM BEING SPOKEN MULTIPLE TIMES IN A ROW:" + str(self.last_spoken_sentence) + "\n") # TODO: very crude solution...
                     print("- time delta was: " + str(time.time() - self.last_spoken_sentence_time))
                     self.speak("echo")
-                    self.last_spoken_sentence_time = 0
+                self.last_spoken_sentence_time = 0
                 dont_speak_twice = True
             else:
                 self.last_spoken_sentence_time = time.time()
@@ -3703,7 +3707,7 @@ class VocoAdapter(Adapter):
                         site_id = site_id.replace('text-','')
                     elif site_id.startswith('signal-'):
                         intent['origin'] = 'signal'
-                        site_id = site_id.replace('signl-','')
+                        site_id = site_id.replace('signal-','')
                     elif site_id.startswith('matrix-'):
                         intent['origin'] = 'matrix'
                         site_id = site_id.replace('matrix-','')
@@ -3793,6 +3797,7 @@ class VocoAdapter(Adapter):
                     if self.DEBUG:
                         print("Origin was Both. Speaking and sending to matrix: " + str(voice_message))
                     voice_message = clean_up_string_for_chatting(voice_message)
+                    self.send_signal_message(voice_message)
                     self.send_signal_message(voice_message)
                     self.matrix_messages_queue.put({'title':'','message': voice_message ,'level':'Normal'})
                 

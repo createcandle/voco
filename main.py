@@ -7,10 +7,12 @@ import signal
 import sys
 import time
 
-sys.path.append(path.join(path.dirname(path.abspath(__file__)), 'lib'))
+lib_path = path.join(path.dirname(path.abspath(__file__)), 'lib')
+if lib_path not in sys.path:
+	sys.path.append(lib_path)
 if path.exists('/usr/lib/aarch64-linux-gnu'):
-    sys.path.append('/usr/lib/aarch64-linux-gnu')
-
+    if not '/usr/lib/aarch64-linux-gnu' in sys.path:
+        sys.path.append('/usr/lib/aarch64-linux-gnu')
 
 from pkg.voco_adapter import VocoAdapter  # noqa
 

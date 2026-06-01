@@ -209,20 +209,23 @@
 				this.view.innerHTML = this.content;
 			}
 
+			this.view.scrollTop = 0;
 
 			document.getElementById('menu-button').classList.remove('hidden');
+
+			
 
 			const list = document.getElementById('extension-voco-list');
 			const content_container_el = this.view.querySelector('#extension-voco-content-container');
 			const text_chat_container = this.view.querySelector('#extension-voco-text-chat-container');
 			const text_input_field = this.view.querySelector('#extension-voco-text-input-field');
 			
-			
-
 			if(content_container_el == null || text_input_field == null){
 				console.error("Voco: HTML did not load");
 				return
 			}
+
+			
 
 
 			const title_el = this.view.querySelector('#extension-voco-title');
@@ -248,21 +251,21 @@
 					console.log("voco debug: random_quote: ", random_quote);
 				}
 				window.API.postJson(
-				          `/extensions/${this.id}/api/ajax`,
-							    {'action':'speak',
-                                'sentence': random_quote
-                                }
-
-				        ).then((body) => {
-							if(this.debug){
-                                console.log("voco debug: title easter egg speak response: ", body);
-                            }
-						})
-						.catch((err) => {
-							if(this.debug){
-								console.error("voco debug: title easter egg: caught error calling speak action: ", err);
+						`/extensions/${this.id}/api/ajax`,
+							{'action':'speak',
+							'sentence': random_quote
 							}
-						})
+
+					).then((body) => {
+						if(this.debug){
+							console.log("voco debug: title easter egg speak response: ", body);
+						}
+					})
+					.catch((err) => {
+						if(this.debug){
+							console.error("voco debug: title easter egg: caught error calling speak action: ", err);
+						}
+					})
 			});
 
 
@@ -291,6 +294,7 @@
                     }
                     this.view.querySelector('#extension-voco-tab-button-' + desired_tab).classList.add('extension-voco-tab-selected'); // show tab
                     this.view.querySelector('#extension-voco-tab-' + desired_tab).classList.remove('extension-voco-hidden'); // show tab
+					this.view.scrollTop = 0;
                 });
             };
 

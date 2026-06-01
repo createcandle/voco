@@ -6,9 +6,13 @@ import time
 import threading
 import subprocess
 
-sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'lib'))
+
+lib_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'lib')
+if lib_path not in sys.path:
+	sys.path.append(lib_path)
 if os.path.exists('/usr/lib/aarch64-linux-gnu'):
-    sys.path.append('/usr/lib/aarch64-linux-gnu')
+	if not '/usr/lib/aarch64-linux-gnu' in sys.path:
+    	sys.path.append('/usr/lib/aarch64-linux-gnu')
     
 #sys.path.remove('/usr/lib/python3/dist-packages') # hide the globally installed packages
 
@@ -34,7 +38,7 @@ def signal_init(self):
 	self.signal_accounts = signal_accounts
 
 	if self.DEBUG:
-			print("signal_init:  self.signal_accounts: ", self.signal_accounts)
+		print("signal_init:  self.signal_accounts: ", self.signal_accounts)
 	if self.signal_accounts:
 		self.signal_ensure_group()
 	else:
@@ -128,7 +132,7 @@ def start_signal_link(self):
 				
 				self.signal_link_start_timestamp = 0
 				if self.DEBUG:
-					print("link_process THREAD END")
+					print("signal link_process THREAD END")
 				
 			self.stdout_thread = threading.Thread(target=read_stdout)
 			self.stdout_thread.daemon = True
