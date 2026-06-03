@@ -936,8 +936,8 @@ def avahi_detect_gateways(list_only=False):
             result = avahi_result.decode(encoding['encoding'],"ignore")
             
             #print("avahi-browse result: " + str(result))
-            for line in result.split('\n'):
-                if  "IPv4;CandleMQTT-" in line:
+            for line in result.splitlines():
+                if "IPv4;CandleMQTT-" in line:
                     #print("avahi_detect_gateways: line: " + str(line))
                     # get name
                     try:

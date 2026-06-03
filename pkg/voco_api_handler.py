@@ -52,7 +52,7 @@ class VocoAPIHandler(APIHandler):
                 manifest = json.load(f)
 
             APIHandler.__init__(self, manifest['id'])
-            self.manager_proxy.add_api_handler(self)
+            #self.manager_proxy.add_api_handler(self)
             
 
             if self.DEBUG:
@@ -546,6 +546,7 @@ class VocoAPIHandler(APIHandler):
                                   content=json.dumps({
                                         'state': state,
                                         'signal_accounts': self.adapter.signal_accounts,
+                                        'signal_started': self.adapter.signal_started,
                                         'signal_linked': self.adapter.persistent_data['signal_linked'],
                                         'signal_link_seconds_to_go': link_seconds_to_go,
                                         'signal_link_messages': self.adapter.signal_link_messages
@@ -829,12 +830,18 @@ class VocoAPIHandler(APIHandler):
                                 if self.adapter.main_controller_goodbye_timestamp != 0:
                                     main_controller_goodbye_seconds_ago = int(time.time()) - self.adapter.main_controller_goodbye_timestamp
 
+                                last_injection_request_seconds_ago = 0
+                                if self.adapter.last_injection_request_time != 0:
+                                    last_injection_request_seconds_ago = int(time.time()) - self.adapter.last_injection_request_time
+
+                                
 
                                 return APIResponse(
                                     status=200,
                                     content_type='application/json',
                                     content=json.dumps({'state': state, 
                                                         'update': '',
+                                                        'still_busy_booting':self.adapter.still_busy_booting,
                                                         'busy_starting_snips': self.adapter.busy_starting_snips,
                                                         'own_ip_address':self.adapter.ip_address,
                                                         'mqtt_server':self.adapter.persistent_data['mqtt_server'], 
@@ -855,6 +862,9 @@ class VocoAPIHandler(APIHandler):
                                                         'llm_busy_generating':self.adapter.llm_busy_generating,
                                                         'llm_generated_text':self.adapter.llm_generated_text,
                                                         'info_to_show': self.adapter.info_to_show,
+                                                        'injection_level':self.adapter.injection_level,
+                                                        'last_injection_request_seconds_ago':last_injection_request_seconds_ago,
+                                                        'injection_in_progress':self.adapter.injection_in_progress,
                                                         'initial_injection_completed':self.adapter.initial_injection_completed,
                                                         'missing_microphone':self.adapter.missing_microphone, 
                                                         'matrix_started':self.adapter.matrix_started,
@@ -872,7 +882,7 @@ class VocoAPIHandler(APIHandler):
                                                         'llm_folder_size':llm_folder_size,
                                                         'llm_not_enough_disk_space':self.adapter.llm_not_enough_disk_space,
                                                         'free_memory':self.adapter.free_memory,
-                                                        'fastest_controller_id':self.adapter.fastest_controller_id,
+                                                        'fastest_controller_id':str(self.adapter.fastest_controller_id),
                                                         'fastest_controller_score':self.adapter.fastest_controller_score,
                                                         'fastest_controller_last_ping_seconds_ago':fastest_controller_last_ping_seconds_ago,
                                                         'main_controller_last_ping_seconds_ago':main_controller_last_ping_seconds_ago,
@@ -880,9 +890,11 @@ class VocoAPIHandler(APIHandler):
                                                         'llm_stt_started': self.adapter.llm_stt_started,
                                                         'llm_wakeword_started': self.adapter.llm_wakeword_started,
                                                         'llm_assistant_started': self.adapter.llm_assistant_started,
-                                                        'injection_level':self.adapter.injection_level,
                                                         'signal_qr_code':self.adapter.signal_qr_code,
-                                                        'signal_linked':self.adapter.persistent_data['signal_linked']
+                                                        'signal_started':self.adapter.signal_started,
+                                                        'signal_accounts_length':len(self.adapter.signal_accounts),
+                                                        'got_good_things_list':self.adapter.got_good_things_list,
+                                                        'got_good_groups_list':self.adapter.got_good_groups_list,
                                                         })
                                 )
                                 

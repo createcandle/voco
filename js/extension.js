@@ -1176,17 +1176,17 @@
 				}
 			}
 			
-			if(typeof body.signal_linked == 'boolean'){
+			if(typeof body.signal_started == 'boolean'){
 				if(this.debug){
-                    console.log("voco debug: signal_linked: ", body.signal_linked);
+                    console.log("voco debug: signal_started: ", body.signal_started);
                 }
-				if(body.signal_linked){
+				if(body.signal_started){
 					this.view.classList.add('extension-voco-signal-linked');
 				}
 				else{
 					this.view.classList.remove('extension-voco-signal-linked');
 				}
-				this.starting_info['Signal linked'] = body.signal_linked;
+				this.starting_info['Signal started'] = body.signal_started;
 			}
 			
 			
@@ -1519,15 +1519,24 @@
 			if(typeof body['is_satellite'] == 'boolean'){
 				this.starting_info['Is satellite'] = body['is_satellite'];
 			}
+			
+			if(typeof body['still_busy_booting'] == 'boolean'){
+				this.starting_info['Still busy booting'] = body['still_busy_booting'];
+			}
 			if(typeof body['busy_starting_snips'] == 'boolean'){
 				this.starting_info['Busy starting Snips'] = body['busy_starting_snips'];
 			}
-			
+			if(typeof body['last_injection_request_seconds_ago'] == 'number'){
+				this.starting_info['Last injection request seconds ago'] = body['last_injection_request_seconds_ago'];
+			}
+			if(typeof body['injection_level'] == 'number'){
+				this.starting_info['Injection level'] = body['injection_level'];
+			}
 			if(typeof body['injection_in_progress'] == 'boolean'){
-				this.starting_info['Learning names in progress'] = body['injection_in_progress'];
+				this.starting_info['Injection in progress'] = body['injection_in_progress'];
 			}
 			if(typeof body['initial_injection_completed'] == 'boolean'){
-				this.starting_info['Initial Learning names phase completed'] = body['initial_injection_completed'];
+				this.starting_info['Initial injection completed'] = body['initial_injection_completed'];
 			}
 			if(typeof body['own_ip_address'] == 'string'){
 				this.starting_info['Own IP'] = body['own_ip_address'];
@@ -1550,11 +1559,9 @@
 			if(typeof body['main_controller_hostname'] == 'string'){
 				this.starting_info['Main controller hostname'] = body['main_controller_hostname'];
 			}
-			
 			if(typeof body['main_controller_ip'] == 'string'){
 				this.starting_info['Main controller IP'] = body['main_controller_ip'];
 			}
-			
 			if(typeof body['internal_ip'] == 'string'){
 				this.starting_info['Internal IP'] = body['internal_ip'];
 			}
@@ -1582,6 +1589,7 @@
 			if(typeof body['fastest_controller_last_ping_seconds_ago'] == 'number'){
 				this.starting_info['Fastest controller last ping seconds ago'] = body['fastest_controller_last_ping_seconds_ago'];
 			}
+			
 			
 			
 			
@@ -1916,13 +1924,13 @@
 					const injection_progress_el = this.view.querySelector('#extension-voco-injection-learning-progress');
 					if(injection_progress_el){
 						
-						if( body['injection_level'] == 3 && injection_progress_el.innerHTML == ''){
+						if( body['injection_level'] == 2 && injection_progress_el.innerHTML == ''){
 							// do nothing
 							injection_progress_el.classList.add('extension-voco-hidden');
 						}
 						else{
 							injection_progress_el.classList.remove('extension-voco-hidden');
-							if(body['injection_level'] == 3){
+							if(body['injection_level'] == 2){
 								injection_progress_el.innerHTML = '<h3>Learning complete</h3>';
 							}
 							else{
@@ -1949,7 +1957,7 @@
 								
 								injection_progress_el.appendChild(learning_level_wrapper_el);
 							}
-							if(body['injection_level'] == 3){
+							if(body['injection_level'] == 2){
 								setTimeout(() => {
 									injection_progress_el.innerHTML = '';
 									injection_progress_el.classList.add('extension-voco-hidden');
@@ -1974,18 +1982,24 @@
 				}
 			}
 
-			if(typeof body.signal_linked == 'boolean'){
+			if(typeof body.signal_started == 'boolean'){
 				if(this.debug){
-                    console.log("voco debug: signal_linked: ", body.signal_linked);
+                    console.log("voco debug: signal_linked: ", body.signal_started);
                 }
-				if(body.signal_linked){
+				if(body.signal_started){
 					this.view.classList.add('extension-voco-signal-linked');
 				}
 				else{
 					this.view.classList.remove('extension-voco-signal-linked');
 				}
-				this.starting_info['Signal linked'] = body.signal_linked;
+				this.starting_info['Signal started'] = body.signal_started;
 			}
+
+			if(typeof body.signal_accounts_length == 'number'){
+				this.starting_info['Signal accounts'] = body.signal_accounts_length;
+			}
+
+			
 
 			/*
 			if(typeof body['injection_level'] == 'number'){

@@ -182,7 +182,7 @@ class VocoAdapter(Adapter):
 
 
     try:
-        from .signal import signal_init,link_signal,start_signal_link,after_link_signal,signal_ensure_group,get_signal_messages,parse_signal_message,send_signal_message
+        from .signal_chat import signal_init,link_signal,start_signal_link,after_link_signal,signal_ensure_group,get_signal_messages,parse_signal_message,send_signal_message
     except Exception as ex:
         print("ERROR importing signal.py: " + str(ex))
 
@@ -302,7 +302,6 @@ class VocoAdapter(Adapter):
         self.last_pong_time = 0
 
         
-        
         # TTS
         self.llm_tts_enabled = False
         self.llm_tts_binary_name = 'piper'
@@ -402,19 +401,13 @@ class VocoAdapter(Adapter):
         self.llm_chat_history = []
         self.llm_last_assistant_reponse_time = 0
         
-        
     
         #self.llm_assistant_skipped = False # if there is not enough memory, then LLM AI will be skipped
         #self.llm_tts_skipped = False # if there is not enough memory, then LLM TTS will be skipped
         
-        
-        
         #self.intended_snips_proces_count_mismatch_count = 0
         
-        
-        
-        
-        
+
         # A chat between a curious user and an artificial intelligence assistant. The assistant gives helpful, detailed, and polite answers to the user's questions. USER: {prompt} ASSISTANT:
         
         self.controller_model = str(run_command("cat /proc/device-tree/model")).strip()
@@ -467,6 +460,7 @@ class VocoAdapter(Adapter):
         
         # SIGNAL CHAT
         
+        self.signal_started = False
         self.signal_qr_code = ''
         self.signal_messages = {}
         self.signal_accounts = []
@@ -656,7 +650,6 @@ class VocoAdapter(Adapter):
         
         try:
             
-            
             if 'site_id' not in self.persistent_data:
                 random_site_id = generate_random_string(8)
                 #print("site_id was not in persistent data, adding random one now: " + str(random_site_id))
@@ -756,7 +749,6 @@ class VocoAdapter(Adapter):
                 #print("microphone_gain was not in persistent data, adding it now.")
                 self.persistent_data['signal_phone_number'] = None
                 self.save_to_persistent_data = True
-
 
             if self.persistent_data['is_satellite'] == False and self.persistent_data['main_controller_hostname'] != self.hostname:
                 self.persistent_data['main_controller_hostname'] = self.hostname
@@ -1116,8 +1108,6 @@ class VocoAdapter(Adapter):
             print("WARNING - VOICE RECORDING(S) WILL NOT BE DELETED WHILE IN DEBUG MODE")
         else:
             self.delete_recordings()
-        
-        
         
         
         # TTS
@@ -1626,7 +1616,6 @@ class VocoAdapter(Adapter):
                                     'end':'<|im_end|>'
                                 }
                             },
-                            
             'BitNet 2B':{'model':'ggml-model-i2_s.gguf',
                                 'size':1200,
                                 'description':'Made by Microsoft',
@@ -1649,7 +1638,6 @@ class VocoAdapter(Adapter):
                                     'reverse':'<|answer|>',
                                     'end':'</s>'
                                 }
-                                
                             },
             'TinyLlama 1.1B Q2 Chat':{'model':'TinyLlama-1.1B-Chat-v1.0.Q2_K.gguf',
                                 'size':500,
@@ -1675,8 +1663,6 @@ class VocoAdapter(Adapter):
                                     'end':'<|im_end|>'
                                 }
                             },
-                            
-                            
             'Gemma 3 1B Instruct':{'model':'gemma-3-1b-it-Q4_0.gguf',
                                 'size':750,
                                 'description':'Made by Google',
@@ -1688,7 +1674,6 @@ class VocoAdapter(Adapter):
                                     'end':'<|im_end|>'
                                 }
                             },
-                            
             'Unsloth 4Bit':{'model':'ent_val_personal_4bit_gguf-unsloth.Q4_K_M.gguf',
                                 'size':700,
                                 'developer':True,
@@ -1860,11 +1845,8 @@ class VocoAdapter(Adapter):
         
         # Default chat protocol
         self.llm_assistant_protocol = 'basic'
-        
 
-                        
-                        
-                        
+
         if os.path.exists(self.custom_wakeword_model_path):
             if self.DEBUG:
                 print("Detected custom wakeword")
@@ -1938,7 +1920,7 @@ class VocoAdapter(Adapter):
         # START API
         try:
             self.extension = VocoAPIHandler(self, verbose=True)
-            #self.manager_proxy.add_api_handler(self.extension)
+            
             if self.DEBUG:
                 print("Extension API handler initiated")
         except Exception as ex:
@@ -1952,26 +1934,7 @@ class VocoAdapter(Adapter):
         # Perhaps it should store the unique ID of the main controller, and check against that.
         #
 
-        # Get all the things via the API.
-        try:
-            try_updating_things_counter = 0
-            while self.try_updating_things() == False:
-                if self.DEBUG:
-                    print("init: warning: try_updating_things failed, will attempt again in 3 seconds. ")
-                time.sleep(4) # api_get timeout is 3 seconds
-                try_updating_things_counter += 1
-                
-                if try_updating_things_counter == 20:
-                    if self.DEBUG:
-                        print("Error: after 20 attempts to get the things list, it still wasn't possible.")
-                    break
-            #if self.DEBUG:
-            #    print("Did the initial API call to /things. Result: " + str(self.things))
-
-                #print("Error handling API: " + str(ex))
-                
-        except Exception as ex:
-            print("Error, couldn't load things at init: " + str(ex))
+        
 
         if self.DEBUG:
             print("self.api_server is now: " + str(self.api_server))
@@ -2227,6 +2190,8 @@ class VocoAdapter(Adapter):
             print("self.persistent_data['matrix_candle_username']: " + str(self.persistent_data['matrix_candle_username']))
             #print("self.persistent_data['matrix_candle_password']: " + str(self.persistent_data['matrix_candle_password']))
         
+
+        self.manager_proxy.add_api_handler(self.extension)
         
         self.unmute()
         
@@ -2281,6 +2246,7 @@ class VocoAdapter(Adapter):
             self.start_matrix()
         except Exception as ex:
             print("Voco adapter init: caught error starting Signal / Matrix: " + str(ex))
+        
         
         
         
@@ -5023,6 +4989,28 @@ class VocoAdapter(Adapter):
         
         #loop = self.get_or_create_eventloop()
         
+
+        # Get all the things via the API.
+        try:
+            try_updating_things_counter = 0
+            while self.try_updating_things(True) == False:
+                if self.DEBUG:
+                    print("init: warning: try_updating_things failed, will attempt again in 3 seconds. ")
+                time.sleep(4) # api_get timeout is 3 seconds
+                try_updating_things_counter += 1
+                
+                if try_updating_things_counter == 20:
+                    if self.DEBUG:
+                        print("Error: after 20 attempts to get the things list, it still wasn't possible.")
+                    break
+            #if self.DEBUG:
+            #    print("Did the initial API call to /things. Result: " + str(self.things))
+
+                #print("Error handling API: " + str(ex))
+                
+        except Exception as ex:
+            print("Error, couldn't load things at init: " + str(ex))
+            
         
         if self.DEBUG == False:
             if self.is_mosquitto_up() == False:
@@ -5036,7 +5024,7 @@ class VocoAdapter(Adapter):
                 time.sleep(5)
         
         if self.DEBUG:
-            print("starting mqtt clients")
+            print("clock: starting mqtt clients")
         
         self.run_mqtt() # this will also start run_snips once a connection is established
         
@@ -5048,6 +5036,10 @@ class VocoAdapter(Adapter):
         
         previous_action_times_count = 0
         #previouxs_injection_time = time.time()
+
+        if self.DEBUG:
+            print("clock: starting while loop")
+
         while not self.threads_must_stop.is_set():
 
             voice_message = ""
@@ -5090,7 +5082,7 @@ class VocoAdapter(Adapter):
                         
                     self.snips_stderr_messages = []
                 
-                
+                    """
                     if self.llm_assistant_process != None and self.llm_assistant_process.poll() == None and self.llm_assistant_process.stdout != None:
                         try:
                     
@@ -5117,7 +5109,10 @@ class VocoAdapter(Adapter):
                         
                         except Exception as ex:
                             print("caught other type of exception parsing subprocesses stdout: " + str(ex))
-                
+                    """
+
+
+
                     #else:
                     #    if self.DEBUG:
                     #        print("clock: assistant subprocess was not ok")
@@ -5384,7 +5379,6 @@ class VocoAdapter(Adapter):
                     if time.time() > self.current_utc_time + 1:
                         if self.DEBUG:
                             print("clock: WARNING, THE CLOCK TICK TOOK LONGER THAN A SECOND ALREADY (check 1): " + str(time.time() - self.current_utc_time))
-                        #self.current_utc_time = int(time.time())
 
                     #timer_removed = False
                     try:
@@ -5646,8 +5640,8 @@ class VocoAdapter(Adapter):
                     if time.time() > self.current_utc_time + 1:
                         if self.DEBUG:
                             print("clock: WARNING, THE CLOCK TICK TOOK LONGER THAN A SECOND ALREADY (check 2): " + str(time.time() - self.current_utc_time))
-                        #self.current_utc_time = int(time.time())
-                
+                    else:
+                        print("clock still within one second")
 
                     # Update the persistence data if the number of timers has changed
                     try:
@@ -5666,15 +5660,14 @@ class VocoAdapter(Adapter):
                     if time.time() > self.current_utc_time + 1:
                         if self.DEBUG:
                             print("clock: WARNING, THE CLOCK TICK TOOK LONGER THAN A SECOND ALREADY (check 3): " + str(time.time() - self.current_utc_time))
-                        #self.current_utc_time = int(time.time())
                 
                     # Check if the microphone has been plugged in or unplugged.
                 
                     try:
                         self.capture_devices = self.scan_alsa('capture')
                     
-                        #if self.DEBUG:
-                        #    print("self.capture_devices: " + str(self.capture_devices))
+                        if self.DEBUG:
+                            print("clock: self.capture_devices: " + str(self.capture_devices))
                     
                         if len(self.capture_devices) == 0:
                             #if self.DEBUG:
@@ -5753,7 +5746,6 @@ class VocoAdapter(Adapter):
                     if time.time() > self.current_utc_time + 1:
                         if self.DEBUG:
                             print("clock: WARNING, THE CLOCK TICK TOOK LONGER THAN A SECOND ALREADY (check 4): " + str(time.time() - self.current_utc_time))
-                        #self.current_utc_time = int(time.time())
 
                     if self.should_restart_snips == True:
                         if self.DEBUG:
@@ -5764,14 +5756,13 @@ class VocoAdapter(Adapter):
                     if time.time() > self.current_utc_time + 1:
                         if self.DEBUG:
                             print("clock: WARNING, THE CLOCK TICK TOOK LONGER THAN A SECOND (final check): " + str(time.time() - self.current_utc_time))
-                        #self.current_utc_time = int(time.time())
                     
                 except Exception as ex:
                     print("caught general error in clock: ", ex)
                 
                 
         if self.DEBUG:
-            print("CLOCK: beyond while loop")
+            print("\nCLOCK: beyond while loop\n")
 #
 #  THINGS PROPERTIES
 #
@@ -6274,6 +6265,7 @@ class VocoAdapter(Adapter):
                 if self.DEBUG:
                     print("Error communicating: " + str(r.status_code))
                 return {"error": str(r.status_code)}
+
             else:
                 return_value = {}
                 try:
@@ -6304,21 +6296,25 @@ class VocoAdapter(Adapter):
 
 
 
-    def try_updating_things(self):
-        if self.DEBUG2:
-            print("in try_updating_things")
+    def try_updating_things(self, force_update=False):
+        if self.DEBUG:
+            print("in try_updating_things.  force_update: ", force_update)
             #pass
         #print("fresh things: " + str(fresh_things)) # outputs HUGE amount of data
         
         updating_things_interval = 60
-        if self.still_busy_booting == True:
+        if self.got_good_things_list == False:
             updating_things_interval = 10
-        if self.last_things_update_time < (time.time() - updating_things_interval):
+        #if self.still_busy_booting == True:
+        #    updating_things_interval = 10
+        if self.last_things_update_time < (time.time() - updating_things_interval) or self.still_busy_booting or force_update:
             self.last_things_update_time = time.time()
+            if self.DEBUG:
+                print("try_updating_things: trying to get /things")
             
             try:
                 fresh_things = self.api_get("/things")
-            
+                
                 if hasattr(fresh_things, 'error'):
                     if self.DEBUG:
                         print("try_update_things: get_api returned an error.")
@@ -6333,15 +6329,19 @@ class VocoAdapter(Adapter):
                 
                 else:
                     if fresh_things != None:
-                        if self.DEBUG2:
+                        if self.DEBUG:
                             print("updating things was succesful")
                         self.things = fresh_things
                         self.got_good_things_list = True
                         return True
+                    else:
+                        if self.DEBUG:
+                            print("updating things: ERROR, fresh_things was None")
+                        
                     
             except Exception as ex:
                 if self.DEBUG:
-                    print("Error in try_updating_things: " + str(ex))
+                    print("caught error in try_updating_things: " + str(ex))
 
             
             
@@ -6370,11 +6370,14 @@ class VocoAdapter(Adapter):
             except Exception as ex:
                 if self.DEBUG:
                     print("Error in try_updating_things: " + str(ex))
-
-
+        else:
+            if self.DEBUG:
+                print("try_updating_things: aborting, already tried updating less than 10 seconds ago")
+            return self.got_good_things_list
 
         return False
-        
+
+
 
 #
 #  PERSISTENCE
@@ -10081,7 +10084,9 @@ class VocoAdapter(Adapter):
     def inject_updated_things_into_snips(self, force_injection=False):
         """ Teaches Snips what the user's devices and properties are called """
         if self.DEBUG:
-            print("Checking if new things/properties/strings should be injected into Snips.  self.injection_level:", self.injection_level, ", self.preparing_an_injection: ", self.preparing_an_injection)
+            print("\n\n\n\ninject_updated_things_into_snips: Checking if new things/properties/strings should be injected into Snips")
+            print("inject_updated_things_into_snips:  - self.injection_level: ", self.injection_level)
+            print("inject_updated_things_into_snips:  - self.preparing_an_injection: ", self.preparing_an_injection)
         injection_stopwatch_start = time.time()
         try:
             
@@ -10104,7 +10109,6 @@ class VocoAdapter(Adapter):
                 #        print("inject_updated_things_into_snips: injection already in progress. Aborting.")
                 #    return
             
-            
 
             if force_injection == True:
                 self.force_injection = True # sic (adding to self)
@@ -10118,7 +10122,6 @@ class VocoAdapter(Adapter):
                 if self.DEBUG:
                     print("At inject_updated_things_into_snips, but no things list has ever been succesfully loaded form the API. Aborting.")
                 return
-            
             
             
             if self.last_injection_request_time + self.minimum_injection_interval > time.time(): # + self.minimum_injection_interval > datetime.utcnow().timestamp():
@@ -10139,6 +10142,7 @@ class VocoAdapter(Adapter):
                 if self.DEBUG:
                     print("error, already busy preparing an injection")
                 return
+
             self.preparing_an_injection = True
             # Check if any new things have been created by the user.
             #if datetime.utcnow().timestamp() - self.last_injection_request_time < self.minimum_injection_interval:
@@ -10164,7 +10168,7 @@ class VocoAdapter(Adapter):
                 
                 if self.DEBUG:
                     print("inject_updated_things_into_snips: self.try_updating_things done")
-                    print("injection_stopwatch delta: ", time.time() - injection_stopwatch_start)
+                    print("inject_updated_things_into_snips: injection_stopwatch delta: ", time.time() - injection_stopwatch_start)
                     
                 local_thing_titles_list = []
                 full_thing_titles_list = []
@@ -10235,8 +10239,8 @@ class VocoAdapter(Adapter):
                                     property_string_name = clean_up_thing_string(str(word)) #.strip()
                                     if len(str(property_string_name)) > 2:
                                         if too_difficult_to_pronounce(property_string_name):
-                                            if self.DEBUG2:
-                                                print("skipping property value that is too difficult to pronounce: " + str(property_string_name))
+                                            if self.DEBUG:
+                                                print("inject_updated_things_into_snips: skipping property value that is too difficult to pronounce: " + str(property_string_name))
                                         elif " " in property_string_name and any(char.isdigit() for char in property_string_name) and not (property_string_name[-1].isdigit() or (property_string_name[0].isdigit() and ( property_string_name[1] == " " or property_string_name[2] == " " )) ):
                                             if self.DEBUG2:
                                                 print("skipping property value string with both a space and a number in it (that is not the first or last character): " + str(property_string_name))
@@ -10244,7 +10248,7 @@ class VocoAdapter(Adapter):
                                             if len(str(property_string_name)) > 3 and property_string_name.isupper():
                                                 property_string_name = property_string_name.lower()
                                                 if self.DEBUG:
-                                                    print("property_string_name should now be lower-case: ", property_string_name)
+                                                    print("inject_updated_things_into_snips: property_string_name should now be lower-case: ", property_string_name)
                                             #print("property_string_name not too difficult to pronounce?: ", property_string_name)
                                             fresh_property_strings.add(clean_up_thing_string(property_string_name))
                                             
@@ -10254,8 +10258,8 @@ class VocoAdapter(Adapter):
                             if len(property_title) > 2:
                                 if property_title.startswith("Unknown ") == False:
                                     if too_difficult_to_pronounce(property_title):
-                                        if self.DEBUG2:
-                                            print("skipping property_title that is too difficult to pronounce: " + str(property_title))
+                                        if self.DEBUG:
+                                            print("inject_updated_things_into_snips: skipping property_title that is too difficult to pronounce: " + str(property_title))
                                     elif " " in property_title and any(char.isdigit() for char in property_title) and not property_title[-1].isdigit():
                                         if self.DEBUG2:
                                             print("skipping property_title with both a space and a number in it (and the number is not the last character): " + str(property_title))
@@ -10263,7 +10267,7 @@ class VocoAdapter(Adapter):
                                         if len(str(property_title)) > 3 and property_title.isupper():
                                             property_title = property_title.lower()
                                             if self.DEBUG:
-                                                print("property_title should now be lower-case: ", property_title)
+                                                print("inject_updated_things_into_snips: property_title should now be lower-case: ", property_title)
                                         fresh_property_titles.add(property_title)
                         
                 # Add things from satellites (if this is not itself a satellite)
@@ -10274,30 +10278,30 @@ class VocoAdapter(Adapter):
                 local_thing_titles_list = full_thing_titles_list.copy()
 
                 if self.DEBUG:
-                    print("fresh_property_titles: " + str(fresh_property_titles))
-                    print("injection_stopwatch delta: ", time.time() - injection_stopwatch_start)
+                    print("inject_updated_things_into_snips: fresh_property_titles: " + str(fresh_property_titles))
+                    print("inject_updated_things_into_snips: injection_stopwatch delta: ", time.time() - injection_stopwatch_start)
 
                 #satellites_thing_titles = [] # holds a list of only the titles of things on satellites. Used later to create a full list of local + satellite things
                 
                 # add the thing titles on satellites
                 for sat in self.persistent_data['satellite_thing_titles']:
                     if self.DEBUG2:
-                        print("adding: " + str(len(self.persistent_data['satellite_thing_titles'][sat])) + " , thing titles from satellite: " + str(sat))
+                        print("inject_updated_things_into_snips: adding: " + str(len(self.persistent_data['satellite_thing_titles'][sat])) + " , thing titles from satellite: " + str(sat))
                     for sat_thing_title in self.persistent_data['satellite_thing_titles'][sat]:
                         #if self.DEBUG:
                         #    print("-- " + str(sat_thing_title))
                         if not sat_thing_title in full_thing_titles_list:
                             if too_difficult_to_pronounce(sat_thing_title):
                                 if self.DEBUG2:
-                                    print("skipping sat_thing_title that is too difficult to pronounce: " + str(sat_thing_title))
+                                    print("inject_updated_things_into_snips: skipping sat_thing_title that is too difficult to pronounce: " + str(sat_thing_title))
                             elif " " in sat_thing_title and any(char.isdigit() for char in sat_thing_title) and not sat_thing_title[-1].isdigit():
                                 if self.DEBUG2:
-                                    print("skipping property_title with both a space and a number in it (and the number is not the last character): " + str(property_title))
+                                    print("inject_updated_things_into_snips: skipping property_title with both a space and a number in it (and the number is not the last character): " + str(property_title))
                             else:
                                 if len(str(sat_thing_title)) > 3 and sat_thing_title.isupper():
                                     sat_thing_title = sat_thing_title.lower()
                                     if self.DEBUG:
-                                        print("sat_thing_title should now be lower-case: ", sat_thing_title)
+                                        print("inject_updated_things_into_snips: sat_thing_title should now be lower-case: ", sat_thing_title)
                                 
                                 full_thing_titles_list.append(sat_thing_title)
                                 
@@ -10321,7 +10325,7 @@ class VocoAdapter(Adapter):
                         #if self.DEBUG:
                         #    print(" thing title after cleaning:" + thing_name)
                         if self.DEBUG:
-                            print("!!?? adding thing_name from full_thing_titles_list: ", thing_name)
+                            print("inject_updated_things_into_snips: !!?? adding thing_name from full_thing_titles_list: ", thing_name)
                         fresh_thing_titles.add(thing_name)
                         #self.my_thing_title_list.append(thing_name)
                     
@@ -10336,19 +10340,19 @@ class VocoAdapter(Adapter):
                 
                 
                 if self.DEBUG:
-                    print("creating operations. injection_stopwatch delta: ", time.time() - injection_stopwatch_start)
+                    print("inject_updated_things_into_snips: creating operations. injection_stopwatch delta: ", time.time() - injection_stopwatch_start)
                 operations = []
             
-                #if self.DEBUG:
+                if self.DEBUG:
                 #    print("fresh_thing_titles = " + str(fresh_thing_titles))
                 #    print("fresh_prop_titles = " + str(fresh_property_titles))
-                #    print("fresh_prop_strings = " + str(fresh_property_strings))
+                    print("fresh_prop_strings = " + str(fresh_property_strings))
                 
                 try:
                     thing_titles = set(self.persistent_data['all_thing_titles']) # all_thing_titles includes the previously known satellite thing titles (which might have changed)
                 except:
                     if self.DEBUG:
-                        print("Error, Couldn't load previous thing titles from persistence. If Voco was just installed then this is normal.")
+                        print("inject_updated_things_into_snips: ERROR: couldn't load previous thing titles from persistence. If Voco was just installed then this is normal.")
                     thing_titles = set()
                     self.persistent_data['local_thing_titles'] = []
                     self.save_to_persistent_data = True #self.save_persistent_data()
@@ -10357,7 +10361,7 @@ class VocoAdapter(Adapter):
                     property_titles = set(self.persistent_data['property_titles'])
                 except:
                     if self.DEBUG:
-                        print("Error, Couldn't load previous property titles from persistence. If Voco was just installed then this is normal.")
+                        print("inject_updated_things_into_snips: ERROR: couldn't load previous property titles from persistence. If Voco was just installed then this is normal.")
                     property_titles = set()
                     self.persistent_data['property_titles'] = []
                     self.save_to_persistent_data = True #self.save_persistent_data()
@@ -10366,7 +10370,7 @@ class VocoAdapter(Adapter):
                     property_strings = set(self.persistent_data['property_strings'])
                 except:
                     if self.DEBUG:
-                        print("Error, Couldn't load previous property strings from persistence. If Voco was just installed then this is normal.")
+                        print("inject_updated_things_into_snips: ERROR: couldn't load previous property strings from persistence. If Voco was just installed then this is normal.")
                     property_strings = set()
                     self.persistent_data['property_strings'] = []
                     self.save_to_persistent_data = True #self.save_persistent_data()
@@ -10376,18 +10380,18 @@ class VocoAdapter(Adapter):
                 #print("fresh: " + str(fresh_thing_titles))
                 
                 if self.DEBUG2:
-                    print("self.force_injection: " + str(self.force_injection))
-                    print("previous: len(thing_titles): " + str(len(thing_titles)))
-                    print("current:  len(fresh_thing_titles): " + str(len(fresh_thing_titles)))
-                    print("diff: " + str(thing_titles^fresh_thing_titles))
+                    print("inject_updated_things_into_snips: self.force_injection: " + str(self.force_injection))
+                    print("inject_updated_things_into_snips: previous: len(thing_titles): " + str(len(thing_titles)))
+                    print("inject_updated_things_into_snips: current:  len(fresh_thing_titles): " + str(len(fresh_thing_titles)))
+                    print("inject_updated_things_into_snips: diff: " + str(thing_titles^fresh_thing_titles))
                 
                 if len(thing_titles^fresh_thing_titles) > 0 or self.force_injection == True: # comparing sets to detect changes in thing titles
                     if self.DEBUG:
                         if self.force_injection:
-                            print("FORCED:")
-                        print("Teaching Snips the updated thing titles:")
+                            print("inject_updated_things_into_snips: FORCED!")
+                        print("inject_updated_things_into_snips: Teaching Snips the updated thing titles:")
                         print(str(list(fresh_thing_titles)))
-                        print("\nDIFFERENT THING TITLES: " + str(thing_titles^fresh_thing_titles) )
+                        print("\ninject_updated_things_into_snips: DIFFERENT THING TITLES: " + str(thing_titles^fresh_thing_titles) )
                     #operations.append(
                     #    AddFromVanillaInjectionRequest({"Thing" : list(fresh_thing_titles) })
                     #)
@@ -10410,10 +10414,10 @@ class VocoAdapter(Adapter):
                 if len(property_titles^fresh_property_titles) > 0 or self.force_injection == True:
                     if self.DEBUG:
                         if self.force_injection:
-                            print("FORCED:")
-                        print("Teaching Snips the updated property titles:")
+                            print("inject_updated_things_into_snips: FORCED!!")
+                        print("inject_updated_things_into_snips: teaching Snips the updated property titles:")
                         print(str(list(fresh_property_titles)))
-                        print("\nDIFFERENT PROPERTY TITLES: " + str(property_titles^fresh_property_titles) )
+                        print("\ninject_updated_things_into_snips: DIFFERENT PROPERTY TITLES: " + str(property_titles^fresh_property_titles) )
                     #operations.append(
                     #    AddFromVanillaInjectionRequest({"Property" : list(fresh_property_titles) + self.extra_properties + self.capabilities + self.generic_properties + self.numeric_property_names})
                     #)
@@ -10421,7 +10425,7 @@ class VocoAdapter(Adapter):
                     
                     if self.injection_timeout_count > 1 or self.injection_level < 1:
                         if self.DEBUG:
-                            print("TRUNCATING property_titles.  self.injection_timeout_count,self.injection_level: ", self.injection_timeout_count, self.injection_level)
+                            print("inject_updated_things_into_snips: TRUNCATING property_titles.  self.injection_timeout_count,self.injection_level: ", self.injection_timeout_count, self.injection_level)
                         fresh_property_titles = set(['state', 'volume', 'brightness','temperature'])
                     
                     #if not self.persistent_data['is_satellite']:
@@ -10433,10 +10437,10 @@ class VocoAdapter(Adapter):
                 if len(property_strings^fresh_property_strings) > 0 or self.force_injection == True:
                     if self.DEBUG:
                         if self.force_injection:
-                            print("FORCED:")
-                        print("Teaching Snips the updated property strings:")
+                            print("inject_updated_things_into_snips: FORCED!!!")
+                        print("inject_updated_things_into_snips: teaching Snips the updated property strings:")
                         print(str(list(fresh_property_strings)))
-                        print("\nDIFFERENT PROPERTY STRINGS: " + str(property_strings^fresh_property_strings) )
+                        print("\ninject_updated_things_into_snips: DIFFERENT PROPERTY STRINGS: " + str(property_strings^fresh_property_strings) )
                     #operations.append(
                     #    AddFromVanillaInjectionRequest({"string" : list(fresh_property_strings) })
                     #)
@@ -10453,14 +10457,14 @@ class VocoAdapter(Adapter):
                     
                     if self.injection_timeout_count > 0 or self.injection_level < 2:
                         if self.DEBUG:
-                            print("TRUNCATING PROPERTY STRING INJECTION")
+                            print("inject_updated_things_into_snips: TRUNCATING PROPERTY STRING INJECTION")
                         fresh_property_strings = set(['on','off'])
                     
                     try:
                         for final_property_string in list(fresh_property_strings):
                             if too_difficult_to_pronounce(final_property_string):
                                 if self.DEBUG:
-                                    print("ERROR, spotted final_property_string that was too difficult to pronounce: ", final_property_string)
+                                    print("inject_updated_things_into_snips: ERROR, spotted final_property_string that was too difficult to pronounce: ", final_property_string)
                                 fresh_property_strings.remove(final_property_string)
                     except Exception as ex:
                         print("caught error pruning fresh_property_strings that are too difficult to pronounce: ", ex)
@@ -10472,12 +10476,14 @@ class VocoAdapter(Adapter):
                 #if self.DEBUG:
                 #    print("operations: " + str(operations))
                 if self.DEBUG:
-                    print("operations created. injection_stopwatch delta: ", time.time() - injection_stopwatch_start)
-                    
+                    print("inject_updated_things_into_snips: operations created. injection_stopwatch delta: ", time.time() - injection_stopwatch_start)
+                    print("inject_updated_things_into_snips: len(operations): ", len(operations))
+                    print("inject_updated_things_into_snips: self.force_injection: ", self.force_injection)
+
                 # Check if Snips should be updated with fresh data
                 if len(operations) > 0 or self.force_injection: # len(operations) has a maximum value of 3 (when things, properties and string all have at least one different value)
                     if self.DEBUG:
-                        print("creating injection update_request with operations: ", operations)
+                        print("inject_updated_things_into_snips: creating injection update_request with operations: ", operations)
                     self.force_injection = False
                     update_request = {"operations":operations}
             
@@ -10520,11 +10526,11 @@ class VocoAdapter(Adapter):
                 
                     except Exception as ex:
                          if self.DEBUG:
-                             print("Error during injection: " + str(ex))
+                             print("inject_updated_things_into_snips: caught ERROR during injection: " + str(ex))
             
                 else:
                     if self.DEBUG:
-                        print("No need for injection")
+                        print("inject_updated_things_into_snips: no need for injection")
                 
             else:
                 if self.DEBUG:
@@ -10533,13 +10539,13 @@ class VocoAdapter(Adapter):
 
         except Exception as ex:
             if self.DEBUG:
-                print("Error during analysis and injection of your things into Snips: " + str(ex))
+                print("inject_updated_things_into_snips: caught ERRORduring analysis and injection of things into Snips: " + str(ex))
 
 
         self.preparing_an_injection = False
         if self.DEBUG:
-            print("reached end of inject_updated_things_into_snips")
-            print("injection_stopwatch delta: ", time.time() - injection_stopwatch_start)
+            print("inject_updated_things_into_snips: reached END")
+            print("inject_updated_things_into_snips: injection_stopwatch delta: ", time.time() - injection_stopwatch_start)
 
 
 
@@ -10570,7 +10576,7 @@ class VocoAdapter(Adapter):
         if self.DEBUG:
             print("\n[?] in thing scanner [?]")
             print("intent: " + str(intent))
-            print("Searching for matching thing. Scan slots: " + str(slots))
+            print("searching for matching thing. Scan slots: " + str(slots))
         
             
         best_matched_found_property = None # during pruning it may whittle down to a single found_property
@@ -13872,6 +13878,45 @@ class VocoAdapter(Adapter):
                             print("\nError, start_ai_assistant: active assistant model was set to None, cannot start assistant\n")
                         return
 
+
+
+                    def read_stdout():
+                        while self.running and self.bitnet_may_run: #self.llm_assistant_process:
+                            msg = self.llm_assistant_process.stdout.readline()
+                            #print("stdout: ", msg.decode())
+                            #self.assistant_messages.append({'type':'stdout','content':msg.decode()})
+                            stdout_message = msg.decode()
+                            if stdout_message:
+                                self.assistant_messages.put({'type':'stdout','content':stdout_message})
+                            
+                            
+                            #print("messages length after: " + str(len(self.messages)))
+
+                            error_msg = self.llm_assistant_process.stderr.readline()
+                            stderr_message = error_msg.decode()
+                            if stderr_message:
+                                self.assistant_messages.put({'type':'stdout','content':stderr_message})
+                            
+                            #print("stderr: ", msg.decode())
+                            #self.assistant_messages.put({'type':'stderr','content':error_msg.decode()})
+
+                            time.sleep(0.0001)
+                        if self.DEBUG:
+                            print("bitnet assistant read_stdout thread got beyond while loop, ending now")
+
+                    def read_stderr():
+                        while self.running and self.bitnet_may_run: #self.llm_assistant_process:
+                            msg = self.llm_assistant_process.stderr.readline()
+                            #print("stderr: ", msg.decode())
+                            self.assistant_messages.put({'type':'stderr','content':msg.decode()})
+                            #print("messages length after: " + str(len(self.messages)))
+                            time.sleep(0.0001)
+                        if self.DEBUG:
+                            print("bitnet assistant read_stderr closed")
+
+
+
+
                     if self.DEBUG:
                         print("start_ai_assistant: llm_assistant_model: ", str(self.persistent_data['llm_assistant_model']).lower())
 
@@ -13921,44 +13966,13 @@ class VocoAdapter(Adapter):
                         #    print("\n\nBITNET ASSISTANT COMMAND:\n")
                         #    print(assistant_command)
                         #    print("\n")
+
                         #self.llm_assistant_process = subprocess.Popen(assistant_command, stderr=subprocess.PIPE, shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE, cwd=self.data_dir_path, env=bitnet_environment)
                         self.llm_assistant_process = subprocess.Popen(assistant_shell_command, stderr=subprocess.PIPE, shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE, cwd=self.data_dir_path, env=bitnet_environment)
                         
                         
 
-                        def read_stdout():
-                            while self.running and self.bitnet_may_run: #self.llm_assistant_process:
-                                msg = self.llm_assistant_process.stdout.readline()
-                                #print("stdout: ", msg.decode())
-                                #self.assistant_messages.append({'type':'stdout','content':msg.decode()})
-                                stdout_message = msg.decode()
-                                if stdout_message:
-                                    self.assistant_messages.put({'type':'stdout','content':stdout_message})
-                                
-                                
-                                #print("messages length after: " + str(len(self.messages)))
-
-                                error_msg = self.llm_assistant_process.stderr.readline()
-                                stderr_message = error_msg.decode()
-                                if stderr_message:
-                                    self.assistant_messages.put({'type':'stdout','content':stderr_message})
-                                
-                                #print("stderr: ", msg.decode())
-                                #self.assistant_messages.put({'type':'stderr','content':error_msg.decode()})
-
-                                time.sleep(0.0001)
-                            if self.DEBUG:
-                                print("bitnet assistant read_stdout thread got beyond while loop, ending now")
-
-                        def read_stderr():
-                            while self.running and self.bitnet_may_run: #self.llm_assistant_process:
-                                msg = self.llm_assistant_process.stderr.readline()
-                                #print("stderr: ", msg.decode())
-                                self.assistant_messages.put({'type':'stderr','content':msg.decode()})
-                                #print("messages length after: " + str(len(self.messages)))
-                                time.sleep(0.0001)
-                            if self.DEBUG:
-                                print("bitnet assistant read_stderr closed")
+                        
 
                         self.stdout_thread = threading.Thread(target=read_stdout)
                         self.stdout_thread.daemon = True
@@ -14123,7 +14137,13 @@ class VocoAdapter(Adapter):
                                     if self.DEBUG:
                                         print("\n\n\n[OK]\nLLM Assistant process started succesfully\n\n\n")
                                     self.llm_assistant_started = True
+
+                                    self.stdout_thread = threading.Thread(target=read_stdout)
+                                    self.stdout_thread.daemon = True
+                                    self.stdout_thread.start()
+
                                     self.check_if_this_is_the_fastest_controller()
+
                                 else:
                                     if self.DEBUG:
                                         print("\n\n\nLLM Assistant process immediately crashed! return code: " + str(self.llm_assistant_process.returncode) + "\n\n\n")
@@ -14149,6 +14169,12 @@ class VocoAdapter(Adapter):
                             else:
                                 if self.DEBUG:
                                     print("\n\nERROR, incomplete assistant model's prompts structure: ", prot , "\n\n")
+                                self.llm_assistant_started = False
+                        
+                        
+                        else:
+                            # self.persistent_data['llm_assistant_protocol'] is nully
+                            self.llm_assistant_started = False
 
                 else:
                     if self.DEBUG:
@@ -14158,6 +14184,7 @@ class VocoAdapter(Adapter):
             else:
                 if self.DEBUG:
                     print("LLM or Assistant not enabled\n")
+
             #self.llm_assistant_process = await asyncio.subprocess.create_subprocess_exec(
             #    str(self.llm_assistant_binary_path), assistant_command, stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
             #)
