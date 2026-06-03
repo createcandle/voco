@@ -812,12 +812,42 @@ class VocoAPIHandler(APIHandler):
                                 #last_text_response = self.adapter.last_text_response;
                                 #self.adapter.last_text_response = []
 
+                                fastest_controller_last_ping_seconds_ago = 0
+                                if self.adapter.fastest_controller_last_ping_time != 0:
+                                    fastest_controller_last_ping_seconds_ago = int(time.time()) - self.adapter.fastest_controller_last_ping_time
+
+                                main_controller_last_ping_seconds_ago = 0
+                                if self.adapter.main_controller_last_ping_time != 0:
+                                    main_controller_last_ping_seconds_ago = int(time.time()) - self.adapter.main_controller_last_ping_time
+
+                                last_pong_time_seconds_ago = 0
+                                if self.adapter.last_pong_time != 0:
+                                    last_pong_time_seconds_ago = int(time.time()) - self.adapter.last_pong_time
+                                
+
+                                main_controller_goodbye_seconds_ago = 0
+                                if self.adapter.main_controller_goodbye_timestamp != 0:
+                                    main_controller_goodbye_seconds_ago = int(time.time()) - self.adapter.main_controller_goodbye_timestamp
+
+
                                 return APIResponse(
                                     status=200,
                                     content_type='application/json',
                                     content=json.dumps({'state': state, 
                                                         'update': '',
                                                         'busy_starting_snips': self.adapter.busy_starting_snips,
+                                                        'own_ip_address':self.adapter.ip_address,
+                                                        'mqtt_server':self.adapter.persistent_data['mqtt_server'], 
+                                                        'mqtt_connected':self.adapter.mqtt_connected, 
+                                                        'mqtt_connected_succesfully_at_least_once':self.adapter.mqtt_connected_succesfully_at_least_once, 
+                                                        'periodic_mqtt_attempts':self.adapter.periodic_mqtt_attempts,
+                                                        'main_controller_hostname':self.adapter.persistent_data['main_controller_hostname'],
+                                                        'main_controller_ip':self.adapter.persistent_data['main_controller_ip'],
+                                                        'main_controller_goodbye_seconds_ago':main_controller_goodbye_seconds_ago,
+                                                        'mqtt_connected_to_ip':self.adapter.mqtt_connected_to_ip,
+                                                        'internal_ip':self.adapter.internal_ip,
+                                                        'last_pong_time_seconds_ago':last_pong_time_seconds_ago,
+                                                        'voco_connected':self.adapter.voco_connected,
                                                         'items': self.adapter.persistent_data['action_times'],
                                                         'mqtt_others': self.adapter.mqtt_others,
                                                         'current_time':self.adapter.current_utc_time,
@@ -837,12 +867,15 @@ class VocoAPIHandler(APIHandler):
                                                         'is_satellite':self.adapter.persistent_data['is_satellite'],
                                                         'connected_satellites': self.adapter.connected_satellites,
                                                         'periodic_voco_attempts':self.adapter.periodic_voco_attempts,
+                                                        'currently_scanning_for_missing_mqtt_server':self.adapter.currently_scanning_for_missing_mqtt_server,
                                                         'llm_busy_downloading_models':self.adapter.llm_busy_downloading_models,
                                                         'llm_folder_size':llm_folder_size,
                                                         'llm_not_enough_disk_space':self.adapter.llm_not_enough_disk_space,
                                                         'free_memory':self.adapter.free_memory,
                                                         'fastest_controller_id':self.adapter.fastest_controller_id,
                                                         'fastest_controller_score':self.adapter.fastest_controller_score,
+                                                        'fastest_controller_last_ping_seconds_ago':fastest_controller_last_ping_seconds_ago,
+                                                        'main_controller_last_ping_seconds_ago':main_controller_last_ping_seconds_ago,
                                                         'llm_tts_started': self.adapter.llm_tts_started,
                                                         'llm_stt_started': self.adapter.llm_stt_started,
                                                         'llm_wakeword_started': self.adapter.llm_wakeword_started,

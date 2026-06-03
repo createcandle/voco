@@ -296,7 +296,11 @@ class VocoAdapter(Adapter):
         #self.llm_downloaded_models = {'tts':[],'stt':[],'assistant':[]} # is this still used?
         
         self.fastest_controller_id = None # which Voco device in the network has the fastest hardware and should ideally be used to run LLM models
+        self.fastest_controller_ip = None
         self.fastest_controller_last_ping_time = 0
+        self.main_controller_last_ping_time = 0
+        self.last_pong_time = 0
+
         
         
         # TTS
@@ -354,7 +358,7 @@ class VocoAdapter(Adapter):
         self.last_time_llm_assistant_reset = 0
         self.llm_assistant_process = None
         self.llm_assistant_port = 8047
-        self.llm_assistant_threads = 3
+        self.llm_assistant_threads = 2
         #self.llm_assistant_prompt = ''
         self.llm_assistant_name = 'Candle'
         self.llm_assistant_prompt = "The following is a conversation between a curious researcher and their helpful AI assistant called {assistant_name}, which is a large language model trained on the sum of human knowledge."
@@ -702,7 +706,6 @@ class VocoAdapter(Adapter):
             elif self.persistent_data['mqtt_server'] == 'localhost':
                 self.persistent_data['mqtt_server'] = '127.0.0.1'
                 self.save_to_persistent_data = True
-
 			
             if 'main_site_id' not in self.persistent_data: # to remember what the main voco server is, for satellites.
                 #print("main_site_id was not in persistent data, adding it now.")
@@ -754,7 +757,16 @@ class VocoAdapter(Adapter):
                 self.persistent_data['signal_phone_number'] = None
                 self.save_to_persistent_data = True
 
+
+            if self.persistent_data['is_satellite'] == False and self.persistent_data['main_controller_hostname'] != self.hostname:
+                self.persistent_data['main_controller_hostname'] = self.hostname
+                self.persistent_data['main_controller_ip'] = '127.0.0.1'
+                self.save_to_persistent_data = True
             
+            if self.persistent_data['main_controller_ip'] == 'localhost':
+                self.persistent_data['main_controller_ip'] = '127.0.0.1'
+                self.save_to_persistent_data = True
+
             # TODO TEMPORARY!
             #self.persistent_data['main_controller_ip'] = '192.168.2.198'
             #self.save_persistent_data()
@@ -967,11 +979,14 @@ class VocoAdapter(Adapter):
         self.last_spoken_sentence = ""      # Used to avoid speaking the same sentence twice in quick succession
         self.last_spoken_sentence_time = 0  # Used to avoid speaking the same sentence twice in quick succession
         self.previous_intent_callback_time = 0 # avoid "echo" problem where the main controller and a satellite both hear a command (sometimes slightly differently), which causes a command to be run twice in a row.
-        
+        self.main_controller_goodbye_timestamp = 0
+
         # MQTT client
         self.mqtt_client = None
         self.mqtt_port = 1885
         self.mqtt_connected = False
+        self.mqtt_connected_to_ip = None
+        self.last_run_mqtt_time = 0
         self.recent_first_mqtt_error_count = 0
         self.recent_second_mqtt_error_count = 0
         
@@ -980,6 +995,7 @@ class VocoAdapter(Adapter):
         self.should_restart_mqtt = True
         self.mqtt_busy_connecting = False
         self.mqtt_connected_succesfully_at_least_once = False
+        self.mqtt_last_disconnect_timestamp = 0
         self.disable_security = False
         self.mqtt_username = 'candle'
         self.mqtt_password = 'smarthome'
@@ -1117,8 +1133,9 @@ class VocoAdapter(Adapter):
             os.system('mkdir -p ' + str(self.llm_tts_cache_dir_path))
         
         # Assistant
-        self.llm_assistant_dir_path = os.path.join(self.llm_data_dir_path, 'assistant')
-        os.system('mkdir -p ' + str(self.llm_assistant_dir_path))
+        self.llm_assistant_addon_dir_path = os.path.join(self.addon_dir_path,'llm','assistant')
+        self.llm_assistant_data_dir_path = os.path.join(self.llm_data_dir_path, 'assistant')
+        os.system('mkdir -p ' + str(self.llm_assistant_data_dir_path))
         #self.llm_assistant_binary_zip_path = os.path.join(self.addon_dir_path,'llm','assistant','llamafile.zip')
         #self.llm_assistant_binary_path = os.path.join(self.data_dir_path,'llm','llamafile')
         
@@ -2748,7 +2765,13 @@ class VocoAdapter(Adapter):
                     self.llm_assistant_models['Custom']['model_url'] = str(config['Custom AI assistant model URL'])
                 if self.DEBUG:
                     print("-Custom AI assistant model URL is present in the config data: " + str(self.llm_assistant_models['Custom']['model_url']))
-                    
+            
+            if 'Assistant threads' in config:
+                self.llm_assistant_threads = int(config['Assistant threads'])
+                if self.DEBUG:
+                    print("-AI assistant thread count was in the config data: " + str(self.llm_assistant_threads))
+            
+
             if 'Do not break up AI assistant sentences' in config:
                 self.llm_assistant_do_not_break_up_sentences = bool(config['Do not break up AI assistant sentences'])
                 if self.DEBUG:
@@ -3651,19 +3674,32 @@ class VocoAdapter(Adapter):
             self.last_sound_activity = time.time() - 1
             if self.DEBUG:
                 print("Speak: site_id: " + str(site_id))
-                if self.persistent_data['site_id'] == str(site_id):
+                
+            if self.persistent_data['site_id'] == str(site_id):
+                if self.DEBUG:
                     print("- really_speak: debug: this is my own site_id")
-                else:
+                if 'customData' in intent and 'parsed_by' in intent['customData'] and \
+                  self.persistent_data['is_satellite'] == True and \
+                  self.persistent_data['main_site_id'] != self.persistent_data['site_id'] and \
+                  str(intent['customData']['parsed_by']) == self.persistent_data['main_site_id']:
+                    if self.DEBUG:
+                        print("- really_speak: debug: this message has been parsed by the main controller")
+                    self.voco_connected = True
+                    self.periodic_voco_attempts = 0
+
+            else:
+                if self.DEBUG:
                     print("- really_speak: debug: this is not my own site_id? " + str(site_id))
-                    
+                
+            if self.DEBUG:
                 if voice_message == '':
                     print("[...] really_speak: ERROR, voice message was empty string")
                     #voice_message = 'debug: Error in speak: message was empty string'
                 else:
                     print("[...] really_speak:  voice_message: " + str(voice_message))
-                #print("[...] intent: " + str(json.dumps(intent, indent=4)))
-            
-            
+                    #print("[...] intent: " + str(json.dumps(intent, indent=4)))
+                
+                
             
             if voice_message == '':
                 if self.DEBUG:
@@ -5118,6 +5154,10 @@ class VocoAdapter(Adapter):
                         if self.DEBUG:
                             print("___\n\n   Clock: 15 seconds have passed. Time: " + str(int(time.time()) % 60))
                             print("   self.periodic_voco_attempts: " + str(self.periodic_voco_attempts))
+                            if self.main_controller_last_ping_time > 0:
+                                print("   main controller ping received seconds ago: ", int(time.time()) - self.main_controller_last_ping_time)
+                            if self.last_pong_time > 0:
+                                print("   pong seconds ago: ", int(time.time()) - self.last_pong_time)
                             print("   self.intended_snips_proces_count: ", self.intended_snips_proces_count)
                             print("   running_snips_processes_count: ", running_snips_processes_count)
                             print("   self.recent_first_mqtt_error_count: ", self.recent_first_mqtt_error_count)
@@ -5141,8 +5181,11 @@ class VocoAdapter(Adapter):
                     
                         if self.persistent_data['is_satellite'] and self.persistent_data['main_site_id'] == self.persistent_data['site_id']:
                             if self.DEBUG:
-                                print("clock: this satellite doesn't have a different main_site_id (yet)")
-                            self.periodic_voco_attempts += 1
+                                print("clock: this satellite doesn't have a different main_site_id (yet):")
+                                print(" - self.persistent_data['site_id']     : ", self.persistent_data['site_id'])
+                                print(" - self.persistent_data['main_site_id']: ", self.persistent_data['main_site_id'])
+
+                            #self.periodic_voco_attempts += 1
                     
                         try:
                             #print("self.mqtt_client: " + str(self.mqtt_client))
@@ -5245,7 +5288,7 @@ class VocoAdapter(Adapter):
 
                                         
                                         self.periodic_mqtt_attempts += 1
-                                        if self.persistent_data['is_satellite'] and self.this_is_main_controller == False:
+                                        if self.persistent_data['is_satellite'] and self.this_is_main_controller == False and self.mqtt_connected:
                                             self.periodic_voco_attempts += 1
                                 
                                     
@@ -5272,7 +5315,7 @@ class VocoAdapter(Adapter):
                                 
                                         if self.mqtt_connected == False and self.periodic_mqtt_attempts%5 == 4:
                                             if self.DEBUG:
-                                                print("clock: Should attempt to find correct MQTT server IP address")
+                                                print("clock: Should attempt to find correct MQTT server IP address.  self.periodic_mqtt_attempts: ", self.periodic_mqtt_attempts)
                                             self.look_for_mqtt_server()
                                             #time.sleep(1)
                     
@@ -5283,7 +5326,7 @@ class VocoAdapter(Adapter):
                                             #pass
                                         if self.periodic_voco_attempts > 5:
                                             if self.DEBUG:
-                                                print("clock: main Voco controller has not responded. It may be down permanently.")
+                                                print("clock: main Voco controller has not responded in a while. It may be down permanently.")
                                             self.voco_connected = False
                                             self.set_status_on_thing("Main controller is not responding")
                                 
@@ -5964,8 +6007,7 @@ class VocoAdapter(Adapter):
         if self.mqtt_client != None:
             self.mqtt_client.disconnect() # disconnect
             self.mqtt_client.loop_stop()
-        
-        #time.sleep(.1)
+            time.sleep(1)
         
         if self.DEBUG:
             print("VOCO shutdown complete. Talk to you later!")
@@ -6268,7 +6310,10 @@ class VocoAdapter(Adapter):
             #pass
         #print("fresh things: " + str(fresh_things)) # outputs HUGE amount of data
         
-        if self.last_things_update_time < (time.time() - 60) or self.still_busy_booting == True:
+        updating_things_interval = 60
+        if self.still_busy_booting == True:
+            updating_things_interval = 10
+        if self.last_things_update_time < (time.time() - updating_things_interval):
             self.last_things_update_time = time.time()
             
             try:
@@ -7286,9 +7331,12 @@ class VocoAdapter(Adapter):
             print("is_satellite: " + str(self.persistent_data['is_satellite']))
         
         if self.mqtt_connected == True:
-            print("WEIRD: in run_mqtt but self.mqtt_connected was already true")
+            if self.DEBUG:
+                print("WEIRD: in run_mqtt but self.mqtt_connected was already true")
             #return # TODO: experimental addition in april 2022
         
+        
+
         #if not self.is_mosquitto_up():
         #    print("mosquitto didn't seem to be up yet. Cancelling run_mqtt")
         #    time.sleep(5)
@@ -7300,52 +7348,93 @@ class VocoAdapter(Adapter):
                 print("Error, the MQTT server IP address was the device's own IP address. Because this is a satellite, this shouldn't be the case.")
         elif self.persistent_data['is_satellite'] == False and str(self.persistent_data['mqtt_server']) != '127.0.0.1' and str(self.persistent_data['mqtt_server']) != '0.0.0.0':
             if self.DEBUG:
-                print("Error, not a satellite, but mqtt_server was not 127.0.0.1 / 0.0.0.0")
-                
+                print("Error, not a satellite, but self.persistent_data['mqtt_server'] was not 127.0.0.1 / 0.0.0.0: ", self.persistent_data['mqtt_server'])
+
+
+        if self.last_run_mqtt_time > int(time.time()) - 10:
+            if self.DEBUG:
+                print("Error, run_mqtt was already called less than 10 seconds ago. Aborting.")
+            return
+
+        if self.mqtt_busy_connecting == True:
+            if self.DEBUG:
+                print("run_mqtt: self.mqtt_busy_connecting was already True, aborting")
+            return
+
+        self.last_run_mqtt_time = int(time.time())
+
         try:
             if self.DEBUG:
                 print("self.mqtt_client: " + str(self.mqtt_client))
         except Exception as ex:
-            print("Error printing mqtt client: " + str(ex))
+            if self.DEBUG:
+                print("caught error printing mqtt client: " + str(ex))
                 
         # First, close any existing MQTT client
         try:
             if self.mqtt_client != None:
                 if self.DEBUG:
-                    print("MQTT Client already existed. Not stopping and restarting it, it will keep trying by itself.")
+                    print("run_mqtt: MQTT Client already existed. Not stopping and restarting it, it will keep trying by itself.")
                 
                 if self.should_restart_mqtt:
                     try:
                         #if self.mqtt_connected:
                         if self.DEBUG:
-                            print("disconnecting mqtt first")
+                            print("run_mqtt: disconnecting mqtt first")
                         self.mqtt_client.disconnect() # disconnect
                         self.mqtt_client.loop_stop()
+                        time.sleep(1)
                         self.mqtt_client = None
                     except Exception as ex:
-                        print("Error closing existing MQTT client: " + str(ex))
+                        if self.DEBUG:
+                            print("run_mqtt: caught error closing existing MQTT client: " + str(ex))
                
                 else:
-                    print("run_mqtt was called, but the client already existed...")
+                    if self.DEBUG:
+                        print("run_mqtt was called, but the client already existed...")
                     #return # TODO Experimental change
                 
                     if self.mqtt_client.is_connected():
                         if self.DEBUG:
-                            print("MQTT client says it is already connected. Aborting run_mqtt.")
+                            print("run_mqtt: MQTT client says it is already connected. Aborting.")
                         return
                 
                 
-            if self.mqtt_client == None:
+            
+            if self.mqtt_client == None :
+                self.should_restart_mqtt = False
+
+                if self.persistent_data['is_satellite']:
+                    if str(self.persistent_data['mqtt_server']) == self.ip_address:
+                        if self.DEBUG:
+                            print("run_mqtt: The MQTT server IP address was the device's own IP address. Because this is a satellite, this shouldn't be the case. Requesting a network scan for the correct server.")
+                        if not self.currently_scanning_for_missing_mqtt_server: #and not self.orphaned:
+                            if self.DEBUG:
+                                print("run_mqtt: requesting scan for missing MQTT server.")
+                            self.look_for_mqtt_server()
+                            return
+
+
+
                 try:
                     client_name = "voco_" + self.persistent_data['site_id']
+                    if self.DEBUG:
+                        print("run_mqtt: creating self.mqtt_client with client_name: ", client_name)
                     self.mqtt_client = client.Client(client_id=client_name)
                 except Exception as ex:
-                    print("Error creating MQTT client: " + str(ex))
+                    if self.DEBUG:
+                        print("Error creating MQTT client: " + str(ex))
 
                 #HOST = "127.0.0.1"
                 #PORT = 1883
-            
-            
+
+                if not self.mqtt_client:
+                    if self.DEBUG:
+                        print("Error, creating MQTT client failed")
+                    return
+
+                self.mqtt_client.reconnect_delay_set(min_delay=2, max_delay=60)
+
                 self.mqtt_client.on_connect = self.on_connect
                 self.mqtt_client.on_disconnect = self.on_disconnect
                 self.mqtt_client.on_message = self.on_message
@@ -7353,49 +7442,57 @@ class VocoAdapter(Adapter):
                 if self.disable_security == False:
                     self.mqtt_client.username_pw_set(username=self.mqtt_username, password=self.mqtt_password)
                 if self.DEBUG:
-                    print("self.persistent_data['mqtt_server'] = " + str(self.persistent_data['mqtt_server']))
+                    print("run_mqtt: self.persistent_data['mqtt_server'] = " + str(self.persistent_data['mqtt_server']))
             
             
-            if self.persistent_data['is_satellite']:
-                if str(self.persistent_data['mqtt_server']) == self.ip_address:
-                    if self.DEBUG:
-                        print("The MQTT server IP address was the device's own IP address. Because this is a satellite, this shouldn't be the case. Requesting a network scan for the correct server.")
-                    if not self.currently_scanning_for_missing_mqtt_server: #and not self.orphaned:
-                        if self.DEBUG:
-                            print("requesting scan for missing MQTT server.")
-                        self.look_for_mqtt_server()
+
                         
 
                 #if self.should_restart_mqtt:
                 if self.mqtt_connected == False and self.mqtt_busy_connecting == False:
                     if self.DEBUG:
-                        print("This device is a satellite, so MQTT client is connecting to: " + str(self.persistent_data['mqtt_server']))
+                        print("run_mqtt:  this device is a satellite, so MQTT client is connecting to: " + str(self.persistent_data['mqtt_server']))
                     self.mqtt_busy_connecting = True
+                    self.mqtt_connected_to_ip = str(self.persistent_data['mqtt_server'])
                     self.mqtt_client.connect(str(self.persistent_data['mqtt_server']), int(self.mqtt_port), keepalive=60)
                 else:
-                    print("MQTT is already connected or busy connecting. self.mqtt_connected: " + str(self.mqtt_connected))
+                    print("run_mqtt: MQTT is already connected or busy connecting. self.mqtt_connected: " + str(self.mqtt_connected))
             
             else:
-                if self.mqtt_connected == False and self.mqtt_busy_connecting == False:
                 #if self.should_restart_mqtt:
+                if self.mqtt_connected == False and self.mqtt_busy_connecting == False:
+                
                     self.mqtt_busy_connecting = True
                     if self.DEBUG:
-                        print("This device is NOT a satellite, so MQTT client is connecting to: " + str(self.internal_ip) + ":" + str(self.mqtt_port))
+                        print("run_mqtt: This device is NOT a satellite, so MQTT client is connecting to internal_ip and port: " + str(self.internal_ip) + ":" + str(self.mqtt_port))
                     self.mqtt_client.connect(str(self.internal_ip), int(self.mqtt_port), keepalive=60)
                 else:
-                    print("MQTT is already connected or busy connecting.")
+                    if self.DEBUG:
+                        print("WARNING: run_mqtt: unexpectedly MQTT is already connected or busy connecting.")
             
             
             #print("self.mqtt_client dir: " + str(dir(self.mqtt_client)))
             #print("self.mqtt_client.is_connected: " + str(self.mqtt_client.is_connected()))
             
-            #self.mqtt_client.loop_forever()
+            #self.mqtt_client.loop_forever() # TODO: this was inside the following if statement:
             if self.should_restart_mqtt:
-                self.mqtt_client.loop_start()
+                # self.mqtt_client.loop_start()
                 self.should_restart_mqtt = False
-            
                 if self.DEBUG:
-                    print("MQTT client loop (re)started. self.should_restart_mqtt is now false.")  
+                    print("run_mqtt: MQTT client loop (re)started. set self.should_restart_mqtt back to false")  
+            
+
+            # self.mqtt_client.tls_set(certfile='/home/pi/.webthings/ssl/certificate.crt') ?
+            #self.mqtt_client.tls_set(
+            #    ca_certs='./server-ca.crt',
+            #    certfile='./client.crt', # /home/pi/.webthings/ssl/certificate.crt ?
+            #    keyfile='./client.key'
+            #)
+            # certificate.crt  certificate.pem  csr.pem  privatekey.pem
+
+            # loop_forever() (foreground) or loop_start() (background thread)
+            self.mqtt_client.loop_start()
+
             
             #try:    
             #    if self.DEBUG:
@@ -7406,7 +7503,8 @@ class VocoAdapter(Adapter):
             #    print("Error, that paho var did not exist: " + str(ex))
                 
         except Exception as ex:
-            print("run_mqtt: caught error creating MQTT client connection: " + str(ex))
+            if self.DEBUG:
+                print("run_mqtt: caught error creating MQTT client connection: " + str(ex))
             self.mqtt_connected = False
             self.mqtt_busy_connecting = False
                     
@@ -7429,19 +7527,23 @@ class VocoAdapter(Adapter):
                         if self.DEBUG:
                             print("run_mqtt error -> calling look_for_mqtt_server()")
                         self.look_for_mqtt_server()
+                        return
             
+            time.sleep(1)
             if self.DEBUG:
                 print("run_mqtt error -> setting should_restart_mqtt to True")
             self.should_restart_mqtt = True
     
             
     
-        
+    # Disconnect for the first MQTT client, which can be connected to an external controller
     def on_disconnect(self, client, userdata, rc):
         if self.DEBUG:
             print("MQTT on_disconnect")
         #self.mqtt_connected = False
         #self.voco_connected = False
+        if self.mqtt_connected:
+            self.mqtt_last_disconnect_timestamp = int(time.time())
         self.mqtt_connected = False
         self.mqtt_busy_connecting = False
         self.should_restart_mqtt = True
@@ -7457,14 +7559,14 @@ class VocoAdapter(Adapter):
             self.recent_first_mqtt_error_count += 1
             if self.DEBUG:
                 print("In on_disconnect, and MQTT return code was NOT 0 - (disconnect error!). It was: " + str(rc))
-                print("self.mqtt_connected: " + str(self.mqtt_connected))
+                print("on_disconnect: self.mqtt_connected: " + str(self.mqtt_connected))
             #self.mqtt_connected = False
             if rc == 7:
                 self.set_status_on_thing("Error, please reboot") # Could be multiple instances of Voco active at the same time
         
             if rc == 16:
                 if self.DEBUG:
-                    print("rc is 16")
+                    print("on_disconnect: rc is 16")
                 
             
                 
@@ -7481,7 +7583,7 @@ class VocoAdapter(Adapter):
         
         
     # Subscribe to the important messages
-    def on_connect(self, client, userdata, flags, rc):
+    def on_connect(self, client, userdata, flags, rc): # rc = 'reason_code'
         if self.DEBUG:
             print("In on_connect (mqtt). rc: " + str(rc))
         self.mqtt_connected_succesfully_at_least_once = True
@@ -7547,7 +7649,7 @@ class VocoAdapter(Adapter):
                 
                 
                 self.mqtt_client.subscribe("hermes/voco/ping")
-                #self.mqtt_client.subscribe("hermes/voco/pong")
+                self.mqtt_client.subscribe("hermes/voco/pong")
                 
                 #if self.persistent_data['is_satellite'] == False:
                 self.mqtt_client.subscribe("hermes/voco/parse")
@@ -7580,6 +7682,7 @@ class VocoAdapter(Adapter):
             if self.DEBUG:
                 print("-Error: on_connect: MQTT connect return code was NOT 0. It was: " + str(rc))
             self.mqtt_connected = False
+            self.last_on_second_disconnect_time = int(time.time())
             
             # TODO: should this possibly initiate a search?
         
@@ -7630,7 +7733,51 @@ class VocoAdapter(Adapter):
         self.periodic_mqtt_attempts = 0
         self.mqtt_connected = True
             
-        
+        # Handle broadcast ping and pong messages
+        #if msg.topic.startswith("hermes/voco/ping"):
+            #self.update_network_info()
+        #    self.parse_ping(payload,ping_type="ping")
+            
+            # broadcast ping messages are now sent continously
+            # Send back a broadcast pong message
+            #self.send_mqtt_ping(broadcast=True, ping_type="pong")
+            
+                
+        #elif msg.topic.startswith("hermes/voco/pong"):
+        #    self.parse_ping(payload,ping_type="pong")
+
+        if msg.topic == 'hermes/voco/ping':
+
+            if 'siteId' in payload:
+                if payload['siteId'] == self.persistent_data['site_id']:
+                    if self.DEBUG:
+                        print("spotted the ping that I sent") # What we want is to receive a pong from the main controller
+                elif self.persistent_data['is_satellite'] == True and self.persistent_data['main_site_id'] != self.persistent_data['site_id'] and payload['siteId'] == self.persistent_data['main_site_id']:
+                    if self.DEBUG:
+                        print("spotted a ping sent by the main controller")
+                    self.voco_connected = True
+                    self.periodic_voco_attempts = 0
+                    self.parse_ping(payload,ping_type="ping")
+                else:
+                    if self.DEBUG:
+                        print("spotted ping from some other controller")
+
+
+        elif msg.topic == 'hermes/voco/pong':
+            if 'siteId' in payload:
+                if payload['siteId'] == self.persistent_data['site_id']:
+                    if self.DEBUG:
+                        print("spotted the pong that I sent") # What we want is to receive a pong from the main controller
+                elif self.persistent_data['is_satellite'] == True and self.persistent_data['main_site_id'] != self.persistent_data['site_id'] and payload['siteId'] == self.persistent_data['main_site_id']:
+                    if self.DEBUG:
+                        print("spotted a pong sent by the main controller")
+                    self.voco_connected = True
+                    self.periodic_voco_attempts = 0
+                    self.parse_ping(payload,ping_type="pong")
+                else:
+                    if self.DEBUG:
+                        print("spotted pong from some other controller")
+
 
         if msg.topic == 'hermes/voco/parse':
             if self.DEBUG:
@@ -7934,18 +8081,7 @@ class VocoAdapter(Adapter):
                 self.mqtt_client.publish("hermes/voco/time", int(round(time.time() * 1000)))    
         
         
-        # Handle broadcast ping and pong messages
-        if msg.topic.startswith("hermes/voco/ping"):
-            #self.update_network_info()
-            self.parse_ping(payload,ping_type="ping")
-            
-            # broadcast ping messages are now sent continously
-            # Send back a broadcast pong message
-            #self.send_mqtt_ping(broadcast=True, ping_type="pong")
-            
-                
-        #elif msg.topic.startswith("hermes/voco/pong"):
-        #    self.parse_ping(payload,ping_type="pong")
+        
                         
         elif msg.topic.startswith("hermes/voco/add_action"):
             if self.DEBUG:
@@ -8210,7 +8346,10 @@ class VocoAdapter(Adapter):
                     if self.DEBUG2:
                         print("- - -  sending connection check: " + str(ping_type) + " to: " + str(self.persistent_data['main_site_id']) + " at: " + str(self.persistent_data['mqtt_server']) )
                         print("\n    ---( . . . ping . . . )\n")
-                        
+                
+                if str(ping_type) == 'pong':
+                    self.last_pong_time = int(time.time())
+
                 self.mqtt_client.publish(mqtt_ping_path,json.dumps({
                             'ping_type':str(ping_type),
                             'ip':str(self.ip_address),
@@ -8287,7 +8426,7 @@ class VocoAdapter(Adapter):
                         print("_ 🏎 _ 🏎 ___\nupdate_fastest_controller: there is a faster controller: " + str(payload['siteId']) + ", with hardware_score: " + str(self.fastest_controller_score) + " --> " + str(payload['hardware_score']))
             
         if fastest_id == self.persistent_data['site_id']:
-            fastest_last_ping_time = time.time()
+            fastest_last_ping_time = int(time.time())
         
         self.fastest_controller_score = fastest_score
         self.fastest_controller_id = fastest_id
@@ -8321,10 +8460,16 @@ class VocoAdapter(Adapter):
                         print("parse_ping: a controller is shutting down: " + str(payload['siteId']))
                 
                     # pretend it was last seen in 1970
-                    #self.mqtt_others[payload['ip']]['last_seen'] = 0
-                    del self.mqtt_others[payload['ip']]
+                    self.mqtt_others[payload['ip']]['last_seen'] = 0
+                    self.mqtt_others[payload['ip']]['last_bye_timestamp'] = int(time.time())
+                    #del self.mqtt_others[payload['ip']]
 
                     self.update_fastest_controller()
+
+                    if self.persistent_data['is_satellite'] and self.persistent_data['main_site_id'] != self.persistent_data['site_id'] and str(payload['siteId']) == self.persistent_data['main_site_id']:
+                        if self.DEBUG:
+                            print("\nTHE MAIN CONTROLLER SAID GOODBYE\n")
+                        self.main_controller_goodbye_timestamp = int(time.time())
                 
                     return
                 else:
@@ -8341,18 +8486,25 @@ class VocoAdapter(Adapter):
         
                     #... but the main_site_id hasn't changed to the actual main_site_id yet (this is the first broadcast pong message to supply it), then set the main_site_id now.
             
-                    #if payload['ip'] != self.ip_address and payload['ip'] == self.persistent_data['mqtt_server'] and self.persistent_data['main_site_id'] == self.persistent_data['site_id']:
-                    if payload['ip'] != self.ip_address and payload['hostname'] == self.persistent_data['main_controller_hostname']: # and self.persistent_data['main_site_id'] == self.persistent_data['site_id']: # and self.persistent_data['main_site_id'] == self.persistent_data['site_id']:
-                        if self.DEBUG2:
+                    if payload['ip'] != self.ip_address and payload['ip'] == self.persistent_data['mqtt_server'] and self.persistent_data['main_site_id'] != self.persistent_data['site_id'] and str(payload['siteId']) == self.persistent_data['main_site_id']:
+                        if self.persistent_data['main_controller_ip'] != payload['ip']:
+                            self.persistent_data['main_controller_ip'] = payload['ip']
+                            self.save_to_persistent_data = True
+                            if self.DEBUG:
+                                print("parse_ping: satellite received a new IP address for the main controller. Saving it: ", payload['ip'])
+
+                    elif payload['ip'] != self.ip_address and payload['hostname'] == self.persistent_data['main_controller_hostname']: # and self.persistent_data['main_site_id'] == self.persistent_data['site_id']: # and self.persistent_data['main_site_id'] == self.persistent_data['site_id']:
+                        if self.DEBUG:
                             print("broadcast ping was from intented main MQTT server. This has supplied the intended main_site_id: " + str(payload['siteId']) )
                         self.persistent_data['main_controller_ip'] = payload['ip']
                     
                         if self.persistent_data['main_site_id'] != payload['siteId']:
+                            self.persistent_data['main_site_id'] = payload['siteId']
                             self.save_to_persistent_data = True
-                            if self.DEBUG2:
-                                print("parse_ping: received the new main_site_id. Saving it.")
+                            if self.DEBUG:
+                                print("parse_ping: satellite received the site_id of the main controller. Saving it: ", payload['siteId'])
                             
-                        self.persistent_data['main_site_id'] = payload['siteId']
+                        
         
         
                 #
@@ -8360,9 +8512,11 @@ class VocoAdapter(Adapter):
                 #
             
                 if payload['siteId'] == self.persistent_data['main_site_id'] and self.persistent_data['main_site_id'] != self.persistent_data['site_id']:
-                    if self.DEBUG2:
+                    if self.DEBUG:
                         print("parse_ping: good response from main controller")
-                
+
+                    self.main_controller_last_ping_time = int(time.time())
+
                     if self.periodic_voco_attempts > 4:
                         #self.set_status_on_thing("Reconnected to main controller")
                         #time.sleep(2)
@@ -8372,6 +8526,8 @@ class VocoAdapter(Adapter):
                         else:
                             self.set_status_on_thing("Not listening")
                     
+                    self.mqtt_connected == True
+                    self.should_restart_mqtt = False
                     self.periodic_voco_attempts = 0 # we got a good response, so set the (unsuccesful) attempts counter back to zero.  
                     self.voco_connected = True
                 
@@ -8392,6 +8548,8 @@ class VocoAdapter(Adapter):
         
                     # Main server was missing for a LONG while
                     if self.currently_scanning_for_missing_mqtt_server:
+                        if self.DEBUG:
+                            print("Received ping from missing controller while currently_scanning_for_missing_mqtt_server was true. Aborting scan.")
                         self.currently_scanning_for_missing_mqtt_server = False
                         self.persistent_data['mqtt_server'] = str(payload['ip'])
                         self.save_to_persistent_data = True
@@ -8402,7 +8560,7 @@ class VocoAdapter(Adapter):
                         else:
                             self.set_status_on_thing("Not listening")
             
-                        self.should_restart_mqtt = True
+                    
             
             
                 #
@@ -8498,7 +8656,7 @@ class VocoAdapter(Adapter):
                         print("query_intent: setting self.current_snips_session_id as session id")
                     session_id = self.current_snips_session_id
 
-                query_id = 'b3faa0ff-39e8-4a23-9a12-d918fafafafa' #8e0e
+                query_id = 'b3faa0ff-39e8-' + str(randomHex(4)) + '-' + str(randomHex(4)) + '-' + str(randomHex(4)) + 'fafafafa' #8e0e
             
                 query = {
                         "input": str(sentence),
@@ -12207,6 +12365,16 @@ class VocoAdapter(Adapter):
             if self.DEBUG:
                 print("------------------ in look_for_mqtt_server.  self.currently_scanning_for_missing_mqtt_server: " + str(self.currently_scanning_for_missing_mqtt_server))
             #if self.currently_scanning_for_missing_mqtt_server == False and self.persistent_data['is_satellite']: # and self.persistent_data['main_site_id'] != self.persistent_data['site_id']
+            
+            if self.mqtt_last_disconnect_timestamp == 0:
+                self.mqtt_last_disconnect_timestamp = int(time.time())
+                return
+
+            if self.mqtt_last_disconnect_timestamp > int(time.time()) - 300:
+                if self.DEBUG:
+                    print("look_for_mqtt_server: mqtt_last_disconnect_timestamp was less than 5 minutes ago.. aborting search for MQTT server, since the odds are that the other controller is just rebooting and reconnection will occur naturally soon")
+
+            
             if self.persistent_data['is_satellite']:
                 if self.DEBUG:
                     print("------------------ This satellite wasn't already searching for missing main MQTT server, so the search process is starting now.")
@@ -13629,6 +13797,9 @@ class VocoAdapter(Adapter):
                     except Exception as ex:
                         if self.DEBUG:
                             print("stop_ai_assistant: second follow-up attempt to less nicely stop existing assistant process also failed, with error: " + str(ex))
+            else:
+                if self.DEBUG:
+                    print("stop_ai_assistant: process already stopped?")
 
             if self.llm_assistant_process != None and self.llm_assistant_process.poll() == None:
                 if self.DEBUG:
@@ -13659,8 +13830,11 @@ class VocoAdapter(Adapter):
 
             self.bitnet_ready = False
 
+            time.sleep(1)
+
         except Exception as ex:
-            print("caught error in stop_ai_assistant: ", ex)
+            if self.DEBUG:
+                print("caught error in stop_ai_assistant: ", ex)
         
         
 
@@ -13708,13 +13882,16 @@ class VocoAdapter(Adapter):
 
                         self.bitnet_may_run = True
 
+                        model_path = os.path.join(self.llm_assistant_data_dir_path,self.persistent_data['llm_assistant_model'])
+
                         assistant_command = [
                             str(self.llm_assistant_bitnet_binary_path),
-                            '-m', str(self.llm_models['assistant']['active']),
+                            #'-m', str(self.llm_models['assistant']['active']),
+                            '-m', str(model_path),
                             '-n', '128',
                             '-t', str(self.llm_assistant_threads),
                             #'-p', str(assistant_prompt),
-                            '-p', 'You are a helpful assistant that answers in at most two sentences. If the user query starts with the word "show", then you may give long answers. Otherwise keep it brief.', #
+                            '-p', '"You are a helpful assistant."', #
                             '-ngl', '0',
                             '-c', '2048',
                             '--temp', '0.8',
@@ -13723,13 +13900,31 @@ class VocoAdapter(Adapter):
                             #'>>'',
                             #str(self.llm_assistant_output_file_path)
                         ]
+                        assistant_shell_command = "LD_LIBRARY_PATH=" + str(self.llm_assistant_addon_dir_path ) + " " + ' '.join(assistant_command)
                         if self.DEBUG:
                             print("\n--- - - +\nbitnet assistant_command: ", assistant_command)
                             print("a.k.a.")
-                            print(' '.join(assistant_command))
+                            print(assistant_shell_command)
                             print("")
 
-                        self.llm_assistant_process = subprocess.Popen(assistant_command, stderr=subprocess.PIPE, shell=False, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+                        bitnet_environment = os.environ.copy()
+                        #environment["LD_LIBRARY_PATH"] = '{}:{}'.format(self.snips_path,self.arm_libs_path)
+                        bitnet_environment["LD_LIBRARY_PATH"] = str(self.llm_assistant_addon_dir_path )
+                        
+                        #assistant_command.insert(0, 'exec')
+
+                        #ld_path_prefix = "LD_LIBRARY_PATH=" + str(self.llm_assistant_addon_dir_path )
+                        #assistant_command.insert(0, ld_path_prefix)
+                        
+                        #assistant_command = ' '.join(assistant_command)
+                        #if self.DEBUG:
+                        #    print("\n\nBITNET ASSISTANT COMMAND:\n")
+                        #    print(assistant_command)
+                        #    print("\n")
+                        #self.llm_assistant_process = subprocess.Popen(assistant_command, stderr=subprocess.PIPE, shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE, cwd=self.data_dir_path, env=bitnet_environment)
+                        self.llm_assistant_process = subprocess.Popen(assistant_shell_command, stderr=subprocess.PIPE, shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE, cwd=self.data_dir_path, env=bitnet_environment)
+                        
+                        
 
                         def read_stdout():
                             while self.running and self.bitnet_may_run: #self.llm_assistant_process:

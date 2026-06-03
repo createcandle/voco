@@ -40,6 +40,11 @@ body:not(.developer) .extension-voco-show-if-developer {
     display: none !important;
 }
 
+.extension-voco-flex-between{
+    display:flex;
+    justify-content:space-between;
+}
+
 
 .extension-voco-vlak {
     padding: 2rem;
@@ -67,7 +72,7 @@ body.developer .extension-voco-timer-item-cosmetic:after {
 
 
 body.developer .extension-voco-timer-item-owner:not(:empty):before{
-	content: "Managed by other controller: ";
+	content: "Managed by: ";
 }
 
 /*  TABS  */
@@ -997,6 +1002,14 @@ body #extension-voco-view .extension-voco-tab-selected {
 
 .extension-voco-injection-learning-checkbox{
 	font-size:2rem;
+}
+
+#extension-voco-starting-info{
+    background-color:#555;
+    max-width:40rem;
+}
+#extension-voco-starting-info > div{
+    margin:1rem 0;
 }
 
 

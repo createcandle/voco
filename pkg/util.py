@@ -1083,7 +1083,6 @@ def randomWord(length=8):
 def generate_matrix_device_id(length=10):
     consonants = "ABCDEFGHIJKLMNIOPQRSTUVWXYZ"
     return "".join(random.choice(consonants) for i in range(length))
-
     
 def randomPassword(length=12):
     symbols = "!@#$%ˆ&*()" # string.punctuation
@@ -1094,6 +1093,10 @@ def randomPassword(length=12):
     characters = symbols + lower + upper + numbers
     characters_array = random.sample(characters,length)
     return "".join(characters_array)
+
+def randomHex(random_chars=12, alphabet="0123456789abcdef"):
+    r = random.SystemRandom()
+    return ''.join([r.choice(alphabet) for i in range(random_chars)])
 
     
     

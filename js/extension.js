@@ -62,6 +62,8 @@
 			this.should_reset_previous_chat_response = false;
 			
 			this.ai_tab_shown = false;
+
+			this.starting_info = {};
 			
 			this.text_chat_hints = [
 			    'What time is it?',
@@ -1076,6 +1078,7 @@
 			
 			if(voco_content_container_el){
 				if('is_satellite' in body){
+					this.starting_info['Is satellite'] = body['is_satellite'];
 					if(body['is_satellite']){
 						//console.log("is satellite, so should start with satellite tab");
 					
@@ -1170,10 +1173,7 @@
 						account_item_el.textContent = body.signal_accounts[ac];
 						account_list_el.appendChild(account_item_el);
 					}
-
 				}
-
-
 			}
 			
 			if(typeof body.signal_linked == 'boolean'){
@@ -1186,11 +1186,13 @@
 				else{
 					this.view.classList.remove('extension-voco-signal-linked');
 				}
+				this.starting_info['Signal linked'] = body.signal_linked;
 			}
 			
 			
 			if(typeof body['site_id'] == 'string'){
 				this.site_id = body['site_id'];
+				this.starting_info['My site ID'] = body['site_id'];
 				
 				const site_id_el = this.view.querySelector('#extension-voco-site-id');
 				if(site_id_el){
@@ -1212,13 +1214,15 @@
 			
 			if(typeof body['main_site_id'] == 'string'){
 				this.main_site_id = body['main_site_id'];
+				this.starting_info['Main site ID'] = body['main_site_id'];
 				if(this.debug){
 					console.log("voco debug: main site_id is: ", this.main_site_id);
 				}
 			}
 
 			if(typeof body['llm_assistant_started'] == 'boolean'){
-				this.llm_assistant_started = body['llm_assistant_started']
+				this.llm_assistant_started = body['llm_assistant_started'];
+				this.starting_info['Assistant started'] = body['llm_assistant_started'];
 				if(body['llm_assistant_started'] && this.assistant_text_chat_hints_added == false ){
 					this.assistant_text_chat_hints_added = true;
 					this.text_chat_hints = this.text_chat_hints.concat(this.assistant_text_chat_hints);
@@ -1227,11 +1231,41 @@
 					}
 				}
 			}
-			
+
+			if(typeof body['main_controller_last_ping_seconds_ago'] == 'number'){
+				this.starting_info['Main controller last ping seconds ago'] = body['main_controller_last_ping_seconds_ago'];
+			}
+
+			this.render_starting_info();
+
 		}
 		
 
+		render_starting_info(){
+			if(location.pathname == '/extensions/voco'){
+				if(this.debug){
+					console.log("voco debug: in render_starting_info");
+				}
 
+				const starting_info_el = this.view.querySelector('#extension-voco-starting-info');
+				if(starting_info_el){
+					if(this.debug){
+						console.log("voco debug:  starting_info: \n", JSON.stringify(this.starting_info,null,2),"\n");
+					}
+					starting_info_el.innerHTML = '';
+					
+					for (const [key,value] of Object.entries(this.starting_info)) {
+						const starting_item_el = document.createElement('div');
+						starting_item_el.classList.add('extension-voco-flex-between');
+						starting_item_el.innerHTML = '<span>' + key + '</span><span>' + value + '</span>';
+						if(value == true){
+							starting_item_el.classList.add('extension-voco-starting-checklist-item-done');
+						}
+						starting_info_el.appendChild(starting_item_el);
+					}
+				}
+			}
+		}
 
 
 
@@ -1445,7 +1479,7 @@
 		
 		
 		parse_poll_response(body){
-			if(this.debug){
+			if(this.debug && location.pathname == '/extensions/voco'){
 				console.log("voco debug: in parse_poll_response.  body: ", body);
 			}
 
@@ -1482,6 +1516,77 @@
 				this.display_info_overlay();
 			}
 
+			if(typeof body['is_satellite'] == 'boolean'){
+				this.starting_info['Is satellite'] = body['is_satellite'];
+			}
+			if(typeof body['busy_starting_snips'] == 'boolean'){
+				this.starting_info['Busy starting Snips'] = body['busy_starting_snips'];
+			}
+			
+			if(typeof body['injection_in_progress'] == 'boolean'){
+				this.starting_info['Learning names in progress'] = body['injection_in_progress'];
+			}
+			if(typeof body['initial_injection_completed'] == 'boolean'){
+				this.starting_info['Initial Learning names phase completed'] = body['initial_injection_completed'];
+			}
+			if(typeof body['own_ip_address'] == 'string'){
+				this.starting_info['Own IP'] = body['own_ip_address'];
+			}
+			if(typeof body['mqtt_server'] == 'string'){
+				this.starting_info['MQTT server IP'] = body['mqtt_server'];
+			}
+			if(typeof body['mqtt_connected_to_ip'] == 'string'){
+				this.starting_info['MQTT is connected to IP'] = body['mqtt_connected_to_ip'];
+			}
+			if(typeof body['mqtt_connected'] == 'boolean'){
+				this.starting_info['MQTT connected'] = body['mqtt_connected'];
+			}
+			if(typeof body['mqtt_connected_succesfully_at_least_once'] == 'boolean'){
+				this.starting_info['MQTT connected succesfully at least once'] = body['mqtt_connected_succesfully_at_least_once'];
+			}
+			if(typeof body['currently_scanning_for_missing_mqtt_server'] == 'boolean'){
+				this.starting_info['Currently scanning for missing MQTT server'] = body['currently_scanning_for_missing_mqtt_server'];
+			}
+			if(typeof body['main_controller_hostname'] == 'string'){
+				this.starting_info['Main controller hostname'] = body['main_controller_hostname'];
+			}
+			
+			if(typeof body['main_controller_ip'] == 'string'){
+				this.starting_info['Main controller IP'] = body['main_controller_ip'];
+			}
+			
+			if(typeof body['internal_ip'] == 'string'){
+				this.starting_info['Internal IP'] = body['internal_ip'];
+			}
+			if(typeof body['main_controller_last_ping_seconds_ago'] == 'number'){
+				this.starting_info['Main controller last ping seconds ago'] = body['main_controller_last_ping_seconds_ago'];
+			}
+			if(typeof body['main_controller_goodbye_seconds_ago'] == 'number'){
+				this.starting_info['Main controller said goodbye seconds ago'] = body['main_controller_goodbye_seconds_ago'];
+			}
+			if(typeof body['last_pong_time_seconds_ago'] == 'number'){
+				this.starting_info['Last pong response sent seconds ago'] = body['last_pong_time_seconds_ago'];
+			}
+			if(typeof body['voco_connected'] == 'boolean'){
+				this.starting_info['Voco connected'] = body['voco_connected'];
+			}
+			if(typeof body['periodic_mqtt_attempts'] == 'number'){
+				this.starting_info['Periodic MQTT attempts'] = body['periodic_mqtt_attempts'];
+			}
+			if(typeof body['periodic_voco_attempts'] == 'number'){
+				this.starting_info['Periodic voco attempts'] = body['periodic_voco_attempts'];
+			}
+			if(typeof body['fastest_controller_id'] == 'string'){
+				this.starting_info['Fastest controller ID'] = body['fastest_controller_id'];
+			}
+			if(typeof body['fastest_controller_last_ping_seconds_ago'] == 'number'){
+				this.starting_info['Fastest controller last ping seconds ago'] = body['fastest_controller_last_ping_seconds_ago'];
+			}
+			
+			
+			
+			
+
 			//console.log(body['items']);
 			if(body['state'] == true){
 				this.items_list = body['items'];
@@ -1516,21 +1621,31 @@
 						this.view.querySelector('#extension-voco-text-commands-container').style.display = 'block';
 					}
 				}
+				
+				
+				
+				
 
-				if(body['missing_microphone']){
-					this.view.querySelector('#extension-voco-missing-microphone').style.display = 'block';
-				}
-				else{
-					this.view.querySelector('#extension-voco-missing-microphone').style.display = 'none';
+				if(typeof body['periodic_voco_attempts'] == 'number' && location.pathname == '/extensions/voco'){
+					this.starting_info['Periodic voco attempts'] = body['periodic_voco_attempts'];
+					const controller_not_responding_el = this.view.querySelector('#extension-voco-main-controller-not-responding');
+					if(controller_not_responding_el){
+						if(body['periodic_voco_attempts'] > 3){
+							controller_not_responding_el.style.display = 'block';
+							if(typeof body['main_controller_last_ping_seconds_ago'] == 'number'){
+								this.view.querySelector('#extension-voco-main-controller-last-ping-seconds-ago').textContent = body['main_controller_last_ping_seconds_ago'] + " seconds ago";
+							}
+							else{
+								this.view.querySelector('#extension-voco-main-controller-last-ping-seconds-ago').textContent = "? seconds ago";
+							}
+						}
+						else{
+							this.view.querySelector('#extension-voco-main-controller-not-responding').style.display = 'none';
+						}
+					}
 				}
 
-
-				if(body['periodic_voco_attempts'] > 3){
-					this.view.querySelector('#extension-voco-main-controller-not-responding').style.display = 'block';
-				}
-				else{
-					this.view.querySelector('#extension-voco-main-controller-not-responding').style.display = 'none';
-				}
+				
 
 
 				const text_commands_container_el = this.view.querySelector('#extension-voco-text-commands-container')
@@ -1848,6 +1963,40 @@
 				}
 			
 			}
+
+			if(typeof body['missing_microphone'] == 'boolean'){
+				this.starting_info['Missing microphone'] = body['missing_microphone'];
+				if(body['missing_microphone']){
+					this.view.querySelector('#extension-voco-missing-microphone').style.display = 'block';
+				}
+				else{
+					this.view.querySelector('#extension-voco-missing-microphone').style.display = 'none';
+				}
+			}
+
+			if(typeof body.signal_linked == 'boolean'){
+				if(this.debug){
+                    console.log("voco debug: signal_linked: ", body.signal_linked);
+                }
+				if(body.signal_linked){
+					this.view.classList.add('extension-voco-signal-linked');
+				}
+				else{
+					this.view.classList.remove('extension-voco-signal-linked');
+				}
+				this.starting_info['Signal linked'] = body.signal_linked;
+			}
+
+			/*
+			if(typeof body['injection_level'] == 'number'){
+				this.starting_info['Injection level'] = body['injection_level'];
+			}
+			if(typeof body['main_controller_last_ping_seconds_ago'] == 'number'){
+				this.starting_info['Main controller last ping seconds ago'] = body['main_controller_last_ping_seconds_ago'];
+			}
+			*/
+
+			this.render_starting_info();
 			
 		}
 		
