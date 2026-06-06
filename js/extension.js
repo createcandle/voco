@@ -1547,6 +1547,9 @@
 			if(typeof body['mqtt_connected_to_ip'] == 'string'){
 				this.starting_info['MQTT is connected to IP'] = body['mqtt_connected_to_ip'];
 			}
+			if(typeof body['mqtt_busy_connecting'] == 'boolean'){
+				this.starting_info['MQTT busy connecting'] = body['mqtt_busy_connecting'];
+			}
 			if(typeof body['mqtt_connected'] == 'boolean'){
 				this.starting_info['MQTT connected'] = body['mqtt_connected'];
 			}
@@ -1555,6 +1558,9 @@
 			}
 			if(typeof body['currently_scanning_for_missing_mqtt_server'] == 'boolean'){
 				this.starting_info['Currently scanning for missing MQTT server'] = body['currently_scanning_for_missing_mqtt_server'];
+			}
+			if(typeof body['last_mqtt_disconnect_seconds_ago'] == 'number'){
+				this.starting_info['Last MQTT disconnect seconds ago'] = body['last_mqtt_disconnect_seconds_ago'];
 			}
 			if(typeof body['main_controller_hostname'] == 'string'){
 				this.starting_info['Main controller hostname'] = body['main_controller_hostname'];

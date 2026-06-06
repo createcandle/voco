@@ -915,9 +915,9 @@ def avahi_detect_gateways(list_only=False):
         
         #print(".hex(): " + str(avahi_result.hex() ))
         
-        encoding = chardet.detect(avahi_result)
+        #encoding = chardet.detect(avahi_result)
         #print("chardet: encoding: " + str(encoding))
-        output = avahi_result.decode(str(encoding['encoding']),"ignore")
+        #output = avahi_result.decode(str(encoding['encoding']),"ignore")
         #result = result.stdout.decode('utf-16', 'ignore')
         #result = run_command("avahi-browse --all --resolve --no-db-lookup --parsable --no-fail -t")
         
@@ -933,42 +933,45 @@ def avahi_detect_gateways(list_only=False):
             #print("chardet: encoding: " + str(encoding))
             #result = result.stdout.decode(encoding,"ignore") #.decode(None, 'ignore')
             #result = output.decode(encoding,"ignore")
-            result = avahi_result.decode(encoding['encoding'],"ignore")
-            
-            #print("avahi-browse result: " + str(result))
-            for line in result.splitlines():
-                if "IPv4;CandleMQTT-" in line:
-                    #print("avahi_detect_gateways: line: " + str(line))
-                    # get name
-                    try:
-                        before = 'IPv4;CandleMQTT-'
-                        after = ';_mqtt._tcp;'
-                        name = line[line.find(before)+16 : line.find(after)]
-                    except Exception as ex:
-                        #print("avahi_detect_gateways: invalid name: " + str(ex))
-                        continue
-                    
-                    # get IP
-                    #pattern = re.compile(r'(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})')
-                    #ip = pattern.search(line)[0]
-                    #lst.append(pattern.search(line)[0])
 
-                    try:
-                        ip_address_list = re.findall(r'(?:\d{1,3}\.)+(?:\d{1,3})', str(line))
-                        #print("avahi_detect_gateways: ip_address_list = " + str(ip_address_list))
-                        if len(ip_address_list) > 0:
-                            ip_address = str(ip_address_list[0])
-                            if not valid_ip(ip_address):
-                                continue
-                    
-                            if ip_address not in gateway_list:
-                                gateway_list.append(ip_address)
-                                satellite_targets[ip_address] = name
+            encoding = chardet.detect(avahi_result)
+            if encoding and 'encoding' in encoding:
+                result = avahi_result.decode(encoding['encoding'],"ignore")
+
+                #print("avahi-browse result: " + str(result))
+                for line in str(result).splitlines():
+                    if "IPv4;CandleMQTT-" in line:
+                        #print("avahi_detect_gateways: line: " + str(line))
+                        # get name
+                        try:
+                            before = 'IPv4;CandleMQTT-'
+                            after = ';_mqtt._tcp;'
+                            name = line[line.find(before)+16 : line.find(after)]
+                        except Exception as ex:
+                            #print("avahi_detect_gateways: invalid name: " + str(ex))
+                            continue
                         
-                    except Exception as ex:
-                        pass
-                        #print("avahi_detect_gateways: no IP address in line: " + str(ex))
-                    
+                        # get IP
+                        #pattern = re.compile(r'(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})')
+                        #ip = pattern.search(line)[0]
+                        #lst.append(pattern.search(line)[0])
+
+                        try:
+                            ip_address_list = re.findall(r'(?:\d{1,3}\.)+(?:\d{1,3})', str(line))
+                            #print("avahi_detect_gateways: ip_address_list = " + str(ip_address_list))
+                            if len(ip_address_list) > 0:
+                                ip_address = str(ip_address_list[0])
+                                if not valid_ip(ip_address):
+                                    continue
+                        
+                                if ip_address not in gateway_list:
+                                    gateway_list.append(ip_address)
+                                    satellite_targets[ip_address] = name
+                            
+                        except Exception as ex:
+                            pass
+                            #print("avahi_detect_gateways: no IP address in line: " + str(ex))
+                        
                
                 
     except Exception as ex:

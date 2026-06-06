@@ -834,6 +834,10 @@ class VocoAPIHandler(APIHandler):
                                 if self.adapter.last_injection_request_time != 0:
                                     last_injection_request_seconds_ago = int(time.time()) - self.adapter.last_injection_request_time
 
+                                last_mqtt_disconnect_seconds_ago = 0
+                                if self.adapter.mqtt_last_disconnect_timestamp != 0:
+                                    last_mqtt_disconnect_seconds_ago = int(time.time()) - self.adapter.mqtt_last_disconnect_timestamp
+                                
                                 
 
                                 return APIResponse(
@@ -852,6 +856,8 @@ class VocoAPIHandler(APIHandler):
                                                         'main_controller_ip':self.adapter.persistent_data['main_controller_ip'],
                                                         'main_controller_goodbye_seconds_ago':main_controller_goodbye_seconds_ago,
                                                         'mqtt_connected_to_ip':self.adapter.mqtt_connected_to_ip,
+                                                        'mqtt_busy_connecting':self.adapter.mqtt_busy_connecting,
+                                                        'last_mqtt_disconnect_seconds_ago':last_mqtt_disconnect_seconds_ago,
                                                         'internal_ip':self.adapter.internal_ip,
                                                         'last_pong_time_seconds_ago':last_pong_time_seconds_ago,
                                                         'voco_connected':self.adapter.voco_connected,
