@@ -5786,7 +5786,7 @@ class VocoAdapter(Adapter):
                             self.close_proxy()
                         elif last_controller_ping_seconds_ago > 120 and last_controller_ping_seconds_ago % 20 == 0:
                             if self.DEBUG:
-                                print("No contact with main controller for 2 minutes, attempting MQTT reconnenct")
+                                print("No contact with main controller for 2 minutes, attempting MQTT reconnect")
                             #self.should_restart_mqtt = True
                             self.mqtt_busy_connecting = False
                             self.run_mqtt()
