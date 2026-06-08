@@ -1637,9 +1637,6 @@
 				}
 				
 				
-				
-				
-
 				if(typeof body['periodic_voco_attempts'] == 'number' && location.pathname == '/extensions/voco'){
 					this.starting_info['Periodic voco attempts'] = body['periodic_voco_attempts'];
 					const controller_not_responding_el = this.view.querySelector('#extension-voco-main-controller-not-responding');

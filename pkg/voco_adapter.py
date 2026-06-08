@@ -974,6 +974,11 @@ class VocoAdapter(Adapter):
         self.previous_intent_callback_time = 0 # avoid "echo" problem where the main controller and a satellite both hear a command (sometimes slightly differently), which causes a command to be run twice in a row.
         self.main_controller_goodbye_timestamp = 0
 
+        self.attempted_exit = False
+        self.attempted_close_proxy = False
+        self.last_network_manager_restart_attempt_time = 0
+        self.last_scan_for_missing_controller_time = 0
+
         # MQTT client
         self.mqtt_client = None
         self.mqtt_port = 1885
@@ -3645,7 +3650,9 @@ class VocoAdapter(Adapter):
             if self.persistent_data['site_id'] == str(site_id):
                 if self.DEBUG:
                     print("- really_speak: debug: this is my own site_id")
-                if 'customData' in intent and 'parsed_by' in intent['customData'] and \
+                if 'customData' in intent and \
+                  intent['customData'] != None and \
+                  'parsed_by' in intent['customData'] and \
                   self.persistent_data['is_satellite'] == True and \
                   self.persistent_data['main_site_id'] != self.persistent_data['site_id'] and \
                   str(intent['customData']['parsed_by']) == self.persistent_data['main_site_id']:
@@ -5774,23 +5781,52 @@ class VocoAdapter(Adapter):
                     
 
                     last_controller_ping_seconds_ago = int(time.time()) - int(self.main_controller_last_ping_time)
+                    if self.DEBUG:
+                        print(" - is_satellite                                    :  ", self.persistent_data['is_satellite'])
+                        print(" - self.mqtt_connected                             :  ", self.mqtt_connected)
+                        print(" - self.should_restart_mqtt                        : ", self.should_restart_mqtt)
+                        print(" - self.mqtt_connected_succesfully_at_least_once   :  ", self.mqtt_connected_succesfully_at_least_once)
+                        print(" - self.currently_scanning_for_missing_mqtt_server : ", self.currently_scanning_for_missing_mqtt_server)
+                        print(" - last_controller_ping_seconds_ago                : ", last_controller_ping_seconds_ago)
+
                     if self.mqtt_connected == False and \
                       self.persistent_data['is_satellite'] == True and \
-                      self.should_restart_mqtt == False and \
-                      self.mqtt_connected_succesfully_at_least_once == True and \
-                      self.currently_scanning_for_missing_mqtt_server == False:
+                      self.mqtt_connected_succesfully_at_least_once == True:
+                      # and \
+                      #self.currently_scanning_for_missing_mqtt_server == False:
+                      #self.should_restart_mqtt == False and \
 
-                        if last_controller_ping_seconds_ago > 1200: # no contact for 20 minutes.. reboot the addon? 
+                        
+
+                        
+
+                        if last_controller_ping_seconds_ago > 500 and self.last_network_manager_restart_attempt_time < time.time() - 700:
+                            self.last_network_manager_restart_attempt_time = int(time.time())
+                            run_command('echo "candle: Voco: restarting NetworkManager to hopefully fix network issues" | sudo tee -a /dev/kmsg')
+                            run_command('sudo systemctl restart NetworkManager')
+
+                        elif last_controller_ping_seconds_ago > 600 and self.last_scan_for_missing_controller_time < time.time() - 600:
+                            self.last_scan_for_missing_controller_time = int(time.time())
+                            self.look_for_mqtt_server()
+
+                        elif last_controller_ping_seconds_ago > 1300 and self.attempted_close_proxy == False: # no contact for 20 minutes.. reboot the addon? 
                             # TODO: maybe ping the IP address of the main controller?
                             if self.DEBUG:
                                 print("No contact with main controller for 20 minutes.. attempting addon restart")
                             self.close_proxy()
+
+                        elif last_controller_ping_seconds_ago > 1400 and self.attempted_exit == False: # no contact for 20 minutes.. reboot the addon? 
+                            # TODO: maybe ping the IP address of the main controller?
+                            if self.DEBUG:
+                                print("No contact with main controller for 21 minutes.. self.close_proxy seems to have failed.. attempting exit()")
+                            exit()
+
                         elif last_controller_ping_seconds_ago > 120 and last_controller_ping_seconds_ago % 20 == 0:
                             if self.DEBUG:
-                                print("No contact with main controller for 2 minutes, attempting MQTT reconnect")
-                            #self.should_restart_mqtt = True
-                            self.mqtt_busy_connecting = False
-                            self.run_mqtt()
+                                print("No contact with main controller for more than 2 minute and last_controller_ping_seconds_ago module 20 is 0  ->  setting self.should_restart_mqtt to True")
+                            self.should_restart_mqtt = True
+                            #self.mqtt_busy_connecting = False
+                            #self.run_mqtt()
                
 
                     
@@ -7698,14 +7734,6 @@ class VocoAdapter(Adapter):
         self.mqtt_busy_connecting = False
         self.should_restart_mqtt = False
 
-        if rc.is_failure:
-            if self.DEBUG:
-                print(f"mqtt client failed to connect: {rc}")
-            self.mqtt_connected = False
-        else:
-            if self.DEBUG:
-                print("MQTT client connected succesfully")
-            self.mqtt_connected = True
 
         if rc == 0:
             if self.DEBUG:
@@ -7715,12 +7743,12 @@ class VocoAdapter(Adapter):
                 if self.DEBUG:
                     print("-Connection to MQTT (re)established at self.persistent_data['mqtt_server']: " + str(self.persistent_data['mqtt_server']))
             
-            self.mqtt_connected = True
+            #self.mqtt_connected = True
             
-            if self.currently_scanning_for_missing_mqtt_server:
-                if self.DEBUG:
-                    print("mqtt_client: on_connect: currently_scanning_for_missing_mqtt_server was True, setting to false")
-            self.currently_scanning_for_missing_mqtt_server = False
+            #if self.currently_scanning_for_missing_mqtt_server:
+            #    if self.DEBUG:
+            #        print("mqtt_client: on_connect: currently_scanning_for_missing_mqtt_server was True, setting to false")
+            #self.currently_scanning_for_missing_mqtt_server = False
             
             ###self.run_snips()
                 
