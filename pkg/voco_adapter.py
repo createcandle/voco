@@ -5160,13 +5160,22 @@ class VocoAdapter(Adapter):
                             print("   self.recent_second_mqtt_error_count: ", self.recent_second_mqtt_error_count)
                             print("   self.injection_level: ", self.injection_level)
                             pass
+                        
+                        if self.mqtt_client != None:
+                            self.mqtt_connected = self.mqtt_client.is_connected()
+                            if self.DEBUG:
+                                print("   self.mqtt_client.is_connected: ", self.mqtt_connected)
+                                print("CLOCK: Calling run_mqtt")
+                            self.run_mqtt()
+
+                            self.send_mqtt_ping(broadcast=True) # broadcast ping
                     
                         if self.recent_first_mqtt_error_count > 2:
                             if self.DEBUG:
-                                print("Many MQTT errors on the FIRST client in the last 15 seconds: ", self.recent_first_mqtt_error_count)
+                                print("Many MQTT error count on the FIRST client in the last 15 seconds: ", self.recent_first_mqtt_error_count)
                         if self.recent_second_mqtt_error_count > 2:
                             if self.DEBUG:
-                                print("Many MQTT errors on the SECOND client in the last 15 seconds: ", self.recent_second_mqtt_error_count)
+                                print("Many MQTT error count on the SECOND client in the last 15 seconds: ", self.recent_second_mqtt_error_count)
                     
                         self.recent_first_mqtt_error_count = 0
                         self.recent_second_mqtt_error_count = 0
@@ -5184,21 +5193,7 @@ class VocoAdapter(Adapter):
                             #self.periodic_voco_attempts += 1
                     
                         try:
-                            #print("self.mqtt_client: " + str(self.mqtt_client))
-                            if self.mqtt_client != None:
-                                if self.DEBUG:
-                                    #print("MQTT client object exists. mqtt_connected_succesfully_at_least_once: " + str(self.mqtt_connected_succesfully_at_least_once))
-                                    pass
                             
-                                # The main broadcast ping that informs other controllers of this controller's existence and information
-                                if self.DEBUG:
-                                    print("clock: sending broadcast ping")
-                                self.send_mqtt_ping(broadcast=True) # broadcast ping
-                                
-                            else:
-                                if self.DEBUG:
-                                    print("clock: MQTT client object doesn't exist yet.")
-                        
                         
 
                             if self.still_busy_booting == True and time.time() - self.addon_start_time > 120:
@@ -5211,19 +5206,20 @@ class VocoAdapter(Adapter):
                                     self.possible_injection_failure = True
 
 
-                            if self.should_restart_mqtt:
-                                ###self.should_restart_mqtt = False
-                                if self.DEBUG:
-                                    print("clock: Periodic check: self.should_restart_mqtt was true - calling run_mqtt()")
-                                self.run_mqtt() # try connecting again. If Mosquitto is up, then it will create the MQTT client and try to connect.
+                            #if self.should_restart_mqtt:
+                            #    ###self.should_restart_mqtt = False
+                            #    if self.DEBUG:
+                            #        print("clock: Periodic check: self.should_restart_mqtt was true - calling run_mqtt()")
+                            #    self.run_mqtt() # try connecting again. If Mosquitto is up, then it will create the MQTT client and try to connect.
                                 
                             
-                            elif self.mqtt_client != None:
+                            if self.mqtt_client != None:
                                 # The MQTT client exists, so Mosquitto was available at least once.
                                 
                                 
                                 
                                 # TODO: this doesn't work on satellites. Maybe it now should?
+                                # TODO: also check for self.mqtt_connected_succesfully_at_least_once ?
                                 # 36000 = 1 hour
                                 if time.time() - self.addon_start_time > 36000 and self.initial_injection_completed == False and self.persistent_data['is_satellite'] == False:
                                     if self.DEBUG:
@@ -5231,6 +5227,7 @@ class VocoAdapter(Adapter):
                                     self.close_proxy()
                                     #sys.exit()
                                 
+
                                 if self.still_busy_booting == False:
                                 
                                     #if time.time() - self.last_time_snips_started < 15:
@@ -6040,8 +6037,8 @@ class VocoAdapter(Adapter):
             print("unload: beyond stop_snips")
         
         if self.mqtt_client != None:
-            self.mqtt_client.disconnect() # disconnect
             self.mqtt_client.loop_stop()
+            self.mqtt_client.disconnect() # disconnect
             time.sleep(1)
         
         if self.DEBUG:
@@ -7377,10 +7374,12 @@ class VocoAdapter(Adapter):
             print("mqtt_server: " + str(self.persistent_data['mqtt_server']))
             print("is_satellite: " + str(self.persistent_data['is_satellite']))
         
-        if self.mqtt_connected == True:
-            if self.DEBUG:
-                print("WEIRD: in run_mqtt but self.mqtt_connected was already true")
-            #return # TODO: experimental addition in april 2022
+        
+
+        #if self.mqtt_connected == True:
+        #    if self.DEBUG:
+        #        print("WEIRD: in run_mqtt but self.mqtt_connected was already true")
+        #    #return # TODO: experimental addition in april 2022
         
         
 
@@ -7403,11 +7402,12 @@ class VocoAdapter(Adapter):
                 print("Error, run_mqtt was already called less than 10 seconds ago. Aborting.")
             return
 
-        if self.mqtt_busy_connecting == True:
-            if self.DEBUG:
-                print("run_mqtt: self.mqtt_busy_connecting was already True, aborting")
-            return
+        #if self.mqtt_busy_connecting == True:
+        #    if self.DEBUG:
+        #        print("run_mqtt: self.mqtt_busy_connecting was already True, aborting")
+        #    return
 
+        self.last_run_mqtt_time = int(time.time())
         
 
         try:
@@ -7428,38 +7428,54 @@ class VocoAdapter(Adapter):
                         #if self.mqtt_connected:
                         if self.DEBUG:
                             print("run_mqtt: disconnecting mqtt first")
-                        self.mqtt_client.disconnect() # disconnect
                         self.mqtt_client.loop_stop()
+                        self.mqtt_client.disconnect() # disconnect
                         time.sleep(1)
-                        self.mqtt_client = None
+                        #self.mqtt_client = None
                     except Exception as ex:
                         if self.DEBUG:
-                            print("run_mqtt: caught error closing existing MQTT client: " + str(ex))
+                            print("run_mqtt: restart: caught error closing existing MQTT client: " + str(ex))
                
-                else:
+                elif self.persistent_data['is_satellite'] and self.mqtt_connected_to_ip != str(self.persistent_data['mqtt_server']):
                     if self.DEBUG:
-                        print("run_mqtt was called, but the client already existed...")
+                        print("run_mqtt: satellite is connected to the wrong MQTT server IP. Disconnecting.  self.mqtt_connected_to_ip,str(self.persistent_data['mqtt_server']: ", self.mqtt_connected_to_ip, str(self.persistent_data['mqtt_server']))
+                    self.mqtt_client.loop_stop()
+                    self.mqtt_client.disconnect() # disconnect
+                    time.sleep(1)
+                    
+                elif self.persistent_data['is_satellite'] == False and self.mqtt_connected_to_ip != str(self.internal_ip):
+                    if self.DEBUG:
+                        print("run_mqtt: satellite is not a satellite (anymore), and MQTT client is connected to the wrong IP. Disconnecting.  self.mqtt_connected_to_ip, self.internal_ip: ", self.mqtt_connected_to_ip, str(self.internal_ip))
+                    self.mqtt_client.loop_stop()
+                    self.mqtt_client.disconnect() # disconnect
+                    time.sleep(1)
+
+                else:
+                    
                     #return # TODO Experimental change
                 
                     if self.mqtt_client.is_connected():
                         if self.DEBUG:
-                            print("run_mqtt: MQTT client says it is already connected. Aborting.")
+                            print("run_mqtt: MQTT client alraedy exists and says it is already connected to the correct server. Aborting run_mqtt")
                         return
+                    
                 
                 
             
             if self.mqtt_client == None:
-                
+                if self.DEBUG:
+                    print("run_mqtt: self.mqtt_client does not exists yet, creating it now")
 
                 if self.persistent_data['is_satellite']:
                     if str(self.persistent_data['mqtt_server']) == self.ip_address:
                         if self.DEBUG:
-                            print("run_mqtt: The MQTT server IP address was the device's own IP address. Because this is a satellite, this shouldn't be the case. Requesting a network scan for the correct server.")
-                        if not self.currently_scanning_for_missing_mqtt_server: #and not self.orphaned:
-                            if self.DEBUG:
-                                print("run_mqtt: requesting scan for missing MQTT server.")
-                            self.look_for_mqtt_server()
-                            return
+                            print("run_mqtt: ERROR, The MQTT server IP address was the device's own IP address. Because this is a satellite, this shouldn't be the case. Continuing anyway.")
+                            #print("run_mqtt: Requesting a network scan for the correct server")
+                        #if not self.currently_scanning_for_missing_mqtt_server: #and not self.orphaned:
+                        #    if self.DEBUG:
+                        #        print("run_mqtt: requesting scan for missing MQTT server.")
+                        #    self.look_for_mqtt_server()
+                        #    return
 
                 
 
@@ -7467,7 +7483,7 @@ class VocoAdapter(Adapter):
                     client_name = "voco_" + self.persistent_data['site_id']
                     if self.DEBUG:
                         print("run_mqtt: creating self.mqtt_client with client_name: ", client_name)
-                    self.mqtt_client = client.Client(client_id=client_name)
+                    self.mqtt_client = client.Client(client_id=client_name,clean_session=True)
                 except Exception as ex:
                     if self.DEBUG:
                         print("caught error creating MQTT client: ", ex)
@@ -7479,11 +7495,10 @@ class VocoAdapter(Adapter):
                     if self.DEBUG:
                         print("ERROR, creating MQTT client failed")
                     return
-
-
+                
                 self.mqtt_client.reconnect_delay_set(min_delay=2, max_delay=60)
-
                 self.mqtt_client.on_connect = self.on_connect
+                self.mqtt_client.on_connect_fail = self.mqtt_client.on_connect_fail
                 self.mqtt_client.on_disconnect = self.on_disconnect
                 self.mqtt_client.on_message = self.on_message
                 self.mqtt_client.on_publish = self.on_publish
@@ -7492,25 +7507,50 @@ class VocoAdapter(Adapter):
                 if self.DEBUG:
                     print("run_mqtt: self.persistent_data['mqtt_server'] = " + str(self.persistent_data['mqtt_server']))
             
-            
 
-                        
+            # self.mqtt_client should now exist
+
+            if self.mqtt_client:
+                self.mqtt_connected = self.mqtt_client.is_connected()
+                if self.mqtt_connected:
+                    
+                    if self.persistent_data['is_satellite'] and self.mqtt_connected_to_ip == str(self.persistent_data['mqtt_server']):
+                        if self.DEBUG:
+                            print("run_mqtt: aborting, satellite and already connected to the correct server?: ", self.mqtt_connected_to_ip)
+                        return
+                    if self.persistent_data['is_satellite'] == False and self.mqtt_connected_to_ip == str(self.internal_ip):
+                        if self.DEBUG:
+                            print("run_mqtt: aborting, already connected to the correct server? ", self.mqtt_connected_to_ip)
+                        return
+                    
+                    try:
+                        #if self.mqtt_connected:
+                        if self.DEBUG:
+                            print("run_mqtt: disconnecting mqtt first")
+                        self.mqtt_client.loop_stop()
+                        self.mqtt_client.disconnect() # disconnect
+                        time.sleep(1)
+                        #self.mqtt_client = None
+                    except Exception as ex:
+                        if self.DEBUG:
+                            print("run_mqtt: caught error closing existing MQTT client: " + str(ex))
+
+
 
                 #if self.should_restart_mqtt:
-                if self.mqtt_connected == False and self.mqtt_busy_connecting == False:
-                    if self.DEBUG:
-                        print("run_mqtt:  this device is a satellite, so MQTT client is connecting to: " + str(self.persistent_data['mqtt_server']))
-                    self.should_restart_mqtt = False
-                    self.mqtt_busy_connecting = True
-                    if self.persistent_data['is_satellite']:
-                        self.mqtt_connected_to_ip = str(self.persistent_data['mqtt_server'])
-                        self.mqtt_client.connect(str(self.persistent_data['mqtt_server']), int(self.mqtt_port), keepalive=60)
-                    else:
-                        self.mqtt_connected_to_ip = str(self.internal_ip)
-                        self.mqtt_client.connect(str(self.internal_ip), int(self.mqtt_port), keepalive=60)
+                #if self.mqtt_connected == False and self.mqtt_busy_connecting == False:
+                #    if self.DEBUG:
+                #        print("run_mqtt:  this device is a satellite, so MQTT client is connecting to: " + str(self.persistent_data['mqtt_server']))
+                self.should_restart_mqtt = False
+                self.mqtt_busy_connecting = True
+                if self.persistent_data['is_satellite']:
+                    self.mqtt_connected_to_ip = str(self.persistent_data['mqtt_server'])
+                    self.mqtt_client.connect(str(self.persistent_data['mqtt_server']), int(self.mqtt_port), keepalive=60)
                 else:
-                    print("run_mqtt: during the (re)connect process MQTT somehow already got connected, or got busy connecting.  self.mqtt_connected,self.mqtt_busy_connecting: ", self.mqtt_connected, self.mqtt_busy_connecting)
-            
+                    self.mqtt_connected_to_ip = str(self.internal_ip)
+                    self.mqtt_client.connect(str(self.internal_ip), int(self.mqtt_port), keepalive=60)
+                
+            """
             else:
                 #if self.should_restart_mqtt:
                 if self.mqtt_connected == False and self.mqtt_busy_connecting == False:
@@ -7528,8 +7568,8 @@ class VocoAdapter(Adapter):
                 else:
                     if self.DEBUG:
                         print("WARNING: run_mqtt: unexpectedly MQTT is already connected or busy connecting.")
+            """
             
-            self.last_run_mqtt_time = int(time.time())
             
             #print("self.mqtt_client dir: " + str(dir(self.mqtt_client)))
             #print("self.mqtt_client.is_connected: " + str(self.mqtt_client.is_connected()))
@@ -7551,7 +7591,8 @@ class VocoAdapter(Adapter):
             # certificate.crt  certificate.pem  csr.pem  privatekey.pem
 
             # loop_forever() (foreground) or loop_start() (background thread)
-            self.mqtt_client.loop_start()
+            #self.mqtt_client.loop_start()
+            self.mqtt_client.client.loop_forever(retry_first_connection=True)
             
             
             #try:    
@@ -7598,6 +7639,8 @@ class VocoAdapter(Adapter):
             
     
     # Disconnect for the first MQTT client, which can be connected to an external controller
+    # THIS CALLBACK MUST ONLY BE USED FOR OBSERVATION, do not run time.sleep or call reconnection functions in here
+    # See https://www.emqx.com/en/blog/how-to-use-mqtt-in-python
     def on_disconnect(self, client, userdata, rc):
         if self.DEBUG:
             print("MQTT on_disconnect")
@@ -7651,6 +7694,16 @@ class VocoAdapter(Adapter):
         self.mqtt_connected_succesfully_at_least_once = True
         self.mqtt_busy_connecting = False
         self.should_restart_mqtt = False
+
+        if rc.is_failure:
+            if self.DEBUG:
+                print(f"mqtt client failed to connect: {rc}")
+            self.mqtt_connected = False
+        else:
+            if self.DEBUG:
+                print("MQTT client connected succesfully")
+            self.mqtt_connected = True
+
         if rc == 0:
             if self.DEBUG:
                 print("In on_connect, and MQTT connect return code was 0 - (everything is ok)")
@@ -7753,7 +7806,11 @@ class VocoAdapter(Adapter):
             # TODO: should this possibly initiate a search?
         
         
-
+    # only called following an automatic (re)connection made by loop_start() and loop_forever()
+    # See: https://pypi.org/project/paho-mqtt/
+    def on_connect_fail(self, client, userdata, flags, rc): # rc = 'reason_code'
+        if self.DEBUG:
+            print("in on_connect_fail")
 
     # Process an mqtt message as it arrives
     def on_message(self, client, userdata, msg):
@@ -12396,34 +12453,37 @@ class VocoAdapter(Adapter):
     def update_network_info(self):
         try:
             possible_ip = get_ip()
-            if isinstance(possible_ip,str):
-                if valid_ip(possible_ip):
-                    self.ip_address = possible_ip
+            if isinstance(possible_ip,str) and valid_ip(possible_ip):
+                self.ip_address = possible_ip
             else:
-                print("update_network_info: error, not a valid possible_ip: " + str(possible_ip))
+                print("\nupdate_network_info: ERROR, not a valid possible_ip: " + str(possible_ip))
             #if self.DEBUG:
             #    print("update_network_info: IP address is now: " + str(self.ip_address))
         except Exception as ex:
-            print("Error getting IP address: " + str(ex))
+            print("\ncaught error getting IP address: " + str(ex))
 
         # Get hostname
         try:
-            self.hostname = str(socket.gethostname())
-            #if self.DEBUG:
-            #    print("fresh hostname = " + str(self.hostname))
+            #self.hostname = str(socket.gethostname())
+            self.hostname = str(run_command('hostname')).rstrip().strip()
+            if self.DEBUG:
+                print("update_network_info: fresh hostname:  -->" + str(self.hostname) + "<--")
         except Exception as ex:
             if self.DEBUG:
                 print("update_network_info: caught error getting hostname: " + str(ex))
-            if os.path.exists('/boot/firmware/hostname.txt'):
+                print("WARNING, attempting to fall back to reading /home/pi/.webthings/etc/hostname.txt")
+            if os.path.exists('/home/pi/.webthings/etc/hostname.txt'):
                 if self.DEBUG:
-                    print("setting hostname from /boot/firmware/hostname.txt")
-                with open('/boot/firmware/hostname.txt') as f:
+                    print("getting hostname from /home/pi/.webthings/etc/hostname.txt")
+                with open('/home/pi/.webthings/etc/hostname.txt') as f:
                     content = f.read()
                     self.hostname = str(content).strip().rstrip()
-            else:
-                if self.DEBUG:
-                    print("setting hostname to ip_address instead")
-                self.hostname = self.ip_address
+                    if self.DEBUG:
+                        print("update_network_info: fresh hostname from /home/pi/.webthings/etc/hostname.txt:  -->" + str(self.hostname) + "<--")
+            #else:
+            #    if self.DEBUG:
+            #        print("setting hostname to ip_address instead")
+            #    self.hostname = self.ip_address
             if self.DEBUG:
                 print("update_network_info: hostname is now: " + str(self.hostname))
         
