@@ -1646,15 +1646,23 @@
 					if(controller_not_responding_el){
 						if(body['periodic_voco_attempts'] > 3){
 							controller_not_responding_el.style.display = 'block';
-							if(typeof body['main_controller_last_ping_seconds_ago'] == 'number'){
-								this.view.querySelector('#extension-voco-main-controller-last-ping-seconds-ago').textContent = body['main_controller_last_ping_seconds_ago'] + " seconds ago";
+							const last_ping_seconds_ago_el = this.view.querySelector('#extension-voco-main-controller-last-ping-seconds-ago');
+							if(last_ping_seconds_ago_el){
+								if(typeof body['main_controller_last_ping_seconds_ago'] == 'number'){
+									last_ping_seconds_ago_el.textContent = body['main_controller_last_ping_seconds_ago'] + " seconds ago";
+								}
+								else{
+									last_ping_seconds_ago_el.textContent = "? seconds ago";
+								}
 							}
-							else{
-								this.view.querySelector('#extension-voco-main-controller-last-ping-seconds-ago').textContent = "? seconds ago";
-							}
+							
 						}
 						else{
-							this.view.querySelector('#extension-voco-main-controller-not-responding').style.display = 'none';
+							const not_responding_el = this.view.querySelector('#extension-voco-main-controller-not-responding');
+							if(not_responding_el){
+								not_responding_el.style.display = 'none';
+							}
+							
 						}
 					}
 				}

@@ -5161,12 +5161,16 @@ class VocoAdapter(Adapter):
                             print("   self.injection_level: ", self.injection_level)
                             pass
                         
+                        if self.DEBUG:
+                            print("CLOCK: Calling run_mqtt")
+                        self.run_mqtt()
+
                         if self.mqtt_client != None:
                             self.mqtt_connected = self.mqtt_client.is_connected()
                             if self.DEBUG:
                                 print("   self.mqtt_client.is_connected: ", self.mqtt_connected)
-                                print("CLOCK: Calling run_mqtt")
-                            self.run_mqtt()
+                                
+                            
 
                             self.send_mqtt_ping(broadcast=True) # broadcast ping
                     
@@ -7591,8 +7595,8 @@ class VocoAdapter(Adapter):
             # certificate.crt  certificate.pem  csr.pem  privatekey.pem
 
             # loop_forever() (foreground) or loop_start() (background thread)
-            #self.mqtt_client.loop_start()
-            self.mqtt_client.client.loop_forever(retry_first_connection=True)
+            self.mqtt_client.loop_start()
+            #self.mqtt_client.loop_forever(retry_first_connection=True)
             
             
             #try:    
@@ -7613,7 +7617,6 @@ class VocoAdapter(Adapter):
             if '111' in str(ex): # [Errno 111] Connection refused
                 if self.DEBUG:
                     print("- MQTT connection was refused. The clock thread should restart the connection process automatically.")
-                time.sleep(5)
             
             elif '113' in str(ex):
                 if self.DEBUG:
@@ -7624,12 +7627,12 @@ class VocoAdapter(Adapter):
                 if self.persistent_data['is_satellite']:
                     self.set_status_on_thing("Error connecting to main Voco controller")
                     self.periodic_voco_attempts += 1
-                    if self.currently_scanning_for_missing_mqtt_server == False and self.persistent_data['site_id'] != self.persistent_data['main_site_id']:
+                    #if self.currently_scanning_for_missing_mqtt_server == False and self.persistent_data['site_id'] != self.persistent_data['main_site_id']:
                         # Satellites may attempt to find the new IP address of the MQTT server
-                        if self.DEBUG:
-                            print("run_mqtt error -> calling look_for_mqtt_server()")
-                        self.look_for_mqtt_server()
-                        return
+                        #if self.DEBUG:
+                        #    print("run_mqtt error -> calling look_for_mqtt_server()")
+                        #self.look_for_mqtt_server()
+                        #return
             
             time.sleep(1)
             if self.DEBUG:
