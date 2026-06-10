@@ -315,7 +315,7 @@ class VocoAPIHandler(APIHandler):
                             elif action == 'refresh_matrix_members':
                                 state = True
                                 if self.DEBUG:
-                                    print('ajax handling refresh_matrix_members')
+                                    print('ajax handling refresh_matrix_members request')
                                 self.adapter.refresh_matrix_members = True
                                     
                                 return APIResponse(
@@ -325,6 +325,28 @@ class VocoAPIHandler(APIHandler):
                                 )
                                 
                                 
+                            elif action == 'close_proxy':
+                                if self.DEBUG:
+                                    print('ajax handling close_proxy request')
+                                self.adapter.close_proxy()
+                                    
+                                return APIResponse(
+                                  status=200,
+                                  content_type='application/json',
+                                  content=json.dumps({'state' : True}),
+                                )
+                            
+                            elif action == 'exit':
+                                if self.DEBUG:
+                                    print('ajax handling exit request')
+                                exit()
+                                    
+                                return APIResponse(
+                                  status=200,
+                                  content_type='application/json',
+                                  content=json.dumps({'state' : True}),
+                                )
+
                                 
                                 
                             elif action == 'llm_init':
@@ -546,6 +568,7 @@ class VocoAPIHandler(APIHandler):
                                   content=json.dumps({
                                         'state': state,
                                         'signal_accounts': self.adapter.signal_accounts,
+                                        'signal_accounts_length':len(self.adapter.signal_accounts),
                                         'signal_started': self.adapter.signal_started,
                                         'signal_linked': self.adapter.persistent_data['signal_linked'],
                                         'signal_link_seconds_to_go': link_seconds_to_go,
@@ -564,7 +587,9 @@ class VocoAPIHandler(APIHandler):
                                   content=json.dumps({
                                         'state': state, 
                                         'signal_linked':self.adapter.persistent_data['signal_linked'],
+                                        'signal_started':self.adapter.signal_started,
                                         'signal_accounts': self.adapter.signal_accounts,
+                                        'signal_accounts_length':len(self.adapter.signal_accounts)
                                         }),
                                 )
 
@@ -818,8 +843,12 @@ class VocoAPIHandler(APIHandler):
                                     fastest_controller_last_ping_seconds_ago = int(time.time()) - self.adapter.fastest_controller_last_ping_time
 
                                 main_controller_last_ping_seconds_ago = 0
-                                if self.adapter.main_controller_last_ping_time != 0:
-                                    main_controller_last_ping_seconds_ago = int(time.time()) - self.adapter.main_controller_last_ping_time
+                                if self.adapter.main_controller_last_ping_received_time != 0:
+                                    main_controller_last_ping_seconds_ago = int(time.time()) - self.adapter.main_controller_last_ping_received_time
+
+                                last_ping_time_seconds_ago = 0
+                                if self.adapter.last_ping_time != 0:
+                                    last_ping_time_seconds_ago = int(time.time()) - self.adapter.last_ping_time
 
                                 last_pong_time_seconds_ago = 0
                                 if self.adapter.last_pong_time != 0:
@@ -859,6 +888,7 @@ class VocoAPIHandler(APIHandler):
                                                         'mqtt_busy_connecting':self.adapter.mqtt_busy_connecting,
                                                         'last_mqtt_disconnect_seconds_ago':last_mqtt_disconnect_seconds_ago,
                                                         'internal_ip':self.adapter.internal_ip,
+                                                        'last_ping_time_seconds_ago':last_ping_time_seconds_ago,
                                                         'last_pong_time_seconds_ago':last_pong_time_seconds_ago,
                                                         'voco_connected':self.adapter.voco_connected,
                                                         'items': self.adapter.persistent_data['action_times'],
@@ -958,9 +988,9 @@ class VocoAPIHandler(APIHandler):
                         elif request.path == '/update':
                             if self.DEBUG:
                                 print("handling /update")
-
+                            state = False
                             try:
-                                state = False
+                                
                                 action = str(request.body['action'])
                                 update = "" 
                             
@@ -1042,79 +1072,92 @@ class VocoAPIHandler(APIHandler):
                                         
                                         try:
                                             
-                                            self.adapter.persistent_data['is_satellite'] = bool(request.body['is_satellite'])
+                                            satellite_state_changed = False
+                                            if self.adapter.persistent_data['is_satellite'] != bool(request.body['is_satellite']):
+                                                satellite_state_changed = True
+                                                self.adapter.persistent_data['is_satellite'] = bool(request.body['is_satellite'])
 
-                                            #if bool(request.body['is_satellite']) != self.adapter.persistent_data['is_satellite']:
-                                            if self.adapter.persistent_data['is_satellite']:
-                                                
-                                                self.adapter.persistent_data['main_controller_hostname'] = str(request.body['main_controller_hostname'])
-                                                
-                                                if self.adapter.llm_assistant_started:
-                                                    self.adapter.start_ai_assistant() # this actually only stops the assistant in this case.
-                                                
-                                                #self.adapter.persistent_data['mqtt_server'] = str(request.body['mqtt_server'])
-                                                
-                                                if self.DEBUG:
-                                                    print("self.adapter.satellite_targets: " + str(self.adapter.satellite_targets))
-                                                if len(self.adapter.satellite_targets) == 0:
+                                                #if bool(request.body['is_satellite']) != self.adapter.persistent_data['is_satellite']:
+                                                if self.adapter.persistent_data['is_satellite']:
+                                                    
+                                                    self.adapter.persistent_data['main_controller_hostname'] = str(request.body['main_controller_hostname'])
+                                                    
+                                                    if self.adapter.llm_assistant_started:
+                                                        self.adapter.start_ai_assistant() # this actually only stops the assistant in this case.
+                                                    
+                                                    #self.adapter.persistent_data['mqtt_server'] = str(request.body['mqtt_server'])
+                                                    
                                                     if self.DEBUG:
-                                                        print("re-populating empty satellite_targets list")
-                                                    self.adapter.satellite_targets = avahi_detect_gateways()
-                                                
-                                                found_ip = False
-                                                for sat_ip_address in self.adapter.satellite_targets:
-                                                    if self.DEBUG:
-                                                        print("sat_ip_address: " + str(sat_ip_address) + ", self.adapter.satellite_targets[sat_ip_address]: " + str(self.adapter.satellite_targets[sat_ip_address]))
-                                                    if self.adapter.satellite_targets[sat_ip_address] == str(request.body['main_controller_hostname']):
-                                                        self.adapter.persistent_data['mqtt_server'] = sat_ip_address
-                                                        found_ip = True
+                                                        print("self.adapter.satellite_targets: " + str(self.adapter.satellite_targets))
+                                                    if len(self.adapter.satellite_targets) == 0:
                                                         if self.DEBUG:
-                                                            print("found IP address for: " + str(request.body['main_controller_hostname']) + ", it is: "  + str(sat_ip_address) )
+                                                            print("re-populating empty satellite_targets list")
+                                                        self.adapter.satellite_targets = avahi_detect_gateways()
+                                                    
+                                                    found_ip = False
+                                                    for sat_ip_address in self.adapter.satellite_targets:
+                                                        if self.DEBUG:
+                                                            print("sat_ip_address: " + str(sat_ip_address) + ", self.adapter.satellite_targets[sat_ip_address]: " + str(self.adapter.satellite_targets[sat_ip_address]))
+                                                        if self.adapter.satellite_targets[sat_ip_address] == str(request.body['main_controller_hostname']):
+                                                            if sat_ip_address != '0.0.0.0' and sat_ip_address != '127.0.0.1':
+                                                                if self.adapter.persistent_data['mqtt_server'] != sat_ip_address:
+                                                                    if self.DEBUG:
+                                                                        print("found IP address for: " + str(request.body['main_controller_hostname']) + ", persistent_data['mqtt_server'] is now: "  + str(sat_ip_address) )
+                                                                    self.adapter.save_to_persistent_data = True
+                                                                found_ip = True
+                                                                self.adapter.persistent_data['mqtt_server'] = sat_ip_address
+                                                            else:
+                                                                print("ERROR, the provided IP address was a localhost IP.  sat_ip_address: ", sat_ip_address)
+                                                                
+                                                                
+                                                    if found_ip:
+                                                        self.adapter.stop_snips()
+                                                        self.connected_satellites = {} # forget which satellites are connected to this controller
+                                                        self.adapter.initial_injection_completed = False
+                                                        self.adapter.addon_start_time = time.time()
+                                                        self.adapter.should_restart_mqtt = True
+                                                        self.adapter.run_mqtt()
+                                                        time.sleep(1)
+                                                        self.adapter.send_mqtt_ping(True)
+                                                        self.adapter.run_snips() # this stops Snips first
+                                                        state = True
+                                                        update = 'Satellite mode enabled'
+                                                        if self.DEBUG:
+                                                            print("- Satellite mode enabled")
+                                                            
+                                                    else:
+                                                        if self.DEBUG:
+                                                            print("ERROR, satellite mode enabled, but no known IP for target controller (yet)")
+                                                        update = 'Error: could not find IP address of prefered controller'
+                                                else:
+                                                    if self.DEBUG:
+                                                        print("- Satellite mode disabled")
                                                         
-                                                if found_ip:
-                                                    self.connected_satellites = {} # forget which satellites are connected to this controller
+                                                    # No longer a satellite
+                                                    self.adapter.persistent_data['mqtt_server'] = self.adapter.internal_ip
+                                                    self.adapter.persistent_data['main_controller_ip'] = self.adapter.internal_ip
+                                                    self.adapter.persistent_data['main_controller_hostname'] = self.adapter.hostname
+                                                    self.adapter.persistent_data['main_site_id'] = self.adapter.persistent_data['site_id'] #reset to default
                                                     self.adapter.initial_injection_completed = False
                                                     self.adapter.addon_start_time = time.time()
                                                     self.adapter.should_restart_mqtt = True
                                                     self.adapter.run_mqtt()
-                                                    self.adapter.send_mqtt_ping(True)
                                                     self.adapter.run_snips() # this stops Snips first
-                                                    state = True
-                                                    update = 'Satellite mode enabled'
-                                                    if self.DEBUG:
-                                                        print("- Satellite mode enabled")
-                                                        
-                                                else:
-                                                    update = 'Error: could not find IP address of prefered controller'
-                                            else:
-                                                if self.DEBUG:
-                                                    print("- Satellite mode disabled")
                                                     
-                                                # No longer a satellite
-                                                self.adapter.persistent_data['mqtt_server'] = 'localhost'
-                                                self.adapter.persistent_data['main_controller_ip'] = 'localhost'
-                                                self.adapter.persistent_data['main_controller_hostname'] = self.adapter.hostname
-                                                self.adapter.persistent_data['main_site_id'] = self.adapter.persistent_data['site_id'] #reset to default
-                                                self.adapter.initial_injection_completed = False
-                                                self.adapter.addon_start_time = time.time()
-                                                self.adapter.should_restart_mqtt = True
-                                                self.adapter.run_mqtt()
-                                                self.adapter.run_snips() # this stops Snips first
-                                                
-                                                if self.adapter.llm_enabled and self.adapter.llm_assistant_enabled:
-                                                    self.adapter.check_available_memory()
-                                                    if self.adapter.llm_assistant_possible:
-                                                        self.adapter.llm_should_download = True
-                                                        self.adapter.assistant_loop_counter = self.adapter.llm_servers_watchdog_interval - 2
-                                                
-                                                state = True
-                                                update = 'Satellite mode disabled'
+                                                    if self.adapter.llm_enabled and self.adapter.llm_assistant_enabled:
+                                                        self.adapter.check_available_memory()
+                                                        if self.adapter.llm_assistant_possible:
+                                                            self.adapter.llm_should_download = True
+                                                            self.adapter.assistant_loop_counter = self.adapter.llm_servers_watchdog_interval - 2
+                                                    
+                                                    state = True
+                                                    update = 'Satellite mode disabled'
                                                 
                                                 
                                             
                                         except Exception as ex:
                                             if self.DEBUG:
-                                                print("Error changing satellite mode: " + str(ex))
+                                                print("aught error changing satellite mode: " + str(ex))
                             
                                         self.adapter.save_persistent_data()
                             
@@ -1122,7 +1165,7 @@ class VocoAPIHandler(APIHandler):
                                         #update = 'Satellite settings have been saved'
                                         if self.DEBUG:
                                             print(str(update))
-                                            print("self.adapter.persistent_data['mqtt_server'] is now: " + str(self.adapter.persistent_data['mqtt_server']))
+                                            print("changing satellite mode: self.adapter.persistent_data['mqtt_server'] is now: " + str(self.adapter.persistent_data['mqtt_server']))
                                     else:
                                         if self.DEBUG:
                                             print("Missing values in request body")
@@ -1143,17 +1186,21 @@ class VocoAPIHandler(APIHandler):
                                     content_type='application/json',
                                     content=json.dumps({'state': False, 'update': "Server error"}),
                                 )
+
+                            return APIResponse(
+                                    status=200,
+                                    content_type='application/json',
+                                    content=json.dumps({'state' : state}),
+                                )
                         
                         else:
-                            return APIResponse(
-                                status=500,
-                                content_type='application/json',
-                                content=json.dumps("API error"),
-                            )
+                            if self.DEBUG:
+                                print("API got request at an unsupported path: ", request.path)
+                            return APIResponse(status=404)
                         
                     except Exception as ex:
                         if self.DEBUG:
-                            print("Voco api handler: generic api handler issue: " + str(ex))
+                            print("Voco api handler: caught generic api handler issue: " + str(ex))
                         return APIResponse(
                             status=500,
                             content_type='application/json',

@@ -476,6 +476,7 @@
 				})
 				.catch((err) => {
 					console.error("caught error calling after_link_signal: ", err);
+					this.flash_message("Testing Signal failed - controller connection issue?");
 				})
 			});
 
@@ -680,11 +681,39 @@
             */
 
 
+			this.view.querySelector('#extension-voco-restart-button').addEventListener('click', () => {
+				window.API.postJson(
+                  `/extensions/${this.id}/api/ajax`,
+                    {'action':'close_proxy'}
+
+                ).then((body) => {
+        			console.log("voco: close_proxy response: ", body);
+                }).catch((err) => {
+					console.error("voco: caught error calling close_proxy: ", err);
+                });
+			});
+			
+
+			this.view.querySelector('#extension-voco-exit-button').addEventListener('click', () => {
+				window.API.postJson(
+                  `/extensions/${this.id}/api/ajax`,
+                    {'action':'exit'}
+
+                ).then((body) => {
+        			console.log("voco: exit response: ", body);
+                }).catch((err) => {
+					console.error("voco: caught error calling exit: ", err);
+                });
+			});
+
+			
+
+
 			//
 			//  LLM AI
 			//
 
-			this.view.querySelector('#extension-voco-tab-button-ai').addEventListener('click', (event) => {
+			this.view.querySelector('#extension-voco-tab-button-ai').addEventListener('click', () => {
 				this.update_ai_data();
 			});
 
@@ -1505,21 +1534,16 @@
             //var all_tabs = this.view.querySelectorAll('.extension-voco-tab');
             //var all_tab_buttons = this.view.querySelectorAll('.extension-voco-main-tab-button');
 
-
-
 			if(this.ai_tab_shown && typeof body['llm_wakeword_model'] == 'string'){
 				this.change_title(body['llm_wakeword_model']);
 			}
-			
 			if(typeof body['info_to_show'] != 'undefined'){
 				this.info_to_show = body['info_to_show'];
 				this.display_info_overlay();
 			}
-
 			if(typeof body['is_satellite'] == 'boolean'){
 				this.starting_info['Is satellite'] = body['is_satellite'];
 			}
-			
 			if(typeof body['still_busy_booting'] == 'boolean'){
 				this.starting_info['Still busy booting'] = body['still_busy_booting'];
 			}
@@ -1577,6 +1601,9 @@
 			if(typeof body['main_controller_goodbye_seconds_ago'] == 'number'){
 				this.starting_info['Main controller said goodbye seconds ago'] = body['main_controller_goodbye_seconds_ago'];
 			}
+			if(typeof body['last_ping_time_seconds_ago'] == 'number'){
+				this.starting_info['Last ping sent seconds ago'] = body['last_ping_time_seconds_ago'];
+			}
 			if(typeof body['last_pong_time_seconds_ago'] == 'number'){
 				this.starting_info['Last pong response sent seconds ago'] = body['last_pong_time_seconds_ago'];
 			}
@@ -1595,10 +1622,6 @@
 			if(typeof body['fastest_controller_last_ping_seconds_ago'] == 'number'){
 				this.starting_info['Fastest controller last ping seconds ago'] = body['fastest_controller_last_ping_seconds_ago'];
 			}
-			
-			
-			
-			
 			
 
 			//console.log(body['items']);
@@ -1935,45 +1958,52 @@
 					const injection_progress_el = this.view.querySelector('#extension-voco-injection-learning-progress');
 					if(injection_progress_el){
 						
-						if( body['injection_level'] == 2 && injection_progress_el.innerHTML == ''){
+						if( body['injection_level'] >= 2 && injection_progress_el.innerHTML == ''){
 							// do nothing
 							injection_progress_el.classList.add('extension-voco-hidden');
 						}
 						else{
-							injection_progress_el.classList.remove('extension-voco-hidden');
-							if(body['injection_level'] == 2){
-								injection_progress_el.innerHTML = '<h3>Learning complete</h3>';
-							}
-							else{
-								injection_progress_el.innerHTML = '<h3>Learning.. </h3>'; //  ' + (body['injection_level']+1) + '/3
-							}
 							
-							const learning_levels = ['Names of things','Names of properties','Selectable values'];
-							for(let ll = 0; ll < learning_levels.length; ll++){
-								const learning_level_wrapper_el = document.createElement('div');
-								
-								if(body['injection_level'] == ll){
-									learning_level_wrapper_el.classList.add('extension-voco-busy-updating');
-								}
-								
-								let level_html = '';
-								if (ll < body['injection_level']){
-									level_html = '<span class="extension-voco-injection-learning-checkbox extension-voco-injection-learning-checkbox-checked">☑</span>';
-								}
-								else{
-									level_html = '<span class="extension-voco-injection-learning-checkbox">☐</span>';
-								}
-								level_html = '<span class="extension-voco-injection-learning-level-text">' + learning_levels[ll] + '</span>' + level_html;
-								learning_level_wrapper_el.innerHTML = level_html;
-								
-								injection_progress_el.appendChild(learning_level_wrapper_el);
-							}
-							if(body['injection_level'] == 2){
+							if(body['injection_level'] >= 2){
+								injection_progress_el.innerHTML = '<h3>Learning complete</h3>';
 								setTimeout(() => {
 									injection_progress_el.innerHTML = '';
 									injection_progress_el.classList.add('extension-voco-hidden');
 								},5000);
 							}
+							else{
+								injection_progress_el.innerHTML = '<h3>Learning.. </h3>'; //  ' + (body['injection_level']+1) + '/3
+							
+								const learning_levels = ['Names of things','Names of properties','Selectable values'];
+								for(let ll = 0; ll < learning_levels.length; ll++){
+									const learning_level_wrapper_el = document.createElement('div');
+									
+									if(body['injection_level'] == ll){
+										learning_level_wrapper_el.classList.add('extension-voco-busy-updating');
+									}
+									
+									let level_html = '';
+									if (ll < body['injection_level']){
+										level_html = '<span class="extension-voco-injection-learning-checkbox extension-voco-injection-learning-checkbox-checked">☑</span>';
+									}
+									else{
+										level_html = '<span class="extension-voco-injection-learning-checkbox">☐</span>';
+									}
+									level_html = '<span class="extension-voco-injection-learning-level-text">' + learning_levels[ll] + '</span>' + level_html;
+									learning_level_wrapper_el.innerHTML = level_html;
+									
+									injection_progress_el.appendChild(learning_level_wrapper_el);
+								}
+								/*
+								if(body['injection_level'] == 2){
+									setTimeout(() => {
+										injection_progress_el.innerHTML = '';
+										injection_progress_el.classList.add('extension-voco-hidden');
+									},5000);
+								}*/
+							}
+							
+							
 						}
 						
 					}
@@ -1995,7 +2025,7 @@
 
 			if(typeof body.signal_started == 'boolean'){
 				if(this.debug){
-                    console.log("voco debug: signal_linked: ", body.signal_started);
+                    console.log("voco debug: signal_started: ", body.signal_started);
                 }
 				if(body.signal_started){
 					this.view.classList.add('extension-voco-signal-linked');

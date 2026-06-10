@@ -161,8 +161,10 @@ def after_link_signal(self):
 		#signal-cli -u [USERNAME] receive
 		self.get_signal_messages()
 		self.signal_ensure_group()
+		time.sleep(1)
+		self.send_signal_message('Hello world')
 
-	return linked
+	return self.signal_started
 
 
 def signal_ensure_group(self):

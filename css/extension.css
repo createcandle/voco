@@ -40,6 +40,12 @@ body:not(.developer) .extension-voco-show-if-developer {
     display: none !important;
 }
 
+.extension-voco-flex-center{
+    display:flex;
+    align-items: center;
+    justify-content:center;
+}
+
 .extension-voco-flex-between{
     display:flex;
     justify-content:space-between;
