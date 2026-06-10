@@ -7972,7 +7972,7 @@ class VocoAdapter(Adapter):
                     self.parse_ping(payload,ping_type="ping")
                 else:
                     if self.DEBUG:
-                        print("spotted ping received from some other controller.  payload: ", payload
+                        print("spotted ping received from some other controller.  payload: ", payload)
             else:
                 if self.DEBUG:
                     print("no siteId in received ping payload: ", payload)
@@ -7993,7 +7993,7 @@ class VocoAdapter(Adapter):
                     self.parse_ping(payload,ping_type="pong")
                 else:
                     if self.DEBUG:
-                        print("spotted pong from some other controller.  msg: ", msg)
+                        print("spotted pong from some other controller.  payload: ", payload)
             else:
                 if self.DEBUG:
                     print("no siteId in received pong payload: ", payload)
