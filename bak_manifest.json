@@ -1,233 +1,233 @@
 {
-  "author": "CandleSmartHome.com",
-  "description": "Privacy friendly voice control. Control devices, set timers, reminders, alarms and more. Supports satellites, so it can be used in multiple rooms. You can also chat with voco through the Matrix messenging network.",
-  "content_scripts": [
-    {
-      "css": [
-        "css/extension.css"
-      ],
-      "js": [
-        "js/extension.js",
-		"js/qrcode.js"
-      ]
-    }
-  ],  
-  "gateway_specific_settings": {
-    "webthings": {
-      "exec": "python3 {path}/main.py",
-	  "primary_type": "adapter",
-      "strict_max_version": "*",
-      "strict_min_version": "0.10.0"
-    }
-  },
-  "homepage_url": "https://www.candlesmarthome.com/voco-privacy-friendly-voice-control",
-  "id": "voco",
-  "license": "MPL-2.0",
-  "manifest_version": 1,
-  "name": "Voco",
-  "options": {
-    "default": {
-      "Authorization token": "",
-      "Metric": true,
-      "Microphone": "Auto",
-      "Speaker": "Auto",
-      "Audio sample rate": "16000",
-      "Voice accent": "en-GB",
-      "Voice pitch": "1.2",
-      "Voice speed": "0.9",
-      "Hotword sensitivity": "0.5",
-      "System audio volume": 90,
-      "Sound detection": false,
-      "Hey Candle": true,
-	  "Mute the radio": false,
-      "Satellite device control": false,
-	  "Disable security": false,
-	  "MQTT port": 1885,
-	  "Send chat control notifications": false,
-	  "Show the sentence that Voco heard": false,
-	  "Custom AI voice synthesis model url": "",
-      "Debugging": false
-    },
-    "schema": {
-      "properties": {
-        "Authorization token": {
-          "description": "Advanced. To be allowed to get information on all your devices, you have to create an 'authorization' code. It's basically a very long password. You can generate it yourself under Settings -> Developer -> Create local authorization. Any code you add here will override the code set through the interface.",
-          "type": "string"
-        },
-        "Metric": {
-          "description": "Check the box to use metric values instead of imperial units. For example: temperature in Celcius or Fahrenheit.",
-          "type": "boolean"
-        },
-        "Allow notifications when chat is disabled": {
-          "description": "Normally when you disable chat control, Voco also stops sending notifications from your rules to the chatroom. You can allow Voco to keep sending these notifications even when chat control is disabled.",
-          "type": "boolean"
-        },
-        "Microphone": {
-          "description": "Advanced. You can manually set the prefered microphone if the automatic selection isn't ok. With a USB microphone it's most likely 'Attached device (1,0)'. Note: the Raspberry Pi does not have a built-in microphone (0,0), the option is only there in case you're running on exotic hardware. Bluetooth microphones are currently not an option.",
-          "enum": [
-			"Auto",
-            "Built-in microphone (0,0)",
-			"Built-in microphone, channel 2 (0,1)",
-            "Attached device (1,0)",
-			"Attached device, channel 2 (1,1)",
-            "Second attached device (2,0)",
-			"Second attached device, channel 2 (2,1)"
-          ],
-          "type": "string"
-        },
-        "Speaker": {
-          "description": "Advanced. You would normally choose the audio output through the Voice Control thing. However, here you can 'force' audio to a certain output. Default is 'auto', where it tries to auto-detect the last thing you plugged in (HDMI cable or audio jack). The bluetooth option is experimental, and will only work if you have connected a Bluetooth speaker through the Bluetooth Pairing addon.",
-          "enum": [
-            "Auto",
-            "Headphone jack",
-            "HDMI",
-			"Bluetooth speaker"
-          ],
-          "type": "string"
-        },
-        "Audio sample rate": {
-          "description": "Advanced. In rare cases, if you are using a USB speaker you may need to set a specific samplerate before the speaker will play audio, or play it at the correct speed. If you use a Jabra USB speaker you probably have to set this to 48000. The default is 16000.",
-          "enum": [
-            "16000",
-            "44100",
-            "48000"
-          ],
-          "type": "string"
-        },
-        "Voice accent": {
-          "description": "Select an accent that you'd like the basic speaking voice to have. Default is en-GB",
-          "enum": [
-            "en-US", 
-            "en-GB"
-          ],
-          "type": "string"
-        },
-        "Voice pitch": {
-          "description": "Select how high or low you'd like to basic voice to sound. Default is 1.2.",
-          "enum": [
-            "0.5",
-            "0.6",
-            "0.7",
-            "0.8",
-            "0.9",
-            "1.0",
-            "1.1",
-            "1.2",
-            "1.3",
-            "1.4",
-            "1.5",
-            "1.6",
-            "1.7",
-            "1.8",
-            "1.9",
-            "2.0"
-          ],
-          "type": "string"
-        },
-        "Voice speed": {
-          "description": "How fast should the basic voice speak? Default is 0.9.",
-          "enum": [
-            "0.5",
-            "0.6",
-            "0.7",
-            "0.8",
-            "0.9",
-            "1.0",
-            "1.1",
-            "1.2",
-            "1.3",
-            "1.4",
-            "1.5",
-            "1.6",
-            "1.7",
-            "1.8",
-            "1.9",
-            "2.0"
-          ],
-          "type": "string"
-        },
-        "Hotword sensitivity": {
-          "description": "How sensitive should the system be to 'hey snips'? If it's often responding when nobody said the actual hotword, then you could try lowering this sensitivity. Default is 0.5.",
-          "enum": [
-              "0.1",
-              "0.2",
-              "0.3",
-              "0.4",
-			  "0.45",
-              "0.5",
-			  "0.55",
-              "0.6",
-			  "0.65",
-              "0.7",
-              "0.8",
-              "0.9",
-              "1.0"
-          ],
-          "type": "string"
-        },
-        "System audio volume": {
-          "description": "Advanced. When provided, the system volume will be set to this volume percentage level when Voco starts. This is separate from Voco's own volume, which is relative to the system volume. Can be between 0 and 100 percent. The default is 90.",
-          "type": "integer",
-          "minimum": 10,
-          "maximum": 100
-        },
-        "Sound detection": {
-          "description": "When enabled, an extra switch will be created in the voice control thing. That switch will be turned on for 10 seconds whenever speech or sound is detected.",
-          "type": "boolean"
-        },
-        "Hey Candle": {
-          "description": "When enabled, you can also say 'Hey Candle' to start a command.",
-          "type": "boolean"
-        },
-        "Mute the radio": {
-          "description": "If you're using a bluetooth speaker, enabling this will briefly stop the radio whenever Voco needs to say something.",
-          "type": "boolean"
-        },
-        "Satellite device control": {
-          "description": "If this is a satellite, enabling this will allow you to control things on this satellite using your voice. It's recommended to give things on satellites unique names. For example, call 'radio' something like 'kitchen radio' instead. If a thing with the same name exists on the main controller and on a satellite, a voice command will always favour controlling the satellite's thing.",
-          "type": "boolean"
-        },
-        "Show the sentence that Voco heard": {
-          "description": "Advanced. Whenever you give a voice command, Voco can show a popup with the sentence it just heard. This can be useful to learn more about how Voco is handling your commands.",
-          "type": "boolean"
-        },
-        "Send chat control notifications": {
-          "description": "Advanced. If enabled, Voco will send a Matrix notification whenever it can be controlled via chat, or when this control has just been disabled.",
-          "type": "boolean"
-        },
-        "Disable security": {
-          "description": "Advanced. Disabling security might make Voco play nice with older/other versions of Candle or the Webthings Gateway.",
-          "type": "boolean"
-        },
-        "MQTT port": {
-          "description": "Advanced. By default Candle uses port 1885, but you can override that here by entering a different port number.",
-          "type": "integer"
-        },
-		"Custom AI voice synthesis model url": {
-          "description": "Advanced. Provide a URL to a custom voice synthesis model. It must be a .ommx type.",
-          "type": "string"
-        },
-        "Debugging": {
-          "description": "Advanced. Debugging allows you to diagnose any issues with the add-on. If enabled it will result in a lot more debug data in the internal log (which can be found under settings -> developer -> view internal logs).",
-          "type": "boolean"
+    "author": "CandleSmartHome.com",
+    "description": "Privacy friendly voice control. Control devices, set timers, reminders, alarms and more. Supports satellites, so it can be used in multiple rooms. You can also chat with voco through the Matrix messenging network.",
+    "content_scripts": [
+        {
+            "css": [
+                "css/extension.css"
+            ],
+            "js": [
+                "js/extension.js",
+                "js/qrcode.js"
+            ]
         }
-      },
-      "required": [],
-      "type": "object"
-    }
-  },
-  "short_name": "Voco",
-  "version": "4.4.7",
-  "web_accessible_resources": [
-    "css/*.css",
-    "images/*.svg",
-    "images/*.png",
-    "images/*.gif",
-	"images/*.jpg",
-	"images/*.jpeg",
-	"audio/*.wav",
-	"audio/*.mp3",
-    "js/*.js",
-    "views/*.html"
-  ]
+    ],
+    "gateway_specific_settings": {
+        "webthings": {
+            "exec": "python3 {path}/main.py",
+            "primary_type": "adapter",
+            "strict_max_version": "*",
+            "strict_min_version": "0.10.0"
+        }
+    },
+    "homepage_url": "https://www.candlesmarthome.com/voco-privacy-friendly-voice-control",
+    "id": "voco",
+    "license": "MPL-2.0",
+    "manifest_version": 1,
+    "name": "Voco",
+    "options": {
+        "default": {
+            "Authorization token": "",
+            "Metric": true,
+            "Microphone": "Auto",
+            "Speaker": "Auto",
+            "Audio sample rate": "16000",
+            "Voice accent": "en-GB",
+            "Voice pitch": "1.2",
+            "Voice speed": "0.9",
+            "Hotword sensitivity": "0.5",
+            "System audio volume": 90,
+            "Sound detection": false,
+            "Hey Candle": true,
+            "Mute the radio": false,
+            "Satellite device control": false,
+            "Disable security": false,
+            "MQTT port": 1885,
+            "Send chat control notifications": false,
+            "Show the sentence that Voco heard": false,
+            "Custom AI voice synthesis model url": "",
+            "Debugging": false
+        },
+        "schema": {
+            "properties": {
+                "Authorization token": {
+                    "description": "Advanced. To be allowed to get information on all your devices, you have to create an 'authorization' code. It's basically a very long password. You can generate it yourself under Settings -> Developer -> Create local authorization. Any code you add here will override the code set through the interface.",
+                    "type": "string"
+                },
+                "Metric": {
+                    "description": "Check the box to use metric values instead of imperial units. For example: temperature in Celcius or Fahrenheit.",
+                    "type": "boolean"
+                },
+                "Allow notifications when chat is disabled": {
+                    "description": "Normally when you disable chat control, Voco also stops sending notifications from your rules to the chatroom. You can allow Voco to keep sending these notifications even when chat control is disabled.",
+                    "type": "boolean"
+                },
+                "Microphone": {
+                    "description": "Advanced. You can manually set the prefered microphone if the automatic selection isn't ok. With a USB microphone it's most likely 'Attached device (1,0)'. Note: the Raspberry Pi does not have a built-in microphone (0,0), the option is only there in case you're running on exotic hardware. Bluetooth microphones are currently not an option.",
+                    "enum": [
+                        "Auto",
+                        "Built-in microphone (0,0)",
+                        "Built-in microphone, channel 2 (0,1)",
+                        "Attached device (1,0)",
+                        "Attached device, channel 2 (1,1)",
+                        "Second attached device (2,0)",
+                        "Second attached device, channel 2 (2,1)"
+                    ],
+                    "type": "string"
+                },
+                "Speaker": {
+                    "description": "Advanced. You would normally choose the audio output through the Voice Control thing. However, here you can 'force' audio to a certain output. Default is 'auto', where it tries to auto-detect the last thing you plugged in (HDMI cable or audio jack). The bluetooth option is experimental, and will only work if you have connected a Bluetooth speaker through the Bluetooth Pairing addon.",
+                    "enum": [
+                        "Auto",
+                        "Headphone jack",
+                        "HDMI",
+                        "Bluetooth speaker"
+                    ],
+                    "type": "string"
+                },
+                "Audio sample rate": {
+                    "description": "Advanced. In rare cases, if you are using a USB speaker you may need to set a specific samplerate before the speaker will play audio, or play it at the correct speed. If you use a Jabra USB speaker you probably have to set this to 48000. The default is 16000.",
+                    "enum": [
+                        "16000",
+                        "44100",
+                        "48000"
+                    ],
+                    "type": "string"
+                },
+                "Voice accent": {
+                    "description": "Select an accent that you'd like the basic speaking voice to have. Default is en-GB",
+                    "enum": [
+                        "en-US",
+                        "en-GB"
+                    ],
+                    "type": "string"
+                },
+                "Voice pitch": {
+                    "description": "Select how high or low you'd like to basic voice to sound. Default is 1.2.",
+                    "enum": [
+                        "0.5",
+                        "0.6",
+                        "0.7",
+                        "0.8",
+                        "0.9",
+                        "1.0",
+                        "1.1",
+                        "1.2",
+                        "1.3",
+                        "1.4",
+                        "1.5",
+                        "1.6",
+                        "1.7",
+                        "1.8",
+                        "1.9",
+                        "2.0"
+                    ],
+                    "type": "string"
+                },
+                "Voice speed": {
+                    "description": "How fast should the basic voice speak? Default is 0.9.",
+                    "enum": [
+                        "0.5",
+                        "0.6",
+                        "0.7",
+                        "0.8",
+                        "0.9",
+                        "1.0",
+                        "1.1",
+                        "1.2",
+                        "1.3",
+                        "1.4",
+                        "1.5",
+                        "1.6",
+                        "1.7",
+                        "1.8",
+                        "1.9",
+                        "2.0"
+                    ],
+                    "type": "string"
+                },
+                "Hotword sensitivity": {
+                    "description": "How sensitive should the system be to 'hey snips'? If it's often responding when nobody said the actual hotword, then you could try lowering this sensitivity. Default is 0.5.",
+                    "enum": [
+                        "0.1",
+                        "0.2",
+                        "0.3",
+                        "0.4",
+                        "0.45",
+                        "0.5",
+                        "0.55",
+                        "0.6",
+                        "0.65",
+                        "0.7",
+                        "0.8",
+                        "0.9",
+                        "1.0"
+                    ],
+                    "type": "string"
+                },
+                "System audio volume": {
+                    "description": "Advanced. When provided, the system volume will be set to this volume percentage level when Voco starts. This is separate from Voco's own volume, which is relative to the system volume. Can be between 0 and 100 percent. The default is 90.",
+                    "type": "integer",
+                    "minimum": 10,
+                    "maximum": 100
+                },
+                "Sound detection": {
+                    "description": "When enabled, an extra switch will be created in the voice control thing. That switch will be turned on for 10 seconds whenever speech or sound is detected.",
+                    "type": "boolean"
+                },
+                "Hey Candle": {
+                    "description": "When enabled, you can also say 'Hey Candle' to start a command.",
+                    "type": "boolean"
+                },
+                "Mute the radio": {
+                    "description": "If you're using a bluetooth speaker, enabling this will briefly stop the radio whenever Voco needs to say something.",
+                    "type": "boolean"
+                },
+                "Satellite device control": {
+                    "description": "If this is a satellite, enabling this will allow you to control things on this satellite using your voice. It's recommended to give things on satellites unique names. For example, call 'radio' something like 'kitchen radio' instead. If a thing with the same name exists on the main controller and on a satellite, a voice command will always favour controlling the satellite's thing.",
+                    "type": "boolean"
+                },
+                "Show the sentence that Voco heard": {
+                    "description": "Advanced. Whenever you give a voice command, Voco can show a popup with the sentence it just heard. This can be useful to learn more about how Voco is handling your commands.",
+                    "type": "boolean"
+                },
+                "Send chat control notifications": {
+                    "description": "Advanced. If enabled, Voco will send a Matrix notification whenever it can be controlled via chat, or when this control has just been disabled.",
+                    "type": "boolean"
+                },
+                "Disable security": {
+                    "description": "Advanced. Disabling security might make Voco play nice with older/other versions of Candle or the Webthings Gateway.",
+                    "type": "boolean"
+                },
+                "MQTT port": {
+                    "description": "Advanced. By default Candle uses port 1885, but you can override that here by entering a different port number.",
+                    "type": "integer"
+                },
+                "Custom AI voice synthesis model url": {
+                    "description": "Advanced. Provide a URL to a custom voice synthesis model. It must be a .ommx type.",
+                    "type": "string"
+                },
+                "Debugging": {
+                    "description": "Advanced. Debugging allows you to diagnose any issues with the add-on. If enabled it will result in a lot more debug data in the internal log (which can be found under settings -> developer -> view internal logs).",
+                    "type": "boolean"
+                }
+            },
+            "required": [],
+            "type": "object"
+        }
+    },
+    "short_name": "Voco",
+    "version": "4.4.15",
+    "web_accessible_resources": [
+        "css/*.css",
+        "images/*.svg",
+        "images/*.png",
+        "images/*.gif",
+        "images/*.jpg",
+        "images/*.jpeg",
+        "audio/*.wav",
+        "audio/*.mp3",
+        "js/*.js",
+        "views/*.html"
+    ]
 }
