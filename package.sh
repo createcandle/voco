@@ -227,14 +227,14 @@ cp ./llm/wakeword/open_wake_word/* ./lib/openwakeword/resources/models/
 mkdir -p ./signal
 
 wget --retry-connrefused --waitretry=1 --read-timeout=20 --timeout=15 -t 3 https://media.projektzentrisch.de/temp/signal-cli/signal-cli_ubuntu2004_arm64.gz -O signal-cli_ubuntu2004_arm64.gz
-wget --retry-connrefused --waitretry=1 --read-timeout=20 --timeout=15 -t 3 https://media.projektzentrisch.de/temp/signal-cli/libsignal_jni_so0991_ubuntu2004_arm64.gz -O libsignal_jni_so0921_ubuntu2004_arm64.gz
+wget --retry-connrefused --waitretry=1 --read-timeout=20 --timeout=15 -t 3 https://media.projektzentrisch.de/temp/signal-cli/libsignal_jni_so0991_ubuntu2004_arm64.gz -O libsignal_jni_soXXXX_ubuntu2004_arm64.gz
 # Remove local cffi so that the globally installed version doesn't clash
 #rm -rf ./lib/cffi*
 
 gunzip signal-cli_ubuntu2004_arm64.gz
-gunzip libsignal_jni_so0921_ubuntu2004_arm64.gz
-if [ -f libsignal_jni_so0921_ubuntu2004_arm64 ]; then
-  mv libsignal_jni_so0921_ubuntu2004_arm64 ./signal/
+gunzip libsignal_jni_soXXXX_ubuntu2004_arm64.gz
+if [ -f libsignal_jni_soXXXX_ubuntu2004_arm64 ]; then
+  mv libsignal_jni_soXXXX_ubuntu2004_arm64 ./signal/
 fi
 if [ -f signal-cli_ubuntu2004_arm64 ]; then
   mv signal-cli_ubuntu2004_arm64 ./signal/signal-cli64
