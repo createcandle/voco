@@ -245,10 +245,10 @@ class VocoAdapter(Adapter):
         if self.bits == 64:
             self.bit_extension = "64"
         else:
-            self.hardware_score = -100 # avoid 32 it systems
+            self.hardware_score = -100 # avoid 32 bit systems
             
-        self.internal_ip = "0.0.0.0"
-        #self.internal_ip = "127.0.0.1"
+        #self.internal_ip = "0.0.0.0"
+        self.internal_ip = "127.0.0.1"
 
         #print("self.manager_proxy = " + str(self.manager_proxy))
         #print("self.user_profile: " + str(self.user_profile))
@@ -777,7 +777,7 @@ class VocoAdapter(Adapter):
                 self.persistent_data['main_controller_ip'] = self.internal_ip
                 self.save_to_persistent_data = True
 
-            if self.persistent_data['main_controller_ip'] == '0.0.0.0':
+            elif self.persistent_data['main_controller_ip'] == '0.0.0.0':
                 self.persistent_data['main_controller_ip'] = self.internal_ip
                 self.save_to_persistent_data = True
 
@@ -1907,10 +1907,11 @@ class VocoAdapter(Adapter):
         # Create Voco device
         try:
             self.voco_device = VocoDevice(self, self.audio_output_options, self.audio_input_options)
-            self.handle_device_added(self.voco_device)
-            self.voco_device.add_event('event test',{'meta':True})
-            if self.DEBUG:
-                print("Voco thing created")
+            if self.voco_device:
+                self.handle_device_added(self.voco_device)
+                self.voco_device.add_event('event test',{'meta':True})
+                if self.DEBUG:
+                    print("Voco thing created")
             
         except Exception as ex:
             if self.DEBUG:
@@ -6311,10 +6312,11 @@ class VocoAdapter(Adapter):
                 return json.loads(r.text)
             
         except Exception as ex:
-            print("Error doing http request/loading returned json: " + str(ex))
+            print("caught error doing http request/loading returned json: " + str(ex))
             
             if self.DEBUG:
-                self.speak("I could not connect to API. ", intent=intent)
+                self.pairing_prompt("could not connect to API")
+                #self.speak("I could not connect to API. ", intent=intent)
             #return [] # or should this be {} ? Depends on the call perhaps.
             return {"error": 500}
 
@@ -7517,14 +7519,14 @@ class VocoAdapter(Adapter):
                
                 elif self.persistent_data['is_satellite'] and self.mqtt_connected_to_ip != str(self.persistent_data['mqtt_server']):
                     if self.DEBUG:
-                        print("run_mqtt: satellite is connected to the wrong MQTT server IP. Disconnecting.  self.mqtt_connected_to_ip,str(self.persistent_data['mqtt_server']: ", self.mqtt_connected_to_ip, str(self.persistent_data['mqtt_server']))
+                        print("run_mqtt: satellite is connected to the wrong MQTT server IP. Disconnecting.  self.mqtt_connected_to_ip,str(self.persistent_data['mqtt_server']: ", str(self.mqtt_connected_to_ip), str(self.persistent_data['mqtt_server']))
                     self.mqtt_client.loop_stop()
                     self.mqtt_client.disconnect() # disconnect
                     time.sleep(1)
                     
                 elif self.persistent_data['is_satellite'] == False and self.mqtt_connected_to_ip != str(self.internal_ip):
                     if self.DEBUG:
-                        print("run_mqtt: satellite is not a satellite (anymore), and MQTT client is connected to the wrong IP. Disconnecting.  self.mqtt_connected_to_ip, self.internal_ip: ", self.mqtt_connected_to_ip, str(self.internal_ip))
+                        print("run_mqtt: satellite is not a satellite (anymore), and MQTT client is connected to the wrong IP. Disconnecting.  self.mqtt_connected_to_ip, self.internal_ip: ", str(self.mqtt_connected_to_ip), str(self.internal_ip))
                     self.mqtt_client.loop_stop()
                     self.mqtt_client.disconnect() # disconnect
                     time.sleep(1)
@@ -10752,7 +10754,7 @@ class VocoAdapter(Adapter):
                                 #print(str(json.dumps(operations)))
                             self.mqtt_second_client.publish('hermes/injection/perform', json.dumps(update_request))
                             self.injection_requested = True
-                            self.last_injection_request_time = time.time()
+                            self.last_injection_request_time = int(time.time())
                             self.force_injection = False
                             
                             
@@ -12660,7 +12662,7 @@ class VocoAdapter(Adapter):
                 return False
 
         except Exception as ex:
-            print("Error while looking for MQTT server: " + str(ex))
+            print("caught error while looking for MQTT server: " + str(ex))
             return False
         
         

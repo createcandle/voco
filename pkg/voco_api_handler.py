@@ -1138,6 +1138,9 @@ class VocoAPIHandler(APIHandler):
                                                     self.adapter.persistent_data['main_controller_ip'] = self.adapter.internal_ip
                                                     self.adapter.persistent_data['main_controller_hostname'] = self.adapter.hostname
                                                     self.adapter.persistent_data['main_site_id'] = self.adapter.persistent_data['site_id'] #reset to default
+                                                    if self.DEBUG:
+                                                        print("- Satellite mode disabled, and mqtt_server reset to self.internal_ip: ", self.adapter.internal_ip)
+                                                    self.adapter.save_to_persistent_data = True
                                                     self.adapter.initial_injection_completed = False
                                                     self.adapter.addon_start_time = time.time()
                                                     self.adapter.should_restart_mqtt = True
@@ -1157,14 +1160,14 @@ class VocoAPIHandler(APIHandler):
                                             
                                         except Exception as ex:
                                             if self.DEBUG:
-                                                print("aught error changing satellite mode: " + str(ex))
+                                                print("caught error changing satellite mode: " + str(ex))
                             
                                         self.adapter.save_persistent_data()
                             
                                         #print("satellite choice is: " + str(self.adapter.persistent_data['is_satellite']))
                                         #update = 'Satellite settings have been saved'
                                         if self.DEBUG:
-                                            print(str(update))
+                                            print("update: " + str(update))
                                             print("changing satellite mode: self.adapter.persistent_data['mqtt_server'] is now: " + str(self.adapter.persistent_data['mqtt_server']))
                                     else:
                                         if self.DEBUG:
@@ -1174,13 +1177,13 @@ class VocoAPIHandler(APIHandler):
                                     status=200,
                                     content_type='application/json',
                                     content=json.dumps({
-                                            'state' : state, 
-                                            'update':update,
+                                            'state': state, 
+                                            'update': update,
                                             'llm_assistant_started': self.adapter.llm_assistant_started
                                             }),
                                 )
                             except Exception as ex:
-                                print("Error updating: " + str(ex))
+                                print("caught error updating: " + str(ex))
                                 return APIResponse(
                                     status=500,
                                     content_type='application/json',
