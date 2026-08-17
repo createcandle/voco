@@ -5208,6 +5208,9 @@ class VocoAdapter(Adapter):
                             print(" - self.mqtt_connected to IP                       : ", self.mqtt_connected_to_ip)
                             print(" - main_controller_ip                              : ", self.persistent_data['main_controller_ip'])
                             print(" - self.ip_address                                 : ", self.ip_address)
+                            
+                            print(" - self.persistent_data['site_id']                 : ", str(self.persistent_data['site_id']))
+                            print(" - self.persistent_data['main_site_id']            : ", str(self.persistent_data['main_site_id']))
 
 
                         if self.DEBUG:
@@ -7962,10 +7965,25 @@ class VocoAdapter(Adapter):
         if msg.topic.startswith('hermes/voco/ping'):
             if self.DEBUG:
                 print("received ping at topic: ", msg.topic)
+
             if 'siteId' in payload:
+
+                if self.DEBUG:
+                    print(" - message payload['siteId']           : ", str(payload['siteId']))
+                    print(" - self.persistent_data['site_id']     : ", str(self.persistent_data['site_id']))
+                    print(" - self.persistent_data['main_site_id']: ", str(self.persistent_data['main_site_id']))
+
                 if payload['siteId'] == self.persistent_data['site_id']:
                     if self.DEBUG:
                         print("spotted the ping that I sent") # What we want is to receive a pong from the main controller
+                
+                # not received the site ID of the main controller yet, but this ping is supplying it
+                elif self.persistent_data['is_satellite'] == True and self.persistent_data['main_site_id'] == self.persistent_data['site_id'] and payload['siteId'] != self.persistent_data['site_id'] and 'hostname' in payload and payload['hostname'] == self.persistent_data['main_controller_hostname']:
+                    if self.DEBUG:
+                        print("spotted first ping sent by the main controller; received main_site_id for hostname: ", self.persistent_data['main_controller_hostname'], " --> ", payload['siteId'])
+                    self.voco_connected = True
+                    self.periodic_voco_attempts = 0
+                    self.parse_ping(payload,ping_type="ping")
                 elif self.persistent_data['is_satellite'] == True and self.persistent_data['main_site_id'] != self.persistent_data['site_id'] and payload['siteId'] == self.persistent_data['main_site_id']:
                     if self.DEBUG:
                         print("spotted a ping sent by the main controller")
