@@ -7984,12 +7984,14 @@ class VocoAdapter(Adapter):
                     self.voco_connected = True
                     self.periodic_voco_attempts = 0
                     self.parse_ping(payload,ping_type="ping")
+                    self.send_mqtt_ping(broadcast=False, ping_type="pong", target_site_id=payload['siteId'])
                 elif self.persistent_data['is_satellite'] == True and self.persistent_data['main_site_id'] != self.persistent_data['site_id'] and payload['siteId'] == self.persistent_data['main_site_id']:
                     if self.DEBUG:
                         print("spotted a ping sent by the main controller")
                     self.voco_connected = True
                     self.periodic_voco_attempts = 0
                     self.parse_ping(payload,ping_type="ping")
+                    self.send_mqtt_ping(broadcast=False, ping_type="pong", target_site_id=payload['siteId'])
                 else:
                     if self.DEBUG:
                         print("spotted ping received from some other controller.  payload: ", payload)
@@ -8370,8 +8372,8 @@ class VocoAdapter(Adapter):
                         
                 # currently not used. Switched to sending broadcast pings every 15 seconds.
                 elif msg.topic.endswith('/ping'):
-                    if self.DEBUG2:
-                        print("received ping targetted at this controller")
+                    if self.DEBUG:
+                        print("received ping specifically targetted at this controller")
                     self.parse_ping(payload,ping_type="ping")
                         
                     # Send back a pong message
@@ -8379,8 +8381,8 @@ class VocoAdapter(Adapter):
                         
                 
                 elif msg.topic.endswith('/pong'):
-                    if self.DEBUG2:
-                        print("- - - message ends in /pong. A voco server is responding with IP and site_id combination")
+                    if self.DEBUG:
+                        print("- - - received pong specifically targetted at this controller: a voco server is responding with IP and site_id combination")
                     
                     self.parse_ping(payload,ping_type="pong")
                     
